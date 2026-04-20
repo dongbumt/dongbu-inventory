@@ -1,0 +1,2456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>동부엠티 재고관리</title>
+<style>
+  /* ── 구글 연동 오버레이 ── */
+  #gs-overlay{position:fixed;inset:0;background:rgba(26,37,47,.82);
+    z-index:9999;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:16px;color:#fff;}
+  #gs-overlay.hidden{display:none;}
+  .gs-spinner{width:44px;height:44px;border:4px solid rgba(255,255,255,.3);
+    border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #gs-setup{position:fixed;inset:0;background:rgba(26,37,47,.95);
+    z-index:10000;display:flex;align-items:center;justify-content:center;}
+  #gs-setup.hidden{display:none;}
+  .gs-setup-box{background:#fff;border-radius:12px;padding:32px;max-width:520px;
+    width:90%;box-shadow:0 8px 40px rgba(0,0,0,.4);}
+  .gs-setup-box h2{font-size:18px;margin-bottom:8px;color:#1a252f;}
+  .gs-setup-box p{font-size:13px;color:#555;margin-bottom:16px;line-height:1.7;}
+  .gs-setup-box input{width:100%;padding:10px 12px;border:2px solid #dde1e7;
+    border-radius:8px;font-size:13px;margin-bottom:12px;font-family:monospace;}
+  .gs-setup-box input:focus{border-color:#2980b9;outline:none;}
+  .gs-sync-bar{position:fixed;bottom:16px;right:16px;background:#27ae60;color:#fff;
+    padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;
+    opacity:0;transition:opacity .3s;z-index:500;pointer-events:none;}
+  .gs-sync-bar.show{opacity:1;}
+  .gs-sync-bar.err{background:#e74c3c;}
+  .gs-status{font-size:11px;color:#888;padding:4px 10px;border-radius:12px;
+    background:#f0f2f5;display:inline-flex;align-items:center;gap:6px;}
+  .gs-dot{width:8px;height:8px;border-radius:50%;background:#27ae60;display:inline-block;}
+  .gs-dot.off{background:#e74c3c;}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* ══════════════════════════════════════════
+     동부엠티 재고관리 시스템 — HACCP 통합 디자인
+  ══════════════════════════════════════════ */
+  :root {
+    --bg:#f0f2f5; --card:#fff; --text:#2c3e50;
+    --border:#dde1e7; --header:#1a252f;
+    --blue:#2980b9; --green:#27ae60; --red:#e74c3c;
+    --orange:#e67e22; --purple:#8e44ad;
+    --blue-lt:#e8f4fd; --green-lt:#e8f8ef; --red-lt:#fde8e8;
+    --orange-lt:#fef3e2; --gray-lt:#f8f9fa;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+       background:var(--bg);color:var(--text);min-height:100vh;}
+
+  /* ── 헤더 ── */
+  .app-header{background:var(--header);color:#fff;padding:0 24px;
+    display:flex;align-items:center;justify-content:space-between;
+    height:60px;box-shadow:0 2px 8px rgba(0,0,0,.3);
+    position:sticky;top:0;z-index:100;}
+  .app-header .logo{display:flex;align-items:center;gap:12px;}
+  .logo-icon{width:36px;height:36px;background:var(--blue);border-radius:8px;
+    display:flex;align-items:center;justify-content:center;font-size:20px;}
+  .app-header h1{font-size:17px;font-weight:700;}
+  .header-sub{font-size:10px;color:#95a5a6;letter-spacing:.5px;margin-bottom:1px;}
+  .header-right{display:flex;align-items:center;gap:14px;}
+  .header-date{text-align:right;font-size:12px;color:#bdc3c7;}
+  .header-date .today-str{font-size:15px;color:#fff;font-weight:600;}
+
+  /* ── 내비 탭 ── */
+  .nav-tabs{background:#fff;border-bottom:2px solid var(--border);
+    display:flex;padding:0 24px;position:sticky;top:60px;z-index:99;
+    box-shadow:0 2px 4px rgba(0,0,0,.05);overflow-x:auto;}
+  .nav-tab{padding:14px 18px;font-size:13px;font-weight:600;color:#7f8c8d;
+    cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;
+    transition:all .2s;display:flex;align-items:center;gap:6px;
+    white-space:nowrap;flex-shrink:0;}
+  .nav-tab:hover{color:var(--text);}
+  .nav-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+  /* ── 메인 영역 ── */
+  .main{padding:24px;max-width:1280px;margin:0 auto;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* ── 카드 ── */
+  .card{background:var(--card);border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);padding:20px;margin-bottom:20px;}
+  .card-title{font-size:14px;font-weight:700;margin-bottom:14px;
+    display:flex;align-items:center;gap:8px;}
+  .card-title .ct-bar{width:4px;height:18px;border-radius:2px;flex-shrink:0;}
+
+  /* ── 폼 ── */
+  .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+    gap:10px;margin-bottom:10px;}
+  .form-group{display:flex;flex-direction:column;gap:5px;}
+  .form-group label{font-size:11px;font-weight:700;color:#666;}
+  input,select,textarea{width:100%;padding:9px 11px;
+    border:1px solid var(--border);border-radius:8px;
+    font-size:13px;font-family:inherit;background:#fff;color:var(--text);
+    transition:border .15s;}
+  input:focus,select:focus{outline:none;border-color:var(--blue);
+    box-shadow:0 0 0 3px rgba(41,128,185,.1);}
+
+  /* ── 버튼 ── */
+  .btn{padding:8px 15px;border-radius:8px;font-size:13px;font-weight:600;
+    cursor:pointer;border:none;transition:all .15s;
+    display:inline-flex;align-items:center;gap:5px;font-family:inherit;}
+  .btn-primary{background:var(--blue);color:#fff;}
+  .btn-primary:hover{background:#1a6a9a;}
+  .btn-success{background:var(--green);color:#fff;}
+  .btn-success:hover{background:#1e8449;}
+  .btn-danger{background:var(--red);color:#fff;}
+  .btn-danger:hover{background:#c0392b;}
+  .btn-secondary{background:#fff;color:#666;border:1px solid var(--border);}
+  .btn-secondary:hover{background:#f0f0f0;}
+  .btn-sm{padding:5px 11px;font-size:12px;border-radius:6px;}
+  .btn-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+
+  /* ── 테이블 ── */
+  .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{background:#f8f9fa;padding:9px 12px;text-align:left;
+    font-size:11px;font-weight:700;color:#666;
+    border-bottom:2px solid var(--border);}
+  td{padding:9px 12px;border-bottom:1px solid #f0f0f0;
+    color:var(--text);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:#f8f9fa;}
+
+  /* ── 배지 ── */
+  .badge{display:inline-block;padding:3px 9px;border-radius:12px;
+    font-size:11px;font-weight:700;}
+  .badge-in{background:var(--green-lt);color:#1e8449;}
+  .badge-use{background:var(--orange-lt);color:#d35400;}
+  .badge-out{background:var(--red-lt);color:#c0392b;}
+
+  /* ── 통계 카드 ── */
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+    gap:12px;margin-bottom:16px;}
+  .stat{background:#f8f9fa;border-radius:10px;padding:12px 14px;
+    border:1px solid var(--border);}
+  .stat-label{font-size:11px;color:#888;margin-bottom:4px;font-weight:600;}
+  .stat-val{font-size:22px;font-weight:700;color:var(--text);}
+
+  /* ── 섹션 헤더 ── */
+  .section-header{display:flex;justify-content:space-between;
+    align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+
+  /* ── 거래명세서 ── */
+  .invoice-preview{background:#fff;border-radius:10px;
+    border:1px solid var(--border);padding:24px;font-size:12px;}
+  .inv-title{text-align:center;font-size:18px;font-weight:700;
+    letter-spacing:4px;margin-bottom:14px;color:var(--header);}
+  .inv-row{display:flex;gap:12px;margin-bottom:8px;}
+  .inv-box{flex:1;border:1px solid var(--border);border-radius:8px;padding:10px;}
+  .inv-box-title{font-size:11px;font-weight:700;color:#666;
+    margin-bottom:6px;text-align:center;}
+  .inv-line{display:flex;justify-content:space-between;padding:2px 0;font-size:11px;}
+  .inv-line span:first-child{color:#888;}
+  .inv-total-row{background:#f8f9fa;font-weight:700;}
+
+  /* ── 알림/뱃지 ── */
+  .alert{padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:12px;
+    border-left:4px solid;}
+  .alert-info{background:var(--blue-lt);color:#1a6a9a;border-color:var(--blue);}
+  .alert-success{background:var(--green-lt);color:#1e8449;border-color:var(--green);}
+  .alert-warn{background:var(--orange-lt);color:#d35400;border-color:var(--orange);}
+
+  /* ── 가져오기 드롭존 ── */
+  .import-dropzone{border:2px dashed var(--border);border-radius:10px;
+    padding:36px;text-align:center;cursor:pointer;transition:all .2s;
+    background:var(--gray-lt);position:relative;}
+  .import-dropzone:hover,.import-dropzone.drag-over{
+    border-color:var(--blue);background:var(--blue-lt);}
+  .import-dropzone input[type=file]{position:absolute;inset:0;
+    opacity:0;cursor:pointer;width:100%;height:100%;}
+  .drop-icon{font-size:36px;margin-bottom:10px;}
+  .drop-title{font-size:14px;font-weight:700;margin-bottom:4px;}
+  .drop-sub{font-size:12px;color:#888;}
+  .progress-bar-wrap{background:#e0e0e0;border-radius:99px;height:6px;
+    overflow:hidden;margin-top:8px;}
+  .progress-bar{height:100%;background:var(--blue);border-radius:99px;
+    transition:width .3s;width:0%;}
+
+  /* ── 스텝 인디케이터 ── */
+  .step-indicator{display:flex;gap:0;margin-bottom:16px;}
+  .step{flex:1;padding:9px 12px;background:#f8f9fa;
+    border:1px solid var(--border);font-size:12px;font-weight:600;
+    color:#aaa;text-align:center;position:relative;}
+  .step:first-child{border-radius:8px 0 0 8px;}
+  .step:last-child{border-radius:0 8px 8px 0;}
+  .step.active{background:var(--blue-lt);color:var(--blue);
+    border-color:var(--blue);}
+  .step.done{background:var(--green-lt);color:var(--green);
+    border-color:var(--green);}
+
+  /* ── 미리보기 테이블 ── */
+  .import-preview-table{max-height:320px;overflow-y:auto;
+    border-radius:8px;border:1px solid var(--border);}
+  .tag{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;
+    border-radius:99px;font-size:10px;font-weight:700;}
+  .tag-new{background:var(--green-lt);color:#1e8449;}
+  .tag-dup{background:var(--orange-lt);color:#d35400;}
+
+  /* ── 모달 / 알림 토스트 ── */
+  .notification{position:fixed;bottom:24px;right:24px;
+    background:var(--header);color:#fff;padding:12px 18px;
+    border-radius:10px;font-size:13px;z-index:9999;
+    box-shadow:0 4px 20px rgba(0,0,0,.3);animation:slideIn .3s ease;}
+  @keyframes slideIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  /* ── 재고 상태 ── */
+  .stock-ok{color:var(--green);font-weight:700;}
+  .stock-warn{color:var(--orange);font-weight:700;}
+  .stock-ng{color:var(--red);font-weight:700;}
+
+  /* ── 생산일보 소계행 ── */
+  .subtotal-row td{background:#f0f4f8!important;
+    font-size:11px;color:#666;border-top:1px solid var(--border);}
+
+  /* ── 반응형 ── */
+  @media(max-width:768px){
+    .main{padding:12px;}
+    .app-header h1{font-size:14px;}
+    .nav-tab{padding:12px 12px;font-size:12px;}
+    .form-row{grid-template-columns:1fr 1fr;}
+  }
+  ::-webkit-scrollbar{width:5px;height:5px;}
+  ::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- ── Google Sheets 로딩 오버레이 ── -->
+<div id="gs-overlay">
+  <div class="gs-spinner"></div>
+  <div id="gs-overlay-msg" style="font-size:14px;font-weight:600;">Google Sheets에서 데이터 불러오는 중...</div>
+</div>
+
+<!-- ── Google Sheets URL 초기 설정 화면 ── -->
+<div id="gs-setup" class="hidden">
+  <div class="gs-setup-box">
+    <h2>🔗 Google Sheets 연동 설정</h2>
+    <p>
+      아래에 Apps Script 웹앱 URL을 입력하세요.<br>
+      Apps Script → <strong>배포 → 웹앱으로 배포</strong> 후 받은 URL입니다.<br>
+      <span style="color:#e74c3c;font-size:12px;">⚠ 한 번만 입력하면 이 브라우저에 저장됩니다.</span>
+    </p>
+    <input id="gs-url-input" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <div style="display:flex;gap:8px;">
+      <button onclick="gsSetupSave()" style="flex:1;padding:10px;background:#2980b9;color:#fff;
+        border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">저장 후 시작</button>
+      <button onclick="gsSetupSkip()" style="padding:10px 16px;background:#f0f2f5;
+        border:none;border-radius:8px;font-size:13px;cursor:pointer;color:#666;">오프라인으로 사용</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 동기화 상태 표시바 ── -->
+<div id="gs-sync-bar" class="gs-sync-bar"></div>
+
+<!-- 헤더 -->
+<header class="app-header">
+  <div class="logo">
+    <div class="logo-icon">📦</div>
+    <div>
+      <div class="header-sub">INVENTORY MANAGEMENT SYSTEM</div>
+      <h1>동부엠티 재고관리 시스템</h1>
+    </div>
+  </div>
+  <div class="header-right">
+  <div class="gs-status" id="gs-status-badge">
+    <span class="gs-dot off" id="gs-dot"></span>
+    <span id="gs-status-text">오프라인</span>
+  </div>
+    <div class="header-date">
+      <div class="today-str" id="headerDate"></div>
+      <div id="headerDay" style="font-size:11px;"></div>
+    </div>
+  </div>
+</header>
+
+<!-- 내비 탭 -->
+<nav class="nav-tabs">
+  <div class="nav-tab active" onclick="showPage('p-transactions',this)" id="nav-transactions">
+    📋 거래내역
+  </div>
+  <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">
+    🏭 생산일보
+  </div>
+  <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">
+    📊 재고현황
+  </div>
+  <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">
+    🧾 거래명세서
+  </div>
+  <div class="nav-tab" onclick="showPage('p-shiplog',this)" id="nav-shiplog">
+    🚚 출고일지
+  </div>
+  <div class="nav-tab" onclick="showPage('p-prices',this)" id="nav-prices">
+    💰 단가표
+  </div>
+  <div class="nav-tab" onclick="showPage('p-import',this)" id="nav-import" style="color:var(--green);font-weight:700;">
+    📥 엑셀 가져오기
+  </div>
+</nav>
+
+<main class="main">
+
+<!-- ══════════════════════════════════════════
+     거래내역
+══════════════════════════════════════════ -->
+<div class="tab-panel active" id="p-transactions">
+  <div class="card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--blue);"></div>
+      새 거래내역 입력
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>날짜</label><input type="date" id="t-date"></div>
+      <div class="form-group"><label>구분</label>
+        <select id="t-type" onchange="updateTransactionForm()">
+          <option value="입고">입고</option>
+          <option value="출고">출고</option>
+        </select>
+      </div>
+      <div class="form-group" id="t-product-wrap">
+        <label>품목명</label>
+        <!-- 입고: 자유입력 -->
+        <input id="t-product-input" list="product-list" placeholder="품목명" oninput="onOutProductChange()" style="display:block;">
+        <!-- 출고: 재고품목 선택 -->
+        <select id="t-product-select" onchange="onOutProductSelectChange()" style="display:none;">
+          <option value="">-- 재고품목 선택 --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>원산지</label>
+        <!-- 입고: 자유입력 + datalist -->
+        <input id="t-origin-input" list="origin-list" placeholder="국내산 / 덴마크..." oninput="onOutProductChange()" style="display:block;">
+        <!-- 출고: 재고 있는 원산지 선택 드롭다운 -->
+        <select id="t-origin-select" onchange="onOriginSelectChange()" style="display:none;">
+          <option value="">-- 원산지 선택 --</option>
+        </select>
+        <datalist id="origin-list"></datalist>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group t-trader"><label>거래처</label><input id="t-trader" list="trader-list" placeholder="거래처명"></div>
+      <div class="form-group"><label>이력번호</label>
+        <div style="position:relative;">
+          <input id="t-lot" placeholder="LOT번호 (출고 시 아래 목록 선택)">
+        </div>
+      </div>
+      <div class="form-group t-proddate" style="display:none"><label>생산일</label><input type="date" id="t-proddate"></div>
+      <div class="form-group"><label>중량(KG)</label><input type="number" id="t-weight" placeholder="0.00" step="0.01"></div>
+      <div class="form-group"><label>비고</label><input id="t-note" placeholder="비고"></div>
+    </div>
+    <!-- 출고 시 재고 매칭 -->
+    <div id="lot-match-area" style="display:none;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:6px;">📦 재고 있는 이력번호 선택 (클릭 시 자동 입력)</div>
+      <div id="lot-match-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="addTransaction()">+ 추가</button>
+      <button class="btn btn-secondary" onclick="clearTransactionForm()">초기화</button>
+    </div>
+    <datalist id="product-list"></datalist>
+    <datalist id="trader-list">
+      <option value="동원홈푸드"><option value="이유푸드"><option value="다해푸드">
+      <option value="아이푸드트레이딩"><option value="위더스아이앤씨"><option value="동부축산유통">
+      <option value="가치">
+    </datalist>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--blue);"></div>
+        거래 목록 <span id="t-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="t-filter-type" style="width:90px;font-size:12px;padding:6px 8px;" onchange="renderTransactions()">
+          <option value="">전체</option>
+          <option value="입고">입고</option>
+          <option value="출고">출고</option>
+          <option value="사용">사용(구 데이터)</option>
+        </select>
+        <input placeholder="검색..." id="t-search" style="width:150px;" oninput="renderTransactions()">
+        <button class="btn btn-secondary btn-sm" onclick="exportTransactionsCSV()">CSV 저장</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table id="t-table">
+        <thead><tr>
+          <th>날짜</th><th>구분</th><th>거래처</th><th>품목명</th><th>원산지</th>
+          <th>이력번호</th><th style="text-align:right">중량(KG)</th>
+          <th style="text-align:right">단가</th><th style="text-align:right">금액</th>
+          <th>비고</th><th>관리</th>
+        </tr></thead>
+        <tbody id="t-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     생산일보
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-production">
+
+  <!-- 신규 생산일보 입력 카드 -->
+  <div class="card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--orange);"></div>
+      새 생산일보 입력
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>작업일</label><input type="date" id="prod-date"></div>
+      <div class="form-group"><label>작업번호</label><input id="prod-job-no" placeholder="1" style="width:80px;"></div>
+    </div>
+
+    <!-- 투입 품목 (동적) -->
+    <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:6px;margin-top:4px;">▶ 투입 품목</div>
+    <div id="prod-input-rows">
+      <!-- JS로 렌더 -->
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="addProdInputRow()" style="margin-bottom:14px;">+ 투입 품목 추가</button>
+
+    <!-- 생산 품목 (동적) -->
+    <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px;">▶ 생산 품목</div>
+    <div id="prod-output-rows">
+      <!-- JS로 렌더 -->
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="addProdOutputRow()" style="margin-bottom:10px;">+ 생산 품목 추가</button>
+
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="saveProdEntry()">✓ 생산일보 저장</button>
+      <button class="btn btn-secondary" onclick="clearProdForm()">초기화</button>
+    </div>
+  </div>
+
+  <!-- 생산일보 목록 -->
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--orange);"></div>
+        생산일보 목록
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="form-group" style="flex:0 0 auto;gap:4px;">
+          <label style="font-size:11px;font-weight:700;color:#666;">날짜 필터</label>
+          <input type="date" id="prod-filter-date" style="width:150px;font-size:12px;" onchange="renderProduction()">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('prod-filter-date').value='';renderProduction()" style="margin-top:18px;">전체</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportProductionCSV()" style="margin-top:18px;">CSV</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#888;margin-bottom:12px;padding:8px 12px;background:#f8f9fa;border-radius:6px;border-left:3px solid var(--orange);">
+      생산금액 = 투입금액 합계 &nbsp;|&nbsp; 생산단가 = 생산금액 ÷ 생산수량 (로스 자동 반영)
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:90px;">작업일</th>
+          <th>투입 품목</th><th>원산지</th>
+          <th style="text-align:right">투입량(KG)</th>
+          <th style="text-align:right">투입단가</th>
+          <th style="text-align:right">투입금액</th>
+          <th>투입이력번호</th>
+          <th style="border-left:2px solid var(--border);"></th>
+          <th>생산 품목</th><th>원산지</th>
+          <th style="text-align:right">생산량(KG)</th>
+          <th style="text-align:right">생산단가</th>
+          <th style="text-align:right">생산금액</th>
+          <th>생산이력번호</th>
+          <th>관리</th>
+        </tr></thead>
+        <tbody id="prod-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     재고현황
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-stock">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--green);"></div>
+        전체 재고현황
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" oninput="renderStock()">
+        <select id="stock-filter-status" style="font-size:12px;padding:7px 10px;width:auto;" onchange="renderStock()">
+          <option value="재고">재고있음</option>
+          <option value="소진">소진</option>
+          <option value="">전체</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="exportStockCSV()">CSV</button>
+      </div>
+    </div>
+    <div class="stat-grid" id="stock-stats"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>품목명</th><th>이력번호</th><th>원산지</th>
+          <th style="text-align:right">총입고(KG)</th>
+          <th style="text-align:right">총사용(KG)</th>
+          <th style="text-align:right">총출고(KG)</th>
+          <th style="text-align:right">재고(KG)</th>
+          <th>상태</th>
+        </tr></thead>
+        <tbody id="stock-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     거래명세서
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-invoice">
+  <div class="card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--purple);"></div>
+      거래명세서 발행
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>출고일 선택</label>
+        <select id="inv-date" onchange="loadInvoiceByDate()"><option value="">-- 날짜 선택 --</option></select>
+      </div>
+      <div class="form-group"><label>거래처</label>
+        <input id="inv-trader" readonly style="background:#f8f9fa;"></div>
+      <div class="form-group"><label>전 미수금액 (자동)</label>
+        <input id="inv-prev-unpaid" readonly style="background:#f8f9fa;color:var(--red);font-weight:700;"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--purple);"></div>
+        거래명세서 미리보기
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="exportInvoiceExcel()">🖨 인쇄</button>
+    </div>
+    <div id="invoice-preview"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     완제품 출고일지
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-shiplog">
+  <div class="card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--red);"></div>
+      완제품 출고일지
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>출고일 선택</label>
+        <select id="ship-date" onchange="loadShipLog()"><option value="">-- 날짜 선택 --</option></select>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--red);"></div>
+        출고일지 미리보기
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="exportShipLogExcel()">🖨 인쇄</button>
+    </div>
+    <div id="shiplog-preview"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     단가표
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-prices">
+  <!-- 추가/수정 입력 카드 -->
+  <div class="card" id="pr-form-card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--orange);"></div>
+      <span id="pr-form-title">단가 추가</span>
+    </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group">
+        <label>품목명</label>
+        <input id="pr-product" list="product-list" placeholder="예) 돈등심(작업)" autocomplete="off">
+      </div>
+      <div class="form-group" style="max-width:160px;">
+        <label>원산지</label>
+        <input id="pr-origin" list="pr-origin-list" placeholder="예) 국내산" autocomplete="off">
+        <datalist id="pr-origin-list">
+          <option value="국내산"><option value="미국산"><option value="호주산">
+          <option value="덴마크"><option value="독일"><option value="스페인">
+          <option value="오스트리아"><option value="칠레"><option value="미국">
+        </datalist>
+      </div>
+      <div class="form-group" style="max-width:150px;">
+        <label>단가 (원/KG)</label>
+        <input type="number" id="pr-price" placeholder="0" min="0" step="100">
+      </div>
+      <input type="hidden" id="pr-edit-idx" value="-1">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="savePrice()">✓ 저장</button>
+      <button class="btn btn-secondary" onclick="cancelEditPrice()">취소</button>
+      <span id="pr-form-hint" style="font-size:11px;color:#888;margin-left:6px;"></span>
+    </div>
+  </div>
+
+  <!-- 단가표 목록 카드 -->
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--orange);"></div>
+        단가표 <span id="pr-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="pr-search" placeholder="품목명 / 원산지 검색..." style="width:200px;" oninput="renderPrices()">
+        <button class="btn btn-secondary btn-sm" onclick="exportPricesCSV()">CSV 저장</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>품목명</th>
+          <th style="width:120px;">원산지</th>
+          <th style="text-align:right;width:130px;">단가 (원/KG)</th>
+          <th style="width:130px;text-align:center;">관리</th>
+        </tr></thead>
+        <tbody id="price-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     엑셀 가져오기
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-import">
+  <div class="card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--green);"></div>
+      📥 기존 엑셀 데이터 가져오기
+    </div>
+    <div class="alert alert-info" style="margin-bottom:14px;">
+      <strong>지원 파일:</strong> 원료수불부 (.xlsm / .xlsx) — [거래내역] 시트를 자동 파싱합니다.<br>
+      <strong>중복 처리:</strong> 날짜+품목+이력번호+중량이 동일한 항목은 자동으로 건너뜁니다.
+    </div>
+
+    <div class="step-indicator" id="import-steps">
+      <div class="step active" id="step-1">① 파일 선택</div>
+      <div class="step" id="step-2">② 데이터 확인</div>
+      <div class="step" id="step-3">③ 완료</div>
+    </div>
+
+    <!-- STEP 1 -->
+    <div id="import-step1">
+      <div class="import-dropzone" id="dropzone"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <input type="file" id="excel-file-input" accept=".xlsx,.xlsm,.xls" onchange="handleFileSelect(event)">
+        <div class="drop-icon">📂</div>
+        <div class="drop-title">파일을 여기에 끌어다 놓거나 클릭하여 선택</div>
+        <div class="drop-sub">원료수불부.xlsm / .xlsx 파일 지원</div>
+      </div>
+      <div id="import-progress" style="display:none;margin-top:12px;">
+        <div style="font-size:12px;color:#888;" id="progress-text">파일 읽는 중...</div>
+        <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div id="import-step2" style="display:none;">
+      <div id="import-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;"></div>
+      <div id="import-warn" class="alert alert-warn" style="display:none;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:700;">가져올 데이터 미리보기</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="show-skipped" onchange="renderImportPreview()"> 중복 포함
+          </label>
+          <select id="preview-filter" style="font-size:12px;padding:5px 8px;width:auto;" onchange="renderImportPreview()">
+            <option value="">전체</option>
+            <option value="입고">입고</option>
+            <option value="사용">사용</option>
+            <option value="출고">출고</option>
+          </select>
+        </div>
+      </div>
+      <div class="import-preview-table">
+        <table>
+          <thead><tr>
+            <th style="width:50px;"></th>
+            <th>날짜</th><th>구분</th><th>거래처</th><th>품목명</th>
+            <th>원산지</th><th>이력번호</th>
+            <th style="text-align:right">중량(KG)</th><th>비고</th>
+          </tr></thead>
+          <tbody id="preview-body"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">
+        <button class="btn btn-secondary" onclick="resetImport()">← 다시 선택</button>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span id="import-count-label" style="font-size:12px;color:#888;"></span>
+          <button class="btn btn-success" id="btn-do-import" onclick="doImport()">✓ 가져오기 실행</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div id="import-step3" style="display:none;text-align:center;padding:32px 0;">
+      <div style="font-size:40px;margin-bottom:14px;">✅</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px;" id="import-done-msg"></div>
+      <div style="font-size:12px;color:#888;margin-bottom:20px;" id="import-done-sub"></div>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="btn btn-primary" onclick="showPage('p-transactions',document.querySelector('.nav-tab'))">거래내역 확인</button>
+        <button class="btn btn-secondary" onclick="resetImport()">다른 파일 가져오기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--green);"></div>
+      📌 가져오기 안내
+    </div>
+    <div style="font-size:12px;color:#666;line-height:2;">
+      <div>• <strong>지원 시트:</strong> [거래내역] 시트 (원료수불부.xlsm의 첫 번째 시트)</div>
+      <div>• <strong>날짜 자동 변환:</strong> YYMMDD (260107) → YYYY-MM-DD (2026-01-07)</div>
+      <div>• <strong>중복 감지:</strong> 날짜·구분·품목명·이력번호·중량이 완전히 일치하면 건너뜁니다</div>
+      <div>• <strong>생산일 파싱:</strong> 비고의 '생산일:YYYY/MM/DD' 형식을 자동으로 처리합니다</div>
+      <div>• <strong>단가 자동 조회:</strong> 단가표에 등록된 품목은 금액이 자동으로 계산됩니다</div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ─── 초기화 ───────────────────────────────────────────
+const today = new Date().toISOString().slice(0,10);
+// DOM 접근이 필요한 초기화는 initDOM()으로 분리 → DOMContentLoaded에서 호출
+function initDOM(){
+  const tDate = document.getElementById('t-date');
+  if(tDate) tDate.value = today;
+  // 헤더 날짜 표시
+  const d=new Date();
+  const days=['일','월','화','수','목','금','토'];
+  const hs=`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+  const el=document.getElementById('headerDate');
+  const el2=document.getElementById('headerDay');
+  if(el) el.textContent=hs;
+  if(el2) el2.textContent=`${days[d.getDay()]}요일`;
+}
+
+// ── 엑셀 원본 데이터 (읽기 전용 기준값) ──
+const EXCEL_TRANSACTIONS = [];
+
+// ══════════════════════════════════════════════
+// Google Sheets 연동 레이어
+// ══════════════════════════════════════════════
+let GS_ONLINE = false;
+const GS_URL  = 'https://script.google.com/macros/s/AKfycbyGPUL1cKw3hUlotf7_wELbmUj4-yAMzVa03Lx4gXY1Ia_aYrS-3gt8HYdtLHLail9JBQ/exec';
+
+// 동기화 상태 표시
+function gsShowSync(msg, isErr=false){
+  const bar = document.getElementById('gs-sync-bar');
+  if(!bar) return;
+  bar.textContent = msg;
+  bar.className = 'gs-sync-bar show' + (isErr?' err':'');
+  clearTimeout(bar._t);
+  bar._t = setTimeout(()=>{ bar.className='gs-sync-bar'; }, 3000);
+}
+
+function gsSetStatus(online){
+  GS_ONLINE = online;
+  const dot = document.getElementById('gs-dot');
+  const txt = document.getElementById('gs-status-text');
+  if(dot) dot.className = 'gs-dot' + (online ? '' : ' off');
+  if(txt) txt.textContent = online ? '☁ Sheets 연동중' : '오프라인';
+}
+
+// ── Google Sheets API ──
+// GET: JSONP 방식 (CORS 완전 우회)
+// POST: fetch 방식 (저장용 — Apps Script POST는 CORS 허용됨)
+function gsGet(action){
+  return new Promise((resolve, reject) => {
+    const cbName = 'cb_' + Date.now();
+    const script = document.createElement('script');
+    const timer  = setTimeout(() => {
+      delete window[cbName];
+      script.remove();
+      reject(new Error('JSONP timeout'));
+    }, 15000);
+
+    window[cbName] = function(data){
+      clearTimeout(timer);
+      delete window[cbName];
+      script.remove();
+      if(data.ok) resolve(data.data);
+      else reject(new Error(data.error || '서버 오류'));
+    };
+
+    script.src = GS_URL + '?action=' + action + '&callback=' + cbName;
+    script.onerror = () => {
+      clearTimeout(timer);
+      delete window[cbName];
+      reject(new Error('Script load error'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+async function gsPost(action, postData){
+  const res = await fetch(GS_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain'},
+    body: JSON.stringify({action, data: postData})
+  });
+  const text = await res.text();
+  const json = JSON.parse(text);
+  if(!json.ok) throw new Error(json.error || '서버 오류');
+  return json;
+}
+
+// ── 초기 데이터 로드 ──
+async function gsInit(){
+  const overlay = document.getElementById('gs-overlay');
+  const msg     = document.getElementById('gs-overlay-msg');
+  if(msg) msg.textContent = 'Google Sheets 연결 중...';
+  try {
+    const all = await gsGet('getAll');
+    // date 필드 정규화 (Sheets에서 Date 객체로 올 수 있음)
+    userTransactions = (all.transactions || []).map(t => ({
+      ...t,
+      date:     normalizeDate(t.date),
+      proddate: normalizeDate(t.proddate),
+    }));
+    userProdEntries = all.prod || [];
+    const remotePrices = all.prices || [];
+    if(remotePrices.length) prices = remotePrices;
+    transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+    gsSetStatus(true);
+    if(overlay) overlay.classList.add('hidden');
+    renderAll();
+    gsShowSync('✅ Google Sheets 데이터 로드 완료');
+    // 로컬 백업
+    localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+    localStorage.setItem('dbmt_user_prod',         JSON.stringify(userProdEntries));
+    localStorage.setItem('dbmt_prices',            JSON.stringify(prices));
+  } catch(err) {
+    console.error('GS 로드 오류:', err);
+    gsSetStatus(false);
+    if(overlay) overlay.classList.add('hidden');
+    localInit();
+    renderAll();
+    gsShowSync('⚠ Sheets 연결 실패 — 로컬 데이터로 실행 중', true);
+  }
+}
+
+// 날짜 정규화: 어떤 형식이든 YYYY-MM-DD로 변환
+function normalizeDate(v){
+  if(!v) return '';
+  const s = String(v);
+  // 이미 YYYY-MM-DD 형식
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Date 문자열 변환
+  try {
+    const d = new Date(s);
+    if(!isNaN(d)){
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return y+'-'+m+'-'+day;
+    }
+  } catch(e) {}
+  return s;
+}
+
+// localStorage 로컬 데이터 초기화 (오프라인 폴백)
+function localInit(){
+  userTransactions = JSON.parse(localStorage.getItem('dbmt_user_transactions')||'[]');
+  userProdEntries  = JSON.parse(localStorage.getItem('dbmt_user_prod')||'[]');
+  const localPrices = localStorage.getItem('dbmt_prices');
+  if(localPrices) { try{ prices = JSON.parse(localPrices); }catch(e){} }
+  transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+}
+
+// 전체 렌더
+function renderAll(){
+  renderTransactions();
+  updateProductList();
+  if(typeof updateOriginList === 'function') updateOriginList();
+  initProdForm();
+}
+
+// ── 사용자가 앱에서 직접 추가 입력한 데이터 ──
+let userTransactions = [];
+let userProdEntries  = [];
+
+// ── 전체 transactions = 엑셀 원본 + 사용자 추가 ──
+let transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+let prices = JSON.parse(localStorage.getItem('dbmt_prices')||JSON.stringify([
+  {product:'냉장돈등심(작업)',  origin:'국내산',   price:12000},
+  {product:'냉장돈등심(치즈용)',origin:'국내산',   price:12000},
+  {product:'돈등심(작업)',     origin:'국내산',   price:9500},
+  {product:'돈등심(작업)',     origin:'미국산',   price:7800},
+  {product:'돈민찌(분쇄육)',   origin:'국내산',   price:6800},
+  {product:'돈사태(작업)',     origin:'국내산',   price:7500},
+  {product:'목전지(작업)',     origin:'미국산',   price:7000},
+  {product:'무항돈갈비(8mm)', origin:'국내산',   price:9000},
+  {product:'미전지(작업)',     origin:'국내산',   price:10000},
+  {product:'삼겹살(작업)',     origin:'덴마크',   price:10000},
+  {product:'삼겹살(작업)',     origin:'독일',     price:12000},
+  {product:'삼겹살(작업)',     origin:'스페인',   price:10000},
+  {product:'삼겹살(작업)',     origin:'오스트리아',price:11500},
+  {product:'삼겹살(작업)',     origin:'칠레',     price:11500},
+  {product:'삼겹양지(작업)',   origin:'미국산',   price:11500},
+  {product:'설도(작업)',       origin:'호주산',   price:18000},
+  {product:'알목심(작업)',     origin:'미국',     price:20000},
+  {product:'알목심(작업)',     origin:'미국산',   price:20000},
+  {product:'우국거리(작업)',   origin:'호주산',   price:14500},
+  {product:'우민찌(분쇄육)',   origin:'호주산',   price:14000},
+  {product:'우불고기(작업)',   origin:'호주산',   price:14500},
+  {product:'우잡채(작업)',     origin:'호주산',   price:14500},
+  {product:'차돌양지(작업)',   origin:'호주산',   price:14000},
+  {product:'토시(작업)',       origin:'미국산',   price:21000},
+  {product:'후지(작업)',       origin:'국내산',   price:6800},
+  {product:'부채살(작업)',     origin:'미국산',   price:0},
+]));
+
+// ─── 토스트 알림 ───────────────────────────────────────────
+function toast(msg, duration=2200){
+  const el=document.createElement('div');
+  el.className='notification';
+  el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{
+    el.style.opacity='0';
+    el.style.transition='opacity .4s';
+    setTimeout(()=>el.remove(), 400);
+  }, duration);
+}
+
+function save(){
+  // 1) localStorage 항상 저장
+  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+  localStorage.setItem('dbmt_prices',            JSON.stringify(prices));
+  localStorage.setItem('dbmt_user_prod',         JSON.stringify(userProdEntries));
+
+  // 2) Google Sheets 저장
+  if(GS_ONLINE){
+    gsPost('saveAll', {
+      transactions: userTransactions,
+      prod:         userProdEntries,
+      prices:       prices,
+    }).then(()=>{
+      gsShowSync('☁ Google Sheets 저장 완료');
+    }).catch(err=>{
+      console.error('GS 저장 오류:', err);
+      gsShowSync('⚠ Sheets 저장 실패 — 로컬에만 저장됨', true);
+    });
+  }
+}
+
+// ─── 탭 전환 ───────────────────────────────────────────
+function showPage(id, btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='p-production'){renderProduction();initProdForm();updateOriginList();}
+  if(id==='p-stock') renderStock();
+  if(id==='p-invoice') initInvoiceDates();
+  if(id==='p-shiplog') initShipDates();
+  if(id==='p-prices'){ cancelEditPrice(); renderPrices(); }
+}
+
+// ─── 거래내역 ───────────────────────────────────────────
+function updateTransactionForm(){
+  const t = document.getElementById('t-type').value;
+  document.querySelector('.t-proddate').style.display = (t==='출고') ? 'flex' : 'none';
+
+  const inpProd  = document.getElementById('t-product-input');
+  const selProd  = document.getElementById('t-product-select');
+  const inpOrig  = document.getElementById('t-origin-input');
+  const dispOrig = document.getElementById('t-origin-display');
+
+  const selOrig = document.getElementById('t-origin-select');
+  if(t === '출고'){
+    // 출고 모드: 품목 드롭다운 + 원산지 select
+    inpProd.style.display  = 'none';
+    selProd.style.display  = 'block';
+    inpOrig.style.display  = 'none';
+    if(selOrig)  selOrig.style.display  = 'block';
+    if(dispOrig) dispOrig.style.display = 'none';
+    updateOutProductList();
+    onOutProductChange();
+  } else {
+    // 입고 모드: 자유입력
+    inpProd.style.display  = 'block';
+    selProd.style.display  = 'none';
+    inpOrig.style.display  = 'block';
+    if(selOrig)  selOrig.style.display  = 'none';
+    if(dispOrig) dispOrig.style.display = 'none';
+    document.getElementById('lot-match-area').style.display = 'none';
+    updateOriginList();
+  }
+}
+
+function updateOutProductList(){
+  // 출고: 재고 있는 품목 목록으로 select 갱신
+  const stockMap = getStockMap();
+  const products = [...new Set(
+    Object.values(stockMap).filter(s=>s.stock>0.01).map(s=>s.product)
+  )].sort();
+  const sel = document.getElementById('t-product-select');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-- 재고품목 선택 --</option>' +
+    products.map(p=>`<option value="${p}" ${p===cur?'selected':''}>${p}</option>`).join('');
+  // datalist도 동기화 (fallback)
+  const dl = document.getElementById('product-list');
+  if(dl) dl.innerHTML = products.map(p=>`<option value="${p}">`).join('');
+}
+
+// 출고 품목 선택 시 → 재고 있는 원산지만 select에 표시
+function onOutProductSelectChange(){
+  const product = document.getElementById('t-product-select').value;
+  const selOrig = document.getElementById('t-origin-select');
+  // LOT 초기화
+  document.getElementById('t-lot').value = '';
+  document.getElementById('lot-match-area').style.display = 'none';
+  if(!selOrig) return;
+  if(!product){
+    selOrig.innerHTML = '<option value="">-- 원산지 선택 --</option>';
+    return;
+  }
+  // 재고 있는 원산지 목록
+  const stockMap = getStockMap();
+  const origins = [...new Set(
+    Object.values(stockMap)
+      .filter(s => s.product === product && s.stock > 0.01)
+      .map(s => s.origin)
+  )].sort();
+  selOrig.innerHTML = '<option value="">-- 원산지 선택 --</option>' +
+    origins.map(o => `<option value="${o}">${o}</option>`).join('');
+  // 원산지 1개면 자동 선택
+  if(origins.length === 1) selOrig.value = origins[0];
+  onOutProductChange();
+}
+
+// 원산지 select 변경 시 LOT 매칭 갱신
+function onOriginSelectChange(){
+  document.getElementById('t-lot').value = '';
+  onOutProductChange();
+}
+
+// 출고 시 품목/원산지 기준으로 재고 이력번호 자동 매칭 카드 표시
+function onOutProductChange(){
+  if(document.getElementById('t-type').value!=='출고') return;
+  const product = getTProduct();
+  const origin  = getTOrigin();
+  const area = document.getElementById('lot-match-area');
+  const list = document.getElementById('lot-match-list');
+  if(!product){ area.style.display='none'; return; }
+
+  const stockMap = getStockMap();
+  const matches = Object.values(stockMap).filter(s=>
+    s.product===product && s.stock>0.01 &&
+    (!origin || s.origin===origin)
+  ).sort((a,b)=>b.stock-a.stock);
+
+  if(!matches.length){ area.style.display='none'; return; }
+
+  area.style.display='block';
+  list.innerHTML = matches.map(s=>`
+    <div onclick="selectLot('${s.lot}','${s.origin}')" style="cursor:pointer;
+      background:var(--green-lt);border:1px solid var(--green);border-radius:6px;
+      padding:5px 10px;font-size:12px;display:flex;flex-direction:column;gap:1px;
+      min-width:140px;">
+      <div style="font-family:monospace;font-size:11px;font-weight:700;color:var(--green)">${s.lot}</div>
+      <div style="color:#666;font-size:10px;">${s.origin||''} · <strong>${s.stock.toFixed(2)} KG</strong></div>
+    </div>`).join('');
+}
+
+function selectLot(lot, origin){
+  document.getElementById('t-lot').value = lot;
+  // 원산지도 자동 채움
+  const dispOrig = document.getElementById('t-origin-display');
+  const inpOrig  = document.getElementById('t-origin-input');
+  if(dispOrig && dispOrig.style.display!=='none') dispOrig.value = origin||'';
+  else if(inpOrig && !inpOrig.value) inpOrig.value = origin||'';
+  toast('이력번호 선택: '+lot);
+}
+
+// 현재 재고 맵 계산 — total_in/total_use/total_out/stock 모두 동적 계산
+function getStockMap(){
+  const map={};
+
+  // EXCEL_STOCK 기준값 (빈 배열이면 건너뜀)
+  EXCEL_STOCK.forEach(s=>{
+    const key=s.product+'|'+s.lot;
+    map[key]={
+      product:s.product, lot:s.lot, origin:s.origin,
+      total_in:s.total_in||0, total_use:s.total_use||0, total_out:s.total_out||0,
+      stock:s.stock||0
+    };
+  });
+
+  // userTransactions 반영 — 타입별로 total_* 누적 + stock 계산
+  userTransactions.forEach(t=>{
+    const lot = String(t.lot||'');
+    const key = t.product+'|'+lot;
+    if(!map[key]) map[key]={
+      product:t.product, lot:lot, origin:t.origin||'',
+      total_in:0, total_use:0, total_out:0, stock:0
+    };
+    // origin이 비어있으면 채워줌
+    if(!map[key].origin && t.origin) map[key].origin=t.origin;
+
+    if(t.type==='입고' || t.type==='생산입고'){
+      map[key].total_in  += t.weight;
+      map[key].stock     += t.weight;
+    } else if(t.type==='출고'){
+      map[key].total_out += t.weight;
+      map[key].stock     -= t.weight;
+    } else if(t.type==='사용'){
+      map[key].total_use += t.weight;
+      map[key].stock     -= t.weight;
+    }
+  });
+  return map;
+}
+function getPrice(product,origin){
+  const p=prices.find(x=>x.product===product&&x.origin===origin);
+  return p?p.price:0;
+}
+
+// 현재 거래내역 폼의 품목명 값 읽기 (입고/출고 모드 통합)
+function getTProduct(){
+  const sel = document.getElementById('t-product-select');
+  if(sel && sel.style.display!=='none') return sel.value;
+  return document.getElementById('t-product-input')?.value.trim()||'';
+}
+// 현재 거래내역 폼의 원산지 값 읽기
+function getTOrigin(){
+  // 출고 모드: select에서 읽기
+  const selOrig = document.getElementById('t-origin-select');
+  if(selOrig && selOrig.style.display !== 'none') return selOrig.value.trim();
+  // 입고 모드: input에서 읽기
+  return document.getElementById('t-origin-input')?.value.trim()||'';
+}
+// 원산지 datalist 초기화 (단가표 기반)
+function updateOriginList(){
+  const origins = [...new Set(prices.map(p=>p.origin).filter(Boolean))].sort();
+  const dl = document.getElementById('origin-list');
+  if(dl) dl.innerHTML = origins.map(o=>`<option value="${o}">`).join('');
+}
+
+function updateTxnPrice(id, newPriceStr){
+  const newPrice = parseFloat(newPriceStr)||0;
+  const txn = userTransactions.find(t=>t.id===id);
+  if(!txn) return;
+  txn.price  = newPrice;
+  txn.amount = Math.round(newPrice * txn.weight);
+  transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  save();
+  // 금액 셀만 즉시 업데이트 (전체 re-render 없이)
+  const amtEl = document.getElementById(`txn-amt-${id}`);
+  if(amtEl) amtEl.textContent = txn.amount.toLocaleString();
+  // 거래명세서 탭이 열려있으면 자동 갱신
+  if(document.getElementById('p-invoice').classList.contains('active')){
+    initInvoiceDates();
+    loadInvoiceByDate();
+  }
+  toast('단가 수정 완료 — 거래명세서에 즉시 반영됩니다.', 2500);
+}
+function addTransaction(){
+  const date=document.getElementById('t-date').value;
+  const type=document.getElementById('t-type').value;
+  const product=getTProduct();
+  const origin=getTOrigin();
+  const trader=document.getElementById('t-trader').value.trim();
+  const lot=document.getElementById('t-lot').value.trim();
+  const proddate=document.getElementById('t-proddate').value;
+  const weight=parseFloat(document.getElementById('t-weight').value)||0;
+  const note=document.getElementById('t-note').value.trim();
+  if(!date||!product||!weight){alert('날짜, 품목명, 중량은 필수입니다.');return;}
+  const price=getPrice(product,origin);
+  const newItem={id:Date.now(),date,type,product,origin,trader,lot,proddate,weight,note,price,amount:Math.round(price*weight),_isUser:true};
+  userTransactions.push(newItem);
+  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  save(); renderTransactions(); updateProductList(); clearTransactionForm();
+  // 출고면 거래명세서 날짜 목록 갱신
+  if(type==='출고') initInvoiceDates();
+}
+function clearTransactionForm(){
+  ['t-product-input','t-origin-input','t-trader','t-lot','t-note'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const sel=document.getElementById('t-product-select'); if(sel) sel.value='';
+  const selOrig=document.getElementById('t-origin-select');
+  if(selOrig) selOrig.innerHTML='<option value="">-- 원산지 선택 --</option>';
+  const disp=document.getElementById('t-origin-display'); if(disp) disp.value='';
+  document.getElementById('t-weight').value='';
+  document.getElementById('t-proddate').value='';
+  document.getElementById('t-date').value=today;
+}
+function renderTransactions(){
+  const q=document.getElementById('t-search').value.toLowerCase();
+  const ft=document.getElementById('t-filter-type').value;
+  let rows=transactions.filter(t=>
+    (!ft||t.type===ft)&&
+    (!q||(t.date+t.type+t.product+t.origin+t.trader+t.lot).toLowerCase().includes(q))
+  ).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||b.id-a.id);
+  document.getElementById('t-count').textContent=`(${rows.length}건)`;
+  const b=document.getElementById('t-body');
+  b.innerHTML=rows.map(t=>`<tr>
+    <td>${t.date}</td>
+    <td><span class="badge badge-${t.type==='입고'||t.type==='생산입고'?'in':t.type==='사용'?'use':'out'}" style="${t.type==='생산입고'?'opacity:0.8;font-size:9px;':''}">${t.type}</span></td>
+    <td>${t.trader||'-'}</td><td>${t.product}</td><td>${t.origin||'-'}</td>
+    <td style="font-family:monospace;font-size:10px">${t.lot||'-'}</td>
+    <td style="text-align:right">${t.weight.toFixed(2)}</td>
+    <td style="text-align:right;padding:2px 4px;">
+      ${t._isUser
+        ? `<input type="number" value="${t.price||0}"
+             onchange="updateTxnPrice(${t.id}, this.value)"
+             style="width:80px;text-align:right;font-size:12px;padding:2px 4px;
+                    border:1px solid #ddd;border-radius:4px;background:#fffff8;">`
+        : (t.price?t.price.toLocaleString():'-')}
+    </td>
+    <td style="text-align:right" id="txn-amt-${t.id}">${t.amount?Math.round(t.amount).toLocaleString():'-'}</td>
+    <td>${t.note||'-'}</td>
+    <td>${t._isUser?`<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${t.id})">삭제</button>`:'<span style="font-size:10px;color:#aaa">원본</span>'}</td>
+  </tr>`).join('');
+}
+function deleteTransaction(id){
+  if(!confirm('삭제하시겠습니까?'))return;
+  // 엑셀 원본은 삭제 불가, 사용자 추가분만 삭제
+  userTransactions=userTransactions.filter(t=>t.id!==id);
+  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  save(); renderTransactions();
+}
+function updateProductList(){
+  const dl=document.getElementById('product-list');
+  const prods=[...new Set(transactions.map(t=>t.product))];
+  dl.innerHTML=prods.map(p=>`<option value="${p}">`).join('');
+}
+
+// ─── 생산일보 입력 관련 ───────────────────────────────────────────
+let prodInputRowCount = 0;
+let prodOutputRowCount = 0;
+
+function initProdForm(){
+  document.getElementById('prod-date').value = today;
+  document.getElementById('prod-job-no').value = '1';
+  document.getElementById('prod-input-rows').innerHTML = '';
+  document.getElementById('prod-output-rows').innerHTML = '';
+  prodInputRowCount = 0;
+  prodOutputRowCount = 0;
+  addProdInputRow();
+  addProdOutputRow();
+}
+
+function getStockOptions(){
+  // 재고 있는 품목 목록 반환 (투입 품목 선택용)
+  const stockMap = getStockMap();
+  return Object.values(stockMap)
+    .filter(s=>s.stock>0.01)
+    .sort((a,b)=>String(a.product).localeCompare(String(b.product)) || String(a.lot||'').localeCompare(String(b.lot||'')));
+}
+
+function addProdInputRow(){
+  const id = ++prodInputRowCount;
+  const stockOpts = getStockOptions();
+  const optHtml = stockOpts.map(s=>
+    `<option value="${s.product}|${s.lot}|${s.origin}" data-product="${s.product}" data-lot="${s.lot}" data-origin="${s.origin}" data-stock="${s.stock.toFixed(2)}">${s.product} [${s.lot}] ${s.origin} (${s.stock.toFixed(2)}KG)</option>`
+  ).join('');
+
+  const row = document.createElement('div');
+  row.id = `prod-in-${id}`;
+  row.style.cssText = 'display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+  row.innerHTML = `
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:var(--orange);">재고품목 선택 #${id}</label>
+      <select id="prod-in-sel-${id}" onchange="onProdInSelect(${id})" style="font-size:12px;">
+        <option value="">-- 재고에서 선택 --</option>
+        ${optHtml}
+      </select>
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">품목명</label>
+      <input id="prod-in-product-${id}" placeholder="품목명" style="font-size:12px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">이력번호</label>
+      <input id="prod-in-lot-${id}" placeholder="LOT" style="font-family:monospace;font-size:11px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">투입량(KG)</label>
+      <input type="number" id="prod-in-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:var(--blue);">단가(원/KG)</label>
+      <input type="number" id="prod-in-price-${id}" placeholder="0" style="font-size:12px;">
+    </div>
+    <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-in-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
+  `;
+  document.getElementById('prod-input-rows').appendChild(row);
+}
+
+function onProdInSelect(id){
+  const sel = document.getElementById(`prod-in-sel-${id}`);
+  const opt = sel.selectedOptions[0];
+  if(!opt || !opt.value) return;
+  const product = opt.dataset.product || '';
+  const origin  = opt.dataset.origin  || '';
+  document.getElementById(`prod-in-product-${id}`).value = product;
+  document.getElementById(`prod-in-lot-${id}`).value     = opt.dataset.lot || '';
+  // 단가표에서 단가 자동 적용 (수정 가능)
+  const autoPrice = getPrice(product, origin);
+  const priceEl = document.getElementById(`prod-in-price-${id}`);
+  if(priceEl && autoPrice) priceEl.value = autoPrice;
+  // 생산품 원산지 필드 자동 채움 (모든 prod-out-origin 필드에 동일 원산지 표시)
+  document.querySelectorAll('[id^="prod-out-origin-"]').forEach(el=>{ el.value = origin; });
+  toast(`선택: ${product} [${opt.dataset.lot}] 재고 ${opt.dataset.stock}KG${autoPrice?' / 단가 '+autoPrice.toLocaleString()+'원':''}`, 2800);
+}
+
+function addProdOutputRow(){
+  const id = ++prodOutputRowCount;
+  const row = document.createElement('div');
+  row.id = `prod-out-${id}`;
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 0.8fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+  row.innerHTML = `
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:var(--green);">생산품목 #${id}</label>
+      <input id="prod-out-product-${id}" list="product-list" placeholder="생산 품목명" style="font-size:12px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#888;">원산지</label>
+      <input id="prod-out-origin-${id}" placeholder="자동입력" style="font-size:12px;background:#f8fff8;" readonly>
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">이력번호(LOT)</label>
+      <input id="prod-out-lot-${id}" placeholder="LOT" style="font-family:monospace;font-size:11px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">생산량(KG)</label>
+      <input type="number" id="prod-out-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">단가(원/KG)</label>
+      <input type="number" id="prod-out-price-${id}" placeholder="0" style="font-size:12px;">
+    </div>
+    <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-out-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
+  `;
+  document.getElementById('prod-output-rows').appendChild(row);
+  // 현재 투입에서 원산지 자동 감지하여 채움
+  const firstOriginEl = document.querySelector('[id^="prod-in-sel-"] option:checked');
+  if(firstOriginEl && firstOriginEl.dataset.origin){
+    const el = document.getElementById(`prod-out-origin-${id}`);
+    if(el) el.value = firstOriginEl.dataset.origin;
+  }
+}
+
+function saveProdEntry(){
+  const date = document.getElementById('prod-date').value;
+  const jobNo = document.getElementById('prod-job-no').value.trim() || '1';
+  if(!date){alert('작업일을 입력해주세요.');return;}
+
+  // 투입 수집
+  const inputs = [];
+  document.querySelectorAll('[id^="prod-in-qty-"]').forEach(el=>{
+    const id = el.id.replace('prod-in-qty-','');
+    const product = document.getElementById(`prod-in-product-${id}`)?.value.trim();
+    const lot = document.getElementById(`prod-in-lot-${id}`)?.value.trim();
+    const origin = document.getElementById(`prod-in-sel-${id}`)?.selectedOptions[0]?.dataset?.origin || '';
+    const qty = parseFloat(el.value)||0;
+    // 단가: 사용자 입력 우선, 없으면 단가표
+    const manualPrice = parseFloat(document.getElementById(`prod-in-price-${id}`)?.value)||0;
+    const p = manualPrice || getPrice(product, origin);
+    if(product && qty>0){
+      inputs.push({product,lot,qty,price:p,amount:p*qty,origin});
+    }
+  });
+
+  // 생산 수집
+  // 투입 품목의 대표 원산지 (첫 번째 투입 기준 — 원료와 생산품 원산지 동일)
+  const inputOrigin = inputs.length > 0 ? (inputs[0].origin || '') : '';
+  const outputs = [];
+  document.querySelectorAll('[id^="prod-out-qty-"]').forEach(el=>{
+    const id = el.id.replace('prod-out-qty-','');
+    const product = document.getElementById(`prod-out-product-${id}`)?.value.trim();
+    const lot = document.getElementById(`prod-out-lot-${id}`)?.value.trim();
+    const qty = parseFloat(el.value)||0;
+    const price = parseFloat(document.getElementById(`prod-out-price-${id}`)?.value)||0;
+    if(product && qty>0){
+      const totalIn = inputs.reduce((s,i)=>s+i.amount,0);
+      const calcPrice = price||( qty>0?Math.round(totalIn/qty):0 );
+      // 원산지: 생산품 필드에 입력된 값 or 투입 원료와 동일 원산지 적용
+      const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
+      outputs.push({product,lot,qty,price:calcPrice,amount:calcPrice*qty,origin:outOrigin});
+    }
+  });
+
+  if(!inputs.length && !outputs.length){alert('투입 또는 생산 항목을 입력해주세요.');return;}
+
+  // 날짜 포맷 YYYY/MM/DD
+  const [y,m,d] = date.split('-');
+  const dateFormatted = `${y}/${m}/${d}`;
+
+  const entry = {
+    key:[dateFormatted,jobNo],
+    date:dateFormatted,
+    job_no:jobNo,
+    inputs, outputs,
+    _isUser:true,
+    id:Date.now()
+  };
+
+  userProdEntries.push(entry);
+  // '사용' 트랜잭션 자동 생성 (투입 재고 차감)
+  inputs.forEach(inp=>{
+    if(inp.product && inp.qty>0){
+      userTransactions.push({
+        id:Date.now()+Math.random(), date, type:'사용',
+        product:inp.product, lot:inp.lot||'', origin:inp.origin||'',
+        trader:'', weight:inp.qty, price:inp.price, amount:inp.amount,
+        note:`생산작업 ${dateFormatted} #${jobNo}`,
+        _isUser:true, _isProdUse:true, _prodId:entry.id
+      });
+    }
+  });
+  // '생산입고' 트랜잭션 자동 생성 (생산품 재고 추가 — 거래내역 입고와 구분)
+  outputs.forEach(out=>{
+    if(out.product && out.qty>0){
+      userTransactions.push({
+        id:Date.now()+Math.random(), date, type:'생산입고',
+        product:out.product, lot:out.lot||'', origin:out.origin||'',
+        trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
+        note:`생산완료 ${dateFormatted} #${jobNo}`,
+        _isUser:true, _isProdOut:true, _prodId:entry.id
+      });
+    }
+  });
+  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  save();
+  renderProduction();
+  renderStock();
+  renderTransactions();
+  toast('생산일보 저장 완료! 재고에 반영됐습니다.');
+  clearProdForm();
+}
+
+function clearProdForm(){
+  document.getElementById('prod-input-rows').innerHTML='';
+  document.getElementById('prod-output-rows').innerHTML='';
+  prodInputRowCount=0; prodOutputRowCount=0;
+  addProdInputRow();
+  addProdOutputRow();
+}
+
+function deleteProdEntry(id){
+  if(!confirm('삭제하시겠습니까?\n관련 재고(사용/생산입고)도 함께 취소됩니다.'))return;
+  userProdEntries=userProdEntries.filter(e=>e.id!==id);
+  // 관련 트랜잭션(사용 + 생산입고) 함께 삭제
+  userTransactions=userTransactions.filter(t=>t._prodId!==id);
+  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  save();
+  renderProduction();
+  renderStock();
+  toast('생산일보 삭제 완료. 재고가 복원됐습니다.');
+}
+
+// ─── 생산일보 ───────────────────────────────────────────
+// 엑셀 생산일보 시트 직접 데이터
+// ── 엑셀 거래명세서 데이터 (02__거래명세서.xlsx 직접 추출, 단가/금액 완전 일치)
+const EXCEL_INVOICES = [];
+
+const EXCEL_PROD = [];
+
+function renderProduction(){
+  const b=document.getElementById('prod-body');
+  const filterDate=document.getElementById('prod-filter-date')?.value||'';
+  
+  // 엑셀 데이터 기반으로 렌더링
+  const allProd=[...EXCEL_PROD,...userProdEntries];
+  const entries = filterDate
+    ? allProd.filter(e=>{
+        const d = e.date.replace(/\/(\d+)\//,'-').replace('/','/')
+          .replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,'$1-$2-$3')
+          .replace(/^(\d{4})-(\d{1,2})-(\d{1,2})$/, (_,y,m,d2)=>`${y}-${m.padStart(2,'0')}-${d2.padStart(2,'0')}`);
+        return d === filterDate;
+      })
+    : allProd;
+  
+  if(!entries.length){
+    b.innerHTML='<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--color-text-secondary)">데이터 없음</td></tr>';
+    return;
+  }
+  
+  let html='';
+  entries.forEach(e=>{
+    const inputs=e.inputs||[];
+    const outputs=e.outputs||[];
+    if(!inputs.length && !outputs.length) return;
+    
+    const totalInAmt=inputs.reduce((s,i)=>s+i.amount,0);
+    const totalInQty=inputs.reduce((s,i)=>s+i.qty,0);
+    const totalOutQty=outputs.reduce((s,o)=>s+o.qty,0);
+    const totalOutAmt=outputs.reduce((s,o)=>s+o.amount,0);
+    const lossKg=totalInQty-totalOutQty;
+    const lossRate=totalInQty>0?(lossKg/totalInQty*100):0;
+    const lossColor=lossRate>5?'var(--color-text-danger)':lossRate>2?'#633806':'var(--color-text-secondary)';
+    const maxRows=Math.max(inputs.length,outputs.length,1);
+    
+    for(let i=0;i<maxRows;i++){
+      const inp=inputs[i];
+      const out=outputs[i];
+      const isFirst=(i===0);
+      html+=`<tr${isFirst?' style="border-top:1.5px solid var(--color-border-secondary)"':''}>`;
+      // 작업일 (첫행만, rowspan)
+      html+=isFirst
+        ?`<td rowspan="${maxRows}" style="vertical-align:top;border-right:.5px solid var(--color-border-tertiary);padding-top:8px;font-size:11px;font-weight:500">${e.date}<br><span style="font-size:10px;color:var(--color-text-secondary);font-weight:400">작업${e.job_no}</span></td>`
+        :'';
+      // 투입
+      html+=inp
+        ?`<td>${inp.product}</td><td>${inp.origin||''}</td>
+           <td style="text-align:right">${inp.qty.toFixed(2)}</td>
+           <td style="text-align:right">${inp.price?inp.price.toLocaleString():'-'}</td>
+           <td style="text-align:right;font-weight:500">${inp.amount?Math.round(inp.amount).toLocaleString():'-'}</td>
+           <td style="font-family:var(--font-mono);font-size:10px">${inp.lot||'-'}</td>`
+        :'<td colspan="6"></td>';
+      // 구분선
+      html+=`<td style="border-left:2px solid var(--color-border-tertiary)"></td>`;
+      // 생산
+      html+=out
+        ?`<td>${out.product}</td><td>${out.origin||''}</td>
+           <td style="text-align:right">${out.qty.toFixed(2)}</td>
+           <td style="text-align:right">${out.price?Math.round(out.price).toLocaleString():'-'}</td>
+           <td style="text-align:right;font-weight:500">${out.amount?Math.round(out.amount).toLocaleString():'-'}</td>
+           <td style="font-family:var(--font-mono);font-size:10px">${out.lot||'-'}</td>`
+        :'<td colspan="6"></td>';
+      html+='<td></td>'; // 관리열(소계행에서 처리)
+      html+='<td></td>'; // 관리열
+      html+='</tr>';
+    }
+    // 소계 행
+    html+=`<tr class="subtotal-row">
+      <td></td>
+      <td colspan="3" style="text-align:right">투입합계</td>
+      <td></td><td style="text-align:right">${totalInQty.toFixed(2)}KG</td>
+      <td style="text-align:right">${Math.round(totalInAmt).toLocaleString()}원</td>
+      <td style="border-left:2px solid var(--color-border-tertiary)"></td>
+      <td colspan="2">로스 <span style="color:${lossColor}">${lossKg.toFixed(2)}KG (${lossRate.toFixed(1)}%)</span></td>
+      <td style="text-align:right">${totalOutQty.toFixed(2)}KG</td>
+      <td></td>
+      <td style="text-align:right">${Math.round(totalOutAmt).toLocaleString()}원</td>
+      <td></td>
+      <td>${e._isUser?`<button class="btn btn-sm btn-danger" onclick="deleteProdEntry(${e.id})">삭제</button>`:'<span style="font-size:10px;color:#aaa">원본</span>'}</td>
+    </tr>`;
+  });
+  
+  b.innerHTML = html || '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--color-text-secondary)">해당 날짜의 데이터가 없습니다</td></tr>';
+}
+
+
+// ─── 재고현황 ───────────────────────────────────────────
+// 엑셀 재고현황 시트 직접 데이터 (SUMIFS 계산값 그대로)
+const EXCEL_STOCK = [];
+
+function renderStock(){
+  const q=document.getElementById('stock-search').value.toLowerCase();
+  const filterStatus=document.getElementById('stock-filter-status')?.value||'재고';
+
+  // 현재 재고 맵 계산
+  const stockMap=getStockMap();
+  let rows=Object.values(stockMap);
+
+  // 필터 적용
+  if(filterStatus==='재고') rows=rows.filter(s=>s.stock>0.01);
+  else if(filterStatus==='소진') rows=rows.filter(s=>s.stock<=0.01);
+
+  if(q) rows=rows.filter(s=>(s.product+s.lot+s.origin).toLowerCase().includes(q));
+
+  // 정렬: 품목명 가나다순 → 같은 품목 내 재고 내림차순
+  rows.sort((a,b)=>{
+    const pa = String(a.product||'');
+    const pb = String(b.product||'');
+    if(pa !== pb) return pa.localeCompare(pb, 'ko');
+    return b.stock - a.stock;
+  });
+
+  // 통계
+  const totalItems=rows.length;
+  const inStock=rows.filter(s=>s.stock>10).length;
+  const lowStock=rows.filter(s=>s.stock>0.01&&s.stock<=10).length;
+  const outStock=rows.filter(s=>s.stock<=0.01).length;
+  const statsEl=document.getElementById('stock-stats');
+  if(statsEl) statsEl.innerHTML=`
+    <div class="stat"><div class="stat-label">조회 품목</div><div class="stat-val">${totalItems}</div></div>
+    <div class="stat"><div class="stat-label" style="color:var(--green)">정상 재고</div><div class="stat-val stock-ok">${inStock}</div></div>
+    <div class="stat"><div class="stat-label" style="color:var(--orange)">부족 (≤10KG)</div><div class="stat-val stock-warn">${lowStock}</div></div>
+    <div class="stat"><div class="stat-label" style="color:var(--red)">소진</div><div class="stat-val stock-ng">${outStock}</div></div>
+  `;
+
+  const b=document.getElementById('stock-body');
+  if(!rows.length){
+    b.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
+    return;
+  }
+  b.innerHTML=rows.map(s=>{
+    const stk=s.stock;
+    const cls=stk>10?'stock-ok':stk>0.01?'stock-warn':'stock-ng';
+    const label=stk>10?'정상':stk>0.01?'부족':'소진';
+    return `<tr>
+      <td>${s.product}</td>
+      <td style="font-family:monospace;font-size:11px">${s.lot||'-'}</td>
+      <td>${s.origin||'-'}</td>
+      <td style="text-align:right">${(s.total_in||0).toFixed(2)}</td>
+      <td style="text-align:right">${(s.total_use||0).toFixed(2)}</td>
+      <td style="text-align:right">${(s.total_out||0).toFixed(2)}</td>
+      <td style="text-align:right;font-weight:700">${stk.toFixed(2)}</td>
+      <td><span class="${cls}">${label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function initInvoiceDates(){
+  const sel=document.getElementById('inv-date');
+  const saved = sel.value; // 현재 선택값 보존
+
+  // userTransactions 출고 기반 날짜+거래처 목록 생성
+  const userOuts = userTransactions.filter(t=>t.type==='출고');
+  // 날짜|거래처 조합으로 유니크하게
+  const combos = [...new Map(userOuts.map(t=>[t.date+'|'+(t.trader||''), {date:t.date, trader:t.trader||''}])).values()]
+    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+
+  // EXCEL_INVOICES 날짜도 추가 (있는 경우)
+  const excelDates = EXCEL_INVOICES.map(inv=>({date:inv.date, trader:inv.trader}));
+  const allCombos = [...combos];
+  excelDates.forEach(e=>{
+    if(!allCombos.find(c=>c.date===e.date && c.trader===e.trader))
+      allCombos.push(e);
+  });
+  allCombos.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+
+  sel.innerHTML='<option value="">-- 날짜/거래처 선택 --</option>'+
+    allCombos.map(c=>`<option value="${c.date}|${c.trader}">${c.date} · ${c.trader}</option>`).join('');
+
+  // 이전 선택 복원 시도
+  if(saved) sel.value = saved;
+}
+
+function calcPrevUnpaid(date){
+  return 0; // 향후 거래처별 미수금 관리 기능에서 확장
+}
+function loadInvoiceByDate(){
+  const combo=document.getElementById('inv-date').value;
+  if(!combo){document.getElementById('invoice-preview').innerHTML='';return;}
+
+  // 값 형식: "2026-04-16|동원홈푸드"
+  const sepIdx = combo.indexOf('|');
+  const date   = sepIdx>=0 ? combo.slice(0,sepIdx) : combo;
+  const trader = sepIdx>=0 ? combo.slice(sepIdx+1) : '';
+
+  // userTransactions 출고 중 해당 날짜+거래처 필터
+  const dayOuts = userTransactions.filter(t=>
+    t.type==='출고' && t.date===date && (t.trader||'')===(trader||'')
+  );
+
+  // EXCEL_INVOICES 기존 데이터도 확인
+  const excelInv = EXCEL_INVOICES.find(i=>i.date===date && i.trader===trader);
+
+  if(!dayOuts.length && !excelInv){
+    document.getElementById('invoice-preview').innerHTML=
+      '<div class="alert alert-warn">해당 날짜/거래처의 출고 내역이 없습니다.</div>';
+    return;
+  }
+
+  document.getElementById('inv-trader').value = trader;
+  document.getElementById('inv-prev-unpaid').value = '0 원';
+
+  const [yr,mo,da] = date.split('-');
+
+  // 품목 행 — userTransactions 출고 기반
+  let items = dayOuts.map(t=>({
+    date: `${mo}.${da}`,
+    product: t.product,
+    origin:  t.origin||'',
+    lot:     t.lot||'',
+    weight:  t.weight,
+    price:   t.price||0,
+    amount:  t.amount||Math.round((t.price||0)*t.weight),
+    _id:     t.id
+  }));
+
+  // EXCEL_INVOICES 항목도 병합 (excelInv 있으면)
+  if(excelInv && !dayOuts.length){
+    items = excelInv.items.map(it=>({...it, date:`${mo}.${da}`}));
+  }
+
+  const totalWeight = items.reduce((s,i)=>s+i.weight,0);
+  const totalAmount = items.reduce((s,i)=>s+i.amount,0);
+  const prevUnpaid  = excelInv ? excelInv.prev_unpaid : 0;
+  const totalUnpaid = prevUnpaid + totalAmount;
+
+  let itemRows='';
+  items.forEach(item=>{
+    itemRows+=`<tr>
+      <td style="text-align:center">${item.date}</td>
+      <td>${item.product}</td>
+      <td style="text-align:center">Box</td>
+      <td style="text-align:right">${Number(item.weight).toFixed(2)}</td>
+      <td style="text-align:right">${Number(item.price).toLocaleString()}</td>
+      <td style="text-align:right">${Math.round(item.amount).toLocaleString()}</td>
+      <td></td>
+      <td style="text-align:right">${Math.round(item.amount).toLocaleString()}</td>
+    </tr>
+    <tr style="background:#fafafa;">
+      <td colspan="8" style="font-size:10px;color:#666;padding:3px 12px;">
+        ${item.origin||''}${item.origin?'':''}　이력번호 : ${item.lot||''}
+      </td>
+    </tr>`;
+  });
+  
+  document.getElementById('invoice-preview').innerHTML=`
+  <div class="invoice-preview" id="inv-print-area">
+    <div class="inv-title">거　래　명　세　서</div>
+    <div style="font-size:11px;margin-bottom:8px;color:#666;text-align:center;">
+      거래기간 : ${yr}년${mo}월${da}일 ～ ${yr}년${mo}월${da}일　　
+      입금계좌 : 기업(법인) 115-146014-01-014 주식회사동부엠티
+    </div>
+    
+    <div class="inv-row">
+      <div class="inv-box">
+        <div class="inv-box-title" style="background:#1a252f;color:#fff;padding:4px;border-radius:4px 4px 0 0;margin:-10px -10px 8px;">공　급　자</div>
+        <div class="inv-line"><span>등록번호</span><span>495-88-01108</span></div>
+        <div class="inv-line"><span>상호</span><span style="font-weight:600;">주식회사 동부엠티</span></div>
+        <div class="inv-line"><span>대표</span><span>이창성</span></div>
+        <div class="inv-line"><span>주소</span><span style="font-size:10px;">인천광역시 서구 소담2로 36, 2동 201호</span></div>
+        <div class="inv-line"><span>업태</span><span>도매및소매업, 제조업</span></div>
+        <div class="inv-line"><span>전화</span><span>070-4609-9290</span></div>
+        <div class="inv-line"><span>팩스</span><span>02-589-6417</span></div>
+      </div>
+      <div class="inv-box">
+        <div class="inv-box-title" style="background:#2980b9;color:#fff;padding:4px;border-radius:4px 4px 0 0;margin:-10px -10px 8px;">공급 받는 자</div>
+        <div class="inv-line"><span>등록번호</span><span>${trader==='동원홈푸드'?'312-81-25260':''}</span></div>
+        <div class="inv-line"><span>상호</span><span style="font-weight:600;">${trader==='동원홈푸드'?'(주)동원홈푸드':trader}</span></div>
+        <div class="inv-line"><span>대표</span><span>${trader==='동원홈푸드'?'김성용':''}</span></div>
+        <div class="inv-line"><span>주소</span><span style="font-size:10px;">${trader==='동원홈푸드'?'서울특별시 서초구 마방로 68, 14층':''}</span></div>
+        <div class="inv-line"><span>업태</span><span>${trader==='동원홈푸드'?'제조, 도소매':''}</span></div>
+      </div>
+    </div>
+    
+    <div class="tbl-wrap" style="margin:10px 0;border-radius:6px;">
+      <table style="font-size:11px;">
+        <thead>
+          <tr style="background:#1a252f;color:#fff;">
+            <th style="text-align:center;width:60px;">일자</th>
+            <th>상품명</th>
+            <th style="text-align:center;width:45px;">Box</th>
+            <th style="text-align:right;width:70px;">중량</th>
+            <th style="text-align:right;width:75px;">단가</th>
+            <th style="text-align:right;width:90px;">공급가액</th>
+            <th style="text-align:right;width:55px;">부가세</th>
+            <th style="text-align:right;width:90px;">합계금액</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot>
+          <tr style="background:#f0f4f8;font-weight:700;border-top:2px solid #1a252f;">
+            <td colspan="3" style="text-align:center;">합　　계</td>
+            <td style="text-align:right;">${totalWeight.toFixed(2)}</td>
+            <td></td>
+            <td style="text-align:right;">${Math.round(totalAmount).toLocaleString()}</td>
+            <td></td>
+            <td style="text-align:right;">${Math.round(totalAmount).toLocaleString()}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;">
+      <div style="background:#fafafa;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:10px;color:#666;line-height:1.8;">
+        <strong style="color:#333;">원산지 표시 의무 이행 동보</strong><br>
+        매입한 물품은 최종판매 단계까지 한글원산지 표시를 이행하도록 하여야 하며,<br>
+        특히 제3자 양도 시는 동 사항을 서면으로 통보하여 합.<br>
+        물건에 하자 또는 상이품이 있을 시, 거래명세서 작성일로 부터 1주일<br>
+        이내에만 반품이 가능하며, 검수의 의무는 공급받는자에게 있습니다.
+      </div>
+      <div style="text-align:right;white-space:nowrap;">
+        <div style="display:flex;justify-content:space-between;gap:24px;padding:6px 10px;font-size:12px;">
+          <span style="color:#888;">전 미수금액</span>
+          <span style="color:var(--red);font-weight:700;">${prevUnpaid.toLocaleString()} 원</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:24px;padding:6px 10px;font-size:14px;background:#1a252f;color:#fff;border-radius:6px;margin-top:4px;">
+          <span>총 미수금액</span>
+          <span style="font-weight:700;">${totalUnpaid.toLocaleString()} 원</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── 완제품 출고일지 ───────────────────────────────────────────
+function initShipDates(){
+  const dates=[...new Set(transactions.filter(t=>t.type==='출고').map(t=>t.date))].sort((a,b)=>String(b||'').localeCompare(String(a||'')));
+  const sel=document.getElementById('ship-date');
+  sel.innerHTML='<option value="">-- 날짜 선택 --</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+}
+function loadShipLog(){
+  const date=document.getElementById('ship-date').value;
+  if(!date){document.getElementById('shiplog-preview').innerHTML='';return;}
+  const dayOuts=transactions.filter(t=>t.type==='출고'&&t.date===date);
+  if(!dayOuts.length){document.getElementById('shiplog-preview').innerHTML='<div class="alert alert-info">해당 날짜에 출고 내역이 없습니다.</div>';return;}
+  const trader=dayOuts[0].trader||'';
+  const [yr,mo,da]=date.split('-');
+  let rows='';
+  dayOuts.forEach((o,i)=>{
+    rows+=`<tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${o.product}</td><td>${trader}</td>
+      <td>${o.proddate||'-'}</td>
+      <td style="font-family:var(--font-mono);font-size:10px">${o.lot||'-'}</td>
+      <td style="text-align:right;font-weight:500">${o.weight.toFixed(2)}</td>
+    </tr>`;
+  });
+  for(let i=dayOuts.length;i<10;i++){
+    rows+=`<tr><td style="text-align:center;color:var(--color-text-tertiary)">${i+1}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+  }
+  document.getElementById('shiplog-preview').innerHTML=`
+  <div class="invoice-preview">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="inv-title" style="font-size:14px;margin:0">완제품 출고일지</div>
+      <div style="display:flex;gap:16px;font-size:10px"><span>작성</span><span>승인</span></div>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:8px;font-size:10px">
+      <span>담당부서: 생산팀</span><span>출고일: ${yr}년 ${mo}월 ${da}일</span>
+    </div>
+    <div style="font-size:10px;color:var(--color-text-secondary);margin-bottom:10px">
+      냉장고/냉동고에서 완제품을 출고 당일 꺼낸 후, 출고 직전 최종 상태를 점검하고 적합 여부를 기록한다.
+    </div>
+    <table style="margin-bottom:12px">
+      <thead><tr style="background:var(--color-background-secondary)">
+        <th style="text-align:center;width:30px">No</th><th>제품명</th><th>거래처</th><th>제조일자</th><th>LOT</th><th style="text-align:right">수량(KG)</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="font-weight:500;font-size:11px;margin-bottom:6px">▶ 점검사항</div>
+    <table>
+      <thead><tr style="background:var(--color-background-secondary)">
+        <th>점검항목</th><th>결과(적합/부적합)</th><th>점검자</th>
+      </tr></thead>
+      <tbody>
+        ${['보관상태','포장상태','표시사항','배송차량점검'].map(item=>`<tr><td>${item}</td><td style="min-width:120px"></td><td style="min-width:60px"></td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ─── 단가표 ───────────────────────────────────────────
+// ─── 단가표 CRUD ───────────────────────────────────────────
+
+function renderPrices(){
+  const q = (document.getElementById('pr-search')?.value||'').toLowerCase();
+  const filtered = prices
+    .map((p,i)=>({...p,_idx:i}))
+    .filter(p=> !q || (p.product+p.origin).toLowerCase().includes(q))
+    .sort((a,b)=> String(a.product||'').localeCompare(String(b.product||''),'ko') || String(a.origin||'').localeCompare(String(b.origin||''),'ko'));
+
+  const countEl = document.getElementById('pr-count');
+  if(countEl) countEl.textContent = `(${filtered.length}/${prices.length}개)`;
+
+  const b = document.getElementById('price-body');
+  if(!filtered.length){
+    b.innerHTML='<tr><td colspan="4" style="text-align:center;padding:20px;color:#888;">검색 결과 없음</td></tr>';
+    return;
+  }
+  b.innerHTML = filtered.map(p=>`<tr id="pr-row-${p._idx}">
+    <td>${p.product}</td>
+    <td>${p.origin||'-'}</td>
+    <td style="text-align:right;font-weight:600;">${p.price>0?p.price.toLocaleString()+'원':'-'}</td>
+    <td style="text-align:center;">
+      <button class="btn btn-sm btn-secondary" onclick="editPrice(${p._idx})" style="margin-right:4px;">✏ 수정</button>
+      <button class="btn btn-sm btn-danger" onclick="deletePrice(${p._idx})">✕ 삭제</button>
+    </td>
+  </tr>`).join('');
+}
+
+/* 저장 (추가 or 수정) */
+function savePrice(){
+  const product = document.getElementById('pr-product').value.trim();
+  const origin  = document.getElementById('pr-origin').value.trim();
+  const price   = parseInt(document.getElementById('pr-price').value)||0;
+  const editIdx = parseInt(document.getElementById('pr-edit-idx').value);
+
+  if(!product){ alert('품목명을 입력해주세요.'); return; }
+  if(price < 0){ alert('단가는 0 이상이어야 합니다.'); return; }
+
+  if(editIdx >= 0){
+    // 수정 모드
+    prices[editIdx] = {product, origin, price};
+    toast(`수정 완료: ${product} (${origin}) → ${price.toLocaleString()}원`);
+  } else {
+    // 추가 모드 — 동일 품목+원산지 있으면 덮어쓸지 물어보기
+    const dup = prices.findIndex(p=>p.product===product && p.origin===origin);
+    if(dup >= 0){
+      if(!confirm(`이미 등록된 항목입니다.
+${product} / ${origin} → ${prices[dup].price.toLocaleString()}원
+
+단가를 ${price.toLocaleString()}원으로 덮어씌울까요?`)) return;
+      prices[dup].price = price;
+      toast(`단가 갱신: ${product} (${origin}) → ${price.toLocaleString()}원`);
+    } else {
+      prices.push({product, origin, price});
+      toast(`추가 완료: ${product} (${origin}) ${price.toLocaleString()}원`);
+    }
+  }
+  save();
+  cancelEditPrice();
+  renderPrices();
+}
+
+/* 수정 버튼 클릭 → 폼에 값 채우기 */
+function editPrice(i){
+  const p = prices[i];
+  document.getElementById('pr-product').value = p.product;
+  document.getElementById('pr-origin').value  = p.origin||'';
+  document.getElementById('pr-price').value   = p.price;
+  document.getElementById('pr-edit-idx').value = i;
+  document.getElementById('pr-form-title').textContent = '단가 수정';
+  document.getElementById('pr-form-hint').textContent  = `수정 중: ${p.product} / ${p.origin}`;
+  document.getElementById('pr-form-card').style.borderColor = 'var(--orange)';
+  document.getElementById('pr-product').focus();
+  // 해당 행 하이라이트
+  document.querySelectorAll('#price-body tr').forEach(r=>r.style.background='');
+  const row = document.getElementById(`pr-row-${i}`);
+  if(row) row.style.background = 'var(--orange-lt)';
+  // 폼으로 스크롤
+  document.getElementById('pr-form-card').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+/* 취소 / 초기화 */
+function cancelEditPrice(){
+  document.getElementById('pr-product').value  = '';
+  document.getElementById('pr-origin').value   = '';
+  document.getElementById('pr-price').value    = '';
+  document.getElementById('pr-edit-idx').value = '-1';
+  document.getElementById('pr-form-title').textContent = '단가 추가';
+  document.getElementById('pr-form-hint').textContent  = '';
+  document.getElementById('pr-form-card').style.borderColor = '';
+  document.querySelectorAll('#price-body tr').forEach(r=>r.style.background='');
+}
+
+/* 삭제 */
+function deletePrice(i){
+  const p = prices[i];
+  if(!confirm(`삭제하시겠습니까?
+
+${p.product} / ${p.origin||'-'} — ${p.price.toLocaleString()}원`)) return;
+  prices.splice(i,1);
+  save();
+  cancelEditPrice();
+  renderPrices();
+  toast(`삭제 완료: ${p.product}`);
+}
+
+/* CSV 내보내기 */
+function exportPricesCSV(){
+  const rows = [['품목명','원산지','단가(원/KG)'],...prices.map(p=>[p.product,p.origin||'',p.price])];
+  downloadCSV(rows,'단가표.csv');
+}
+
+/* 구버전 호환 */
+function addPrice(){ savePrice(); }
+
+// ─── CSV 내보내기 ───────────────────────────────────────────
+function downloadCSV(rows,filename){
+  const bom='\uFEFF';
+  const csv=bom+rows.map(r=>r.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=filename; a.click();
+}
+function exportTransactionsCSV(){
+  const header=['날짜','구분','거래처','품목명','원산지','이력번호','중량(KG)','단가','금액','비고'];
+  const rows=transactions.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.lot||'',t.weight,t.price||'',t.amount||'',t.note||'']);
+  downloadCSV([header,...rows],'원료수불부_거래내역.csv');
+}
+function exportProductionCSV(){
+  const header=['작업일','작업번호','투입품목','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','생산품목','원산지','생산량(KG)','생산단가','생산금액','생산이력번호'];
+  const rows=[header];
+  EXCEL_PROD.forEach(e=>{
+    const maxRows=Math.max((e.inputs||[]).length,(e.outputs||[]).length,1);
+    for(let i=0;i<maxRows;i++){
+      const inp=(e.inputs||[])[i];
+      const out=(e.outputs||[])[i];
+      rows.push([
+        i===0?e.date:'', i===0?e.job_no:'',
+        inp?inp.product:'', inp?inp.origin||'':'', inp?inp.qty.toFixed(2):'', inp?inp.price:'', inp?Math.round(inp.amount):'', inp?inp.lot||'':'',
+        out?out.product:'', out?out.origin||'':'', out?out.qty.toFixed(2):'', out?Math.round(out.price):'', out?Math.round(out.amount):'', out?out.lot||'':''
+      ]);
+    }
+  });
+  downloadCSV(rows,'생산일보.csv');
+}
+function exportStockCSV(){
+  const header=['품목명','이력번호','원산지','총입고(KG)','총사용(KG)','총출고(KG)','재고(KG)','비고'];
+  const rows=EXCEL_STOCK.map(r=>[r.product,r.lot||'',r.origin||'',r.total_in.toFixed(2),r.total_use.toFixed(2),r.total_out.toFixed(2),r.stock.toFixed(2),r.note||'']);
+  downloadCSV([header,...rows],'재고현황.csv');
+}
+function exportInvoiceExcel(){
+  const area = document.getElementById('inv-print-area');
+  if(!area){alert('먼저 거래명세서를 선택하세요.');return;}
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head>
+    <meta charset="UTF-8">
+    <title>거래명세서</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:11px;color:#222;padding:10mm;}
+      .invoice-preview{max-width:100%;}
+      .inv-title{text-align:center;font-size:18px;font-weight:700;letter-spacing:4px;margin-bottom:8px;}
+      .inv-row{display:flex;gap:10px;margin-bottom:8px;}
+      .inv-box{flex:1;border:1px solid #aaa;border-radius:4px;padding:8px;}
+      .inv-box-title{font-weight:700;background:#1a252f;color:#fff;padding:3px 6px;border-radius:3px 3px 0 0;margin:-8px -8px 6px;font-size:11px;text-align:center;}
+      .inv-line{display:flex;justify-content:space-between;padding:1px 0;font-size:10px;}
+      table{width:100%;border-collapse:collapse;margin:8px 0;}
+      th{background:#1a252f;color:#fff;padding:6px 8px;text-align:center;font-size:10px;}
+      td{padding:5px 8px;border-bottom:1px solid #eee;font-size:10px;}
+      tfoot tr{background:#f0f4f8;font-weight:700;border-top:2px solid #1a252f;}
+      @media print{@page{size:A4;margin:10mm;}}
+    </style></head><body>`+area.outerHTML+`</body></html>`);
+  w.document.close();
+  setTimeout(()=>{w.print();},400);
+}
+function exportShipLogExcel(){
+  const date=document.getElementById('ship-date').value;
+  if(!date){alert('먼저 출고일을 선택하세요.');return;}
+  const dayOuts=transactions.filter(t=>t.type==='출고'&&t.date===date);
+  if(!dayOuts.length){alert('출고 내역이 없습니다.');return;}
+  const pages=[];
+  for(let i=0;i<dayOuts.length;i+=10) pages.push(dayOuts.slice(i,i+10));
+  const totalPages=pages.length;
+  const [yr,mo,da]=date.split('-');
+  const pagesHTML=pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages)).join('<div style="page-break-after:always"></div>');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head>
+    <meta charset="UTF-8"><title>완제품 출고일지 ${yr}-${mo}-${da}</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;padding:10mm;}
+    .shiplog-page{page-break-inside:avoid;}
+    @media print{@page{size:A4;margin:10mm;}body{padding:0;}.shiplog-page{page-break-after:always;}.shiplog-page:last-child{page-break-after:avoid;}}
+    </style></head><body>`+pagesHTML+`</body></html>`);
+  w.document.close();setTimeout(()=>{w.print();},500);
+}
+
+function buildShipLogPageHTML(date,items,pageNo,totalPages){
+  const [yr,mo,da]=date.split('-');
+  const dateStr=`${yr}년 ${mo}월 ${da}일`;
+  const pageLabel=totalPages>1?` (${pageNo}/${totalPages}페이지)`:'';
+  let itemRows='';
+  for(let i=0;i<10;i++){
+    const o=items[i];
+    const b='border:1px solid #bbb;padding:5px 6px;font-size:11px;';
+    const nb='text-align:center;'+b;
+    const lb=b+'font-family:monospace;font-size:10px;word-break:break-all;';
+    if(o){
+      const pd=o.proddate?o.proddate.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$1-$2-$3'):'';
+      itemRows+=`<tr style="height:22px"><td style="${nb}">${(pageNo-1)*10+i+1}</td><td style="${b}">${o.product||''}</td><td style="${b}">${o.trader||''}</td><td style="${b}">${pd}</td><td style="${lb}">${o.lot||''}</td><td style="text-align:right;${b}">${o.weight!=null?o.weight.toFixed(2):''}</td></tr>`;
+    }else{
+      itemRows+=`<tr style="height:22px"><td style="${nb};color:#ccc">${(pageNo-1)*10+i+1}</td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${lb}"></td><td style="${b}"></td></tr>`;
+    }
+  }
+  const checkRows=['보관상태','포장상태','표시사항','배송차량점검'].map(it=>`<tr style="height:22px"><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;">${it}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:100px;"></td><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:60px;"></td></tr>`).join('');
+  const finalChecks=[['온도','냉장: 0~10°C / 냉동: -18°C 이하','온도계 확인','기준 초과 시 보류'],['유통기한','제조일자 및 유통기한 확인','라벨 확인','기한 초과 즉시 폐기'],['포장상태','밀봉 및 파손 여부','육안 확인','불량 시 재포장/폐기'],['표시사항','원산지·성분·알레르기 표시','라벨 확인','미표시 출고 금지'],['위생상태','이물질 혼입 및 오염 여부','육안 확인','이상 시 격리/폐기']];
+  const finalRows=finalChecks.map(([a,b,c,d])=>`<tr style="height:20px"><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${a}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${b}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${c}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${d}</td></tr>`).join('');
+  return `<div class="shiplog-page" style="background:#fff;border:1px solid #dde1e7;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+    <div style="font-size:17px;font-weight:700;letter-spacing:2px;">완제품 출고일지${pageLabel}</div>
+    <div style="display:flex;">
+      <div style="border:1px solid #bbb;padding:4px 18px;font-size:11px;text-align:center;"><div style="font-size:9px;color:#888;margin-bottom:2px;">작성</div><div style="height:20px;"></div></div>
+      <div style="border:1px solid #bbb;border-left:none;padding:4px 18px;font-size:11px;text-align:center;"><div style="font-size:9px;color:#888;margin-bottom:2px;">승인</div><div style="height:20px;"></div></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:12px;margin-bottom:6px;font-size:11px;">
+    <div style="border:1px solid #bbb;padding:4px 10px;border-radius:4px;"><span style="color:#888;margin-right:6px;">담당부서</span><strong>생산팀</strong></div>
+    <div style="border:1px solid #bbb;padding:4px 10px;border-radius:4px;"><span style="color:#888;margin-right:6px;">출고일</span><strong>${dateStr}</strong></div>
+  </div>
+  <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:5px 10px;font-size:10px;color:#795548;margin-bottom:10px;">※ 냉장고/냉동고에서 완제품을 출고 당일 꺼낸 후, 출고 직전 최종 상태를 점검하고 적합 여부를 기록한다.</div>
+  <div style="font-size:11px;font-weight:700;color:#1a252f;margin-bottom:4px;">▶ 기본정보</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+    <thead><tr style="background:#1a252f;">
+      <th style="color:#fff;padding:6px 4px;font-size:11px;border:1px solid #1a252f;text-align:center;width:36px;">No</th>
+      <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;">제품명</th>
+      <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;">거래처</th>
+      <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;width:90px;">제조일자</th>
+      <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;">LOT</th>
+      <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:right;width:80px;">수량(KG)</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <div style="font-size:11px;font-weight:700;color:#1a252f;margin-bottom:4px;">▶ 점검사항</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+    <thead><tr style="background:#1a252f;"><th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;">점검항목</th><th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;">결과(적합/부적합)</th><th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;">점검자</th></tr></thead>
+    <tbody>${checkRows}</tbody>
+  </table>
+  <div style="font-size:11px;font-weight:700;color:#1a252f;margin-bottom:4px;">▶ 출고 전 최종 점검기준</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+    <thead><tr style="background:#1a252f;"><th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;width:70px;">항목</th><th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;">관리기준</th><th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;width:80px;">점검방법</th><th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;">이상시 조치</th></tr></thead>
+    <tbody>${finalRows}</tbody>
+  </table>
+  <div style="display:flex;gap:10px;"><div style="flex:1;border:1px solid #bbb;border-radius:4px;padding:6px 8px;min-height:40px;"><div style="font-size:10px;color:#888;margin-bottom:4px;">특이사항</div></div><div style="flex:1;border:1px solid #bbb;border-radius:4px;padding:6px 8px;min-height:40px;"><div style="font-size:10px;color:#888;margin-bottom:4px;">개선조치 및 결과</div></div></div>
+  </div>`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  📥 엑셀 가져오기 핵심 로직
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let importParsed = []; // 파싱된 전체 행 [{...rawData, _status:'new'|'dup'|'skip'}]
+
+// 드래그&드롭
+function onDragOver(e){ e.preventDefault(); document.getElementById('dropzone').classList.add('drag-over'); }
+function onDragLeave(e){ document.getElementById('dropzone').classList.remove('drag-over'); }
+function onDrop(e){
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag-over');
+  const file=e.dataTransfer.files[0];
+  if(file) processExcelFile(file);
+}
+function handleFileSelect(e){
+  const file=e.target.files[0];
+  if(file) processExcelFile(file);
+}
+
+// 날짜 파싱: YYMMDD(숫자 or 문자) → 'YYYY-MM-DD'
+function parseDate(raw){
+  if(raw===null||raw===undefined||raw==='') return '';
+
+  // SheetJS Date 객체 처리
+  if(raw instanceof Date){
+    const y=raw.getFullYear(),m=raw.getMonth()+1,d=raw.getDate();
+    // SheetJS가 시리얼로 잘못 파싱한 경우 → 연도가 2000년 이상 2100년 이하만 유효
+    if(y>=2020&&y<=2099)
+      return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    // 잘못된 Date → 원래 숫자로 복구 불가 → 빈 문자열
+    return '';
+  }
+
+  // 숫자를 문자열로 변환
+  const s = String(raw).trim();
+
+  // 이미 YYYY-MM-DD 형식
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // 숫자만 추출
+  const n = s.replace(/[^0-9]/g,'');
+
+  // 6자리 YYMMDD → 반드시 YY 앞 2자리로 처리
+  if(n.length===6){
+    const yy=n.slice(0,2), mm=n.slice(2,4), dd=n.slice(4,6);
+    // YY: 20~29 → 2020~2029, 00~19 → 2000~2019, 50~99 → 1950~1999
+    const yr=(parseInt(yy,10)<50?'20':'19')+yy;
+    const mNum=parseInt(mm,10), dNum=parseInt(dd,10);
+    if(mNum>=1&&mNum<=12&&dNum>=1&&dNum<=31)
+      return `${yr}-${mm}-${dd}`;
+  }
+
+  // 8자리 YYYYMMDD
+  if(n.length===8)
+    return `${n.slice(0,4)}-${n.slice(4,6)}-${n.slice(6,8)}`;
+
+  return '';
+}
+
+// 비고에서 생산일 추출: '생산일:2026/01/19' → '2026-01-19'
+function parseProdDateFromNote(note){
+  if(!note) return '';
+  const m=String(note).match(/생산일[:\s]*(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  return '';
+}
+
+// 중복 체크 키 생성
+function dupKey(item){
+  // weight를 소수점 2자리로 고정해서 부동소수점 불일치 방지
+  return [item.date,item.type,item.product,item.lot,parseFloat(item.weight).toFixed(2)].join('|');
+}
+
+// 메인 파싱 함수
+function processExcelFile(file){
+  // 진행바 표시
+  document.getElementById('import-progress').style.display='block';
+  setProgress(10,'파일 읽는 중...');
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      setProgress(40,'시트 분석 중...');
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, {type:'array', cellDates:false, raw:true});
+
+      // [거래내역] 시트 찾기 (없으면 첫 번째 시트)
+      let sheetName = workbook.SheetNames.find(n=>n.includes('거래내역')) || workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+
+      setProgress(60,'데이터 파싱 중...');
+      const rawRows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:true});
+
+      // 헤더 행 찾기: '날짜' 또는 '품목명' 이 있는 행
+      let headerRowIdx = -1;
+      for(let i=0;i<Math.min(rawRows.length,10);i++){
+        const row = rawRows[i].map(c=>String(c).trim());
+        if(row.some(c=>c==='날짜'||c==='품목명')){
+          headerRowIdx=i; break;
+        }
+      }
+      if(headerRowIdx<0) headerRowIdx=0;
+      const headers = rawRows[headerRowIdx].map(c=>String(c).trim());
+
+      // 컬럼 인덱스 매핑
+      // ※ 실제 엑셀 헤더: 날짜|입고(=구분)|거래처|품목명|원산지|이력번호|생산일|중량(KG)|비고
+      //   헤더 B열이 '입고'로 되어 있어 구분(type) 컬럼을 위치 기반으로도 탐색
+      const col = {};
+      const colMap = {
+        '날짜':  ['날짜','일자','date'],
+        '구분':  ['구분','type','입고','사용','출고'],  // '입고'가 헤더인 경우 포함
+        '거래처':['거래처','trader'],
+        '품목명':['품목명','품목','상품명','product'],
+        '원산지':['원산지','origin'],
+        '이력번호':['이력번호','lot','LOT','이력'],
+        '생산일':['생산일','proddate','제조일'],
+        '중량':  ['중량(KG)','중량','KG','weight','수량'],
+        '비고':  ['비고','note','메모','remark']
+      };
+      Object.entries(colMap).forEach(([key,aliases])=>{
+        const idx = headers.findIndex(h=>aliases.some(a=>h.includes(a)));
+        col[key] = idx>=0 ? idx : -1;
+      });
+      // '구분' 컬럼을 못 찾은 경우: 날짜 다음 컬럼(1번)을 구분으로 사용
+      if(col['구분']<0 && col['날짜']>=0) col['구분'] = col['날짜']+1;
+
+      setProgress(80,'중복 확인 중...');
+
+      // 기존 데이터 중복 키 세트
+      const existingKeys = new Set(transactions.map(t=>dupKey(t)));
+
+      const parsed = [];
+      const TYPE_MAP={'입고':'입고','사용':'사용','출고':'출고','IN':'입고','USE':'사용','OUT':'출고'};
+
+      for(let i=headerRowIdx+1; i<rawRows.length; i++){
+        const row = rawRows[i];
+        if(row.every(c=>String(c).trim()===''||c===null||c===undefined)) continue; // 빈 행 스킵
+
+        const rawDate = col['날짜']>=0 ? row[col['날짜']] : '';
+        const rawType = col['구분']>=0 ? String(row[col['구분']]).trim() : '';
+        const rawProd = col['품목명']>=0 ? String(row[col['품목명']]).trim() : '';
+        const rawWeight = col['중량']>=0 ? row[col['중량']] : '';
+
+        // 핵심 필드가 없으면 스킵
+        if(!rawDate && !rawProd) continue;
+
+        const date = parseDate(rawDate);
+        if(!date) continue; // 날짜 파싱 실패 스킵
+
+        const type = TYPE_MAP[rawType] || rawType;
+        if(!['입고','사용','출고'].includes(type)) continue;
+
+        const product = rawProd;
+        const origin = col['원산지']>=0 ? String(row[col['원산지']]).trim() : '';
+        const trader = col['거래처']>=0 ? String(row[col['거래처']]).trim() : '';
+        const lot = col['이력번호']>=0 ? String(row[col['이력번호']]).trim() : '';
+        const weight = parseFloat(String(rawWeight).replace(/,/g,''))||0;
+        const note = col['비고']>=0 ? String(row[col['비고']]).trim() : '';
+        // 생산일: 전용 컬럼 우선, 없으면 비고에서 파싱
+        let proddate = '';
+        if(col['생산일']>=0 && row[col['생산일']]){
+          const rawProdDate = String(row[col['생산일']]).trim();
+          const pm = rawProdDate.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+          if(pm) proddate=`${pm[1]}-${String(pm[2]).padStart(2,'0')}-${String(pm[3]).padStart(2,'0')}`;
+          else proddate = parseDate(rawProdDate);
+        }
+        if(!proddate) proddate = parseProdDateFromNote(note);
+        const price = getPrice(product,origin);
+
+        const item = {date,type,product,origin,trader,lot,weight,note,proddate,price,amount:Math.round(price*weight)};
+        const key = dupKey(item);
+        item._status = existingKeys.has(key) ? 'dup' : 'new';
+        item._sheetName = sheetName;
+        item._rowNum = i+1;
+        parsed.push(item);
+      }
+
+      importParsed = parsed;
+      setProgress(100,'완료!');
+
+      setTimeout(()=>{
+        document.getElementById('import-progress').style.display='none';
+        showImportStep2(sheetName);
+      },400);
+
+    } catch(err){
+      setProgress(0,'');
+      document.getElementById('import-progress').style.display='none';
+      alert('파일을 읽는 중 오류가 발생했습니다.\n\n'+err.message+'\n\n지원 형식: .xlsx, .xlsm');
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function setProgress(pct, text){
+  document.getElementById('progress-bar').style.width=pct+'%';
+  document.getElementById('progress-text').textContent=text;
+}
+
+function showImportStep2(sheetName){
+  document.getElementById('import-step1').style.display='none';
+  document.getElementById('import-step2').style.display='block';
+  document.getElementById('step-1').className='step done';
+  document.getElementById('step-2').className='step active';
+
+  const newItems = importParsed.filter(r=>r._status==='new');
+  const dupItems = importParsed.filter(r=>r._status==='dup');
+
+  // 요약
+  document.getElementById('import-summary').innerHTML=`
+    <div class="import-summary-item">
+      <div class="import-summary-num" style="color:var(--color-text-success)">${newItems.length}</div>
+      <div class="import-summary-label">새로 추가될 항목</div>
+    </div>
+    <div class="import-summary-item">
+      <div class="import-summary-num" style="color:#633806">${dupItems.length}</div>
+      <div class="import-summary-label">중복 (건너뜀)</div>
+    </div>
+    <div class="import-summary-item">
+      <div class="import-summary-num">${importParsed.length}</div>
+      <div class="import-summary-label">전체 파싱 행</div>
+    </div>`;
+
+  if(newItems.length===0){
+    document.getElementById('import-warn').style.display='block';
+    document.getElementById('import-warn').innerHTML='⚠️ 새로 추가될 항목이 없습니다. 이미 모든 데이터가 등록되어 있거나 파일 형식이 맞지 않습니다.';
+    document.getElementById('btn-do-import').disabled=true;
+    document.getElementById('btn-do-import').style.opacity='0.5';
+  } else {
+    document.getElementById('import-warn').style.display='none';
+    document.getElementById('btn-do-import').disabled=false;
+    document.getElementById('btn-do-import').style.opacity='1';
+  }
+
+  document.getElementById('import-count-label').textContent=`${newItems.length}개 항목이 추가됩니다`;
+  renderImportPreview();
+}
+
+function renderImportPreview(){
+  const showSkipped = document.getElementById('show-skipped').checked;
+  const filterType = document.getElementById('preview-filter').value;
+  const rows = importParsed.filter(r=>{
+    if(!showSkipped && r._status==='dup') return false;
+    if(filterType && r.type!==filterType) return false;
+    return true;
+  });
+
+  const b = document.getElementById('preview-body');
+  b.innerHTML = rows.map(r=>{
+    const tag = r._status==='new'
+      ? '<span class="tag tag-new">신규</span>'
+      : '<span class="tag tag-dup">중복</span>';
+    const style = r._status==='dup'?'opacity:.5':'';
+    return `<tr style="${style}">
+      <td>${tag}</td>
+      <td>${r.date}</td>
+      <td><span class="badge badge-${r.type==='입고'?'in':r.type==='사용'?'use':'out'}">${r.type}</span></td>
+      <td>${r.trader||'-'}</td>
+      <td>${r.product}</td>
+      <td>${r.origin||'-'}</td>
+      <td style="font-family:var(--font-mono);font-size:10px">${r.lot||'-'}</td>
+      <td style="text-align:right">${r.weight.toFixed(2)}</td>
+      <td style="font-size:10px">${r.note||'-'}</td>
+    </tr>`;
+  }).join('');
+
+  if(!rows.length){
+    b.innerHTML='<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--color-text-secondary)">표시할 항목이 없습니다</td></tr>';
+  }
+}
+
+function doImport(){
+  const newItems = importParsed.filter(r=>r._status==='new');
+  if(!newItems.length){ alert('추가할 항목이 없습니다.'); return; }
+
+  const confirm_msg = `${newItems.length}개의 거래내역을 가져올까요?`;
+  if(!confirm(confirm_msg)) return;
+
+  newItems.forEach(item=>{
+    userTransactions.push({
+      id: Date.now() + Math.random(),
+      date: item.date,
+      type: item.type,
+      product: item.product,
+      origin: item.origin,
+      trader: item.trader,
+      lot: item.lot,
+      proddate: item.proddate,
+      weight: item.weight,
+      note: item.note,
+      price: item.price,
+      amount: item.amount,
+      _isUser: true
+    });
+  });
+
+  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  save();
+  renderTransactions();
+  updateProductList();
+
+  // 완료 화면
+  document.getElementById('import-step2').style.display='none';
+  document.getElementById('import-step3').style.display='block';
+  document.getElementById('step-2').className='step done';
+  document.getElementById('step-3').className='step done';
+  document.getElementById('import-done-msg').textContent=`${newItems.length}개 항목을 성공적으로 가져왔습니다!`;
+  document.getElementById('import-done-sub').textContent=`거래내역 탭에서 확인하실 수 있습니다. 총 ${transactions.length}개 항목이 저장되었습니다.`;
+}
+
+function resetImport(){
+  importParsed=[];
+  document.getElementById('import-step1').style.display='block';
+  document.getElementById('import-step2').style.display='none';
+  document.getElementById('import-step3').style.display='none';
+  document.getElementById('step-1').className='step active';
+  document.getElementById('step-2').className='step';
+  document.getElementById('step-3').className='step';
+  document.getElementById('excel-file-input').value='';
+  document.getElementById('import-progress').style.display='none';
+  document.getElementById('show-skipped').checked=false;
+  document.getElementById('preview-filter').value='';
+}
+
+// ─── 앱 초기 렌더 ───────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  // DOM 초기화 (날짜 세팅, 헤더 표시)
+  initDOM();
+
+  // Google Sheets 연동 시작
+  gsInit();
+});
+</script>
+</body>
+</html>
