@@ -7,8 +7,114 @@ const SHEET_ID = '1ZjhVq_E2czmrr4zrYSjYsHLgHIILdJF7Cy7AaZyG7WU';
 // ── 도메인 시트 레지스트리 ──
 // 각 키는 index.html의 APP_DATA_REGISTRY와 일치해야 한다.
 // 시트가 존재하면 거기서 읽고, 없으면 앱데이터 시트에서 fallback.
+//
+// 옵션:
+//   name     : Google Sheets 시트명
+//   headers  : 컬럼 헤더 배열
+//   toRows   : (도메인값) → 시트 저장용 배열 변환. 생략 시 그대로 사용 (배열 도메인)
+//   fromRows : (시트의 행 배열) → 도메인 원래 형태로 복원. 생략 시 그대로 사용
 const DOMAIN_SHEETS = {
-  scheduleEvents: { name: '일정', headers: ['id','date','text'] },
+  scheduleEvents: {
+    name: '일정',
+    headers: ['id','date','text']
+  },
+  docChecks: {
+    name: '서류체크',
+    headers: ['key','checked'],
+    toRows: function(obj) {
+      return Object.entries(obj || {}).map(function(pair) {
+        return { key: pair[0], checked: !!pair[1] };
+      });
+    },
+    fromRows: function(rows) {
+      var result = {};
+      rows.forEach(function(r) {
+        if (r.key) result[r.key] = (r.checked === true || r.checked === 'TRUE' || r.checked === 'true' || r.checked === 1);
+      });
+      return result;
+    }
+  },
+  traderInfoMap: {
+    name: '거래처',
+    headers: ['name','fullname','regno','ceo','addr','biz'],
+    toRows: function(obj) {
+      return Object.entries(obj || {}).map(function(pair) {
+        var info = pair[1] || {};
+        return {
+          name:     pair[0],
+          fullname: info.fullname || '',
+          regno:    String(info.regno || ''),
+          ceo:      info.ceo || '',
+          addr:     info.addr || '',
+          biz:      info.biz || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      var result = {};
+      rows.forEach(function(r) {
+        if (r.name) {
+          result[String(r.name)] = {
+            fullname: String(r.fullname || ''),
+            regno:    String(r.regno || ''),
+            ceo:      String(r.ceo || ''),
+            addr:     String(r.addr || ''),
+            biz:      String(r.biz || '')
+          };
+        }
+      });
+      return result;
+    }
+  },
+  employees: {
+    name: '직원',
+    headers: ['id','name','position','hireDate','phone','addr','birthDate','birthCal','healthExpiry','monthlySalary','resignDate','settlement','pastSettlements'],
+    toRows: function(arr) {
+      return (arr || []).map(function(e) {
+        return {
+          id:            String(e.id == null ? '' : e.id),
+          name:          e.name || '',
+          position:      e.position || '',
+          hireDate:      e.hireDate || '',
+          phone:         e.phone || '',
+          addr:          e.addr || '',
+          birthDate:     e.birthDate || '',
+          birthCal:      e.birthCal || '',
+          healthExpiry:  e.healthExpiry || '',
+          monthlySalary: e.monthlySalary || 0,
+          resignDate:    e.resignDate || '',
+          settlement:    e.settlement ? JSON.stringify(e.settlement) : '',
+          pastSettlements: (e.pastSettlements && e.pastSettlements.length) ? JSON.stringify(e.pastSettlements) : ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        var emp = {
+          id:            String(r.id == null ? '' : r.id),
+          name:          r.name || '',
+          position:      r.position || '',
+          hireDate:      r.hireDate || '',
+          phone:         r.phone || '',
+          addr:          r.addr || '',
+          birthDate:     r.birthDate || '',
+          birthCal:      r.birthCal || '',
+          healthExpiry:  r.healthExpiry || '',
+          monthlySalary: parseFloat(r.monthlySalary) || 0,
+          resignDate:    r.resignDate || '',
+          settlement:    null,
+          pastSettlements: []
+        };
+        if (r.settlement) {
+          try { emp.settlement = JSON.parse(String(r.settlement)); } catch(e) {}
+        }
+        if (r.pastSettlements) {
+          try { emp.pastSettlements = JSON.parse(String(r.pastSettlements)); } catch(e) {}
+        }
+        return emp;
+      });
+    }
+  },
   // 다음 도메인은 점진적으로 추가
 };
 
@@ -112,7 +218,8 @@ function getAppData() {
     const config = DOMAIN_SHEETS[domain];
     const domainSheet = ss.getSheetByName(config.name);
     if (domainSheet && domainSheet.getLastRow() > 0) {
-      result[domain] = getRows(config.name, config.headers);
+      const rows = getRows(config.name, config.headers);
+      result[domain] = config.fromRows ? config.fromRows(rows) : rows;
     }
   });
 
@@ -129,7 +236,8 @@ function saveAppData(d) {
   Object.keys(DOMAIN_SHEETS).forEach(domain => {
     if (d[domain] !== undefined) {
       const config = DOMAIN_SHEETS[domain];
-      saveRows(config.name, d[domain], config.headers);
+      const arr = config.toRows ? config.toRows(d[domain]) : d[domain];
+      saveRows(config.name, arr, config.headers);
       domainHandled.add(domain);
     }
   });
@@ -174,12 +282,13 @@ function migrateAppDataToSheets() {
   const migrated = [];
   const removedKeys = new Set();
   Object.keys(DOMAIN_SHEETS).forEach(domain => {
-    if (appData[domain] !== undefined && Array.isArray(appData[domain])) {
-      const config = DOMAIN_SHEETS[domain];
-      saveRows(config.name, appData[domain], config.headers);
-      migrated.push(domain + ' → 시트["' + config.name + '"] (' + appData[domain].length + '건)');
-      removedKeys.add(domain);
-    }
+    if (appData[domain] === undefined) return;
+    const config = DOMAIN_SHEETS[domain];
+    const arr = config.toRows ? config.toRows(appData[domain]) : appData[domain];
+    if (!Array.isArray(arr)) return; // toRows가 없는데 객체면 스킵
+    saveRows(config.name, arr, config.headers);
+    migrated.push(domain + ' → 시트["' + config.name + '"] (' + arr.length + '건)');
+    removedKeys.add(domain);
   });
 
   // 앱데이터에서 이주된 키 제거
@@ -212,8 +321,16 @@ function getRows(sheetName, headers) {
     const obj = {};
     h.forEach((k, i) => {
       let v = row[i];
-      if (['weight','price','amount','id'].includes(k)) {
+      // Date 객체는 어느 컬럼이든 yyyy-MM-dd로 통일
+      if (v instanceof Date) {
+        v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
+      }
+      if (['weight','price','amount'].includes(k)) {
         v = parseFloat(v) || 0;
+      } else if (k === 'id') {
+        // id는 자동 변환 안 함 (도메인별 자연 타입 유지)
+        // - 거래내역: Date.now() → number 셀로 저장 → number로 복원
+        // - 직원/연차: hrId() → string 셀로 저장 → string으로 복원
       } else if (['date','proddate'].includes(k)) {
         if (v instanceof Date) {
           v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
