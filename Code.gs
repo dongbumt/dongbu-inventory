@@ -34,6 +34,42 @@ const DOMAIN_SHEETS = {
       return result;
     }
   },
+  labelProducts: {
+    name: '라벨품목',
+    headers: ['id','name','origin','kind','meattype','storage','shelfdays','packunit','itemno','grade'],
+    toRows: function(arr) {
+      return (arr || []).map(function(p) {
+        return {
+          id:        String(p.id == null ? '' : p.id),
+          name:      p.name || '',
+          origin:    p.origin || '',
+          kind:      p.kind || '',
+          meattype:  p.meattype || '',
+          storage:   p.storage || '',
+          shelfdays: p.shelfdays || 0,
+          packunit:  p.packunit || '',
+          itemno:    p.itemno || '',
+          grade:     p.grade || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        return {
+          id:        String(r.id == null ? '' : r.id),
+          name:      r.name || '',
+          origin:    r.origin || '',
+          kind:      r.kind || '',
+          meattype:  r.meattype || '',
+          storage:   r.storage || '',
+          shelfdays: parseInt(r.shelfdays) || 0,
+          packunit:  r.packunit || '',
+          itemno:    r.itemno || '',
+          grade:     r.grade || ''
+        };
+      });
+    }
+  },
   traderInfoMap: {
     name: '거래처',
     headers: ['name','fullname','regno','ceo','addr','biz'],
