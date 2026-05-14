@@ -355,6 +355,66 @@
     </datalist>
   </div>
 
+  <!-- 입고 일괄 입력 그리드 -->
+  <div class="card" id="bulk-inbound-card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--green);"></div>
+      📥 입고 일괄 입력
+      <span style="font-size:11px;font-weight:400;color:#888;margin-left:6px;">여러 품목을 한 번에 입력하고 [일괄 저장]</span>
+    </div>
+    <div class="form-row" style="margin-bottom:10px;">
+      <div class="form-group" style="max-width:160px;">
+        <label>입고일자 (공통)</label>
+        <input type="date" id="bulk-in-date">
+      </div>
+      <div class="form-group" style="max-width:300px;position:relative;">
+        <label>품목 일괄 채우기</label>
+        <div style="display:flex;gap:4px;">
+          <input id="bulk-in-product-common" class="bulk-in-product" oninput="onBulkProductSearch(this,true)" onfocus="onBulkProductSearch(this,false)" onblur="hideBulkProductResults(this)" placeholder="품목 검색..." autocomplete="off" style="flex:1;">
+          <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundProduct()" title="비어있는 모든 행에 품목 채우기" style="white-space:nowrap;">↓ 적용</button>
+        </div>
+        <input type="hidden" class="bulk-in-product-id" id="bulk-in-product-common-id">
+        <div class="bulk-in-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
+      </div>
+      <div class="form-group" style="max-width:260px;">
+        <label>거래처 일괄 채우기</label>
+        <div style="display:flex;gap:4px;">
+          <input id="bulk-in-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
+          <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
+        </div>
+      </div>
+      <div class="form-group" style="max-width:190px;">
+        <label>단가 일괄 채우기</label>
+        <div style="display:flex;gap:4px;">
+          <input id="bulk-in-price-common" type="number" step="1" placeholder="원/KG" style="flex:1;">
+          <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundPrice()" title="비어있는 모든 행에 단가 채우기" style="white-space:nowrap;">↓ 적용</button>
+        </div>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="max-height:none;overflow:visible;">
+      <table style="font-size:12px;">
+        <thead><tr>
+          <th style="min-width:210px;">품목 (품목관리 기준)</th>
+          <th style="min-width:78px;text-align:center;">원산지</th>
+          <th style="min-width:54px;text-align:center;">보관</th>
+          <th style="min-width:120px;">거래처</th>
+          <th style="min-width:140px;">이력번호(LOT)</th>
+          <th style="min-width:96px;text-align:right;">중량(KG)</th>
+          <th style="min-width:92px;text-align:right;">단가(선택)</th>
+          <th style="min-width:110px;">비고</th>
+          <th style="width:34px;"></th>
+        </tr></thead>
+        <tbody id="bulk-inbound-tbody"></tbody>
+      </table>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="addBulkInboundRow()">+ 행 추가</button>
+      <button class="btn btn-secondary" onclick="addBulkInboundRows(5)">+ 5행</button>
+      <button class="btn btn-secondary" onclick="clearBulkInbound()">전체 비우기</button>
+      <button class="btn btn-primary" onclick="saveBulkInbound()" style="margin-left:auto;">💾 일괄 저장</button>
+    </div>
+  </div>
+
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0;">
@@ -2243,10 +2303,26 @@ function gsSetStatus(online){
 }
 
 // ── Google Sheets API ──
-// GET: JSONP 방식 (로컬 file:// 실행에서도 Apps Script 읽기 가능)
+// GET: fetch 방식 (대용량 응답 안정성 — JSONP는 큰 데이터에서 응답 누락 위험)
 // POST: fetch 방식 (저장용)
 async function gsGet(action){
-  return gsJsonp(action, {}, 30000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(GS_URL + '?action=' + encodeURIComponent(action), {
+      signal: controller.signal,
+      mode: 'cors'
+    });
+    clearTimeout(timer);
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if(!json.ok) throw new Error(json.error || '서버 오류');
+    return json.data;
+  } catch(err) {
+    clearTimeout(timer);
+    if(err.name === 'AbortError') throw new Error('요청 시간 초과 (30초)');
+    throw err;
+  }
 }
 
 function gsJsonp(action, params={}, timeoutMs=30000){
@@ -2307,6 +2383,11 @@ async function gsInit(){
   if(msg) msg.textContent = 'Google Sheets 연결 중...';
   try {
     const all = await gsGet('getAll');
+    // 응답 무결성 검증 — transactions/prod 중 하나라도 누락되면
+    // 이후 save()가 빈 배열로 시트를 덮어쓰므로 즉시 중단하고 로컬 모드로 fallback
+    if(!all || typeof all !== 'object' || all.transactions === undefined || all.prod === undefined){
+      throw new Error('데이터 응답이 불완전합니다 — 안전을 위해 로컬 모드로 전환');
+    }
     // date 필드 정규화 (Sheets에서 Date 객체로 올 수 있음)
     invalidateStockMap();
     userTransactions = (all.transactions || []).map(t => ({
@@ -2523,7 +2604,7 @@ function showPage(id, btn){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(btn) btn.classList.add('active');
-  if(id==='p-transactions') updateTransactionForm();
+  if(id==='p-transactions'){ updateTransactionForm(); initBulkInbound(); }
   if(id==='p-incheck') initIncheck();
   if(id==='p-schedule') renderScheduleCalendar();
   if(id==='p-production'){renderProduction();initProdForm();updateOriginList();}
@@ -3493,6 +3574,207 @@ function clearTransactionForm(){
   if(addBtn) addBtn.textContent='+ 추가';
   document.getElementById('t-amount-preview').value='';
 }
+
+// ─── 입고 일괄 입력 그리드 ───────────────────────────────
+function bulkProductWrap(inp){
+  return inp.closest('td') || inp.closest('.form-group') || inp.parentElement;
+}
+function bulkProductLabel(p){
+  return `${p.name||''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
+}
+function onBulkProductSearch(inp, isInput){
+  const wrap = bulkProductWrap(inp);
+  if(!wrap) return;
+  const box = wrap.querySelector('.bulk-in-product-results');
+  if(!box) return;
+  if(isInput){
+    // 타이핑하면 기존 선택 해제
+    const idEl = wrap.querySelector('.bulk-in-product-id');
+    if(idEl) idEl.value = '';
+    const tr = inp.closest('tr');
+    if(tr){
+      const oEl = tr.querySelector('.bulk-in-origin');
+      const sEl = tr.querySelector('.bulk-in-storage');
+      if(oEl) oEl.textContent = '-';
+      if(sEl) sEl.textContent = '-';
+    }
+  }
+  const q = (inp.value||'').toLowerCase().trim();
+  let list = labelProducts || [];
+  if(q) list = list.filter(p =>
+    `${p.name||''} ${p.origin||''} ${p.storage||''} ${p.packunit||''}`.toLowerCase().includes(q)
+  );
+  list = list.slice(0, 80);
+  if(!list.length){
+    box.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:#999;">검색 결과 없음</div>';
+  } else {
+    box.innerHTML = list.map(p =>
+      `<div class="bulk-prod-opt" data-id="${htmlEscape(String(p.id))}" style="padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
+        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;"> / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
+      </div>`
+    ).join('');
+    box.querySelectorAll('.bulk-prod-opt').forEach(opt => {
+      opt.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        selectBulkProduct(inp, this.dataset.id);
+      });
+    });
+  }
+  box.style.display = 'block';
+}
+function selectBulkProduct(inp, id){
+  const wrap = bulkProductWrap(inp);
+  if(!wrap) return;
+  const lp = (labelProducts||[]).find(p => String(p.id) === String(id));
+  if(!lp) return;
+  inp.value = bulkProductLabel(lp);
+  const idEl = wrap.querySelector('.bulk-in-product-id');
+  if(idEl) idEl.value = id;
+  const tr = inp.closest('tr');
+  if(tr){
+    const oEl = tr.querySelector('.bulk-in-origin');
+    const sEl = tr.querySelector('.bulk-in-storage');
+    if(oEl) oEl.textContent = lp.origin || '-';
+    if(sEl) sEl.textContent = lp.storage || '-';
+  }
+  const box = wrap.querySelector('.bulk-in-product-results');
+  if(box) box.style.display = 'none';
+}
+function hideBulkProductResults(inp){
+  const wrap = bulkProductWrap(inp);
+  if(!wrap) return;
+  setTimeout(()=>{
+    const box = wrap.querySelector('.bulk-in-product-results');
+    if(box) box.style.display = 'none';
+  }, 180);
+}
+function addBulkInboundRow(){
+  const tbody = document.getElementById('bulk-inbound-tbody');
+  if(!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="position:relative;"><input class="bulk-in-product" oninput="onBulkProductSearch(this,true)" onfocus="onBulkProductSearch(this,false)" onblur="hideBulkProductResults(this)" placeholder="품목 검색..." autocomplete="off" style="width:100%;font-size:12px;padding:5px 6px;"><input type="hidden" class="bulk-in-product-id"><div class="bulk-in-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div></td>
+    <td class="bulk-in-origin" style="font-size:11px;color:#666;text-align:center;">-</td>
+    <td class="bulk-in-storage" style="font-size:11px;color:#666;text-align:center;">-</td>
+    <td><input class="bulk-in-trader" list="trader-list" placeholder="거래처" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><input class="bulk-in-lot" placeholder="LOT번호" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-in-price" type="number" step="1" placeholder="자동" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-in-note" placeholder="비고" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkInboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+function addBulkInboundRows(n){
+  for(let i=0;i<n;i++) addBulkInboundRow();
+}
+function removeBulkInboundRow(btn){
+  const tr = btn.closest('tr');
+  const tbody = tr ? tr.parentElement : null;
+  if(tr) tr.remove();
+  if(tbody && !tbody.children.length) addBulkInboundRow();
+}
+function clearBulkInbound(){
+  const tbody = document.getElementById('bulk-inbound-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  addBulkInboundRows(5);
+}
+function applyBulkInboundTrader(){
+  const common = (document.getElementById('bulk-in-trader-common')?.value || '').trim();
+  if(!common){ toast('공통 거래처를 입력하세요.'); return; }
+  let cnt = 0;
+  document.querySelectorAll('#bulk-inbound-tbody .bulk-in-trader').forEach(inp => {
+    if(!inp.value.trim()){ inp.value = common; cnt++; }
+  });
+  toast(cnt ? `${cnt}개 행에 거래처를 채웠습니다.` : '빈 거래처 칸이 없습니다.');
+}
+function applyBulkInboundProduct(){
+  const idEl = document.getElementById('bulk-in-product-common-id');
+  const id = idEl ? idEl.value : '';
+  if(!id){ toast('공통 품목을 검색 목록에서 선택하세요.'); return; }
+  const lp = (labelProducts||[]).find(p => String(p.id) === String(id));
+  if(!lp){ toast('품목 정보를 찾을 수 없습니다.'); return; }
+  const displayVal = bulkProductLabel(lp);
+  let cnt = 0;
+  document.querySelectorAll('#bulk-inbound-tbody tr').forEach(tr => {
+    const pinp = tr.querySelector('.bulk-in-product');
+    if(pinp && !pinp.value.trim()){
+      pinp.value = displayVal;
+      const rowIdEl = tr.querySelector('.bulk-in-product-id');
+      if(rowIdEl) rowIdEl.value = id;
+      const oEl = tr.querySelector('.bulk-in-origin');
+      const sEl = tr.querySelector('.bulk-in-storage');
+      if(oEl) oEl.textContent = lp.origin || '-';
+      if(sEl) sEl.textContent = lp.storage || '-';
+      cnt++;
+    }
+  });
+  toast(cnt ? `${cnt}개 행에 품목을 채웠습니다.` : '빈 품목 칸이 없습니다.');
+}
+function applyBulkInboundPrice(){
+  const inp = document.getElementById('bulk-in-price-common');
+  const val = inp ? inp.value.trim() : '';
+  if(val === ''){ toast('공통 단가를 입력하세요.'); return; }
+  let cnt = 0;
+  document.querySelectorAll('#bulk-inbound-tbody .bulk-in-price').forEach(pinp => {
+    if(!pinp.value.trim()){ pinp.value = val; cnt++; }
+  });
+  toast(cnt ? `${cnt}개 행에 단가를 채웠습니다.` : '빈 단가 칸이 없습니다.');
+}
+function saveBulkInbound(){
+  const date = document.getElementById('bulk-in-date')?.value || '';
+  if(!date){ toast('입고일자를 선택하세요.'); return; }
+  const rows = document.querySelectorAll('#bulk-inbound-tbody tr');
+  const toAdd = [];
+  let errorMsg = '';
+  rows.forEach((tr, idx) => {
+    if(errorMsg) return;
+    const idEl = tr.querySelector('.bulk-in-product-id');
+    const pid = idEl ? idEl.value : '';
+    const productInput = tr.querySelector('.bulk-in-product');
+    const typed = productInput ? productInput.value.trim() : '';
+    const weight = parseFloat(tr.querySelector('.bulk-in-weight')?.value) || 0;
+    // 품목·입력·중량 모두 비어있으면 빈 행으로 간주하고 건너뜀
+    if(!pid && !typed && !weight) return;
+    if(!pid){ errorMsg = `${idx+1}번째 행: 품목을 검색 목록에서 선택하세요.`; return; }
+    if(weight <= 0){ errorMsg = `${idx+1}번째 행: 중량을 입력하세요.`; return; }
+    const lp = (labelProducts||[]).find(p => String(p.id) === String(pid));
+    if(!lp){ errorMsg = `${idx+1}번째 행: 품목 정보를 찾을 수 없습니다.`; return; }
+    const trader = (tr.querySelector('.bulk-in-trader')?.value || '').trim();
+    const lot = (tr.querySelector('.bulk-in-lot')?.value || '').trim();
+    const note = (tr.querySelector('.bulk-in-note')?.value || '').trim();
+    let price = parseFloat(tr.querySelector('.bulk-in-price')?.value) || 0;
+    if(!price) price = getPrice(lp.name, lp.origin, trader) || 0;
+    toAdd.push({
+      id: Date.now() + Math.random(),
+      date, type:'입고',
+      product: lp.name, origin: lp.origin, storage: lp.storage || '',
+      packunit: lp.packunit || '',
+      trader, lot, proddate:'',
+      weight, price, amount: Math.round(price*weight),
+      note, _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
+    });
+  });
+  if(errorMsg){ toast(errorMsg); return; }
+  if(!toAdd.length){ toast('저장할 입고 항목이 없습니다.'); return; }
+  if(!confirm(`입고 ${toAdd.length}건을 일괄 저장할까요?`)) return;
+  toAdd.forEach(t => userTransactions.push(t));
+  transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  _stockMapCache = null;
+  save();
+  renderTransactions(); updateProductList(); renderStock();
+  if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
+  clearBulkInbound();
+  toast(`입고 ${toAdd.length}건 일괄 저장 완료!`);
+}
+function initBulkInbound(){
+  const dateEl = document.getElementById('bulk-in-date');
+  if(dateEl && !dateEl.value) dateEl.value = today;
+  const tbody = document.getElementById('bulk-inbound-tbody');
+  if(tbody && !tbody.children.length) addBulkInboundRows(5);
+}
+
 function renderTransactions(){
   const dateQ=(document.getElementById('t-search-date')?.value||'').trim();
   const productQ=(document.getElementById('t-search-product')?.value||'').toLowerCase().trim();
@@ -4037,6 +4319,7 @@ function clearProdForm(){
   prodInputRowCount=0; prodOutputRowCount=0;
   addProdInputRow();
   addProdOutputRow();
+  autoSetJobNo();
 }
 
 function deleteProdEntry(id){
