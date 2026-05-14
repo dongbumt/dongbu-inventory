@@ -2,7 +2,55 @@
 // 동부엠티 ERP 시스템 — Code.gs
 // =====================================================
 
-const SHEET_ID = '1ZjhVq_E2czmrr4zrYSjYsHLgHIILdJF7Cy7AaZyG7WU';
+const SCRIPT_PROPERTY_KEYS = {
+  sheetId: 'SHEET_ID',
+  mtraceUserId: 'MTRACE_USER_ID',
+  mtraceApiKey: 'MTRACE_API_KEY',
+  ekapeTraceServiceKey: 'EKAPE_TRACE_SERVICE_KEY'
+};
+
+// Apps Script 편집기 > 프로젝트 설정 > 스크립트 속성에서 설정한다.
+// 필수: SHEET_ID
+// 선택: MTRACE_USER_ID, MTRACE_API_KEY, EKAPE_TRACE_SERVICE_KEY
+function getScriptProperty(key) {
+  return String(PropertiesService.getScriptProperties().getProperty(key) || '').trim();
+}
+
+function getRequiredScriptProperty(key, label) {
+  const value = getScriptProperty(key);
+  if (!value) {
+    throw new Error((label || key) + ' 스크립트 속성을 설정하세요.');
+  }
+  return value;
+}
+
+function openDbSpreadsheet() {
+  return SpreadsheetApp.openById(
+    getRequiredScriptProperty(SCRIPT_PROPERTY_KEYS.sheetId, 'SHEET_ID')
+  );
+}
+
+function getTraceServiceKey() {
+  return getScriptProperty(SCRIPT_PROPERTY_KEYS.ekapeTraceServiceKey) ||
+         getScriptProperty(SCRIPT_PROPERTY_KEYS.mtraceApiKey);
+}
+
+function getMtraceCredentials() {
+  return {
+    userId: getScriptProperty(SCRIPT_PROPERTY_KEYS.mtraceUserId),
+    apiKey: getScriptProperty(SCRIPT_PROPERTY_KEYS.mtraceApiKey)
+  };
+}
+
+function withScriptLock(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 // ── 도메인 시트 레지스트리 ──
 // 각 키는 index.html의 APP_DATA_REGISTRY와 일치해야 한다.
@@ -363,36 +411,6 @@ const DOMAIN_SHEETS = {
       });
     }
   },
-  attendance: {
-    name: '근태',
-    headers: ['id','empId','date','inTime','outTime','type','note'],
-    toRows: function(arr) {
-      return (arr || []).map(function(x) {
-        return {
-          id:      String(x.id == null ? '' : x.id),
-          empId:   String(x.empId == null ? '' : x.empId),
-          date:    x.date || '',
-          inTime:  x.inTime ? "'" + x.inTime : '',
-          outTime: x.outTime ? "'" + x.outTime : '',
-          type:    x.type || '',
-          note:    x.note || ''
-        };
-      });
-    },
-    fromRows: function(rows) {
-      return rows.map(function(r) {
-        return {
-          id:      String(r.id == null ? '' : r.id),
-          empId:   String(r.empId == null ? '' : r.empId),
-          date:    String(r.date || ''),
-          inTime:  String(r.inTime || ''),
-          outTime: String(r.outTime || ''),
-          type:    String(r.type || ''),
-          note:    String(r.note || '')
-        };
-      });
-    }
-  },
   leaveRecs: {
     name: '연차',
     headers: ['id','empId','date','type','days','reason'],
@@ -571,11 +589,11 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     if (body.action === 'saveAll') {
-      saveAll(body.data);
+      withScriptLock(function() { saveAll(body.data); });
       return jsonRes({ok:true});
     }
     if (body.action === 'saveAppData') {
-      saveAppData(body.data);
+      withScriptLock(function() { saveAppData(body.data); });
       return jsonRes({ok:true});
     }
     return jsonRes({ok:false, error:'unknown action'});
@@ -592,30 +610,33 @@ function jsonRes(obj) {
 
 // ── 전체 읽기 ──────────────────────────────────────────
 function getAll() {
+  const ss = openDbSpreadsheet();
   return {
     transactions: getRows('거래내역', ['id','date','type','product','origin',
       'trader','storage','lot','proddate','weight','price','amount','note',
-      '_isUser','_isProdUse','_isProdOut','_prodId']),
-    prod:     getProd(),
-    prices:   getRows('단가표', ['product','origin','trader','price']),
-    appData:  getAppData(),
+      '_isUser','_isProdUse','_isProdOut','_prodId'], ss),
+    prod:     getProd(ss),
+    prices:   getRows('단가표', ['product','origin','trader','price'], ss),
+    appData:  getAppData(ss),
   };
 }
 
 // ── 전체 저장 (거래내역·생산일보·단가) ──────────────────
 function saveAll(d) {
+  const ss = openDbSpreadsheet();
   if (d.transactions !== undefined)
     saveRows('거래내역', d.transactions,
       ['id','date','type','product','origin','trader','storage','lot','proddate',
-       'weight','price','amount','note','_isUser','_isProdUse','_isProdOut','_prodId']);
-  if (d.prod   !== undefined) saveProd(d.prod);
-  if (d.prices !== undefined) saveRows('단가표', d.prices, ['product','origin','trader','price']);
+       'weight','price','amount','note','_isUser','_isProdUse','_isProdOut','_prodId'], ss);
+  if (d.prod   !== undefined) saveProd(d.prod, ss);
+  if (d.prices !== undefined) saveRows('단가표', d.prices, ['product','origin','trader','price'], ss);
 }
 
 // ── 보조 데이터 읽기 ──────────────────────────────────
 // 도메인 시트가 있으면 우선 사용, 없으면 앱데이터 시트에서 JSON 파싱
-function getAppData() {
-  const sh   = getOrCreate('앱데이터');
+function getAppData(ss) {
+  ss = ss || openDbSpreadsheet();
+  const sh   = getOrCreate('앱데이터', ss);
   const rows = sh.getDataRange().getValues();
   const result = {};
   for (let i = 1; i < rows.length; i++) {
@@ -626,12 +647,11 @@ function getAppData() {
   }
 
   // 도메인 시트가 존재하면 덮어쓰기 (마이그레이션 완료된 도메인)
-  const ss = SpreadsheetApp.openById(SHEET_ID);
   Object.keys(DOMAIN_SHEETS).forEach(domain => {
     const config = DOMAIN_SHEETS[domain];
     const domainSheet = ss.getSheetByName(config.name);
     if (domainSheet && domainSheet.getLastRow() > 0) {
-      const rows = getRows(config.name, config.headers);
+      const rows = getRows(config.name, config.headers, ss);
       result[domain] = config.fromRows ? config.fromRows(rows) : rows;
     }
   });
@@ -643,6 +663,7 @@ function getAppData() {
 // 도메인 시트가 정의된 항목은 그쪽에 저장, 나머지는 앱데이터 시트에 JSON으로
 function saveAppData(d) {
   if (!d) return;
+  const ss = openDbSpreadsheet();
 
   // 1) 도메인 시트에 저장 (이미 마이그레이션된 항목)
   const domainHandled = new Set();
@@ -650,13 +671,13 @@ function saveAppData(d) {
     if (d[domain] !== undefined) {
       const config = DOMAIN_SHEETS[domain];
       const arr = config.toRows ? config.toRows(d[domain]) : d[domain];
-      saveRows(config.name, arr, config.headers);
+      saveRows(config.name, arr, config.headers, ss);
       domainHandled.add(domain);
     }
   });
 
   // 2) 나머지는 앱데이터 시트에 JSON으로 저장 (기존 방식)
-  const sh = getOrCreate('앱데이터');
+  const sh = getOrCreate('앱데이터', ss);
   const existing = {};
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
@@ -682,7 +703,8 @@ function saveAppData(d) {
 // 앱데이터 시트의 JSON 키를 DOMAIN_SHEETS에 정의된 도메인 시트로 이주.
 // 이주 후 앱데이터 시트에서 해당 키 제거 (앱데이터 시트는 보존, 백업 권장).
 function migrateAppDataToSheets() {
-  const appSheet = getOrCreate('앱데이터');
+  const ss = openDbSpreadsheet();
+  const appSheet = getOrCreate('앱데이터', ss);
   const rows = appSheet.getDataRange().getValues();
   const appData = {};
   for (let i = 1; i < rows.length; i++) {
@@ -699,7 +721,7 @@ function migrateAppDataToSheets() {
     const config = DOMAIN_SHEETS[domain];
     const arr = config.toRows ? config.toRows(appData[domain]) : appData[domain];
     if (!Array.isArray(arr)) return; // toRows가 없는데 객체면 스킵
-    saveRows(config.name, arr, config.headers);
+    saveRows(config.name, arr, config.headers, ss);
     migrated.push(domain + ' → 시트["' + config.name + '"] (' + arr.length + '건)');
     removedKeys.add(domain);
   });
@@ -725,8 +747,8 @@ function migrateAppDataToSheets() {
 }
 
 // ── 행 읽기 ───────────────────────────────────────────
-function getRows(sheetName, headers) {
-  const sh   = getOrCreate(sheetName);
+function getRows(sheetName, headers, ss) {
+  const sh   = getOrCreate(sheetName, ss);
   const rows = sh.getDataRange().getValues();
   if (rows.length <= 1) return [];
   const h = rows[0];
@@ -768,8 +790,8 @@ function getRows(sheetName, headers) {
 }
 
 // ── 행 저장 ───────────────────────────────────────────
-function saveRows(sheetName, arr, headers) {
-  const sh = getOrCreate(sheetName);
+function saveRows(sheetName, arr, headers, ss) {
+  const sh = getOrCreate(sheetName, ss);
   sh.clearContents();
   if (!arr || !arr.length) return;
   const rows = arr.map(t => headers.map(k => t[k] !== undefined ? t[k] : ''));
@@ -778,8 +800,8 @@ function saveRows(sheetName, arr, headers) {
 }
 
 // ── 생산일보 읽기 ──────────────────────────────────────
-function getProd() {
-  const sh   = getOrCreate('생산일보');
+function getProd(ss) {
+  const sh   = getOrCreate('생산일보', ss);
   const rows = sh.getDataRange().getValues();
   if (rows.length <= 1) return [];
   return rows.slice(1)
@@ -788,8 +810,8 @@ function getProd() {
 }
 
 // ── 생산일보 저장 ──────────────────────────────────────
-function saveProd(arr) {
-  const sh = getOrCreate('생산일보');
+function saveProd(arr, ss) {
+  const sh = getOrCreate('생산일보', ss);
   sh.clearContents();
   if (!arr || !arr.length) return;
   sh.getRange(1,1).setValue('json');
@@ -799,11 +821,8 @@ function saveProd(arr) {
 // =====================================================
 // 축산물이력제 OpenAPI (ekape.or.kr)
 // =====================================================
-var MTRACE_USER_ID = '4958801108';
-var MTRACE_API_KEY = 'dWcIzpXwPutkljCTIORZ';
-// data.go.kr traceNoSearch uses serviceKey. If this key is not a data.go.kr
-// service key, the mtrace batch lookup below is used as a fallback.
-var EKAPE_TRACE_SERVICE_KEY = MTRACE_API_KEY;
+// data.go.kr traceNoSearch는 EKAPE_TRACE_SERVICE_KEY를 우선 사용한다.
+// 별도 키가 없으면 MTRACE_API_KEY를 fallback으로 사용한다.
 var EKAPE_URLS = [
   'https://data.ekape.or.kr/openapi-data/service/user/animalTrace/traceNoSearch',
   'http://data.ekape.or.kr/openapi-data/service/user/animalTrace/traceNoSearch'
@@ -821,6 +840,9 @@ var MTRACE_BATCH_URLS = [
 //           4=포장(소/돼지), 5=구제역백신(소), 6=질병(소), 7=브루셀라(소),
 //           8=묶음기본(묶음), 9=묶음구성(묶음)
 function callEkape(traceNo, optionNo, corpNo) {
+  if (!getTraceServiceKey()) {
+    return {ok:false, msg:'EKAPE_TRACE_SERVICE_KEY 또는 MTRACE_API_KEY 스크립트 속성을 설정하세요.'};
+  }
   var lastErr = null;
   for (var i = 0; i < EKAPE_URLS.length; i++) {
     var url = buildEkapeUrl(EKAPE_URLS[i], traceNo, optionNo, corpNo);
@@ -838,6 +860,12 @@ function callEkape(traceNo, optionNo, corpNo) {
 
 function callEkapeBatch(traceNo, optionNos, corpNo) {
   var resultMap = {};
+  if (!getTraceServiceKey()) {
+    optionNos.forEach(function(optionNo) {
+      resultMap[optionNo] = {ok:false, msg:'EKAPE_TRACE_SERVICE_KEY 또는 MTRACE_API_KEY 스크립트 속성을 설정하세요.'};
+    });
+    return resultMap;
+  }
   var lastErr = null;
   for (var u = 0; u < EKAPE_URLS.length; u++) {
     var requests = optionNos.map(function(optionNo) {
@@ -869,7 +897,7 @@ function callEkapeBatch(traceNo, optionNos, corpNo) {
 
 function buildEkapeUrl(baseUrl, traceNo, optionNo, corpNo) {
   return baseUrl
-    + '?serviceKey=' + encodeURIComponent(EKAPE_TRACE_SERVICE_KEY)
+    + '?serviceKey=' + encodeURIComponent(getTraceServiceKey())
     + '&traceNo='    + encodeURIComponent(traceNo)
     + '&optionNo='   + encodeURIComponent(optionNo)
     + (corpNo ? '&corpNo=' + encodeURIComponent(corpNo) : '');
@@ -1078,7 +1106,8 @@ function mapMtraceLabel(row, traceNo, url) {
 }
 
 function findMtraceTraceInfo(traceNo, baseDate) {
-  if (!MTRACE_USER_ID || !MTRACE_API_KEY) return null;
+  var credentials = getMtraceCredentials();
+  if (!credentials.userId || !credentials.apiKey) return null;
   var base = normalizeMtraceYmd(baseDate);
   var today = normalizeMtraceYmd('');
   var windows = [{start: shiftMtraceYmd(base, -9), end: base}];
@@ -1088,8 +1117,8 @@ function findMtraceTraceInfo(traceNo, baseDate) {
   windows.forEach(function(w) {
     MTRACE_BATCH_URLS.forEach(function(url) {
       var payload = {
-        userId: MTRACE_USER_ID,
-        apiKey: MTRACE_API_KEY,
+        userId: credentials.userId,
+        apiKey: credentials.apiKey,
         callType: '',
         outStartYmd: w.start,
         outEndYmd: w.end,
@@ -1241,7 +1270,7 @@ function debugTrace2() {
 }
 
 // ── 시트 가져오기 (없으면 생성) ────────────────────────
-function getOrCreate(name) {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+function getOrCreate(name, ss) {
+  ss = ss || openDbSpreadsheet();
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }

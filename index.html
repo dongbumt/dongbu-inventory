@@ -47,7 +47,7 @@
   <div class="edit-modal" style="max-width:640px;">
     <h3 id="resign-modal-title">📋 퇴직 정산 처리</h3>
     <div style="background:#fef9e7;border-left:4px solid #f39c12;padding:8px 12px;font-size:12px;color:#7d6608;border-radius:4px;margin-bottom:14px;">
-      ⚠ 퇴사 처리 시 직원이 <strong>퇴사자 목록</strong>으로 이동되며, 출퇴근·연차 기록은 보존됩니다. 이후 출퇴근/연차 입력 셀렉트에서는 제외됩니다.
+      ⚠ 퇴사 처리 시 직원이 <strong>퇴사자 목록</strong>으로 이동되며, 연차 기록은 보존됩니다. 이후 연차 입력 셀렉트에서는 제외됩니다.
     </div>
     <div class="em-row">
       <div><label>직원명</label><input id="rs-name" readonly style="background:#f5f5f5;"></div>
@@ -1200,54 +1200,6 @@
 </div>
 
 <!-- ══════════════════════════════════════════
-     출퇴근
-══════════════════════════════════════════ -->
-<div class="tab-panel" id="p-attendance">
-  <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>⏰ 출퇴근 입력</div>
-    <div class="form-row" style="align-items:flex-end;">
-      <div class="form-group"><label>날짜</label><input id="att-date" type="date"></div>
-      <div class="form-group"><label>직원</label>
-        <select id="att-emp" onchange="fillAttForm()"><option value="">-- 직원 선택 --</option></select>
-      </div>
-      <div class="form-group" style="min-width:130px;"><label>출근시각</label><input id="att-in" type="time" value="08:00" style="width:100%;"></div>
-      <div class="form-group" style="min-width:130px;"><label>퇴근시각</label><input id="att-out" type="time" value="18:00" style="width:100%;"></div>
-      <div class="form-group" style="max-width:110px;"><label>구분</label>
-        <select id="att-type">
-          <option value="정상">정상</option>
-          <option value="지각">지각</option>
-          <option value="조퇴">조퇴</option>
-          <option value="결근">결근</option>
-          <option value="출장">출장</option>
-        </select>
-      </div>
-      <div class="form-group"><label>비고</label><input id="att-note" placeholder="선택입력"></div>
-      <div class="form-group" style="flex:0;"><label>&nbsp;</label>
-        <button class="btn btn-primary btn-sm" onclick="saveAttendance()">💾 저장</button>
-      </div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="section-header">
-      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#e67e22;"></div>출퇴근 기록</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <select id="att-filter-emp" onchange="renderAttendance()" style="font-size:12px;padding:6px 10px;width:auto;"><option value="">전체 직원</option></select>
-        <input id="att-filter-month" type="month" onchange="renderAttendance()" style="font-size:12px;padding:6px 8px;">
-      </div>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr>
-          <th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>구분</th><th>비고</th>
-          <th style="text-align:center;">삭제</th>
-        </tr></thead>
-        <tbody id="att-tbody"><tr><td colspan="8" style="text-align:center;padding:20px;color:#888">기록 없음</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════
      연차관리
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-leaves">
@@ -1297,7 +1249,7 @@
   <div class="card">
     <div class="card-title"><div class="ct-bar" style="background:#27ae60;"></div>📅 월별 근태 달력</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
-      <input type="month" id="lv-cal-month" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="renderAttCalendar()">
+      <input type="month" id="lv-cal-month" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="renderLeaveCalendar()">
       <button class="btn btn-secondary btn-sm" onclick="lvCalPrev()">◀ 이전달</button>
       <button class="btn btn-secondary btn-sm" onclick="lvCalNext()">다음달 ▶</button>
       <button class="btn btn-secondary btn-sm" onclick="lvCalToday()">이번달</button>
@@ -1311,7 +1263,7 @@
       <span style="background:#e74c3c;color:#fff;border-radius:4px;padding:2px 8px;">조퇴</span>
       <span style="background:#3498db;color:#fff;border-radius:4px;padding:2px 8px;">예비군/민방위</span>
     </div>
-    <div id="att-calendar" style="overflow-x:auto;"></div>
+    <div id="leave-calendar" style="overflow-x:auto;"></div>
   </div>
 
   <div class="card">
@@ -2057,9 +2009,7 @@ const today = localDateString();
 function initDOM(){
   const tDate = document.getElementById('t-date');
   if(tDate) tDate.value = today;
-  const aDate=document.getElementById('att-date'); if(aDate) aDate.value=today;
   const lvDate=document.getElementById('lv-date'); if(lvDate) lvDate.value=today;
-  const attM=document.getElementById('att-filter-month'); if(attM) attM.value=today.slice(0,7);
   const lvM=document.getElementById('lv-filter-month'); if(lvM) lvM.value=today.slice(0,7);
   const schM=document.getElementById('sch-month'); if(schM) schM.value=today.slice(0,7);
   // 헤더 날짜 표시
@@ -2079,8 +2029,7 @@ const EXCEL_TRANSACTIONS = [];
 // Google Sheets 연동 레이어
 // ══════════════════════════════════════════════
 let GS_ONLINE = false;
-let GS_URL = localStorage.getItem('dbmt_gs_url') ||
-  'https://script.google.com/macros/s/AKfycbyGPUL1cKw3hUlotf7_wELbmUj4-yAMzVa03Lx4gXY1Ia_aYrS-3gt8HYdtLHLail9JBQ/exec';
+let GS_URL = localStorage.getItem('dbmt_gs_url') || '';
 
 // 동기화 상태 표시
 function gsShowSync(msg, isErr=false){
@@ -2122,6 +2071,14 @@ function gsSetupSave(){
 function gsSetupSkip(){
   localStorage.setItem('dbmt_gs_skip', '1');
   gsSkipToLocal();
+}
+
+function gsShowSetup(){
+  const input = document.getElementById('gs-url-input');
+  if(input && GS_URL) input.value = GS_URL;
+  const setup = document.getElementById('gs-setup');
+  if(setup) setup.classList.remove('hidden');
+  gsSetStatus(false);
 }
 
 function getLocalTraceInfo(traceNo){
@@ -2283,30 +2240,18 @@ function gsSetStatus(online){
 }
 
 // ── Google Sheets API ──
-// GET: fetch 방식 (CORS — 크롬/웨일 등 모든 브라우저 호환)
+// GET: JSONP 방식 (로컬 file:// 실행에서도 Apps Script 읽기 가능)
 // POST: fetch 방식 (저장용)
 async function gsGet(action){
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
-  try {
-    const res = await fetch(GS_URL + '?action=' + action, {
-      signal: controller.signal,
-      mode: 'cors'
-    });
-    clearTimeout(timer);
-    const text = await res.text();
-    const json = JSON.parse(text);
-    if(!json.ok) throw new Error(json.error || '서버 오류');
-    return json.data;
-  } catch(err) {
-    clearTimeout(timer);
-    if(err.name === 'AbortError') throw new Error('요청 시간 초과 (12초)');
-    throw err;
-  }
+  return gsJsonp(action, {}, 30000);
 }
 
 function gsJsonp(action, params={}, timeoutMs=30000){
   return new Promise((resolve, reject)=>{
+    if(!GS_URL){
+      reject(new Error('Apps Script 웹앱 URL이 설정되지 않았습니다.'));
+      return;
+    }
     const cb = 'dbmt_jsonp_' + Date.now() + '_' + Math.floor(Math.random()*100000);
     const script = document.createElement('script');
     const timer = setTimeout(()=>{
@@ -2334,6 +2279,7 @@ function gsJsonp(action, params={}, timeoutMs=30000){
 }
 
 async function gsPost(action, postData){
+  if(!GS_URL) throw new Error('Apps Script 웹앱 URL이 설정되지 않았습니다.');
   const res = await fetch(GS_URL, {
     method: 'POST',
     headers: {'Content-Type': 'text/plain'},
@@ -2347,6 +2293,11 @@ async function gsPost(action, postData){
 
 // ── 초기 데이터 로드 (백그라운드 동기화) ──
 async function gsInit(){
+  if(!GS_URL){
+    gsShowSetup();
+    gsShowSync('Google Sheets URL을 설정하면 동기화됩니다.');
+    return;
+  }
   const overlay = document.getElementById('gs-overlay');
   const msg     = document.getElementById('gs-overlay-msg');
   // 오버레이는 이미 닫혀있음 — 메시지만 조용히 업데이트
@@ -2516,7 +2467,6 @@ function jsArg(value){
 const APP_DATA_REGISTRY = {
   scheduleEvents:{ get:()=>scheduleEvents,set:v=>{ scheduleEvents=v; },ls:'dbmt_schedule_events' },
   employees:     { get:()=>employees,     set:v=>{ employees=v; },     ls:'dbmt_employees'   },
-  attendance:    { get:()=>attendance,    set:v=>{ attendance=v; },    ls:'dbmt_attendance'  },
   leaveRecs:     { get:()=>leaveRecs,     set:v=>{ leaveRecs=v; },     ls:'dbmt_leaves'      },
   traderInfoMap: { get:()=>traderInfoMap, set:v=>{ traderInfoMap=v; }, ls:'dbmt_trader_info' },
   docChecks:     { get:()=>docChecks,     set:v=>{ docChecks=v; },     ls:'dbmt_doc_checks'  },
@@ -2582,8 +2532,7 @@ function showPage(id, btn){
   if(id==='p-doccheck') renderDocCheck();
   if(id==='p-traders') renderTraders();
   if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
-  if(id==='p-attendance'){ renderEmployees(); renderAttendance(); }
-  if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderAttCalendar(); renderLeaveRecords(); }
+  if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); }
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
   if(id==='p-factorysim') renderFactorySim();
   if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
@@ -6094,7 +6043,7 @@ function backupAllData(){
   const KEYS = [
     'dbmt_user_transactions','dbmt_user_prod','dbmt_prices',
     'dbmt_schedule_events',
-    'dbmt_employees','dbmt_attendance','dbmt_leaves',
+    'dbmt_employees','dbmt_leaves',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
     'dbmt_label_products','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
@@ -6378,10 +6327,9 @@ function renderDocCheck(){
 }
 
 // ═══════════════════════════════════════════════════════
-// ─── 인사 관리 (직원 · 출퇴근 · 연차) ───────────────────
+// ─── 인사 관리 (직원 · 연차) ───────────────────
 // ═══════════════════════════════════════════════════════
 let employees   = JSON.parse(localStorage.getItem('dbmt_employees')||'[]');
-let attendance  = JSON.parse(localStorage.getItem('dbmt_attendance')||'[]');
 let leaveRecs   = JSON.parse(localStorage.getItem('dbmt_leaves')||'[]');
 let _empEditId  = null;
 let _empSortKey = 'name';
@@ -6457,7 +6405,6 @@ function updateEmpLeaveDisplay() {
 
 function saveHR(){
   localStorage.setItem('dbmt_employees',  JSON.stringify(employees));
-  localStorage.setItem('dbmt_attendance', JSON.stringify(attendance));
   localStorage.setItem('dbmt_leaves',     JSON.stringify(leaveRecs));
   gsSaveAppData();
 }
@@ -6522,11 +6469,10 @@ function deleteEmployee(id){
   const e = employees.find(x=>x.id===id);
   const isRetired = e && e.resignDate;
   const msg = isRetired
-    ? `퇴사자 "${e.name}" 의 모든 기록을 영구 삭제할까요?\n(정산내역, 출퇴근·연차 기록 모두 삭제됩니다)`
-    : `"${e?e.name:id}" 직원을 삭제할까요?\n(해당 출퇴근·연차 기록도 함께 삭제됩니다)`;
+    ? `퇴사자 "${e.name}" 의 모든 기록을 영구 삭제할까요?\n(정산내역, 연차 기록 모두 삭제됩니다)`
+    : `"${e?e.name:id}" 직원을 삭제할까요?\n(해당 연차 기록도 함께 삭제됩니다)`;
   if(!confirm(msg)) return;
   employees  = employees.filter(x=>x.id!==id);
-  attendance = attendance.filter(x=>x.empId!==id);
   leaveRecs  = leaveRecs.filter(x=>x.empId!==id);
   saveHR(); renderEmployees(); renderRetiredEmployees(); renderSalarySummary(); toast('삭제됐습니다.');
 }
@@ -6558,10 +6504,10 @@ function renderEmployees(){
   if(!active.length){
     tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:20px;color:#888">등록된 재직 직원이 없습니다.</td></tr>';
     // 셀렉트도 비워주기
-    ['att-emp','att-filter-emp','lv-emp','lv-record-emp'].forEach(sid=>{
+    ['lv-emp','lv-record-emp'].forEach(sid=>{
       const sel=document.getElementById(sid); if(!sel) return;
       const cur=sel.value;
-      const ph = (sid==='att-filter-emp'||sid==='lv-record-emp')?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
+      const ph = sid==='lv-record-emp'?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
       sel.innerHTML = ph;
       if(cur) sel.value=cur;
     });
@@ -6601,10 +6547,10 @@ function renderEmployees(){
       </td></tr>`;
   }).join('');
     // 셀렉트 업데이트 (재직자만)
-  ['att-emp','att-filter-emp','lv-emp','lv-record-emp'].forEach(sid=>{
+  ['lv-emp','lv-record-emp'].forEach(sid=>{
     const sel=document.getElementById(sid); if(!sel) return;
     const cur=sel.value;
-    const ph = (sid==='att-filter-emp'||sid==='lv-record-emp')?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
+    const ph = sid==='lv-record-emp'?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
     sel.innerHTML = ph + active.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
     if(cur) sel.value=cur;
   });
@@ -6913,77 +6859,6 @@ function reopenSettlement(){
   openResignModal(id);
 }
 
-// ── 출퇴근 ───────────────────────────────────────────────
-function fillAttForm(){
-  // 직원 선택 시 기본 출퇴근 시각 세팅 (09:00/18:00)
-  document.getElementById('att-in').value  = '08:00';
-  document.getElementById('att-out').value = '18:00';
-}
-function calcWorkHours(inTime, outTime){
-  if(!inTime||!outTime) return '-';
-  const [ih,im]=inTime.split(':').map(Number);
-  const [oh,om]=outTime.split(':').map(Number);
-  let mins = (oh*60+om)-(ih*60+im);
-  if(mins<=0) return '-';
-  mins = Math.max(0, mins - 60); // 점심시간 1시간 제외
-  return `${Math.floor(mins/60)}h ${mins%60}m`;
-}
-function saveAttendance(){
-  const empId = document.getElementById('att-emp').value;
-  const date  = document.getElementById('att-date').value;
-  if(!empId||!date){ toast('직원과 날짜를 선택하세요.'); return; }
-  // 같은 날짜·직원 중복 체크
-  const dup = attendance.findIndex(r=>r.empId===empId&&r.date===date);
-  const rec = {
-    id: hrId(), empId, date,
-    inTime:  document.getElementById('att-in').value,
-    outTime: document.getElementById('att-out').value,
-    type:    document.getElementById('att-type').value,
-    note:    document.getElementById('att-note').value.trim(),
-  };
-  if(dup>=0){
-    if(!confirm('이미 같은 날 기록이 있습니다. 덮어쓸까요?')) return;
-    attendance[dup] = rec;
-  } else {
-    attendance.push(rec);
-  }
-  saveHR(); renderAttendance(); toast('출퇴근 기록 저장됐습니다.');
-}
-function deleteAttendance(id){
-  if(!confirm('해당 기록을 삭제할까요?')) return;
-  attendance = attendance.filter(r=>r.id!==id);
-  saveHR(); renderAttendance(); toast('삭제됐습니다.');
-}
-function renderAttendance(){
-  const tbody = document.getElementById('att-tbody'); if(!tbody) return;
-  const filterEmp   = document.getElementById('att-filter-emp')?.value||'';
-  const filterMonth = document.getElementById('att-filter-month')?.value||'';
-  let rows = [...attendance].sort((a,b)=>b.date.localeCompare(a.date));
-  if(filterEmp)   rows = rows.filter(r=>r.empId===filterEmp);
-  if(filterMonth) rows = rows.filter(r=>r.date.startsWith(filterMonth));
-  if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">기록 없음</td></tr>';
-    return;
-  }
-  const typeColor = {정상:'var(--green)',지각:'var(--orange)',조퇴:'var(--orange)',결근:'var(--red)',출장:'var(--blue)'};
-  tbody.innerHTML = rows.map(r=>{
-    const emp = employees.find(e=>e.id===r.empId);
-    const hours = calcWorkHours(r.inTime, r.outTime);
-    const tc = typeColor[r.type]||'#333';
-    return `<tr>
-      <td style="font-size:11px;">${r.date}</td>
-      <td><strong>${emp?emp.name:'?'}</strong></td>
-      <td style="text-align:center;">${r.inTime||'-'}</td>
-      <td style="text-align:center;">${r.outTime||'-'}</td>
-      <td style="text-align:center;font-size:11px;">${hours}</td>
-      <td style="text-align:center;"><span style="color:${tc};font-weight:700;">${r.type||'-'}</span></td>
-      <td style="font-size:11px;">${r.note||'-'}</td>
-      <td style="text-align:center;">
-        <button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 6px;" onclick="deleteAttendance('${r.id}')">삭제</button>
-      </td></tr>`;
-  }).join('');
-}
-
 // ── 연차 ─────────────────────────────────────────────────
 
 // ── 근태 달력 ─────────────────────────────────────────
@@ -7004,7 +6879,7 @@ function lvCalToday(){
   // lv-filter-month 도 동기화
   const fm = document.getElementById('lv-filter-month');
   if(fm) fm.value = ym;
-  renderAttCalendar();
+  renderLeaveCalendar();
 }
 function lvCalPrev(){
   const el = document.getElementById('lv-cal-month'); if(!el||!el.value) return;
@@ -7013,7 +6888,7 @@ function lvCalPrev(){
   el.value = localMonthString(d);
   const fm = document.getElementById('lv-filter-month');
   if(fm) fm.value = el.value;
-  renderAttCalendar();
+  renderLeaveCalendar();
 }
 function lvCalNext(){
   const el = document.getElementById('lv-cal-month'); if(!el||!el.value) return;
@@ -7022,11 +6897,11 @@ function lvCalNext(){
   el.value = localMonthString(d);
   const fm = document.getElementById('lv-filter-month');
   if(fm) fm.value = el.value;
-  renderAttCalendar();
+  renderLeaveCalendar();
 }
 
-function renderAttCalendar(){
-  const el = document.getElementById('att-calendar'); if(!el) return;
+function renderLeaveCalendar(){
+  const el = document.getElementById('leave-calendar'); if(!el) return;
   const monEl = document.getElementById('lv-cal-month');
   const ym = monEl?.value || localMonthString();
   const [y,m] = ym.split('-').map(Number);
@@ -7109,7 +6984,7 @@ function saveLeave(){
   saveHR();
   cancelLeaveEdit(false);
   renderLeaves();
-  renderAttCalendar();
+  renderLeaveCalendar();
   renderLeaveRecords();
   toast(editId ? '근태 기록이 수정됐습니다.' : '근태 기록 저장됐습니다.');
 }
@@ -7117,7 +6992,7 @@ function deleteLeave(id){
   if(!confirm('근태 기록을 삭제할까요?')) return;
   leaveRecs = leaveRecs.filter(r=>r.id!==id);
   if(document.getElementById('lv-edit-id')?.value === id) cancelLeaveEdit(false);
-  saveHR(); renderLeaves(); renderAttCalendar(); renderLeaveRecords(); toast('삭제됐습니다.');
+  saveHR(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); toast('삭제됐습니다.');
 }
 
 function editLeave(id){
@@ -7252,40 +7127,6 @@ function renderLeaves(){
     </tr>`;
   }).join('');
 }
-function renderMonthSummary(){
-  const tbody = document.getElementById('lv-month-tbody'); if(!tbody) return;
-  const ym = document.getElementById('lv-filter-month')?.value || localMonthString();
-  if(!employees.length){ tbody.innerHTML=''; return; }
-  tbody.innerHTML = employees.map(emp=>{
-    const atts = attendance.filter(r=>r.empId===emp.id&&(r.date||'').startsWith(ym));
-    const lvs  = leaveRecs.filter(r=>r.empId===emp.id&&(r.date||'').startsWith(ym));
-    const normal  = atts.filter(r=>r.type==='정상'||r.type==='출장').length;
-    const late    = atts.filter(r=>r.type==='지각').length;
-    const early   = atts.filter(r=>r.type==='조퇴').length;
-    const absent  = atts.filter(r=>r.type==='결근').length;
-    const leaveDays = lvs.reduce((s,r)=>s+(parseFloat(r.days)||0),0);
-    // 총 근무시간
-    let totalMins = 0;
-    atts.forEach(r=>{
-      if(!r.inTime||!r.outTime) return;
-      const [ih,im]=r.inTime.split(':').map(Number);
-      const [oh,om]=r.outTime.split(':').map(Number);
-      const mins=(oh*60+om)-(ih*60+im);
-      if(mins>0) totalMins+=mins;
-    });
-    const totalH = `${Math.floor(totalMins/60)}h ${totalMins%60}m`;
-    return `<tr>
-      <td><strong>${emp.name}</strong></td>
-      <td style="text-align:center;">${normal}</td>
-      <td style="text-align:center;color:${late?'var(--orange)':'#333'};">${late}</td>
-      <td style="text-align:center;color:${early?'var(--orange)':'#333'};">${early}</td>
-      <td style="text-align:center;color:${absent?'var(--red)':'#333'};">${absent}</td>
-      <td style="text-align:center;color:${leaveDays?'var(--green)':'#333'};">${leaveDays}</td>
-      <td style="text-align:right;font-size:11px;">${totalMins?totalH:'-'}</td></tr>`;
-  }).join('');
-}
-
-
 document.addEventListener('DOMContentLoaded', ()=>{
   // DOM 초기화 (날짜 세팅, 헤더 표시)
   initDOM();
@@ -7310,9 +7151,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderAll();
 
   // 2) GAS 백그라운드 동기화 (앱 시작 후 시도)
-  if(localStorage.getItem('dbmt_gs_skip') === '1'){
-    gsSetStatus(false);
-    gsShowSync('오프라인 모드로 시작');
+  if(!GS_URL){
+    gsShowSetup();
+    gsShowSync('Google Sheets URL을 설정하면 동기화됩니다.');
+  } else if(localStorage.getItem('dbmt_gs_skip') === '1'){
+    localStorage.removeItem('dbmt_gs_skip');
+    gsInit();
   } else {
     gsInit();
   }
