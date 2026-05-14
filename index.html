@@ -2029,7 +2029,10 @@ const EXCEL_TRANSACTIONS = [];
 // Google Sheets 연동 레이어
 // ══════════════════════════════════════════════
 let GS_ONLINE = false;
-let GS_URL = localStorage.getItem('dbmt_gs_url') || '';
+// 회사 공용 Apps Script 웹앱 URL — 각 PC에서 별도 설정 없이 자동 연동된다.
+// 개인이 다른 URL을 쓰려면 설정 화면에서 입력하면 localStorage 값이 우선한다.
+const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbyGPUL1cKw3hUlotf7_wELbmUj4-yAMzVa03Lx4gXY1Ia_aYrS-3gt8HYdtLHLail9JBQ/exec';
+let GS_URL = localStorage.getItem('dbmt_gs_url') || DEFAULT_GS_URL;
 
 // 동기화 상태 표시
 function gsShowSync(msg, isErr=false){
