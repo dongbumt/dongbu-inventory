@@ -1,0 +1,15 @@
+# PPT 분석 산출물 (재생성 가능)
+ppt_inspection/
+
+# Claude Code 로컬 설정
+.claude/
+
+# OS 생성 파일
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 임시/백업 파일
+*.bak
+*.tmp
+*~

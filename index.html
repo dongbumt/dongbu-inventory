@@ -267,10 +267,22 @@
   .card{border:1px solid rgba(221,225,231,.78);box-shadow:0 1px 4px rgba(0,0,0,.06);}
   .btn,input,select,textarea{border-radius:7px;}
   .tbl-wrap{border-radius:7px;background:#fff;}
+  .fs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+  .fs-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;}
+  .fs-metric{background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:13px 14px;}
+  .fs-metric small{display:block;font-size:11px;color:#77808a;font-weight:700;margin-bottom:6px;}
+  .fs-metric strong{display:block;font-size:20px;color:#243547;}
+  .fs-layout{position:relative;width:100%;height:420px;background:#f7f9fb;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .fs-layout-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8894a0;font-size:12px;text-align:center;padding:18px;}
+  .fs-zone,.fs-equipment{position:absolute;border-radius:6px;padding:6px 7px;font-size:11px;line-height:1.25;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .fs-zone{background:#e8f4fd;border:1px solid #9fc7e8;color:#1a5c88;}
+  .fs-equipment{background:#fff7e6;border:1px solid #efc979;color:#805100;}
+  .fs-row-table input,.fs-row-table select{padding:6px 8px;font-size:12px;}
   @media(max-width:768px){
     .app-header{height:60px;padding:0 14px;}
     .nav-tabs{width:100%;min-width:0;height:auto;top:0;}
     .main{padding:12px;}
+    .fs-layout{height:320px;}
   }
 </style>
 </head>
@@ -493,6 +505,9 @@
   </div>
   <div class="nav-tab" onclick="showPage('p-import',this)" id="nav-import" style="color:var(--green);font-weight:700;">
     📥 엑셀 가져오기
+  </div>
+  <div class="nav-tab" onclick="showPage('p-factorysim',this);renderFactorySim();" id="nav-factorysim" style="color:#0f766e;font-weight:700;">
+    🏗 확장공장 시뮬레이터
   </div>
 </nav>
 
@@ -1726,15 +1741,137 @@
       <table>
         <thead><tr>
           <th>날짜</th><th>원자재</th>
+          <th style="text-align:right;">인원수</th>
+          <th style="text-align:right;">일일생산량</th>
           <th style="text-align:right;">실생산(KG)</th>
           <th style="text-align:right;">생산단가/KG</th>
           <th style="text-align:right;">판매단가/KG</th>
           <th style="text-align:right;">매출이익</th>
           <th style="text-align:center;">관리</th>
         </tr></thead>
-        <tbody id="cc-history-tbody"><tr><td colspan="7" style="text-align:center;padding:20px;color:#888">저장된 계산이 없습니다.</td></tr></tbody>
+        <tbody id="cc-history-tbody"><tr><td colspan="9" style="text-align:center;padding:20px;color:#888">저장된 계산이 없습니다.</td></tr></tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     확장공장 시뮬레이터
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-factorysim">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#0f766e;"></div>확장공장 시뮬레이터</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select id="fs-scenario-select" onchange="loadFactorySimScenario(this.value)" style="min-width:220px;font-size:12px;"></select>
+        <button class="btn btn-secondary btn-sm" onclick="newFactorySimScenario()">새 시나리오</button>
+        <button class="btn btn-primary btn-sm" onclick="saveFactorySimScenario()">저장</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFactorySimScenario()">삭제</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#667085;line-height:1.65;">
+      현재 공장 자료를 기준으로 이전 후보지의 면적, 설비 배치, 작업 동선, 작업 인원별 예상 생산성을 비교하는 메뉴입니다.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#2980b9;"></div>기본 조건</div>
+    <div class="fs-grid">
+      <div class="form-group"><label>시나리오명</label><input id="fs-name" placeholder="예) 2차 가공장 확장안 A" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>공장 폭 (m)</label><input type="number" id="fs-width" min="1" step="0.1" placeholder="예) 24" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>공장 깊이 (m)</label><input type="number" id="fs-depth" min="1" step="0.1" placeholder="예) 36" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>작업 인원 (명)</label><input type="number" id="fs-workers" min="1" step="1" placeholder="예) 6" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>작업 시간 (시간/일)</label><input type="number" id="fs-shift-hours" min="1" step="0.5" placeholder="예) 8" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>목표 생산량 (KG/일)</label><input type="number" id="fs-target-kg" min="0" step="1" placeholder="예) 3000" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>현재 기준 인원 (명)</label><input type="number" id="fs-base-workers" min="1" step="1" placeholder="예) 3" oninput="calculateFactorySim()"></div>
+      <div class="form-group">
+        <label>현재 평균 생산량 (KG/일)</label>
+        <div style="display:flex;gap:6px;">
+          <input type="number" id="fs-base-daily-kg" min="0" step="1" placeholder="생산일보 평균" oninput="calculateFactorySim()">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="applyFactorySimProductionAverage()" style="white-space:nowrap;">반영</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:12px;">
+      <label>자료 메모</label>
+      <textarea id="fs-note" rows="3" placeholder="현재 배치도, 작업동선, 설비 배치도에서 확인한 특이사항을 적어두세요." oninput="calculateFactorySim()"></textarea>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#16a085;"></div>배치 구획</div>
+      <button class="btn btn-secondary btn-sm" onclick="addFactorySimZone()">+ 구획 추가</button>
+    </div>
+    <div class="tbl-wrap" style="max-height:none;">
+      <table class="fs-row-table">
+        <thead><tr>
+          <th style="min-width:120px;">구획명</th>
+          <th style="min-width:100px;">유형</th>
+          <th style="min-width:70px;text-align:right;">X</th>
+          <th style="min-width:70px;text-align:right;">Y</th>
+          <th style="min-width:80px;text-align:right;">폭</th>
+          <th style="min-width:80px;text-align:right;">깊이</th>
+          <th style="min-width:160px;">비고</th>
+          <th style="width:60px;text-align:center;">삭제</th>
+        </tr></thead>
+        <tbody id="fs-zone-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#e67e22;"></div>설비 & 장비</div>
+      <button class="btn btn-secondary btn-sm" onclick="addFactorySimEquipment()">+ 장비 추가</button>
+    </div>
+    <div class="tbl-wrap" style="max-height:none;">
+      <table class="fs-row-table">
+        <thead><tr>
+          <th style="min-width:120px;">장비명</th>
+          <th style="min-width:100px;">공정</th>
+          <th style="min-width:70px;text-align:right;">X</th>
+          <th style="min-width:70px;text-align:right;">Y</th>
+          <th style="min-width:80px;text-align:right;">폭</th>
+          <th style="min-width:80px;text-align:right;">깊이</th>
+          <th style="min-width:100px;text-align:right;">처리량 KG/h</th>
+          <th style="min-width:90px;text-align:right;">필요인원</th>
+          <th style="width:60px;text-align:center;">삭제</th>
+        </tr></thead>
+        <tbody id="fs-equipment-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#7f8c8d;"></div>작업 동선</div>
+      <button class="btn btn-secondary btn-sm" onclick="addFactorySimRoute()">+ 동선 추가</button>
+    </div>
+    <div class="tbl-wrap" style="max-height:none;">
+      <table class="fs-row-table">
+        <thead><tr>
+          <th style="min-width:130px;">출발</th>
+          <th style="min-width:130px;">도착</th>
+          <th style="min-width:100px;text-align:right;">거리 (m)</th>
+          <th style="min-width:100px;text-align:right;">횟수/일</th>
+          <th style="min-width:180px;">비고</th>
+          <th style="width:60px;text-align:center;">삭제</th>
+        </tr></thead>
+        <tbody id="fs-route-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>분석 결과</div>
+    <div id="fs-analysis-metrics" class="fs-metric-grid"></div>
+    <div id="fs-analysis-notes" style="display:grid;gap:8px;font-size:12px;line-height:1.6;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>배치 미리보기</div>
+    <div id="fs-layout-canvas" class="fs-layout"></div>
   </div>
 </div>
 
@@ -2586,6 +2723,7 @@ function renderAll(){
   updateOutProductList();
   if(typeof updateTransactionForm === 'function') updateTransactionForm();
   if(typeof renderSubMaterials === 'function' && document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
+  if(typeof renderFactorySim === 'function' && document.getElementById('p-factorysim')?.classList.contains('active')) renderFactorySim();
 }
 
 // ── 사용자가 앱에서 직접 추가 입력한 데이터 ──
@@ -2665,6 +2803,7 @@ const APP_DATA_REGISTRY = {
   subMaterialItems: { get:()=>subMaterialItems, set:v=>{ subMaterialItems=v; }, ls:'dbmt_submaterial_items' },
   subMaterialLots:  { get:()=>subMaterialLots,  set:v=>{ subMaterialLots=v; },  ls:'dbmt_submaterial_lots'  },
   subMaterialCounts:{ get:()=>subMaterialCounts,set:v=>{ subMaterialCounts=v; },ls:'dbmt_submaterial_counts'},
+  factorySimScenarios:{ get:()=>factorySimScenarios,set:v=>{ factorySimScenarios=v; },ls:'dbmt_factory_sim_scenarios'},
 };
 
 // ── 앱 전체 데이터 GS 저장 (레지스트리 기반, 자동) ──
@@ -2721,6 +2860,7 @@ function showPage(id, btn){
   if(id==='p-attendance'){ renderEmployees(); renderAttendance(); }
   if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderAttCalendar(); renderLeaveRecords(); }
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
+  if(id==='p-factorysim') renderFactorySim();
   if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
 }
 
@@ -3822,27 +3962,62 @@ function getStockOptions(){
     .sort((a,b)=>String(a.product).localeCompare(String(b.product)) || String(a.lot||'').localeCompare(String(b.lot||'')));
 }
 
-function addProdInputRow(){
-  const id = ++prodInputRowCount;
-  const stockOpts = getStockOptions();
-  const optHtml = stockOpts.map(s=>{
+function getFilteredProdInputStockOptions(query=''){
+  const q = priceKey(query);
+  return getStockOptions().filter(s=>{
+    if(!q) return true;
+    return priceKey([s.product, s.lot, s.origin, s.packunit, s.source].join(' ')).includes(q);
+  });
+}
+
+function getProdInputStockLabel(s){
+  const source = s.source || (s.produced_weight > 0 ? '생산입고' : '입고');
+  const inputPrice = getPriceFromLot(s.product, s.lot, s.origin, source, s.price);
+  const priceLabel = source === '생산입고' ? '생산입고단가' : '입고단가';
+  const packLabel = s.packunit ? ` / ${s.packunit}` : '';
+  return `${s.product}${packLabel} [${s.lot || ''}] ${s.origin || ''} (${Number(s.stock||0).toFixed(2)}KG${inputPrice?' / '+priceLabel+' '+Number(inputPrice).toLocaleString()+'원':''})`;
+}
+
+function renderProdInputStockSuggestions(id){
+  const input = document.getElementById(`prod-in-sel-${id}`);
+  const box = document.getElementById(`prod-in-results-${id}`);
+  if(!input || !box) return;
+  const rows = getFilteredProdInputStockOptions(input.value).slice(0, 80);
+  if(!rows.length){
+    box.innerHTML = '<div style="padding:9px 11px;font-size:12px;color:#888;">검색 결과가 없습니다.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = rows.map(s=>{
     const source = s.source || (s.produced_weight > 0 ? '생산입고' : '입고');
     const inputPrice = getPriceFromLot(s.product, s.lot, s.origin, source, s.price);
-    const priceLabel = source === '생산입고' ? '생산입고단가' : '입고단가';
-    const packLabel = s.packunit ? ` / ${s.packunit}` : '';
-    return `<option value="${htmlEscape(s.product)}|${htmlEscape(s.lot)}|${htmlEscape(s.origin)}|${htmlEscape(s.packunit||'')}" data-product="${htmlEscape(s.product)}" data-lot="${htmlEscape(s.lot)}" data-origin="${htmlEscape(s.origin)}" data-packunit="${htmlEscape(s.packunit||'')}" data-stock="${Number(s.stock||0).toFixed(2)}" data-source="${htmlEscape(source)}" data-price="${inputPrice}">${htmlEscape(s.product)}${htmlEscape(packLabel)} [${htmlEscape(s.lot)}] ${htmlEscape(s.origin)} (${Number(s.stock||0).toFixed(2)}KG${inputPrice?' / '+priceLabel+' '+Number(inputPrice).toLocaleString()+'원':''})</option>`;
+    return `<button type="button" onclick="selectProdInputStock(${id},${jsArg(s.product)},${jsArg(s.lot||'')},${jsArg(s.origin||'')},${jsArg(s.packunit||'')},${Number(s.stock||0)},${jsArg(source)},${Number(inputPrice)||0})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
+      <div style="font-size:12px;font-weight:700;color:#2c3e50;">${htmlEscape(s.product || '')}${s.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(s.packunit)}</span>` : ''}</div>
+      <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(s.lot || '')} · ${htmlEscape(s.origin || '')} · ${Number(s.stock||0).toFixed(2)}KG${inputPrice?' · '+Number(inputPrice).toLocaleString()+'원':''}</div>
+    </button>`;
   }).join('');
+  box.style.display = 'block';
+}
+
+function hideProdInputStockSuggestionsSoon(id){
+  setTimeout(()=>{
+    const box = document.getElementById(`prod-in-results-${id}`);
+    if(box) box.style.display = 'none';
+  }, 180);
+}
+
+function addProdInputRow(){
+  const id = ++prodInputRowCount;
 
   const row = document.createElement('div');
   row.id = `prod-in-${id}`;
   row.style.cssText = 'display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
   row.innerHTML = `
-    <div class="form-group">
+    <div class="form-group" style="position:relative;">
       <label style="font-size:11px;font-weight:700;color:var(--orange);">재고품목 선택 #${id}</label>
-      <select id="prod-in-sel-${id}" onchange="onProdInSelect(${id})" style="font-size:12px;">
-        <option value="">-- 재고에서 선택 --</option>
-        ${optHtml}
-      </select>
+      <input id="prod-in-sel-${id}" placeholder="재고품목 검색/선택" autocomplete="off" oninput="renderProdInputStockSuggestions(${id})" onfocus="renderProdInputStockSuggestions(${id})" onblur="hideProdInputStockSuggestionsSoon(${id})" style="font-size:12px;">
+      <div id="prod-in-results-${id}" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);background:#fff;border:1px solid #dce3ea;border-radius:6px;box-shadow:0 8px 18px rgba(0,0,0,.12);max-height:230px;overflow:auto;z-index:40;"></div>
+      <input type="hidden" id="prod-in-origin-${id}">
       <input type="hidden" id="prod-in-packunit-${id}">
     </div>
     <div class="form-group">
@@ -3866,17 +4041,18 @@ function addProdInputRow(){
   document.getElementById('prod-input-rows').appendChild(row);
 }
 
-function onProdInSelect(id){
-  const sel = document.getElementById(`prod-in-sel-${id}`);
-  const opt = sel.selectedOptions[0];
-  if(!opt || !opt.value) return;
-  const product = opt.dataset.product || '';
-  const origin  = opt.dataset.origin  || '';
+function selectProdInputStock(id, product, lot, origin, packunit, stock, source, inputPrice){
+  const input = document.getElementById(`prod-in-sel-${id}`);
+  if(input) input.value = getProdInputStockLabel({ product, lot, origin, packunit, stock, source, price: inputPrice });
+  const box = document.getElementById(`prod-in-results-${id}`);
+  if(box) box.style.display = 'none';
   document.getElementById(`prod-in-product-${id}`).value = product;
-  document.getElementById(`prod-in-lot-${id}`).value     = opt.dataset.lot || '';
+  document.getElementById(`prod-in-lot-${id}`).value     = lot || '';
+  const originEl = document.getElementById(`prod-in-origin-${id}`);
+  if(originEl) originEl.value = origin || '';
   const packEl = document.getElementById(`prod-in-packunit-${id}`);
-  if(packEl) packEl.value = opt.dataset.packunit || '';
-  const stockQty = Number(opt.dataset.stock) || 0;
+  if(packEl) packEl.value = packunit || '';
+  const stockQty = Number(stock) || 0;
   const qtyEl = document.getElementById(`prod-in-qty-${id}`);
   if(qtyEl && stockQty){
     qtyEl.value = stockQty.toFixed(2);
@@ -3884,9 +4060,7 @@ function onProdInSelect(id){
     qtyEl.title = '재고 전량 자동입력 (수정 가능)';
   }
   // 거래내역 입고/생산입고 단가만 자동 적용 (수정 가능)
-  const lot = opt.dataset.lot || '';
-  const source = opt.dataset.source || '';
-  const autoPrice = getPriceFromLot(product, lot, origin, source, opt.dataset.price);
+  const autoPrice = inputPrice || getPriceFromLot(product, lot, origin, source, inputPrice);
   const priceEl = document.getElementById(`prod-in-price-${id}`);
   if(priceEl){
     priceEl.value = autoPrice || '';
@@ -3895,14 +4069,16 @@ function onProdInSelect(id){
     priceEl.title = autoPrice ? `거래내역 ${priceTypeLabel} 자동입력 (수정 가능)` : `해당 이력번호의 ${priceTypeLabel}를 찾지 못했습니다.`;
   }
   updateProdOutputOriginsFromInputs();
-  toast(`선택: ${product} [${opt.dataset.lot}] 재고 ${opt.dataset.stock}KG${autoPrice?' / 단가 '+autoPrice.toLocaleString()+'원':''}`, 2800);
+  toast(`선택: ${product} [${lot}] 재고 ${Number(stockQty).toFixed(2)}KG${autoPrice?' / 단가 '+autoPrice.toLocaleString()+'원':''}`, 2800);
 }
 
 function getCommonProdInputOrigin(){
-  const checkedOpts = Array.from(document.querySelectorAll('[id^="prod-in-sel-"] option:checked')).filter(o=>o.value);
-  if(!checkedOpts.length) return '';
-  const origins = [...new Set(checkedOpts.map(o=>normalizeOriginName(o.dataset.origin||'')).filter(Boolean))];
-  return origins.length === 1 ? origins[0] : '';
+  const origins = Array.from(document.querySelectorAll('[id^="prod-in-origin-"]'))
+    .map(el=>normalizeOriginName(el.value||''))
+    .filter(Boolean);
+  if(!origins.length) return '';
+  const unique = [...new Set(origins)];
+  return unique.length === 1 ? unique[0] : '';
 }
 
 function updateProdOutputOriginField(el, origin){
@@ -4065,7 +4241,7 @@ function saveProdEntry(){
     const id = el.id.replace('prod-in-qty-','');
     const product = document.getElementById(`prod-in-product-${id}`)?.value.trim();
     const lot = document.getElementById(`prod-in-lot-${id}`)?.value.trim();
-    const origin = document.getElementById(`prod-in-sel-${id}`)?.selectedOptions[0]?.dataset?.origin || '';
+    const origin = document.getElementById(`prod-in-origin-${id}`)?.value.trim() || '';
     const packunit = document.getElementById(`prod-in-packunit-${id}`)?.value.trim() || '';
     const qty = parseFloat(el.value)||0;
     // 단가: 사용자 입력 우선, 없으면 단가표
@@ -4218,7 +4394,11 @@ function openEditProdEntry(id){
     const q=document.getElementById(`prod-in-qty-${n}`);
     const pr=document.getElementById(`prod-in-price-${n}`);
     const pk=document.getElementById(`prod-in-packunit-${n}`);
+    const o=document.getElementById(`prod-in-origin-${n}`);
+    const sel=document.getElementById(`prod-in-sel-${n}`);
     if(p)p.value=inp.product||''; if(l)l.value=inp.lot||'';
+    if(o)o.value=inp.origin||'';
+    if(sel)sel.value=inp.product ? getProdInputStockLabel({product:inp.product, lot:inp.lot, origin:inp.origin, packunit:inp.packunit, stock:inp.qty, source:'', price:inp.price}) : '';
     if(pk)pk.value=inp.packunit||'';
     if(q)q.value=inp.qty||0;      if(pr)pr.value=inp.price||0;
   });
@@ -7841,12 +8021,14 @@ function resetCostCalc(){
 function renderCostHistory(){
   const tbody = document.getElementById('cc-history-tbody'); if(!tbody) return;
   if(!costCalcHistory.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:#888">저장된 계산이 없습니다.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:#888">저장된 계산이 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = costCalcHistory.map(e=>`<tr>
     <td style="font-size:11px;">${e.date}</td>
     <td style="font-weight:600;font-size:12px;">${e.names}</td>
+    <td style="text-align:right;">${e.workers ? fmtD(e.workers) + ' 명' : '-'}</td>
+    <td style="text-align:right;">${e.dailyQty ? fmtD(e.dailyQty) + ' KG' : '-'}</td>
     <td style="text-align:right;">${fmtD(e.totOutput)} KG</td>
     <td style="text-align:right;">${fmt(e.costPerKg)} 원</td>
     <td style="text-align:right;">${e.sellPrice?fmt(e.sellPrice)+' 원':'-'}</td>
@@ -7856,6 +8038,380 @@ function renderCostHistory(){
       <button class="btn btn-sm btn-danger"    onclick="deleteCostCalc(${e.id})">삭제</button>
     </td>
   </tr>`).join('');
+}
+
+// ══════════════════════════════════════════
+// 확장공장 시뮬레이터
+// ══════════════════════════════════════════
+
+let factorySimScenarios = JSON.parse(localStorage.getItem('dbmt_factory_sim_scenarios') || '[]');
+let factorySimActiveId = localStorage.getItem('dbmt_factory_sim_active') || '';
+
+function factorySimId(){
+  return 'fs-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+}
+
+function factorySimProductionAverage(){
+  const map = (typeof getDailyProductionInputMap === 'function') ? getDailyProductionInputMap() : {};
+  const qtys = Object.values(map).map(parseAppNumber).filter(v => v > 0);
+  if(!qtys.length) return 0;
+  return qtys.reduce((s,v)=>s+v,0) / qtys.length;
+}
+
+function factorySimActiveWorkers(){
+  if(!Array.isArray(employees)) return 0;
+  return employees.filter(e => !e.resignDate).length;
+}
+
+function factorySimDraft(){
+  const activeWorkers = factorySimActiveWorkers();
+  return {
+    id:'',
+    name:'',
+    width:'',
+    depth:'',
+    workers: activeWorkers || '',
+    shiftHours: 8,
+    targetKg:'',
+    baseWorkers: activeWorkers || '',
+    baseDailyKg: Math.round(factorySimProductionAverage()) || '',
+    note:'',
+    zones:[],
+    equipment:[],
+    routes:[]
+  };
+}
+
+function factorySimScenarioOptions(){
+  const sel = document.getElementById('fs-scenario-select');
+  if(!sel) return;
+  const sorted = factorySimScenarios.slice().sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  sel.innerHTML =
+    '<option value="">새 시나리오 작성 중</option>' +
+    sorted.map(s => `<option value="${htmlEscape(s.id)}">${htmlEscape(s.name || '이름 없는 시나리오')}</option>`).join('');
+  sel.value = factorySimScenarios.some(s => s.id === factorySimActiveId) ? factorySimActiveId : '';
+}
+
+function loadFactorySimScenario(id){
+  factorySimActiveId = id || '';
+  localStorage.setItem('dbmt_factory_sim_active', factorySimActiveId);
+  renderFactorySim();
+}
+
+function renderFactorySim(){
+  if(!document.getElementById('p-factorysim')) return;
+  if(factorySimActiveId && !factorySimScenarios.some(s => s.id === factorySimActiveId)){
+    factorySimActiveId = '';
+  }
+  factorySimScenarioOptions();
+  const scenario = factorySimScenarios.find(s => s.id === factorySimActiveId) || factorySimDraft();
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if(el) el.value = value ?? '';
+  };
+  set('fs-name', scenario.name);
+  set('fs-width', scenario.width);
+  set('fs-depth', scenario.depth);
+  set('fs-workers', scenario.workers);
+  set('fs-shift-hours', scenario.shiftHours || 8);
+  set('fs-target-kg', scenario.targetKg);
+  set('fs-base-workers', scenario.baseWorkers);
+  set('fs-base-daily-kg', scenario.baseDailyKg);
+  set('fs-note', scenario.note);
+
+  renderFactorySimRows('zone', scenario.zones || []);
+  renderFactorySimRows('equipment', scenario.equipment || []);
+  renderFactorySimRows('route', scenario.routes || []);
+  calculateFactorySim();
+}
+
+function factorySimOptions(options, selected){
+  return options.map(opt => `<option value="${htmlEscape(opt)}"${opt === selected ? ' selected' : ''}>${htmlEscape(opt)}</option>`).join('');
+}
+
+function renderFactorySimRows(type, rows){
+  const tbody = document.getElementById(`fs-${type}-tbody`);
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  if(rows.length){
+    rows.forEach(row => {
+      if(type === 'zone') addFactorySimZone(row);
+      if(type === 'equipment') addFactorySimEquipment(row);
+      if(type === 'route') addFactorySimRoute(row);
+    });
+  }
+}
+
+function addFactorySimZone(row={}){
+  const tbody = document.getElementById('fs-zone-tbody'); if(!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="fs-zone-name" value="${htmlEscape(row.name || '')}" placeholder="예) 원료 입고" oninput="calculateFactorySim()"></td>
+    <td><select class="fs-zone-type" onchange="calculateFactorySim()">${factorySimOptions(['입고','해체/절단','가공','포장','냉장/냉동','출고','세척','보관','기타'], row.type || '가공')}</select></td>
+    <td><input class="fs-zone-x" type="number" step="0.1" value="${htmlEscape(row.x ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-zone-y" type="number" step="0.1" value="${htmlEscape(row.y ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-zone-w" type="number" min="0" step="0.1" value="${htmlEscape(row.w ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-zone-h" type="number" min="0" step="0.1" value="${htmlEscape(row.h ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-zone-note" value="${htmlEscape(row.note || '')}" placeholder="온도, HACCP 구역 등" oninput="calculateFactorySim()"></td>
+    <td style="text-align:center;"><button class="btn btn-sm btn-danger" onclick="removeFactorySimRow(this)">삭제</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addFactorySimEquipment(row={}){
+  const tbody = document.getElementById('fs-equipment-tbody'); if(!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="fs-equipment-name" value="${htmlEscape(row.name || '')}" placeholder="예) 슬라이서 1호" oninput="calculateFactorySim()"></td>
+    <td><input class="fs-equipment-type" value="${htmlEscape(row.type || '')}" placeholder="예) 절단" oninput="calculateFactorySim()"></td>
+    <td><input class="fs-equipment-x" type="number" step="0.1" value="${htmlEscape(row.x ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-equipment-y" type="number" step="0.1" value="${htmlEscape(row.y ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-equipment-w" type="number" min="0" step="0.1" value="${htmlEscape(row.w ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-equipment-h" type="number" min="0" step="0.1" value="${htmlEscape(row.h ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-equipment-capacity" type="number" min="0" step="1" value="${htmlEscape(row.capacity ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-equipment-workers" type="number" min="0" step="1" value="${htmlEscape(row.workers ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td style="text-align:center;"><button class="btn btn-sm btn-danger" onclick="removeFactorySimRow(this)">삭제</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addFactorySimRoute(row={}){
+  const tbody = document.getElementById('fs-route-tbody'); if(!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="fs-route-from" value="${htmlEscape(row.from || '')}" placeholder="예) 원료냉장고" oninput="calculateFactorySim()"></td>
+    <td><input class="fs-route-to" value="${htmlEscape(row.to || '')}" placeholder="예) 절단대" oninput="calculateFactorySim()"></td>
+    <td><input class="fs-route-distance" type="number" min="0" step="0.1" value="${htmlEscape(row.distance ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-route-trips" type="number" min="0" step="1" value="${htmlEscape(row.trips ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-route-note" value="${htmlEscape(row.note || '')}" placeholder="대차, 사람 이동, 원료 이동 등" oninput="calculateFactorySim()"></td>
+    <td style="text-align:center;"><button class="btn btn-sm btn-danger" onclick="removeFactorySimRow(this)">삭제</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function removeFactorySimRow(btn){
+  btn.closest('tr')?.remove();
+  calculateFactorySim();
+}
+
+function collectFactorySimRows(type){
+  const rows = [];
+  document.querySelectorAll(`#fs-${type}-tbody tr`).forEach(tr => {
+    const val = cls => tr.querySelector(`.${cls}`)?.value?.trim() || '';
+    const num = cls => parseAppNumber(tr.querySelector(`.${cls}`)?.value);
+    if(type === 'zone'){
+      const row = {
+        name:val('fs-zone-name'), type:val('fs-zone-type'), x:num('fs-zone-x'), y:num('fs-zone-y'),
+        w:num('fs-zone-w'), h:num('fs-zone-h'), note:val('fs-zone-note')
+      };
+      if(row.name || row.w || row.h || row.note) rows.push(row);
+    }
+    if(type === 'equipment'){
+      const row = {
+        name:val('fs-equipment-name'), type:val('fs-equipment-type'), x:num('fs-equipment-x'), y:num('fs-equipment-y'),
+        w:num('fs-equipment-w'), h:num('fs-equipment-h'), capacity:num('fs-equipment-capacity'), workers:num('fs-equipment-workers')
+      };
+      if(row.name || row.capacity || row.w || row.h) rows.push(row);
+    }
+    if(type === 'route'){
+      const row = {
+        from:val('fs-route-from'), to:val('fs-route-to'), distance:num('fs-route-distance'),
+        trips:num('fs-route-trips'), note:val('fs-route-note')
+      };
+      if(row.from || row.to || row.distance || row.trips || row.note) rows.push(row);
+    }
+  });
+  return rows;
+}
+
+function collectFactorySimForm(){
+  const val = id => document.getElementById(id)?.value?.trim() || '';
+  const num = id => parseAppNumber(document.getElementById(id)?.value);
+  return {
+    id: factorySimActiveId || '',
+    name: val('fs-name'),
+    width: num('fs-width'),
+    depth: num('fs-depth'),
+    workers: num('fs-workers'),
+    shiftHours: num('fs-shift-hours') || 8,
+    targetKg: num('fs-target-kg'),
+    baseWorkers: num('fs-base-workers'),
+    baseDailyKg: num('fs-base-daily-kg'),
+    note: val('fs-note'),
+    zones: collectFactorySimRows('zone'),
+    equipment: collectFactorySimRows('equipment'),
+    routes: collectFactorySimRows('route')
+  };
+}
+
+function saveFactorySimData(){
+  localStorage.setItem('dbmt_factory_sim_scenarios', JSON.stringify(factorySimScenarios));
+  localStorage.setItem('dbmt_factory_sim_active', factorySimActiveId || '');
+  gsSaveAppData();
+}
+
+function saveFactorySimScenario(){
+  const scenario = collectFactorySimForm();
+  if(!scenario.name){
+    alert('시나리오명을 입력하세요.');
+    document.getElementById('fs-name')?.focus();
+    return;
+  }
+  scenario.id = scenario.id || factorySimId();
+  scenario.updatedAt = localDateString();
+  const idx = factorySimScenarios.findIndex(s => s.id === scenario.id);
+  if(idx >= 0) factorySimScenarios[idx] = scenario;
+  else factorySimScenarios.push(scenario);
+  factorySimActiveId = scenario.id;
+  saveFactorySimData();
+  renderFactorySim();
+  toast('확장공장 시나리오가 저장됐습니다.');
+}
+
+function newFactorySimScenario(){
+  factorySimActiveId = '';
+  localStorage.setItem('dbmt_factory_sim_active', '');
+  renderFactorySim();
+  document.getElementById('fs-name')?.focus();
+}
+
+function deleteFactorySimScenario(){
+  if(!factorySimActiveId){ alert('삭제할 저장 시나리오를 선택하세요.'); return; }
+  const scenario = factorySimScenarios.find(s => s.id === factorySimActiveId);
+  if(!confirm(`"${scenario?.name || '선택한 시나리오'}"을 삭제할까요?`)) return;
+  factorySimScenarios = factorySimScenarios.filter(s => s.id !== factorySimActiveId);
+  factorySimActiveId = '';
+  saveFactorySimData();
+  renderFactorySim();
+  toast('시나리오가 삭제됐습니다.');
+}
+
+function applyFactorySimProductionAverage(){
+  const avg = Math.round(factorySimProductionAverage());
+  const baseEl = document.getElementById('fs-base-daily-kg');
+  if(baseEl) baseEl.value = avg || '';
+  const baseWorkersEl = document.getElementById('fs-base-workers');
+  if(baseWorkersEl && !baseWorkersEl.value){
+    const activeWorkers = factorySimActiveWorkers();
+    if(activeWorkers) baseWorkersEl.value = activeWorkers;
+  }
+  calculateFactorySim();
+  toast(avg ? '생산일보 평균을 반영했습니다.' : '생산일보 평균 데이터가 아직 없습니다.');
+}
+
+function factorySimMinPositive(values){
+  const positives = values.filter(v => v > 0);
+  return positives.length ? Math.min(...positives) : 0;
+}
+
+function calculateFactorySim(){
+  const metricsEl = document.getElementById('fs-analysis-metrics');
+  if(!metricsEl) return;
+  const s = collectFactorySimForm();
+  const floorArea = s.width * s.depth;
+  const zoneArea = s.zones.reduce((sum,z)=>sum + (z.w * z.h), 0);
+  const equipmentArea = s.equipment.reduce((sum,e)=>sum + (e.w * e.h), 0);
+  const totalOccupiedArea = zoneArea || equipmentArea;
+  const areaPerWorker = s.workers ? floorArea / s.workers : 0;
+  const workerDaily = (s.baseDailyKg && s.baseWorkers && s.workers)
+    ? s.baseDailyKg / s.baseWorkers * s.workers
+    : 0;
+  const equipmentCaps = s.equipment.map(e => e.capacity).filter(v => v > 0);
+  const bottleneckCapacity = factorySimMinPositive(equipmentCaps);
+  const equipmentDaily = bottleneckCapacity * s.shiftHours;
+  const totalEquipmentDaily = equipmentCaps.reduce((sum,v)=>sum+v,0) * s.shiftHours;
+  const projectedDaily = factorySimMinPositive([workerDaily || 0, equipmentDaily || 0]) || workerDaily || equipmentDaily || 0;
+  const targetGap = s.targetKg ? projectedDaily - s.targetKg : 0;
+  const equipmentUtil = (s.targetKg && equipmentDaily) ? s.targetKg / equipmentDaily * 100 : 0;
+  const totalRouteM = s.routes.reduce((sum,r)=>sum + (r.distance * r.trips), 0);
+  const routePerKg = projectedDaily ? totalRouteM / projectedDaily : 0;
+  const requiredEquipmentWorkers = s.equipment.reduce((sum,e)=>sum + (e.workers || 0), 0);
+  const bottleneck = bottleneckCapacity
+    ? s.equipment.find(e => e.capacity === bottleneckCapacity)
+    : null;
+  const fmtKg = v => v ? `${fmtD(v)} KG` : '-';
+  const fmtSqm = v => v ? `${fmtD(v)} ㎡` : '-';
+  const metrics = [
+    {label:'총 면적', value:fmtSqm(floorArea)},
+    {label:'점유율', value:floorArea && totalOccupiedArea ? `${(totalOccupiedArea / floorArea * 100).toFixed(1)} %` : '-'},
+    {label:'1인당 면적', value:fmtSqm(areaPerWorker)},
+    {label:'인원 기준 생산량', value:fmtKg(workerDaily)},
+    {label:'병목 설비 처리량', value:fmtKg(equipmentDaily)},
+    {label:'예상 가능 생산량', value:fmtKg(projectedDaily)},
+    {label:'목표 대비', value:s.targetKg ? `${targetGap >= 0 ? '+' : ''}${fmtD(targetGap)} KG` : '-'},
+    {label:'일 이동거리', value:totalRouteM ? `${fmtD(totalRouteM)} m` : '-'}
+  ];
+  metricsEl.innerHTML = metrics.map(m => `
+    <div class="fs-metric">
+      <small>${htmlEscape(m.label)}</small>
+      <strong>${htmlEscape(m.value)}</strong>
+    </div>
+  `).join('');
+
+  const notes = [];
+  const note = (kind, title, body) => notes.push({kind, title, body});
+  if(!floorArea) note('info', '면적 입력 대기', '공장 폭과 깊이를 입력하면 면적, 작업자 밀도, 배치 점유율이 계산됩니다.');
+  if(s.targetKg && projectedDaily){
+    if(projectedDaily >= s.targetKg) note('success', '목표 생산량 가능권', `현재 조건상 목표보다 약 ${fmtD(projectedDaily - s.targetKg)}KG 여유가 있습니다.`);
+    else note('warn', '목표 생산량 부족', `현재 조건상 목표보다 약 ${fmtD(s.targetKg - projectedDaily)}KG 부족합니다. 인원, 설비 처리량, 작업 시간을 다시 조정해보세요.`);
+  }
+  if(workerDaily && equipmentDaily && equipmentDaily < workerDaily){
+    note('warn', '설비 병목 가능성', `${bottleneck?.name || '가장 낮은 처리량 설비'} 기준으로 인원 증가분을 모두 받지 못할 수 있습니다.`);
+  }
+  if(areaPerWorker && areaPerWorker < 12){
+    note('warn', '작업자 밀도 확인', '1인당 작업 면적이 좁은 편입니다. 통로, 대차 회전, 세척 공간을 별도로 확인하는 것이 좋습니다.');
+  }
+  if(requiredEquipmentWorkers && s.workers && requiredEquipmentWorkers > s.workers){
+    note('warn', '장비 필요 인원 초과', `장비별 필요 인원 합계가 ${requiredEquipmentWorkers}명으로, 설정한 작업 인원보다 많습니다.`);
+  }
+  if(equipmentUtil > 90){
+    note('warn', '설비 여유율 낮음', `목표 기준 병목 설비 가동률이 ${equipmentUtil.toFixed(1)}%입니다. 피크 물량이나 고장 대응 여유가 낮을 수 있습니다.`);
+  }
+  if(routePerKg > 0.8){
+    note('warn', '동선 부담 높음', `예상 생산량 기준 KG당 이동거리가 ${routePerKg.toFixed(2)}m입니다. 원료 입고-가공-포장-출고 흐름을 더 짧게 잡아보세요.`);
+  }
+  if(totalEquipmentDaily && equipmentDaily && totalEquipmentDaily > equipmentDaily * 2){
+    note('info', '공정 균형 확인', '설비 총 처리량과 병목 처리량 차이가 큽니다. 특정 공정 하나가 전체 라인을 잡아둘 가능성이 있습니다.');
+  }
+  if(!notes.length) note('info', '자료 입력 대기', '구획, 장비, 동선을 입력하면 병목과 생산성 판단이 더 정밀해집니다.');
+
+  const notesEl = document.getElementById('fs-analysis-notes');
+  if(notesEl){
+    notesEl.innerHTML = notes.map(n => {
+      const cls = n.kind === 'success' ? 'alert-success' : n.kind === 'warn' ? 'alert-warn' : 'alert-info';
+      return `<div class="alert ${cls}" style="margin:0;"><strong>${htmlEscape(n.title)}</strong><br>${htmlEscape(n.body)}</div>`;
+    }).join('');
+  }
+  renderFactorySimLayout(s);
+}
+
+function renderFactorySimLayout(s){
+  const canvas = document.getElementById('fs-layout-canvas'); if(!canvas) return;
+  if(!s.width || !s.depth){
+    canvas.innerHTML = '<div class="fs-layout-empty">공장 폭과 깊이를 입력하면 배치 미리보기가 표시됩니다.</div>';
+    return;
+  }
+  const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+  const blockStyle = item => {
+    const left = clamp((item.x || 0) / s.width * 100, 0, 100);
+    const top = clamp((item.y || 0) / s.depth * 100, 0, 100);
+    const width = clamp((item.w || 1) / s.width * 100, 2, 100 - left);
+    const height = clamp((item.h || 1) / s.depth * 100, 2, 100 - top);
+    return `left:${left}%;top:${top}%;width:${width}%;height:${height}%;`;
+  };
+  const zones = s.zones.map(z => `
+    <div class="fs-zone" style="${blockStyle(z)}">
+      <strong>${htmlEscape(z.name || z.type || '구획')}</strong><br>
+      ${htmlEscape(z.type || '')}${z.w && z.h ? ` · ${fmtD(z.w * z.h)}㎡` : ''}
+    </div>
+  `).join('');
+  const equipment = s.equipment.map(e => `
+    <div class="fs-equipment" style="${blockStyle(e)}z-index:2;">
+      <strong>${htmlEscape(e.name || '장비')}</strong><br>
+      ${htmlEscape(e.type || '')}${e.capacity ? ` · ${fmtD(e.capacity)}KG/h` : ''}
+    </div>
+  `).join('');
+  canvas.innerHTML = zones + equipment || '<div class="fs-layout-empty">구획이나 장비를 추가하면 이곳에 배치가 표시됩니다.</div>';
 }
 
 
