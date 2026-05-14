@@ -34,6 +34,108 @@ const DOMAIN_SHEETS = {
       return result;
     }
   },
+  factorySimScenarios: {
+    name: '공장시뮬레이션',
+    headers: ['id','name','width','depth','workers','shiftHours','targetKg','baseWorkers','baseDailyKg','note','updatedAt','zones','equipment','routes'],
+    toRows: function(arr) {
+      return (arr || []).map(function(s) {
+        return {
+          id:          String(s.id == null ? '' : s.id),
+          name:        s.name || '',
+          width:       s.width == null ? '' : s.width,
+          depth:       s.depth == null ? '' : s.depth,
+          workers:     s.workers == null ? '' : s.workers,
+          shiftHours:  s.shiftHours == null ? '' : s.shiftHours,
+          targetKg:    s.targetKg == null ? '' : s.targetKg,
+          baseWorkers: s.baseWorkers == null ? '' : s.baseWorkers,
+          baseDailyKg: s.baseDailyKg == null ? '' : s.baseDailyKg,
+          note:        s.note || '',
+          updatedAt:   s.updatedAt || '',
+          zones:       JSON.stringify(s.zones || []),
+          equipment:   JSON.stringify(s.equipment || []),
+          routes:      JSON.stringify(s.routes || [])
+        };
+      });
+    },
+    fromRows: function(rows) {
+      var parseJson = function(v) {
+        if (v == null || v === '') return [];
+        try { return JSON.parse(String(v)); } catch(e) { return []; }
+      };
+      return rows.map(function(r) {
+        return {
+          id:          String(r.id == null ? '' : r.id),
+          name:        r.name || '',
+          width:       r.width === '' || r.width == null ? '' : r.width,
+          depth:       r.depth === '' || r.depth == null ? '' : r.depth,
+          workers:     r.workers === '' || r.workers == null ? '' : r.workers,
+          shiftHours:  r.shiftHours === '' || r.shiftHours == null ? '' : r.shiftHours,
+          targetKg:    r.targetKg === '' || r.targetKg == null ? '' : r.targetKg,
+          baseWorkers: r.baseWorkers === '' || r.baseWorkers == null ? '' : r.baseWorkers,
+          baseDailyKg: r.baseDailyKg === '' || r.baseDailyKg == null ? '' : r.baseDailyKg,
+          note:        r.note || '',
+          updatedAt:   r.updatedAt || '',
+          zones:       parseJson(r.zones),
+          equipment:   parseJson(r.equipment),
+          routes:      parseJson(r.routes)
+        };
+      });
+    }
+  },
+  labelTemplates: {
+    name: '라벨템플릿',
+    // weight 컬럼은 getRows의 parseFloat 자동변환을 피하려고 labelweight로 저장
+    headers: ['id','name','size','product','origin','grade','slaughter','carcass','labelweight','itemno','ingredients','licenseno','prodtype','packaging','storage','manufacturer','phone','address'],
+    toRows: function(arr) {
+      return (arr || []).map(function(t) {
+        return {
+          id:           t.id,
+          name:         t.name || '',
+          size:         t.size || '',
+          product:      t.product || '',
+          origin:       t.origin || '',
+          grade:        t.grade || '',
+          slaughter:    t.slaughter || '',
+          carcass:      t.carcass || '',
+          labelweight:  t.weight == null ? '' : String(t.weight),
+          itemno:       t.itemno || '',
+          ingredients:  t.ingredients || '',
+          licenseno:    t.licenseno || '',
+          prodtype:     t.prodtype || '',
+          packaging:    t.packaging || '',
+          storage:      t.storage || '',
+          manufacturer: t.manufacturer || '',
+          phone:        t.phone || '',
+          address:      t.address || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        var idNum = Number(r.id);
+        return {
+          id:           isNaN(idNum) ? r.id : idNum,
+          name:         r.name || '',
+          size:         r.size || '',
+          product:      r.product || '',
+          origin:       r.origin || '',
+          grade:        r.grade || '',
+          slaughter:    r.slaughter || '',
+          carcass:      r.carcass || '',
+          weight:       r.labelweight == null ? '' : String(r.labelweight),
+          itemno:       r.itemno || '',
+          ingredients:  r.ingredients || '',
+          licenseno:    r.licenseno || '',
+          prodtype:     r.prodtype || '',
+          packaging:    r.packaging || '',
+          storage:      r.storage || '',
+          manufacturer: r.manufacturer || '',
+          phone:        r.phone || '',
+          address:      r.address || ''
+        };
+      });
+    }
+  },
   labelProducts: {
     name: '라벨품목',
     headers: ['id','name','origin','kind','meattype','storage','shelfdays','packunit','itemno','grade'],
@@ -148,6 +250,281 @@ const DOMAIN_SHEETS = {
           try { emp.pastSettlements = JSON.parse(String(r.pastSettlements)); } catch(e) {}
         }
         return emp;
+      });
+    }
+  },
+  subMaterialItems: {
+    name: '부자재품목',
+    headers: ['id','code','name','spec','unit','unitPrice','note'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:        String(x.id == null ? '' : x.id),
+          code:      x.code || '',
+          name:      x.name || '',
+          spec:      x.spec || '',
+          unit:      x.unit || '',
+          unitPrice: (x.unitPrice == null || x.unitPrice === '') ? '' : x.unitPrice,
+          note:      x.note || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        return {
+          id:        String(r.id == null ? '' : r.id),
+          code:      String(r.code || ''),
+          name:      String(r.name || ''),
+          spec:      String(r.spec || ''),
+          unit:      String(r.unit || ''),
+          unitPrice: (r.unitPrice === '' || r.unitPrice == null) ? '' : (Number(r.unitPrice) || 0),
+          note:      String(r.note || '')
+        };
+      });
+    }
+  },
+  subMaterialLots: {
+    name: '부자재입고',
+    headers: ['id','date','lot','itemId','itemCode','itemName','itemSpec','trader','qty','unit','certName','note','createdAt'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:        String(x.id == null ? '' : x.id),
+          date:      x.date || '',
+          lot:       x.lot || '',
+          itemId:    String(x.itemId == null ? '' : x.itemId),
+          itemCode:  x.itemCode || '',
+          itemName:  x.itemName || '',
+          itemSpec:  x.itemSpec || '',
+          trader:    x.trader || '',
+          qty:       (x.qty == null || x.qty === '') ? '' : x.qty,
+          unit:      x.unit || '',
+          certName:  x.certName || '',
+          note:      x.note || '',
+          createdAt: x.createdAt ? "'" + x.createdAt : ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        return {
+          id:        String(r.id == null ? '' : r.id),
+          date:      String(r.date || ''),
+          lot:       String(r.lot || ''),
+          itemId:    String(r.itemId == null ? '' : r.itemId),
+          itemCode:  String(r.itemCode || ''),
+          itemName:  String(r.itemName || ''),
+          itemSpec:  String(r.itemSpec || ''),
+          trader:    String(r.trader || ''),
+          qty:       (r.qty === '' || r.qty == null) ? 0 : (Number(r.qty) || 0),
+          unit:      String(r.unit || ''),
+          certName:  String(r.certName || ''),
+          note:      String(r.note || ''),
+          createdAt: String(r.createdAt || '')
+        };
+      });
+    }
+  },
+  subMaterialCounts: {
+    name: '부자재조사',
+    headers: ['id','date','itemId','itemCode','itemName','itemSpec','qty','unit','manager','note','createdAt'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:        String(x.id == null ? '' : x.id),
+          date:      x.date || '',
+          itemId:    String(x.itemId == null ? '' : x.itemId),
+          itemCode:  x.itemCode || '',
+          itemName:  x.itemName || '',
+          itemSpec:  x.itemSpec || '',
+          qty:       (x.qty == null || x.qty === '') ? '' : x.qty,
+          unit:      x.unit || '',
+          manager:   x.manager || '',
+          note:      x.note || '',
+          createdAt: x.createdAt ? "'" + x.createdAt : ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        return {
+          id:        String(r.id == null ? '' : r.id),
+          date:      String(r.date || ''),
+          itemId:    String(r.itemId == null ? '' : r.itemId),
+          itemCode:  String(r.itemCode || ''),
+          itemName:  String(r.itemName || ''),
+          itemSpec:  String(r.itemSpec || ''),
+          qty:       (r.qty === '' || r.qty == null) ? 0 : (Number(r.qty) || 0),
+          unit:      String(r.unit || ''),
+          manager:   String(r.manager || ''),
+          note:      String(r.note || ''),
+          createdAt: String(r.createdAt || '')
+        };
+      });
+    }
+  },
+  attendance: {
+    name: '근태',
+    headers: ['id','empId','date','inTime','outTime','type','note'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:      String(x.id == null ? '' : x.id),
+          empId:   String(x.empId == null ? '' : x.empId),
+          date:    x.date || '',
+          inTime:  x.inTime ? "'" + x.inTime : '',
+          outTime: x.outTime ? "'" + x.outTime : '',
+          type:    x.type || '',
+          note:    x.note || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        return {
+          id:      String(r.id == null ? '' : r.id),
+          empId:   String(r.empId == null ? '' : r.empId),
+          date:    String(r.date || ''),
+          inTime:  String(r.inTime || ''),
+          outTime: String(r.outTime || ''),
+          type:    String(r.type || ''),
+          note:    String(r.note || '')
+        };
+      });
+    }
+  },
+  leaveRecs: {
+    name: '연차',
+    headers: ['id','empId','date','type','days','reason'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:     String(x.id == null ? '' : x.id),
+          empId:  String(x.empId == null ? '' : x.empId),
+          date:   x.date || '',
+          type:   x.type || '',
+          days:   (x.days == null || x.days === '') ? '' : x.days,
+          reason: x.reason || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        return {
+          id:     String(r.id == null ? '' : r.id),
+          empId:  String(r.empId == null ? '' : r.empId),
+          date:   String(r.date || ''),
+          type:   String(r.type || ''),
+          days:   (r.days === '' || r.days == null) ? 0 : (Number(r.days) || 0),
+          reason: String(r.reason || '')
+        };
+      });
+    }
+  },
+  pgbList: {
+    name: '판관비',
+    headers: ['id','name','monthlyCost','active'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:          x.id,
+          name:        x.name || '',
+          monthlyCost: (x.monthlyCost == null || x.monthlyCost === '') ? 0 : x.monthlyCost,
+          active:      !!x.active
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        var idNum = Number(r.id);
+        return {
+          id:          isNaN(idNum) ? r.id : idNum,
+          name:        String(r.name || ''),
+          monthlyCost: Number(r.monthlyCost) || 0,
+          active:      (r.active === true || r.active === 'TRUE' || r.active === 'true' || r.active === 1)
+        };
+      });
+    }
+  },
+  costCalcHistory: {
+    name: '원가이력',
+    headers: ['id','date','names','totInput','totOutput','totRawCost','totExpCost','totalCost','costPerKg','sellPrice','revenue','profit','dailyQty','workers','materials'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:         x.id,
+          date:       x.date || '',
+          names:      x.names || '',
+          totInput:   x.totInput || 0,
+          totOutput:  x.totOutput || 0,
+          totRawCost: x.totRawCost || 0,
+          totExpCost: x.totExpCost || 0,
+          totalCost:  x.totalCost || 0,
+          costPerKg:  x.costPerKg || 0,
+          sellPrice:  x.sellPrice || 0,
+          revenue:    x.revenue || 0,
+          profit:     x.profit || 0,
+          dailyQty:   x.dailyQty || 0,
+          workers:    x.workers || 0,
+          materials:  x.materials || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        var idNum = Number(r.id);
+        return {
+          id:         isNaN(idNum) ? r.id : idNum,
+          date:       String(r.date || ''),
+          names:      String(r.names || ''),
+          totInput:   Number(r.totInput) || 0,
+          totOutput:  Number(r.totOutput) || 0,
+          totRawCost: Number(r.totRawCost) || 0,
+          totExpCost: Number(r.totExpCost) || 0,
+          totalCost:  Number(r.totalCost) || 0,
+          costPerKg:  Number(r.costPerKg) || 0,
+          sellPrice:  Number(r.sellPrice) || 0,
+          revenue:    Number(r.revenue) || 0,
+          profit:     Number(r.profit) || 0,
+          dailyQty:   Number(r.dailyQty) || 0,
+          workers:    Number(r.workers) || 0,
+          materials:  String(r.materials || '')
+        };
+      });
+    }
+  },
+  expenseList: {
+    name: '지출',
+    headers: ['id','date','paytype','storetype','store','category','item','amount','note'],
+    toRows: function(arr) {
+      return (arr || []).map(function(x) {
+        return {
+          id:        x.id,
+          date:      x.date || '',
+          paytype:   x.paytype || '',
+          storetype: x.storetype || '',
+          store:     x.store || '',
+          category:  x.category || '',
+          item:      x.item || '',
+          amount:    (x.amount == null || x.amount === '') ? 0 : x.amount,
+          note:      x.note || ''
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        var idNum = Number(r.id);
+        return {
+          id:        isNaN(idNum) ? r.id : idNum,
+          date:      String(r.date || ''),
+          paytype:   String(r.paytype || ''),
+          storetype: String(r.storetype || ''),
+          store:     String(r.store || ''),
+          category:  String(r.category || ''),
+          item:      String(r.item || ''),
+          amount:    Number(r.amount) || 0,
+          note:      String(r.note || '')
+        };
       });
     }
   },
