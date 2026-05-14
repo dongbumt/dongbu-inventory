@@ -1877,6 +1877,10 @@
     <div style="width:100%;">
       <div class="card">
         <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>📋 등록 품목 목록</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+          <input id="lp-search" placeholder="🔍 제품명·원산지·포장단위·품목번호 등 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
+          <span id="lp-search-count" style="font-size:11px;color:#888;white-space:nowrap;"></span>
+        </div>
         <div id="lp-list-wrap" style="overflow-x:auto;">
           <div style="color:#aaa;text-align:center;padding:20px;">품목을 등록해 주세요.</div>
         </div>
@@ -8587,12 +8591,23 @@ function renderLabelProducts(){
   // 라벨출력 탭 제품선택 드롭다운도 갱신
   refreshLabelProductSelect();
   refreshTxnManagedProductControls();
+  const countEl = document.getElementById('lp-search-count');
   if(!labelProducts.length){
     wrap.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">등록된 품목이 없습니다.</div>';
+    if(countEl) countEl.textContent = '';
     return;
   }
+  // 검색 필터 (제품명·원산지·유형·육종·보관·포장단위·품목번호·등급)
+  const searchEl = document.getElementById('lp-search');
+  const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
   const sorted = labelProducts
     .map((p,i)=>({p,i}))
+    .filter(({p})=>{
+      if(!q) return true;
+      const text = [p.name,p.origin,p.kind,p.meattype,p.storage,p.packunit,p.itemno,p.grade]
+        .map(v=>String(v||'')).join(' ').toLowerCase();
+      return text.includes(q);
+    })
     .sort((a,b)=>{
       const av = labelProductSortValue(a.p, labelProductSortKey);
       const bv = labelProductSortValue(b.p, labelProductSortKey);
@@ -8600,6 +8615,11 @@ function renderLabelProducts(){
       if(typeof av === 'number' || typeof bv === 'number') return dir * ((Number(av)||0) - (Number(bv)||0));
       return dir * String(av).localeCompare(String(bv),'ko');
     });
+  if(countEl) countEl.textContent = q ? `${sorted.length} / ${labelProducts.length}건` : `총 ${labelProducts.length}건`;
+  if(!sorted.length){
+    wrap.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">검색 결과가 없습니다.</div>';
+    return;
+  }
   let rows = sorted.map(({p,i},displayIdx) => {
     if(inlineEditLabelProductIdx === i){
       return `
