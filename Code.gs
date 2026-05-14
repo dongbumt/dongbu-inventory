@@ -4,6 +4,14 @@
 
 const SHEET_ID = '1ZjhVq_E2czmrr4zrYSjYsHLgHIILdJF7Cy7AaZyG7WU';
 
+// ── 도메인 시트 레지스트리 ──
+// 각 키는 index.html의 APP_DATA_REGISTRY와 일치해야 한다.
+// 시트가 존재하면 거기서 읽고, 없으면 앱데이터 시트에서 fallback.
+const DOMAIN_SHEETS = {
+  scheduleEvents: { name: '일정', headers: ['id','date','text'] },
+  // 다음 도메인은 점진적으로 추가
+};
+
 // GET: JSONP 방식 (CORS 우회) + 일반 JSON 겸용
 function doGet(e) {
   try {
@@ -86,6 +94,7 @@ function saveAll(d) {
 }
 
 // ── 보조 데이터 읽기 ──────────────────────────────────
+// 도메인 시트가 있으면 우선 사용, 없으면 앱데이터 시트에서 JSON 파싱
 function getAppData() {
   const sh   = getOrCreate('앱데이터');
   const rows = sh.getDataRange().getValues();
@@ -96,22 +105,49 @@ function getAppData() {
     if (!key || !val) continue;
     try { result[key] = JSON.parse(val); } catch(e) { result[key] = val; }
   }
+
+  // 도메인 시트가 존재하면 덮어쓰기 (마이그레이션 완료된 도메인)
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  Object.keys(DOMAIN_SHEETS).forEach(domain => {
+    const config = DOMAIN_SHEETS[domain];
+    const domainSheet = ss.getSheetByName(config.name);
+    if (domainSheet && domainSheet.getLastRow() > 0) {
+      result[domain] = getRows(config.name, config.headers);
+    }
+  });
+
   return result;
 }
 
 // ── 보조 데이터 저장 ──────────────────────────────────
+// 도메인 시트가 정의된 항목은 그쪽에 저장, 나머지는 앱데이터 시트에 JSON으로
 function saveAppData(d) {
   if (!d) return;
+
+  // 1) 도메인 시트에 저장 (이미 마이그레이션된 항목)
+  const domainHandled = new Set();
+  Object.keys(DOMAIN_SHEETS).forEach(domain => {
+    if (d[domain] !== undefined) {
+      const config = DOMAIN_SHEETS[domain];
+      saveRows(config.name, d[domain], config.headers);
+      domainHandled.add(domain);
+    }
+  });
+
+  // 2) 나머지는 앱데이터 시트에 JSON으로 저장 (기존 방식)
   const sh = getOrCreate('앱데이터');
   const existing = {};
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     const key = String(rows[i][0] || '').trim();
     const val = String(rows[i][1] || '').trim();
-    if (key && val) existing[key] = val;
+    // 도메인 시트로 옮겨진 키는 앱데이터에서 제외
+    if (key && val && !domainHandled.has(key)) existing[key] = val;
   }
   Object.keys(d).forEach(k => {
-    if (d[k] !== undefined) existing[k] = JSON.stringify(d[k]);
+    if (d[k] !== undefined && !domainHandled.has(k)) {
+      existing[k] = JSON.stringify(d[k]);
+    }
   });
   sh.clearContents();
   sh.getRange(1, 1, 1, 2).setValues([['key', 'value']]);
@@ -119,6 +155,51 @@ function saveAppData(d) {
   if (entries.length > 0) {
     sh.getRange(2, 1, entries.length, 2).setValues(entries);
   }
+}
+
+// ── 마이그레이션 함수 (Apps Script 편집기에서 1회 실행) ──
+// 앱데이터 시트의 JSON 키를 DOMAIN_SHEETS에 정의된 도메인 시트로 이주.
+// 이주 후 앱데이터 시트에서 해당 키 제거 (앱데이터 시트는 보존, 백업 권장).
+function migrateAppDataToSheets() {
+  const appSheet = getOrCreate('앱데이터');
+  const rows = appSheet.getDataRange().getValues();
+  const appData = {};
+  for (let i = 1; i < rows.length; i++) {
+    const key = String(rows[i][0] || '').trim();
+    const val = String(rows[i][1] || '').trim();
+    if (!key || !val) continue;
+    try { appData[key] = JSON.parse(val); } catch(e) {}
+  }
+
+  const migrated = [];
+  const removedKeys = new Set();
+  Object.keys(DOMAIN_SHEETS).forEach(domain => {
+    if (appData[domain] !== undefined && Array.isArray(appData[domain])) {
+      const config = DOMAIN_SHEETS[domain];
+      saveRows(config.name, appData[domain], config.headers);
+      migrated.push(domain + ' → 시트["' + config.name + '"] (' + appData[domain].length + '건)');
+      removedKeys.add(domain);
+    }
+  });
+
+  // 앱데이터에서 이주된 키 제거
+  if (removedKeys.size > 0) {
+    const newRows = [['key', 'value']];
+    for (let i = 1; i < rows.length; i++) {
+      const key = String(rows[i][0] || '').trim();
+      if (key && !removedKeys.has(key)) {
+        newRows.push([rows[i][0], rows[i][1]]);
+      }
+    }
+    appSheet.clearContents();
+    appSheet.getRange(1, 1, newRows.length, 2).setValues(newRows);
+  }
+
+  const msg = migrated.length > 0
+    ? '마이그레이션 완료:\n' + migrated.join('\n')
+    : '이주할 데이터 없음 (DOMAIN_SHEETS에 정의된 키 중 앱데이터에 없음)';
+  Logger.log(msg);
+  return msg;
 }
 
 // ── 행 읽기 ───────────────────────────────────────────
