@@ -134,6 +134,7 @@
       <span style="color:#e74c3c;font-size:12px;">⚠ 한 번만 입력하면 이 브라우저에 저장됩니다.</span>
     </p>
     <input id="gs-url-input" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <input id="gs-token-input" type="password" placeholder="연동 비밀번호" autocomplete="current-password" style="margin-top:8px;">
     <div style="display:flex;gap:8px;">
       <button onclick="gsSetupSave()" style="flex:1;padding:10px;background:#2980b9;color:#fff;
         border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">저장 후 시작</button>
@@ -2091,10 +2092,13 @@ const EXCEL_TRANSACTIONS = [];
 let GS_ONLINE = false;
 let GS_LOAD_OK = false;
 let GS_REMOTE_COUNTS = null;
+const GS_PENDING_CORE_KEY = 'dbmt_gs_pending_core_save';
+const GS_CORE_SNAPSHOT_KEY = 'dbmt_gs_core_snapshot';
 // 회사 공용 Apps Script 웹앱 URL — 각 PC에서 별도 설정 없이 자동 연동된다.
 // 개인이 다른 URL을 쓰려면 설정 화면에서 입력하면 localStorage 값이 우선한다.
 const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbyGPUL1cKw3hUlotf7_wELbmUj4-yAMzVa03Lx4gXY1Ia_aYrS-3gt8HYdtLHLail9JBQ/exec';
 let GS_URL = localStorage.getItem('dbmt_gs_url') || DEFAULT_GS_URL;
+let GS_TOKEN = localStorage.getItem('dbmt_gs_token') || '';
 
 // 동기화 상태 표시
 function gsShowSync(msg, isErr=false){
@@ -2124,8 +2128,12 @@ function gsSetupSave(){
   if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(\?.*)?$/.test(url)){
     if(!confirm('Apps Script 웹앱 URL 형식이 아닌 것 같습니다. 그래도 저장할까요?')) return;
   }
+  const token = (document.getElementById('gs-token-input')?.value || '').trim();
+  if(!token){ alert('연동 비밀번호를 입력하세요.'); return; }
   GS_URL = url;
+  GS_TOKEN = token;
   localStorage.setItem('dbmt_gs_url', url);
+  localStorage.setItem('dbmt_gs_token', token);
   localStorage.removeItem('dbmt_gs_skip');
   const setup = document.getElementById('gs-setup');
   if(setup) setup.classList.add('hidden');
@@ -2141,6 +2149,8 @@ function gsSetupSkip(){
 function gsShowSetup(){
   const input = document.getElementById('gs-url-input');
   if(input && GS_URL) input.value = GS_URL;
+  const tokenInput = document.getElementById('gs-token-input');
+  if(tokenInput && GS_TOKEN) tokenInput.value = GS_TOKEN;
   const setup = document.getElementById('gs-setup');
   if(setup) setup.classList.remove('hidden');
   gsSetStatus(false);
@@ -2334,6 +2344,197 @@ function gsRememberVerifiedCounts(counts){
   }));
 }
 
+function gsTextKey(value){
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function gsPriceId(row){
+  return row?.id || ['price', gsTextKey(row?.product), gsTextKey(row?.origin), gsTextKey(row?.trader)].join('|');
+}
+
+function gsProdId(row){
+  if(row?.id) return row.id;
+  if(Array.isArray(row?.key)) return 'prod|' + row.key.map(v => String(v ?? '').trim()).join('|');
+  return ['prod', String(row?.date || row?.workDate || '').trim(), String(row?.job_no || row?.jobNo || '').trim()].join('|');
+}
+
+function gsCoreId(entity, row){
+  if(entity === 'prices') return gsPriceId(row);
+  if(entity === 'prod') return gsProdId(row);
+  return row?.id;
+}
+
+function gsNormalizeCorePayload(payload){
+  payload = payload || {};
+  return {
+    transactions: (Array.isArray(payload.transactions) ? payload.transactions : [])
+      .filter(t => !String(t?.deletedAt || t?._deletedAt || '').trim())
+      .map(t => ({
+        ...t,
+        id: t.id,
+        date: normalizeDate(t.date),
+        proddate: normalizeDate(t.proddate)
+      })),
+    prod: (Array.isArray(payload.prod) ? payload.prod : [])
+      .filter(e => !String(e?.deletedAt || e?._deletedAt || '').trim())
+      .map(e => ({...e, id: gsProdId(e)})),
+    prices: (Array.isArray(payload.prices) ? payload.prices : [])
+      .filter(p => !String(p?.deletedAt || p?._deletedAt || '').trim())
+      .map(p => ({...p, id: gsPriceId(p), trader: p.trader || ''}))
+  };
+}
+
+function gsCoreCounts(payload){
+  const core = gsNormalizeCorePayload(payload);
+  return {
+    transactions: core.transactions.length,
+    prod: core.prod.length,
+    prices: core.prices.length
+  };
+}
+
+function gsStableStringify(value){
+  if(value === null || typeof value !== 'object') return JSON.stringify(value);
+  if(Array.isArray(value)) return '[' + value.map(gsStableStringify).join(',') + ']';
+  return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + gsStableStringify(value[k])).join(',') + '}';
+}
+
+function gsCoreFingerprint(payload){
+  return gsStableStringify(gsNormalizeCorePayload(payload));
+}
+
+function gsReadCoreSnapshot(){
+  try {
+    return gsNormalizeCorePayload(JSON.parse(localStorage.getItem(GS_CORE_SNAPSHOT_KEY) || '{}'));
+  } catch(e) {
+    return gsNormalizeCorePayload({});
+  }
+}
+
+function gsRememberCoreSnapshot(payload){
+  localStorage.setItem(GS_CORE_SNAPSHOT_KEY, JSON.stringify(gsNormalizeCorePayload(payload)));
+}
+
+function gsEntityMap(entity, rows){
+  const map = new Map();
+  (rows || []).forEach(row => {
+    const id = String(gsCoreId(entity, row) ?? '').trim();
+    if(id) map.set(id, row);
+  });
+  return map;
+}
+
+function gsBuildEntityPatch(entity, currentRows, baseRows){
+  const current = gsEntityMap(entity, currentRows);
+  const base = gsEntityMap(entity, baseRows);
+  const upsert = [];
+  const del = [];
+  current.forEach((row, id) => {
+    const baseRow = base.get(id);
+    if(!baseRow || gsStableStringify(row) !== gsStableStringify(baseRow)) upsert.push(row);
+  });
+  base.forEach((row, id) => {
+    if(!current.has(id)) del.push(id);
+  });
+  return {upsert, delete: del};
+}
+
+function gsBuildCorePatch(payload, basePayload){
+  const current = gsNormalizeCorePayload(payload);
+  const base = gsNormalizeCorePayload(basePayload || gsReadCoreSnapshot());
+  return {
+    transactions: gsBuildEntityPatch('transactions', current.transactions, base.transactions),
+    prod: gsBuildEntityPatch('prod', current.prod, base.prod),
+    prices: gsBuildEntityPatch('prices', current.prices, base.prices)
+  };
+}
+
+function gsPatchHasChanges(patch){
+  return ['transactions','prod','prices'].some(k =>
+    (patch?.[k]?.upsert || []).length || (patch?.[k]?.delete || []).length
+  );
+}
+
+function gsReadPendingCoreSave(){
+  try {
+    const pending = JSON.parse(localStorage.getItem(GS_PENDING_CORE_KEY) || 'null');
+    if(!pending || !pending.data) return null;
+    return pending;
+  } catch(e) {
+    return null;
+  }
+}
+
+function gsMarkPendingCoreSave(payload){
+  const core = gsNormalizeCorePayload(payload);
+  const pending = {
+    at: new Date().toISOString(),
+    counts: gsCoreCounts(core),
+    fingerprint: gsCoreFingerprint(core),
+    patch: gsBuildCorePatch(core),
+    data: core
+  };
+  localStorage.setItem(GS_PENDING_CORE_KEY, JSON.stringify(pending));
+  return pending;
+}
+
+function gsClearPendingCoreSave(){
+  localStorage.removeItem(GS_PENDING_CORE_KEY);
+}
+
+function gsReadPreLoadCoreBackup(){
+  try {
+    const backup = JSON.parse(localStorage.getItem('dbmt_pre_gs_load_backup_latest') || 'null');
+    if(!backup) return null;
+    return {
+      at: backup.at || '',
+      data: {
+        transactions: JSON.parse(backup.transactions || '[]'),
+        prod: JSON.parse(backup.prod || '[]'),
+        prices: JSON.parse(backup.prices || '[]')
+      }
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+function gsFindBetterLocalCorePayload(remoteCounts){
+  const localCandidate = {
+    source: '현재 로컬 데이터',
+    data: {
+      transactions: gsReadLocalArray('dbmt_user_transactions'),
+      prod: gsReadLocalArray('dbmt_user_prod'),
+      prices: gsReadLocalArray('dbmt_prices')
+    }
+  };
+  const candidates = [localCandidate];
+  const backup = gsReadPreLoadCoreBackup();
+  if(backup) candidates.push({source: '직전 로컬 백업', data: backup.data, at: backup.at});
+  return candidates
+    .map(c => ({...c, counts: gsCoreCounts(c.data)}))
+    .filter(c =>
+      c.counts.transactions > (remoteCounts.transactions || 0) ||
+      c.counts.prod > (remoteCounts.prod || 0)
+    )
+    .sort((a,b) =>
+      (b.counts.transactions + b.counts.prod) - (a.counts.transactions + a.counts.prod)
+    )[0] || null;
+}
+
+function gsApplyCorePayload(payload){
+  const core = gsNormalizeCorePayload(payload);
+  invalidateStockMap();
+  userTransactions = core.transactions;
+  userProdEntries = core.prod;
+  prices = core.prices.length ? core.prices : prices;
+  transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+  localStorage.setItem('dbmt_user_prod', JSON.stringify(userProdEntries));
+  localStorage.setItem('dbmt_prices', JSON.stringify(prices));
+  return core;
+}
+
 function gsBackupLocalBeforeRemoteLoad(){
   const stamp = localDateString() + 'T' + new Date().toTimeString().slice(0, 8).replace(/:/g, '');
   const backup = {
@@ -2342,8 +2543,26 @@ function gsBackupLocalBeforeRemoteLoad(){
     prod: localStorage.getItem('dbmt_user_prod') || '[]',
     prices: localStorage.getItem('dbmt_prices') || '[]'
   };
-  localStorage.setItem('dbmt_pre_gs_load_backup_latest', JSON.stringify(backup));
-  localStorage.setItem('dbmt_pre_gs_load_backup_' + stamp, JSON.stringify(backup));
+  const json = JSON.stringify(backup);
+  // 옛 타임스탬프 백업 정리: 최근 2개만 유지 (latest 별도 + 신규 1개 = 총 3개 슬롯)
+  const KEEP = 2;
+  const oldKeys = Object.keys(localStorage)
+    .filter(k => k.startsWith('dbmt_pre_gs_load_backup_') && k !== 'dbmt_pre_gs_load_backup_latest')
+    .sort();
+  while(oldKeys.length >= KEEP){
+    localStorage.removeItem(oldKeys.shift());
+  }
+  try {
+    localStorage.setItem('dbmt_pre_gs_load_backup_latest', json);
+    localStorage.setItem('dbmt_pre_gs_load_backup_' + stamp, json);
+  } catch(e) {
+    // quota 초과 시: 타임스탬프 백업 전부 제거 후 latest만 유지 (gsInit 진행 우선)
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('dbmt_pre_gs_load_backup_') && k !== 'dbmt_pre_gs_load_backup_latest')
+      .forEach(k => localStorage.removeItem(k));
+    try { localStorage.setItem('dbmt_pre_gs_load_backup_latest', json); }
+    catch(e2) { console.warn('백업 저장 실패 — localStorage 한도 초과', e2); }
+  }
 }
 
 function gsAssertRemoteDataSafe(all){
@@ -2372,6 +2591,11 @@ function gsAssertRemoteDataSafe(all){
 // ── Google Sheets API ──
 // GET: 로컬 파일은 JSONP, 서버/로컬호스트는 fetch 우선
 // POST: fetch 방식 (저장용)
+function gsIsCorsLikeError(err){
+  const msg = String(err?.message || err?.name || err || '');
+  return /Failed to fetch|NetworkError|Load failed|CORS|TypeError/i.test(msg);
+}
+
 async function gsGet(action){
   if(location.protocol === 'file:'){
     return gsJsonp(action, {}, 30000);
@@ -2379,7 +2603,9 @@ async function gsGet(action){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const res = await fetch(GS_URL + '?action=' + encodeURIComponent(action), {
+    const qs = new URLSearchParams({action});
+    if(GS_TOKEN) qs.set('token', GS_TOKEN);
+    const res = await fetch(GS_URL + '?' + qs.toString(), {
       signal: controller.signal,
       mode: 'cors'
     });
@@ -2391,8 +2617,7 @@ async function gsGet(action){
   } catch(err) {
     clearTimeout(timer);
     if(err.name === 'AbortError') throw new Error('요청 시간 초과 (30초)');
-    const msg = String(err?.message || err?.name || err || '');
-    if(/Failed to fetch|NetworkError|Load failed|CORS|TypeError/i.test(msg)){
+    if(gsIsCorsLikeError(err)){
       return gsJsonp(action, {}, 30000);
     }
     throw err;
@@ -2422,6 +2647,7 @@ function gsJsonp(action, params={}, timeoutMs=30000){
       else resolve(json.data);
     };
     const qs = new URLSearchParams({action, callback: cb, ...params});
+    if(GS_TOKEN) qs.set('token', GS_TOKEN);
     script.onerror = ()=>{
       cleanup();
       reject(new Error('Apps Script 호출 실패'));
@@ -2433,22 +2659,64 @@ function gsJsonp(action, params={}, timeoutMs=30000){
 
 async function gsPost(action, postData){
   if(!GS_URL) throw new Error('Apps Script 웹앱 URL이 설정되지 않았습니다.');
-  const res = await fetch(GS_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify({action, data: postData})
+  const body = JSON.stringify({action, token: GS_TOKEN, data: postData});
+  try {
+    const res = await fetch(GS_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body
+    });
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if(!json.ok) throw new Error(json.error || '서버 오류');
+    return json;
+  } catch(err) {
+    if(gsIsCorsLikeError(err)){
+      await fetch(GS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body
+      });
+      return {ok:true, unconfirmed:true};
+    }
+    throw err;
+  }
+}
+
+function gsFlushPendingCoreSave(pending){
+  pending = pending || gsReadPendingCoreSave();
+  if(!pending || !GS_ONLINE || !GS_LOAD_OK) return;
+  const payload = gsNormalizeCorePayload(pending.data);
+  if(!gsAssertCanWriteCoreData(payload)) return;
+  const patch = gsBuildCorePatch(payload);
+  if(!gsPatchHasChanges(patch)){
+    gsRememberCoreSnapshot(payload);
+    gsRememberVerifiedCounts(gsCoreCounts(payload));
+    gsClearPendingCoreSave();
+    return;
+  }
+  gsPost('saveCorePatch', patch).then(res=>{
+    if(res?.unconfirmed){
+      gsShowSync('☁ Sheets 저장 요청 전송됨 — 확인 전까지 로컬 변경사항 보존', true);
+      return;
+    }
+    GS_REMOTE_COUNTS = gsCoreCounts(payload);
+    gsRememberCoreSnapshot(payload);
+    gsRememberVerifiedCounts(GS_REMOTE_COUNTS);
+    gsClearPendingCoreSave();
+    gsShowSync('☁ Google Sheets 저장 완료');
+  }).catch(err=>{
+    console.error('GS 대기 저장 오류:', err);
+    gsShowSync('⚠ Sheets 저장 확인 실패 — 로컬 변경사항 보존 중', true);
   });
-  const text = await res.text();
-  const json = JSON.parse(text);
-  if(!json.ok) throw new Error(json.error || '서버 오류');
-  return json;
 }
 
 // ── 초기 데이터 로드 (백그라운드 동기화) ──
 async function gsInit(){
-  if(!GS_URL){
+  if(!GS_URL || !GS_TOKEN){
     gsShowSetup();
-    gsShowSync('Google Sheets URL을 설정하면 동기화됩니다.');
+    gsShowSync('Google Sheets URL과 연동 비밀번호를 설정하면 동기화됩니다.');
     return;
   }
   const overlay = document.getElementById('gs-overlay');
@@ -2456,7 +2724,8 @@ async function gsInit(){
   // 오버레이는 이미 닫혀있음 — 메시지만 조용히 업데이트
   if(msg) msg.textContent = 'Google Sheets 연결 중...';
   try {
-    const all = await gsGet('getAll');
+    let all = await gsGet('getAll');
+    all = {...all, ...gsNormalizeCorePayload(all)};
     // 응답 무결성 검증 — 빈/부분 응답이 로컬 백업과 시트를 덮어쓰지 못하게 차단
     gsAssertRemoteDataSafe(all);
     gsBackupLocalBeforeRemoteLoad();
@@ -2465,6 +2734,47 @@ async function gsInit(){
       prod: all.prod.length,
       prices: Array.isArray(all.prices) ? all.prices.length : 0
     };
+    gsRememberCoreSnapshot({
+      transactions: all.transactions || [],
+      prod: all.prod || [],
+      prices: all.prices || []
+    });
+    let pending = gsReadPendingCoreSave();
+    if(pending && pending.fingerprint === gsCoreFingerprint({
+      transactions: all.transactions || [],
+      prod: all.prod || [],
+      prices: all.prices || []
+    })){
+      gsClearPendingCoreSave();
+      pending = null;
+    } else if(pending){
+      gsBackupLocalBeforeRemoteLoad();
+      GS_LOAD_OK = true;
+      gsSetStatus(true);
+      if(overlay) overlay.classList.add('hidden');
+      gsApplyCorePayload(pending.data);
+      await new Promise(r => setTimeout(r, 30));
+      renderAll();
+      renderScheduleCalendar();
+      gsShowSync('⚠ 저장 확인 전 로컬 변경사항이 있어 Sheets 덮어쓰기를 중단했습니다', true);
+      gsFlushPendingCoreSave(pending);
+      return;
+    }
+    const betterLocal = gsFindBetterLocalCorePayload(GS_REMOTE_COUNTS);
+    if(betterLocal){
+      const pendingFromLocal = gsMarkPendingCoreSave(betterLocal.data);
+      gsBackupLocalBeforeRemoteLoad();
+      GS_LOAD_OK = true;
+      gsSetStatus(true);
+      if(overlay) overlay.classList.add('hidden');
+      gsApplyCorePayload(betterLocal.data);
+      await new Promise(r => setTimeout(r, 30));
+      renderAll();
+      renderScheduleCalendar();
+      gsShowSync(`⚠ ${betterLocal.source}가 Sheets보다 많아 로컬 데이터를 우선 보존했습니다`, true);
+      gsFlushPendingCoreSave(pendingFromLocal);
+      return;
+    }
     gsRememberVerifiedCounts(GS_REMOTE_COUNTS);
     // date 필드 정규화 (Sheets에서 Date 객체로 올 수 있음)
     invalidateStockMap();
@@ -2684,19 +2994,32 @@ function save(){
       prod:         userProdEntries,
       prices:       prices,
     };
+  gsMarkPendingCoreSave(payload);
   if(gsAssertCanWriteCoreData(payload)){
-    gsPost('saveAll', payload).then(()=>{
-      GS_REMOTE_COUNTS = {
-        transactions: userTransactions.length,
-        prod: userProdEntries.length,
-        prices: prices.length
-      };
+    const core = gsNormalizeCorePayload(payload);
+    const patch = gsBuildCorePatch(core);
+    if(!gsPatchHasChanges(patch)){
+      gsRememberCoreSnapshot(core);
+      gsRememberVerifiedCounts(gsCoreCounts(core));
+      gsClearPendingCoreSave();
+      return;
+    }
+    gsPost('saveCorePatch', patch).then((res)=>{
+      if(res?.unconfirmed){
+        gsShowSync('☁ Sheets 저장 요청 전송됨 — 확인 전까지 로컬 변경사항 보존', true);
+        return;
+      }
+      GS_REMOTE_COUNTS = gsCoreCounts(core);
+      gsRememberCoreSnapshot(core);
       gsRememberVerifiedCounts(GS_REMOTE_COUNTS);
+      gsClearPendingCoreSave();
       gsShowSync('☁ Google Sheets 저장 완료');
     }).catch(err=>{
       console.error('GS 저장 오류:', err);
-      gsShowSync('⚠ Sheets 저장 실패 — 로컬에만 저장됨', true);
+      gsShowSync('⚠ Sheets 저장 확인 실패 — 로컬 변경사항 보존 중', true);
     });
+  } else {
+    gsShowSync('⚠ Sheets 저장 대기 중 — 로컬 변경사항 보존', true);
   }
 }
 
@@ -3636,7 +3959,7 @@ function addTransaction(){
 
   if(_editTxnId){
     // 수정 모드: 기존 항목 업데이트
-    const t=userTransactions.find(x=>x.id===_editTxnId);
+    const t=userTransactions.find(x=>String(x.id)===String(_editTxnId));
     if(t){
       t.date=date; t.type=type; t.product=product; t.origin=origin; t.packunit=packunit;
       t.trader=trader; t.lot=lot; t.proddate=proddate;
@@ -3923,7 +4246,7 @@ function renderTransactions(){
     <td>${note}</td>
     <td style="white-space:nowrap">
       ${t._isUser
-        ? `${isStockAdjust ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${id})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${id})">삭제</button>`
+        ? `${isStockAdjust ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
     </td>
   </tr>`;
@@ -3931,7 +4254,7 @@ function renderTransactions(){
 }
 function deleteTransaction(id){
   if(!confirm('삭제하시겠습니까?'))return;
-  userTransactions=userTransactions.filter(t=>t.id!==id);
+  userTransactions=userTransactions.filter(t=>String(t.id)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   save(); renderTransactions(); renderStock();
 }
@@ -3944,7 +4267,7 @@ function closeEditTxnModal(){ clearTransactionForm(); }
 function saveEditTxn(){ addTransaction(); }
 
 function loadTxnToForm(id){
-  const t=userTransactions.find(x=>x.id===id);
+  const t=userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
   _editTxnId=id;
 
@@ -4373,8 +4696,8 @@ function saveProdEntry(){
 
   // 수정 모드: 기존 항목과 관련 트랜잭션 삭제 후 교체
   if(_editProdId){
-    userProdEntries  =userProdEntries.filter(e=>e.id!==_editProdId);
-    userTransactions =userTransactions.filter(t=>t._prodId!==_editProdId);
+    userProdEntries  =userProdEntries.filter(e=>String(e.id)!==String(_editProdId));
+    userTransactions =userTransactions.filter(t=>String(t._prodId)!==String(_editProdId));
     _editProdId=null;
   }
   userProdEntries.push(entry);
@@ -4426,8 +4749,8 @@ function clearProdForm(){
 
 function deleteProdEntry(id){
   if(!confirm('삭제하시겠습니까?\n관련 재고(사용/생산입고)도 함께 취소됩니다.'))return;
-  userProdEntries=userProdEntries.filter(e=>e.id!==id);
-  userTransactions=userTransactions.filter(t=>t._prodId!==id);
+  userProdEntries=userProdEntries.filter(e=>String(e.id)!==String(id));
+  userTransactions=userTransactions.filter(t=>String(t._prodId)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   save(); renderProduction(); renderStock(); renderTransactions();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
@@ -4437,7 +4760,7 @@ function deleteProdEntry(id){
 // ── 생산일보 수정 ──
 let _editProdId=null;
 function openEditProdEntry(id){
-  const entry=userProdEntries.find(e=>e.id===id);
+  const entry=userProdEntries.find(e=>String(e.id)===String(id));
   if(!entry)return;
   if(!confirm('이 생산일보를 수정하시겠습니까?\n입력 폼에 데이터를 불러옵니다.'))return;
   _editProdId=id;
@@ -4647,7 +4970,7 @@ function renderProduction(){
       <td></td>
       <td style="white-space:nowrap;text-align:center;">
         ${e._isUser
-          ? `<button class="btn btn-sm" style="background:#e67e22;color:#fff;margin-right:1px;font-size:10px;padding:1px 4px;line-height:1.2;" onclick="openEditProdEntry(${e.id})">수정</button><button class="btn btn-sm btn-danger" style="font-size:10px;padding:1px 4px;line-height:1.2;" onclick="deleteProdEntry(${e.id})">삭제</button>`
+          ? `<button class="btn btn-sm" style="background:#e67e22;color:#fff;margin-right:1px;font-size:10px;padding:1px 4px;line-height:1.2;" onclick="openEditProdEntry(${jsArg(e.id)})">수정</button><button class="btn btn-sm btn-danger" style="font-size:10px;padding:1px 4px;line-height:1.2;" onclick="deleteProdEntry(${jsArg(e.id)})">삭제</button>`
           : '<span style="font-size:10px;color:#aaa">원본</span>'}
       </td>
     </tr>`;
@@ -6434,7 +6757,7 @@ function backupAllData(){
     'dbmt_employees','dbmt_leaves',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
-    'dbmt_label_products','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
+    'dbmt_label_products','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_token','dbmt_gs_skip'
   ];
   const backup = { _version: 2, _date: new Date().toISOString(), data: {} };
   KEYS.forEach(k => {
@@ -7515,6 +7838,13 @@ function renderLeaves(){
     </tr>`;
   }).join('');
 }
+window.addEventListener('beforeunload', (e)=>{
+  if(gsReadPendingCoreSave()){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
 document.addEventListener('DOMContentLoaded', ()=>{
   // DOM 초기화 (날짜 세팅, 헤더 표시)
   initDOM();

@@ -6,12 +6,15 @@ const SCRIPT_PROPERTY_KEYS = {
   sheetId: 'SHEET_ID',
   mtraceUserId: 'MTRACE_USER_ID',
   mtraceApiKey: 'MTRACE_API_KEY',
-  ekapeTraceServiceKey: 'EKAPE_TRACE_SERVICE_KEY'
+  ekapeTraceServiceKey: 'EKAPE_TRACE_SERVICE_KEY',
+  appToken: 'APP_TOKEN',
+  appTokenSha256: 'APP_TOKEN_SHA256'
 };
+const DEFAULT_APP_TOKEN_SHA256 = 'e982589ecbd4d4445fe66f211a86ef19a9b0da59cce20381e77e351963febc63';
 
 // Apps Script 편집기 > 프로젝트 설정 > 스크립트 속성에서 설정한다.
 // 필수: SHEET_ID
-// 선택: MTRACE_USER_ID, MTRACE_API_KEY, EKAPE_TRACE_SERVICE_KEY
+// 선택: APP_TOKEN 또는 APP_TOKEN_SHA256(없으면 기본 연동 비밀번호 해시 사용), MTRACE_USER_ID, MTRACE_API_KEY, EKAPE_TRACE_SERVICE_KEY
 function getScriptProperty(key) {
   return String(PropertiesService.getScriptProperties().getProperty(key) || '').trim();
 }
@@ -42,6 +45,40 @@ function getMtraceCredentials() {
   };
 }
 
+function requireAppToken(token) {
+  token = String(token || '');
+  const required = getScriptProperty(SCRIPT_PROPERTY_KEYS.appToken);
+  const requiredHash = getScriptProperty(SCRIPT_PROPERTY_KEYS.appTokenSha256) || DEFAULT_APP_TOKEN_SHA256;
+  if (!required && !requiredHash) {
+    throw new Error('연동 비밀번호가 설정되지 않았습니다.');
+  }
+  if (required && token !== required) {
+    throw new Error('연동 비밀번호가 일치하지 않습니다.');
+  }
+  if (!required && sha256Hex(token) !== requiredHash) {
+    throw new Error('연동 비밀번호가 일치하지 않습니다.');
+  }
+}
+
+function setAppTokenForSetup(token) {
+  token = String(token || '').trim();
+  if (!token) throw new Error('token is required');
+  PropertiesService.getScriptProperties().setProperty(SCRIPT_PROPERTY_KEYS.appToken, token);
+  return {ok:true, tokenLength:token.length};
+}
+
+function sha256Hex(value) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(value || ''),
+    Utilities.Charset.UTF_8
+  );
+  return bytes.map(function(b) {
+    const v = b < 0 ? b + 256 : b;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
+}
+
 function withScriptLock(fn) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -51,6 +88,15 @@ function withScriptLock(fn) {
     lock.releaseLock();
   }
 }
+
+const TX_HEADERS = [
+  'id','date','type','product','origin','packunit','trader','storage','lot','proddate',
+  'weight','price','amount','note','_isUser','_isProdUse','_isProdOut','_prodId',
+  '_isStockAdjust','stockBefore','stockActual','updatedAt','deletedAt'
+];
+const PRICE_HEADERS = ['id','product','origin','trader','price','updatedAt','deletedAt'];
+const PROD_HEADERS = ['json','id','updatedAt','deletedAt'];
+const CHANGE_LOG_HEADERS = ['at','entity','action','id','summary','payload'];
 
 // ── 도메인 시트 레지스트리 ──
 // 각 키는 index.html의 APP_DATA_REGISTRY와 일치해야 한다.
@@ -556,10 +602,16 @@ function doGet(e) {
 
     let result;
     if (action === 'getAll') {
+      requireAppToken(e.parameter.token);
       result = {ok:true, data:getAll()};
     } else if (action === 'ping') {
-      result = {ok:true, data:{pong:true, time:new Date().toISOString()}};
+      result = {ok:true, data:{
+        pong:true,
+        tokenRequired: !!getScriptProperty(SCRIPT_PROPERTY_KEYS.appToken),
+        time:new Date().toISOString()
+      }};
     } else if (action === 'getTraceInfo') {
+      requireAppToken(e.parameter.token);
       result = {ok:true, data: getTraceInfo(e.parameter.traceNo || '', e.parameter.baseDate || '')};
     } else {
       result = {ok:false, error:'unknown action'};
@@ -588,9 +640,13 @@ function jsonGetRes(obj, callback) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
+    requireAppToken(body.token);
     if (body.action === 'saveAll') {
-      withScriptLock(function() { saveAll(body.data); });
-      return jsonRes({ok:true});
+      return jsonRes({ok:false, error:'saveAll은 데이터 보호를 위해 비활성화되었습니다. saveCorePatch를 사용하세요.'});
+    }
+    if (body.action === 'saveCorePatch') {
+      const result = withScriptLock(function() { return saveCorePatch(body.data); });
+      return jsonRes({ok:true, data:result});
     }
     if (body.action === 'saveAppData') {
       withScriptLock(function() { saveAppData(body.data); });
@@ -612,24 +668,229 @@ function jsonRes(obj) {
 function getAll() {
   const ss = openDbSpreadsheet();
   return {
-    transactions: getRows('거래내역', ['id','date','type','product','origin',
-      'trader','storage','lot','proddate','weight','price','amount','note',
-      '_isUser','_isProdUse','_isProdOut','_prodId'], ss),
+    transactions: getRows('거래내역', TX_HEADERS, ss).filter(isActiveRow),
     prod:     getProd(ss),
-    prices:   getRows('단가표', ['product','origin','trader','price'], ss),
+    prices:   getPrices(ss),
     appData:  getAppData(ss),
   };
 }
 
-// ── 전체 저장 (거래내역·생산일보·단가) ──────────────────
+// ── 전체 저장 비활성화 ──────────────────────────────────
 function saveAll(d) {
+  throw new Error('saveAll은 데이터 보호를 위해 비활성화되었습니다. saveCorePatch를 사용하세요.');
+}
+
+// ── 행 단위 저장 (거래내역·생산일보·단가) ──────────────────
+function saveCorePatch(patch) {
+  patch = patch || {};
   const ss = openDbSpreadsheet();
-  if (d.transactions !== undefined)
-    saveRows('거래내역', d.transactions,
-      ['id','date','type','product','origin','trader','storage','lot','proddate',
-       'weight','price','amount','note','_isUser','_isProdUse','_isProdOut','_prodId'], ss);
-  if (d.prod   !== undefined) saveProd(d.prod, ss);
-  if (d.prices !== undefined) saveRows('단가표', d.prices, ['product','origin','trader','price'], ss);
+  const result = {};
+  if (patch.transactions) {
+    result.transactions = applyRowsPatch('거래내역', TX_HEADERS, patch.transactions, 'transaction', ss);
+  }
+  if (patch.prod) {
+    result.prod = applyProdPatch(patch.prod, ss);
+  }
+  if (patch.prices) {
+    result.prices = applyRowsPatch('단가표', PRICE_HEADERS, normalizePricePatch(patch.prices), 'price', ss);
+  }
+  result.counts = {
+    transactions: getRows('거래내역', TX_HEADERS, ss).filter(isActiveRow).length,
+    prod: getProd(ss).length,
+    prices: getPrices(ss).length
+  };
+  return result;
+}
+
+function normalizePricePatch(patch) {
+  patch = patch || {};
+  const upsert = (patch.upsert || []).map(function(p) {
+    const row = Object.assign({}, p || {});
+    row.id = row.id || buildPriceId(row);
+    return row;
+  });
+  const del = (patch.delete || []).map(function(p) {
+    if (typeof p === 'object') return p.id || buildPriceId(p);
+    return p;
+  });
+  return {upsert: upsert, delete: del};
+}
+
+function buildPriceId(p) {
+  return [
+    'price',
+    normalizeKey(p && p.product),
+    normalizeKey(p && p.origin),
+    normalizeKey(p && p.trader)
+  ].join('|');
+}
+
+function normalizeKey(v) {
+  return String(v == null ? '' : v).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function entityId(v) {
+  return String(v == null ? '' : v).trim();
+}
+
+function isActiveRow(row) {
+  return !String(row && (row.deletedAt || row._deletedAt) || '').trim();
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function summarizeRow(row) {
+  row = row || {};
+  return [
+    row.date || row.product || row.id || '',
+    row.type || row.origin || '',
+    row.lot || row.trader || ''
+  ].filter(Boolean).join(' / ').slice(0, 200);
+}
+
+function appendChangeLog(ss, entity, action, id, row) {
+  const sh = getOrCreate('변경로그', ss);
+  ensureSheetHeaders(sh, CHANGE_LOG_HEADERS);
+  sh.appendRow([
+    nowIso(),
+    entity,
+    action,
+    entityId(id),
+    summarizeRow(row),
+    JSON.stringify(row || {})
+  ]);
+}
+
+function applyRowsPatch(sheetName, headers, patch, entity, ss) {
+  patch = patch || {};
+  const sh = getOrCreate(sheetName, ss);
+  const h = ensureSheetHeaders(sh, headers);
+  const values = sh.getDataRange().getValues();
+  const idCol = h.indexOf('id');
+  const deletedCol = h.indexOf('deletedAt');
+  const updatedCol = h.indexOf('updatedAt');
+  const rowById = {};
+  for (let r = 1; r < values.length; r++) {
+    let id = entityId(values[r][idCol]);
+    if (!id && entity === 'price') {
+      const obj = {};
+      h.forEach(function(k, i) { obj[k] = values[r][i]; });
+      id = buildPriceId(obj);
+      if (id && idCol >= 0) sh.getRange(r + 1, idCol + 1).setValue(id);
+    }
+    if (id) rowById[id] = r + 1;
+  }
+
+  let upserted = 0;
+  (patch.upsert || []).forEach(function(item) {
+    const row = Object.assign({}, item || {});
+    const id = entityId(row.id);
+    if (!id) return;
+    if (entity !== 'transaction') row.id = id;
+    row.deletedAt = '';
+    row.updatedAt = nowIso();
+    const rowValues = h.map(function(k) { return row[k] !== undefined ? row[k] : ''; });
+    const rowNo = rowById[id];
+    if (rowNo) {
+      sh.getRange(rowNo, 1, 1, h.length).setValues([rowValues]);
+      appendChangeLog(ss, entity, 'update', id, row);
+    } else {
+      sh.appendRow(rowValues);
+      rowById[id] = sh.getLastRow();
+      appendChangeLog(ss, entity, 'create', id, row);
+    }
+    upserted++;
+  });
+
+  let deleted = 0;
+  (patch.delete || []).forEach(function(rawId) {
+    const id = entityId(rawId);
+    if (!id) return;
+    const rowNo = rowById[id];
+    const tombstone = {id: id, deletedAt: nowIso(), updatedAt: nowIso()};
+    if (rowNo) {
+      if (deletedCol >= 0) sh.getRange(rowNo, deletedCol + 1).setValue(tombstone.deletedAt);
+      if (updatedCol >= 0) sh.getRange(rowNo, updatedCol + 1).setValue(tombstone.updatedAt);
+    } else {
+      const rowValues = h.map(function(k) { return tombstone[k] !== undefined ? tombstone[k] : ''; });
+      sh.appendRow(rowValues);
+    }
+    appendChangeLog(ss, entity, 'delete', id, tombstone);
+    deleted++;
+  });
+
+  return {upserted: upserted, deleted: deleted};
+}
+
+function applyProdPatch(patch, ss) {
+  patch = patch || {};
+  const sh = getOrCreate('생산일보', ss);
+  const h = ensureSheetHeaders(sh, PROD_HEADERS);
+  const values = sh.getDataRange().getValues();
+  const jsonCol = Math.max(0, h.indexOf('json'));
+  const idCol = h.indexOf('id');
+  const updatedCol = h.indexOf('updatedAt');
+  const deletedCol = h.indexOf('deletedAt');
+  const rowById = {};
+  for (let r = 1; r < values.length; r++) {
+    let obj = {};
+    try { obj = JSON.parse(String(values[r][jsonCol] || '{}')); } catch(e) {}
+    const id = entityId(values[r][idCol] || obj.id);
+    if (id) rowById[id] = {rowNo: r + 1, obj: obj};
+  }
+
+  let upserted = 0;
+  (patch.upsert || []).forEach(function(item) {
+    const row = Object.assign({}, item || {});
+    const id = entityId(row.id);
+    if (!id) return;
+    row.id = id;
+    row._deletedAt = '';
+    row.updatedAt = nowIso();
+    const rowValues = h.map(function(k) {
+      if (k === 'json') return JSON.stringify(row);
+      if (k === 'id') return id;
+      if (k === 'updatedAt') return row.updatedAt;
+      if (k === 'deletedAt') return '';
+      return row[k] !== undefined ? row[k] : '';
+    });
+    const current = rowById[id];
+    if (current) {
+      sh.getRange(current.rowNo, 1, 1, h.length).setValues([rowValues]);
+      appendChangeLog(ss, 'prod', 'update', id, row);
+    } else {
+      sh.appendRow(rowValues);
+      rowById[id] = {rowNo: sh.getLastRow(), obj: row};
+      appendChangeLog(ss, 'prod', 'create', id, row);
+    }
+    upserted++;
+  });
+
+  let deleted = 0;
+  (patch.delete || []).forEach(function(rawId) {
+    const id = entityId(rawId);
+    if (!id) return;
+    const current = rowById[id];
+    const row = Object.assign({}, current ? current.obj : {id: id});
+    row.id = id;
+    row._deletedAt = nowIso();
+    row.updatedAt = row._deletedAt;
+    const rowValues = h.map(function(k) {
+      if (k === 'json') return JSON.stringify(row);
+      if (k === 'id') return id;
+      if (k === 'updatedAt') return row.updatedAt;
+      if (k === 'deletedAt') return row._deletedAt;
+      return row[k] !== undefined ? row[k] : '';
+    });
+    if (current) sh.getRange(current.rowNo, 1, 1, h.length).setValues([rowValues]);
+    else sh.appendRow(rowValues);
+    appendChangeLog(ss, 'prod', 'delete', id, row);
+    deleted++;
+  });
+
+  return {upserted: upserted, deleted: deleted};
 }
 
 // ── 보조 데이터 읽기 ──────────────────────────────────
@@ -747,11 +1008,37 @@ function migrateAppDataToSheets() {
 }
 
 // ── 행 읽기 ───────────────────────────────────────────
+function ensureSheetHeaders(sh, headers) {
+  headers = headers || [];
+  const minCols = Math.max(1, headers.length);
+  const lastCol = Math.max(sh.getLastColumn(), minCols);
+  let existing = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function(v) {
+    return String(v || '').trim();
+  });
+  const hasHeader = existing.some(function(v) { return v; });
+  if (!hasHeader) {
+    if (headers.length) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return headers.slice();
+  }
+  let changed = false;
+  headers.forEach(function(h) {
+    if (existing.indexOf(h) < 0) {
+      existing.push(h);
+      changed = true;
+    }
+  });
+  existing = existing.filter(function(v, idx) {
+    return v || idx < headers.length;
+  });
+  if (changed) sh.getRange(1, 1, 1, existing.length).setValues([existing]);
+  return existing;
+}
+
 function getRows(sheetName, headers, ss) {
   const sh   = getOrCreate(sheetName, ss);
+  const h = ensureSheetHeaders(sh, headers);
   const rows = sh.getDataRange().getValues();
   if (rows.length <= 1) return [];
-  const h = rows[0];
   return rows.slice(1).map(row => {
     const obj = {};
     h.forEach((k, i) => {
@@ -760,7 +1047,7 @@ function getRows(sheetName, headers, ss) {
       if (v instanceof Date) {
         v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
       }
-      if (['weight','price','amount'].includes(k)) {
+      if (['weight','price','amount','stockBefore','stockActual'].includes(k)) {
         v = parseFloat(v) || 0;
       } else if (k === 'id') {
         // id는 자동 변환 안 함 (도메인별 자연 타입 유지)
@@ -778,9 +1065,9 @@ function getRows(sheetName, headers, ss) {
             } catch(e) {}
           }
         }
-      } else if (['lot','product','origin','trader','storage','type','note'].includes(k)) {
+      } else if (['lot','product','origin','packunit','trader','storage','type','note','updatedAt','deletedAt'].includes(k)) {
         v = String(v || '');
-      } else if (['_isUser','_isProdUse','_isProdOut'].includes(k)) {
+      } else if (['_isUser','_isProdUse','_isProdOut','_isStockAdjust'].includes(k)) {
         v = (v === true || v === 'TRUE' || v === 'true');
       }
       obj[k] = v;
@@ -793,29 +1080,51 @@ function getRows(sheetName, headers, ss) {
 function saveRows(sheetName, arr, headers, ss) {
   const sh = getOrCreate(sheetName, ss);
   sh.clearContents();
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   if (!arr || !arr.length) return;
   const rows = arr.map(t => headers.map(k => t[k] !== undefined ? t[k] : ''));
-  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   sh.getRange(2, 1, rows.length, headers.length).setValues(rows);
+}
+
+function getPrices(ss) {
+  return getRows('단가표', PRICE_HEADERS, ss)
+    .filter(isActiveRow)
+    .map(function(p) {
+      if (!p.id) p.id = buildPriceId(p);
+      return p;
+    });
 }
 
 // ── 생산일보 읽기 ──────────────────────────────────────
 function getProd(ss) {
   const sh   = getOrCreate('생산일보', ss);
+  const headers = ensureSheetHeaders(sh, PROD_HEADERS);
+  const jsonCol = Math.max(0, headers.indexOf('json'));
+  const deletedCol = headers.indexOf('deletedAt');
   const rows = sh.getDataRange().getValues();
   if (rows.length <= 1) return [];
   return rows.slice(1)
-    .map(r => { try { return JSON.parse(r[0]); } catch(e) { return null; } })
-    .filter(Boolean);
+    .map(r => {
+      try {
+        const obj = JSON.parse(r[jsonCol]);
+        if (deletedCol >= 0 && String(r[deletedCol] || '').trim()) obj._deletedAt = String(r[deletedCol] || '').trim();
+        return obj;
+      } catch(e) {
+        return null;
+      }
+    })
+    .filter(function(row) { return row && isActiveRow(row); });
 }
 
 // ── 생산일보 저장 ──────────────────────────────────────
 function saveProd(arr, ss) {
   const sh = getOrCreate('생산일보', ss);
   sh.clearContents();
+  sh.getRange(1, 1, 1, PROD_HEADERS.length).setValues([PROD_HEADERS]);
   if (!arr || !arr.length) return;
-  sh.getRange(1,1).setValue('json');
-  sh.getRange(2, 1, arr.length, 1).setValues(arr.map(e => [JSON.stringify(e)]));
+  sh.getRange(2, 1, arr.length, PROD_HEADERS.length).setValues(arr.map(function(e) {
+    return [JSON.stringify(e), e.id || '', e.updatedAt || '', e._deletedAt || e.deletedAt || ''];
+  }));
 }
 
 // =====================================================
