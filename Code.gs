@@ -592,6 +592,34 @@ const DOMAIN_SHEETS = {
       });
     }
   },
+  samsungVendors: {
+    name: '삼성웰스토리거래처',
+    headers: ['id','name','note','products'],
+    toRows: function(arr) {
+      return (arr || []).map(function(v) {
+        return {
+          id:       String(v.id == null ? '' : v.id),
+          name:     v.name || '',
+          note:     v.note || '',
+          products: JSON.stringify(v.products || [])
+        };
+      });
+    },
+    fromRows: function(rows) {
+      return rows.map(function(r) {
+        var products = [];
+        if (r.products) {
+          try { products = JSON.parse(String(r.products)); } catch(e) { products = []; }
+        }
+        return {
+          id:       String(r.id == null ? '' : r.id),
+          name:     r.name || '',
+          note:     r.note || '',
+          products: Array.isArray(products) ? products : []
+        };
+      });
+    }
+  },
   // 다음 도메인은 점진적으로 추가
 };
 
