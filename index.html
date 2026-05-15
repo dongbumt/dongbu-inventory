@@ -2089,6 +2089,8 @@ const EXCEL_TRANSACTIONS = [];
 // Google Sheets 연동 레이어
 // ══════════════════════════════════════════════
 let GS_ONLINE = false;
+let GS_LOAD_OK = false;
+let GS_REMOTE_COUNTS = null;
 // 회사 공용 Apps Script 웹앱 URL — 각 PC에서 별도 설정 없이 자동 연동된다.
 // 개인이 다른 URL을 쓰려면 설정 화면에서 입력하면 localStorage 값이 우선한다.
 const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbyGPUL1cKw3hUlotf7_wELbmUj4-yAMzVa03Lx4gXY1Ia_aYrS-3gt8HYdtLHLail9JBQ/exec';
@@ -2296,10 +2298,56 @@ async function fetchTraceInfo(){
 
 function gsSetStatus(online){
   GS_ONLINE = online;
+  if(!online){
+    GS_LOAD_OK = false;
+    GS_REMOTE_COUNTS = null;
+  }
   const dot = document.getElementById('gs-dot');
   const txt = document.getElementById('gs-status-text');
   if(dot) dot.className = 'gs-dot' + (online ? '' : ' off');
   if(txt) txt.textContent = online ? '☁ Sheets 연동중' : '오프라인';
+}
+
+function gsReadLocalArray(key){
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function gsBackupLocalBeforeRemoteLoad(){
+  const stamp = localDateString() + 'T' + new Date().toTimeString().slice(0, 8).replace(/:/g, '');
+  const backup = {
+    at: new Date().toISOString(),
+    transactions: localStorage.getItem('dbmt_user_transactions') || '[]',
+    prod: localStorage.getItem('dbmt_user_prod') || '[]',
+    prices: localStorage.getItem('dbmt_prices') || '[]'
+  };
+  localStorage.setItem('dbmt_pre_gs_load_backup_latest', JSON.stringify(backup));
+  localStorage.setItem('dbmt_pre_gs_load_backup_' + stamp, JSON.stringify(backup));
+}
+
+function gsAssertRemoteDataSafe(all){
+  const remoteTx = Array.isArray(all?.transactions) ? all.transactions : null;
+  const remoteProd = Array.isArray(all?.prod) ? all.prod : null;
+  if(!remoteTx || !remoteProd){
+    throw new Error('데이터 응답이 불완전합니다 — 안전을 위해 로컬 모드로 전환');
+  }
+
+  const localTx = gsReadLocalArray('dbmt_user_transactions');
+  const localProd = gsReadLocalArray('dbmt_user_prod');
+  const tooSmall = (remoteCount, localCount) =>
+    localCount > 0 && (remoteCount === 0 || (localCount >= 10 && remoteCount < Math.floor(localCount * 0.5)));
+
+  if(tooSmall(remoteTx.length, localTx.length)){
+    throw new Error(`거래내역 원격 데이터가 로컬 백업보다 비정상적으로 적습니다 (${remoteTx.length}/${localTx.length}) — 자동 덮어쓰기 중단`);
+  }
+  if(tooSmall(remoteProd.length, localProd.length)){
+    throw new Error(`생산일보 원격 데이터가 로컬 백업보다 비정상적으로 적습니다 (${remoteProd.length}/${localProd.length}) — 자동 덮어쓰기 중단`);
+  }
 }
 
 // ── Google Sheets API ──
@@ -2383,11 +2431,14 @@ async function gsInit(){
   if(msg) msg.textContent = 'Google Sheets 연결 중...';
   try {
     const all = await gsGet('getAll');
-    // 응답 무결성 검증 — transactions/prod 중 하나라도 누락되면
-    // 이후 save()가 빈 배열로 시트를 덮어쓰므로 즉시 중단하고 로컬 모드로 fallback
-    if(!all || typeof all !== 'object' || all.transactions === undefined || all.prod === undefined){
-      throw new Error('데이터 응답이 불완전합니다 — 안전을 위해 로컬 모드로 전환');
-    }
+    // 응답 무결성 검증 — 빈/부분 응답이 로컬 백업과 시트를 덮어쓰지 못하게 차단
+    gsAssertRemoteDataSafe(all);
+    gsBackupLocalBeforeRemoteLoad();
+    GS_REMOTE_COUNTS = {
+      transactions: all.transactions.length,
+      prod: all.prod.length,
+      prices: Array.isArray(all.prices) ? all.prices.length : 0
+    };
     // date 필드 정규화 (Sheets에서 Date 객체로 올 수 있음)
     invalidateStockMap();
     userTransactions = (all.transactions || []).map(t => ({
@@ -2412,6 +2463,7 @@ async function gsInit(){
       });
     }
     transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+    GS_LOAD_OK = true;
     gsSetStatus(true);
     if(overlay) overlay.classList.add('hidden');
     await new Promise(r => setTimeout(r, 30)); // 화면 갱신 후 렌더링
@@ -2567,13 +2619,29 @@ const APP_DATA_REGISTRY = {
 
 // ── 앱 전체 데이터 GS 저장 (레지스트리 기반, 자동) ──
 function gsSaveAppData(){
-  if(!GS_ONLINE) return;
+  if(!GS_ONLINE || !GS_LOAD_OK) return;
   const payload = {};
   Object.entries(APP_DATA_REGISTRY).forEach(([k,r]) => { payload[k] = r.get(); });
   gsPost('saveAppData', payload).catch(err => {
     console.error('GS appData 저장 오류:', err);
     gsShowSync('⚠ 보조데이터 저장 실패', true);
   });
+}
+
+function gsAssertCanWriteCoreData(nextData){
+  if(!GS_ONLINE || !GS_LOAD_OK) return false;
+  const base = GS_REMOTE_COUNTS || {};
+  const nextTxCount = Array.isArray(nextData.transactions) ? nextData.transactions.length : 0;
+  const nextProdCount = Array.isArray(nextData.prod) ? nextData.prod.length : 0;
+  const tooSmall = (nextCount, baseCount) =>
+    baseCount > 0 && (nextCount === 0 || (baseCount >= 10 && nextCount < Math.floor(baseCount * 0.5)));
+
+  if(tooSmall(nextTxCount, base.transactions || 0) || tooSmall(nextProdCount, base.prod || 0)){
+    gsShowSync('⚠ 저장 차단 — 현재 데이터가 원격 기준보다 비정상적으로 적습니다', true);
+    console.error('GS 저장 차단:', {base, next:{transactions:nextTxCount, prod:nextProdCount}});
+    return false;
+  }
+  return true;
 }
 
 function save(){
@@ -2584,12 +2652,18 @@ function save(){
   localStorage.setItem('dbmt_user_prod',         JSON.stringify(userProdEntries));
 
   // 2) Google Sheets 저장
-  if(GS_ONLINE){
-    gsPost('saveAll', {
+  const payload = {
       transactions: userTransactions,
       prod:         userProdEntries,
       prices:       prices,
-    }).then(()=>{
+    };
+  if(gsAssertCanWriteCoreData(payload)){
+    gsPost('saveAll', payload).then(()=>{
+      GS_REMOTE_COUNTS = {
+        transactions: userTransactions.length,
+        prod: userProdEntries.length,
+        prices: prices.length
+      };
       gsShowSync('☁ Google Sheets 저장 완료');
     }).catch(err=>{
       console.error('GS 저장 오류:', err);
