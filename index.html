@@ -3546,15 +3546,7 @@ function onManagedOriginChange(){
 
 function updateOutProductList(){
   // 출고: 재고 있는 품목 목록으로 select 갱신
-  const stockMap = getStockMap();
-  const products = Object.values(stockMap)
-    .filter(s => s.product && String(s.lot||'').trim() && Number(s.stock) > 0.01)
-    .reduce((acc, s)=>{
-      const key = `${s.product}|||${s.packunit||''}`;
-      if(!acc.some(x => x.key === key)) acc.push({key, product:s.product, packunit:s.packunit||''});
-      return acc;
-    }, [])
-    .sort((a,b)=>String(a.product).localeCompare(String(b.product),'ko') || String(a.packunit).localeCompare(String(b.packunit),'ko'));
+  const products = bulkOutboundProductOptions();
   const sel = document.getElementById('t-product-select');
   const packEl = document.getElementById('t-packunit');
   const cur = sel.value;
@@ -3584,11 +3576,10 @@ function onOutProductSelectChange(){
   const dispOrig = document.getElementById('t-origin-display');
   if(!product){ dispOrig.value=''; onOutProductChange(); return; }
   // 재고에서 해당 품목의 원산지 목록 추출
-  const stockMap = getStockMap();
   const origins = [...new Set(
-    Object.values(stockMap)
-      .filter(s=>samePriceText(s.product, product) && String(s.lot||'').trim() && Number(s.stock)>0.01)
-      .filter(s=>!packunit || samePriceText(s.packunit || '', packunit))
+    bulkOutboundStockOptions()
+      .filter(s=>bulkOutboundIdentityKey(s.product) === bulkOutboundIdentityKey(product))
+      .filter(s=>!packunit || bulkOutboundIdentityKey(s.packunit || '') === bulkOutboundIdentityKey(packunit))
       .map(s=>s.origin)
   )];
   dispOrig.value = origins.length===1 ? origins[0] : (origins[0]||'');
@@ -3606,11 +3597,10 @@ function onOutProductChange(){
   const list = document.getElementById('lot-match-list');
   if(!product){ area.style.display='none'; return; }
 
-  const stockMap = getStockMap();
-  const matches = Object.values(stockMap).filter(s=>
-    samePriceText(s.product, product) &&
-    (!packunit || samePriceText(s.packunit || '', packunit)) &&
-    String(s.lot||'').trim() && Number(s.stock)>0.01
+  const matches = bulkOutboundStockOptions().filter(s=>
+    bulkOutboundIdentityKey(s.product) === bulkOutboundIdentityKey(product) &&
+    (!packunit || bulkOutboundIdentityKey(s.packunit || '') === bulkOutboundIdentityKey(packunit)) &&
+    Number(s.stock)>0.01
   ).sort((a,b)=>b.stock-a.stock);
 
   if(!matches.length){
@@ -3621,7 +3611,11 @@ function onOutProductChange(){
 
   // 이력번호별 생산입고 트랜잭션 목록 (날짜 오름차순)
   const prodInMap = {};
-  userTransactions.filter(t=>t.type==='생산입고' && samePriceText(t.product, product) && (!packunit || samePriceText(t.packunit || '', packunit))).forEach(t=>{
+  userTransactions.filter(t=>
+    t.type==='생산입고' &&
+    bulkOutboundIdentityKey(t.product) === bulkOutboundIdentityKey(product) &&
+    (!packunit || bulkOutboundIdentityKey(t.packunit || '') === bulkOutboundIdentityKey(packunit))
+  ).forEach(t=>{
     const lot = String(t.lot||'');
     if(!prodInMap[lot]) prodInMap[lot] = [];
     prodInMap[lot].push({date: t.date, weight: t.weight});
@@ -3651,7 +3645,7 @@ function onOutProductChange(){
       background:var(--green-lt);border:1px solid var(--green);border-radius:6px;
       padding:5px 10px;font-size:12px;display:flex;flex-direction:column;gap:1px;
       min-width:140px;">
-      <div style="font-family:monospace;font-size:11px;font-weight:700;color:var(--green)">${htmlEscape(s.lot)}</div>
+      <div style="font-family:monospace;font-size:11px;font-weight:700;color:var(--green)">${s.lot ? htmlEscape(s.lot) : 'LOT 없음'}</div>
       <div style="color:#666;font-size:10px;">${htmlEscape(s.origin||'')}${s.packunit ? ' · 포장 '+htmlEscape(s.packunit) : ''} · <strong>${Number(s.stock||0).toFixed(2)} KG</strong>${s.price ? ' · '+Number(s.price).toLocaleString()+'원' : ''}${prodDate ? ' · 생산일 '+htmlEscape(prodDate) : ''}</div>
     </div>`;
   }).join('');
@@ -4330,11 +4324,15 @@ function initBulkInbound(){
 // ─── 출고 일괄 입력 그리드 ─────────────────────────────────────────────
 function bulkOutboundKeyFromValues(product, lot, origin='', packunit=''){
   return [
-    priceProductKey(product),
-    String(packunit||'').trim().toLowerCase(),
+    bulkOutboundIdentityKey(product),
+    bulkOutboundIdentityKey(packunit),
     String(lot||'').trim(),
     originKey(origin||'')
   ].join('|');
+}
+
+function bulkOutboundIdentityKey(value){
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function bulkOutboundSearchKey(value){
@@ -4359,6 +4357,7 @@ function bulkOutboundStockOptions(){
         stock: 0,
         proddate: s.proddate || '',
         source: s.source || '',
+        price: 0,
         prices: []
       };
     }
@@ -4366,13 +4365,28 @@ function bulkOutboundStockOptions(){
     if(!grouped[key].proddate && s.proddate) grouped[key].proddate = s.proddate;
     if(!grouped[key].source && s.source) grouped[key].source = s.source;
     const price = parseAppNumber(s.price);
-    if(price && !grouped[key].prices.includes(price)) grouped[key].prices.push(price);
+    if(price){
+      if(!grouped[key].price) grouped[key].price = price;
+      if(!grouped[key].prices.includes(price)) grouped[key].prices.push(price);
+    }
   });
   return Object.values(grouped).sort((a,b)=>
     String(a.product).localeCompare(String(b.product),'ko') ||
     String(a.lot).localeCompare(String(b.lot),'ko') ||
     String(a.origin).localeCompare(String(b.origin),'ko')
   );
+}
+
+function bulkOutboundProductOptions(){
+  return bulkOutboundStockOptions()
+    .reduce((acc, s)=>{
+      const key = `${bulkOutboundIdentityKey(s.product)}|||${bulkOutboundIdentityKey(s.packunit||'')}`;
+      if(!acc.some(x => x.key === key)){
+        acc.push({key, product:s.product, packunit:s.packunit||''});
+      }
+      return acc;
+    }, [])
+    .sort((a,b)=>String(a.product).localeCompare(String(b.product),'ko') || String(a.packunit).localeCompare(String(b.packunit),'ko'));
 }
 
 function bulkOutboundStockLabel(s){
