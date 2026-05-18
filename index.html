@@ -414,6 +414,23 @@
       <div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:6px;">📦 재고 있는 이력번호 선택 (클릭 시 자동 입력)</div>
       <div id="lot-match-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     </div>
+    <div id="t-samsung-area" style="display:none;margin-bottom:10px;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:8px 10px;">
+      <div style="font-size:11px;font-weight:800;color:#1428a0;margin-bottom:6px;">삼성웰스토리 납품품목 지정</div>
+      <div class="form-row" style="margin:0;align-items:flex-end;">
+        <div class="form-group" style="max-width:230px;">
+          <label>삼성 하위 거래처</label>
+          <select id="t-samsung-vendor" onchange="refreshTxnSamsungProducts()">
+            <option value="">-- 선택 안 함 --</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:240px;">
+          <label>등록 납품품목 / 작업스펙</label>
+          <select id="t-samsung-product">
+            <option value="">-- 삼성 거래처 선택 --</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div id="t-edit-banner" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#856404;">
       ✏️ <strong>수정 모드</strong> — 내용을 수정한 후 [수정 저장] 버튼을 누르세요.
     </div>
@@ -524,6 +541,8 @@
           <th style="min-width:130px;text-align:center;">이력번호</th>
           <th style="min-width:96px;text-align:right;">현재재고</th>
           <th style="min-width:120px;">거래처</th>
+          <th style="min-width:140px;">삼성거래처</th>
+          <th style="min-width:190px;">삼성 납품품목/스펙</th>
           <th style="min-width:96px;text-align:right;">출고중량(KG)</th>
           <th style="min-width:92px;text-align:right;">단가</th>
           <th style="min-width:96px;text-align:right;">금액</th>
@@ -3380,6 +3399,8 @@ function updateTransactionForm(){
   const managedOrig = document.getElementById('t-origin-managed');
   const dispOrig = document.getElementById('t-origin-display');
   const storageWrap = document.getElementById('t-storage-managed-wrap');
+  const samsungArea = document.getElementById('t-samsung-area');
+  if(samsungArea) samsungArea.style.display = (t === '출고') ? 'block' : 'none';
 
   if(t === '출고'){
     // 출고 모드: 드롭다운 + 원산지 자동채움
@@ -3393,6 +3414,8 @@ function updateTransactionForm(){
     storageWrap.style.display = 'none';
     updateOutProductList();
     onOutProductChange();
+    refreshTxnSamsungVendorSelect();
+    refreshTxnSamsungProducts();
   } else if(t === '입고'){
     // 입고 모드: 품목관리 기준값만 선택
     inpProd.style.display  = 'none';
@@ -3404,6 +3427,7 @@ function updateTransactionForm(){
     dispOrig.style.display = 'none';
     storageWrap.style.display = 'flex';
     document.getElementById('lot-match-area').style.display = 'none';
+    clearTxnSamsungControls();
     refreshTxnManagedProductControls();
   } else {
     // 사용/생산입고 모드: 자유입력
@@ -3416,6 +3440,7 @@ function updateTransactionForm(){
     dispOrig.style.display = 'none';
     storageWrap.style.display = 'none';
     document.getElementById('lot-match-area').style.display = 'none';
+    clearTxnSamsungControls();
     updateOriginList(); // 입고 시에도 원산지 datalist 갱신
   }
   autoFillTxnPrice();
@@ -3584,6 +3609,7 @@ function onOutProductSelectChange(){
   )];
   dispOrig.value = origins.length===1 ? origins[0] : (origins[0]||'');
   onOutProductChange();
+  refreshTxnSamsungProducts();
   autoFillTxnPrice();
 }
 
@@ -4049,6 +4075,39 @@ function updateTxnAmtPreview(){
   if(el) el.value = (price && weight) ? Math.round(price * weight).toLocaleString('ko-KR') + ' 원' : '';
 }
 
+function refreshTxnSamsungVendorSelect(selectedId=''){
+  const sel = document.getElementById('t-samsung-vendor');
+  if(!sel) return;
+  const cur = selectedId || sel.value || '';
+  sel.innerHTML = samsungVendorOptionsHtml(cur, '-- 선택 안 함 --');
+  sel.value = cur;
+}
+
+function refreshTxnSamsungProducts(selectedRowId=''){
+  const vendorId = document.getElementById('t-samsung-vendor')?.value || '';
+  const productId = document.getElementById('t-product-select')?.selectedOptions?.[0]?.dataset?.productId || '';
+  const productName = getTProduct();
+  const sel = document.getElementById('t-samsung-product');
+  if(!sel) return;
+  sel.innerHTML = samsungProductOptionsHtml(vendorId, productId, productName, selectedRowId);
+  if(selectedRowId) sel.value = selectedRowId;
+}
+
+function clearTxnSamsungControls(){
+  const vendorEl = document.getElementById('t-samsung-vendor');
+  const productEl = document.getElementById('t-samsung-product');
+  if(vendorEl) vendorEl.value = '';
+  if(productEl) productEl.innerHTML = '<option value="">-- 삼성 거래처 선택 --</option>';
+}
+
+function getTxnSamsungMeta(){
+  const vendorId = document.getElementById('t-samsung-vendor')?.value || '';
+  const rowId = document.getElementById('t-samsung-product')?.value || '';
+  if(!vendorId && !rowId) return null;
+  if(vendorId && !rowId) return { error:'삼성 납품품목/작업스펙을 선택하세요.' };
+  return getSamsungProductMeta(vendorId, rowId);
+}
+
 
 function addTransaction(){
   const date=document.getElementById('t-date').value;
@@ -4077,6 +4136,11 @@ function addTransaction(){
     alert('단가표에서 해당 품목/거래처 단가를 찾지 못했습니다.\n단가표를 확인하거나 단가를 직접 입력해주세요.');
     return;
   }
+  const samsungMeta = type === '출고' ? getTxnSamsungMeta() : null;
+  if(samsungMeta && samsungMeta.error){
+    alert('삼성웰스토리 지정 정보를 확인해주세요.\n\n' + samsungMeta.error);
+    return;
+  }
 
   if(_editTxnId){
     // 수정 모드: 기존 항목 업데이트
@@ -4085,10 +4149,11 @@ function addTransaction(){
       t.date=date; t.type=type; t.product=product; t.origin=origin; t.packunit=packunit;
       t.trader=trader; t.lot=lot; t.proddate=proddate;
       t.weight=weight; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
+      Object.assign(t, samsungTxnFields(samsungMeta));
     }
   } else {
     // 신규 추가
-    const newItem={id:Date.now(),date,type,product,origin,packunit,trader,lot,proddate,weight,note,storage,price,amount:Math.round(price*weight),_isUser:true};
+    const newItem={id:Date.now(),date,type,product,origin,packunit,trader,lot,proddate,weight,note,storage,price,amount:Math.round(price*weight),...samsungTxnFields(samsungMeta),_isUser:true};
     userTransactions.push(newItem);
   }
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
@@ -4109,6 +4174,7 @@ function clearTransactionForm(){
   const mosel=document.getElementById('t-origin-managed'); if(mosel) mosel.value='';
   const stsel=document.getElementById('t-storage-managed'); if(stsel) stsel.value='';
   const disp=document.getElementById('t-origin-display'); if(disp) disp.value='';
+  clearTxnSamsungControls();
   document.getElementById('t-weight').value='';
   document.getElementById('t-proddate').value='';
   document.getElementById('t-date').value=today;
@@ -4484,6 +4550,7 @@ function selectBulkOutboundStock(inp, key){
   if(weightEl && !weightEl.value) weightEl.value = Number(s.stock||0).toFixed(2);
   const noteEl = tr.querySelector('.bulk-out-note');
   if(noteEl && !noteEl.value && s.proddate) noteEl.value = '생산일: ' + s.proddate;
+  refreshBulkOutboundSamsungProducts(tr);
   refreshBulkOutboundPrice(tr);
   updateBulkOutboundAmount(tr);
   const box = bulkOutboundWrap(inp)?.querySelector('.bulk-out-stock-results');
@@ -4513,6 +4580,8 @@ function addBulkOutboundRow(){
     <td class="bulk-out-lot-cell" style="font-size:11px;color:#666;text-align:center;font-family:monospace;">-</td>
     <td class="bulk-out-stock-cell" style="font-size:11px;color:#666;text-align:right;">-</td>
     <td><input class="bulk-out-trader" list="trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><select class="bulk-out-sw-vendor" onchange="refreshBulkOutboundSamsungProducts(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;">${samsungVendorOptionsHtml('', '-- 선택 안 함 --')}</select></td>
+    <td><select class="bulk-out-sw-product" style="width:100%;font-size:12px;padding:5px 6px;"><option value="">-- 선택 안 함 --</option></select></td>
     <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td class="bulk-out-amount-cell" style="font-size:11px;color:#555;text-align:right;">-</td>
@@ -4602,6 +4671,25 @@ function applyBulkOutboundNote(){
   toast(cnt ? `${cnt}개 행에 비고를 채웠습니다.` : '빈 비고 칸이 없습니다.');
 }
 
+function refreshBulkOutboundSamsungProducts(tr, selectedRowId=''){
+  if(!tr) return;
+  const vendorId = tr.querySelector('.bulk-out-sw-vendor')?.value || '';
+  const productName = tr.querySelector('.bulk-out-product')?.value || '';
+  const sel = tr.querySelector('.bulk-out-sw-product');
+  if(!sel) return;
+  sel.innerHTML = samsungProductOptionsHtml(vendorId, '', productName, selectedRowId);
+  if(selectedRowId) sel.value = selectedRowId;
+}
+
+function getBulkOutboundSamsungMeta(tr){
+  if(!tr) return null;
+  const vendorId = tr.querySelector('.bulk-out-sw-vendor')?.value || '';
+  const rowId = tr.querySelector('.bulk-out-sw-product')?.value || '';
+  if(!vendorId && !rowId) return null;
+  if(vendorId && !rowId) return { error:'삼성 납품품목/작업스펙을 선택하세요.' };
+  return getSamsungProductMeta(vendorId, rowId);
+}
+
 function saveBulkOutbound(){
   const date = document.getElementById('bulk-out-date')?.value || '';
   if(!date){ toast('출고일자를 선택하세요.'); return; }
@@ -4626,6 +4714,8 @@ function saveBulkOutbound(){
     let price = parseAppNumber(tr.querySelector('.bulk-out-price-input')?.value);
     if(!price) price = getPrice(stockInfo.product, stockInfo.origin, trader) || 0;
     if(!price){ errorMsg = `${idx+1}번째 행: 단가를 찾지 못했습니다. 단가를 직접 입력하세요.`; return; }
+    const samsungMeta = getBulkOutboundSamsungMeta(tr);
+    if(samsungMeta && samsungMeta.error){ errorMsg = `${idx+1}번째 행: ${samsungMeta.error}`; return; }
     requested[key] = (requested[key] || 0) + weight;
     staged.push({
       idx,
@@ -4634,7 +4724,8 @@ function saveBulkOutbound(){
       trader,
       note,
       weight,
-      price
+      price,
+      samsung: samsungMeta
     });
   });
   if(errorMsg){ toast(errorMsg); return; }
@@ -4667,6 +4758,7 @@ function saveBulkOutbound(){
       price: row.price,
       amount: Math.round(row.price * row.weight),
       note: row.note,
+      ...samsungTxnFields(row.samsung),
       _isUser:true,
       _isProdUse:false,
       _isProdOut:false,
@@ -4793,6 +4885,15 @@ function loadTxnToForm(id){
   document.getElementById('t-weight').value  =t.weight||'';
   document.getElementById('t-price').value   =t.price||'';
   document.getElementById('t-note').value    =t.note||'';
+  if(t.type==='출고'){
+    const sw = normalizeSamsungMeta(t);
+    refreshTxnSamsungVendorSelect(sw?.vendorId || '');
+    if(sw?.vendorId){
+      const vendorEl = document.getElementById('t-samsung-vendor');
+      if(vendorEl) vendorEl.value = sw.vendorId;
+      refreshTxnSamsungProducts(sw.productRowId || '');
+    }
+  }
   updateTxnAmtPreview();
 
   // 수정 모드 UI
@@ -4979,7 +5080,7 @@ function addProdOutputRow(){
   const id = ++prodOutputRowCount;
   const row = document.createElement('div');
   row.id = `prod-out-${id}`;
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 0.75fr 0.8fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 0.75fr 0.8fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:10px;align-items:end;padding-bottom:8px;border-bottom:1px dashed #edf0f2;';
   row.innerHTML = `
     <div class="form-group" style="position:relative;">
       <label style="font-size:11px;font-weight:700;color:var(--green);">생산품목 #${id}</label>
@@ -5008,10 +5109,26 @@ function addProdOutputRow(){
       <input type="number" id="prod-out-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
     <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-out-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
+    <div style="grid-column:1 / -1;display:grid;grid-template-columns:minmax(180px,230px) minmax(260px,1fr) 1fr;gap:8px;align-items:end;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:7px 9px;">
+      <div class="form-group">
+        <label style="font-size:11px;font-weight:800;color:#1428a0;">삼성 하위 거래처</label>
+        <select id="prod-out-sw-vendor-${id}" onchange="refreshProdOutSamsungProducts(${id})" style="font-size:12px;">
+          ${samsungVendorOptionsHtml('', '-- 선택 안 함 --')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="font-size:11px;font-weight:800;color:#1428a0;">등록 납품품목 / 작업스펙</label>
+        <select id="prod-out-sw-product-${id}" onchange="applyProdOutSamsungProduct(${id})" style="font-size:12px;">
+          <option value="">-- 삼성 거래처 선택 --</option>
+        </select>
+      </div>
+      <div style="font-size:11px;color:#667085;line-height:1.35;padding-bottom:4px;">선택하면 삼성웰스토리 전용 재고로 집계됩니다.</div>
+    </div>
   `;
   document.getElementById('prod-output-rows').appendChild(row);
   const outOriginEl = document.getElementById(`prod-out-origin-${id}`);
   updateProdOutputOriginField(outOriginEl, getCommonProdInputOrigin());
+  refreshProdOutSamsungProducts(id);
 }
 
 function labelProductPackUnitText(p){
@@ -5056,6 +5173,7 @@ function onProdOutProductSearch(id){
   const packEl = document.getElementById(`prod-out-packunit-${id}`);
   if(hidden) hidden.value = '';
   if(packEl) packEl.value = '';
+  refreshProdOutSamsungProducts(id);
   renderProdOutProductSuggestions(id);
 }
 
@@ -5101,6 +5219,37 @@ function selectProdOutProduct(id, productIdx){
   if(hidden) hidden.value = prod?.id || '';
   if(packEl) packEl.value = labelProductPackUnitText(prod);
   if(box) box.style.display = 'none';
+  refreshProdOutSamsungProducts(id);
+}
+
+function refreshProdOutSamsungProducts(id, selectedRowId=''){
+  const vendorEl = document.getElementById(`prod-out-sw-vendor-${id}`);
+  const productEl = document.getElementById(`prod-out-sw-product-${id}`);
+  if(!vendorEl || !productEl) return;
+  const productId = document.getElementById(`prod-out-product-id-${id}`)?.value || '';
+  const productName = document.getElementById(`prod-out-product-${id}`)?.value || '';
+  productEl.innerHTML = samsungProductOptionsHtml(vendorEl.value, productId, productName, selectedRowId);
+}
+
+function applyProdOutSamsungProduct(id){
+  const meta = getProdOutSamsungMeta(id);
+  if(!meta) return;
+  const productEl = document.getElementById(`prod-out-product-${id}`);
+  const hidden = document.getElementById(`prod-out-product-id-${id}`);
+  const packEl = document.getElementById(`prod-out-packunit-${id}`);
+  const originEl = document.getElementById(`prod-out-origin-${id}`);
+  if(productEl && meta.productName) productEl.value = meta.productName;
+  if(hidden && meta.productId) hidden.value = meta.productId;
+  if(packEl) packEl.value = meta.packunit || '';
+  if(originEl && meta.origin) originEl.value = meta.origin;
+}
+
+function getProdOutSamsungMeta(id){
+  const vendorId = document.getElementById(`prod-out-sw-vendor-${id}`)?.value || '';
+  const rowId = document.getElementById(`prod-out-sw-product-${id}`)?.value || '';
+  if(!vendorId && !rowId) return null;
+  if(vendorId && !rowId) return { error:'삼성 납품품목/작업스펙을 선택하세요.' };
+  return getSamsungProductMeta(vendorId, rowId);
 }
 
 function saveProdEntry(){
@@ -5133,6 +5282,7 @@ function saveProdEntry(){
   // 1차: raw 데이터 수집
   const rawOutputs = [];
   let invalidOutputProduct = '';
+  let invalidSamsungProduct = '';
   document.querySelectorAll('[id^="prod-out-qty-"]').forEach(el=>{
     const id = el.id.replace('prod-out-qty-','');
     const product = document.getElementById(`prod-out-product-${id}`)?.value.trim();
@@ -5147,12 +5297,21 @@ function saveProdEntry(){
         invalidOutputProduct = product + (packunit ? ` / ${packunit}` : '');
         return;
       }
+      const samsungMeta = getProdOutSamsungMeta(id);
+      if(samsungMeta && samsungMeta.error){
+        invalidSamsungProduct = `${product}: ${samsungMeta.error}`;
+        return;
+      }
       const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
-      rawOutputs.push({product: registered.name || product, productId: registered.id || productId, packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin});
+      rawOutputs.push({product: registered.name || product, productId: registered.id || productId, packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta});
     }
   });
   if(invalidOutputProduct){
     alert(`생산품목은 품목관리에 등록된 품목만 선택할 수 있습니다.\n\n등록되지 않은 품목: ${invalidOutputProduct}`);
+    return;
+  }
+  if(invalidSamsungProduct){
+    alert(`삼성웰스토리 지정 정보를 확인해주세요.\n\n${invalidSamsungProduct}`);
     return;
   }
 
@@ -5165,7 +5324,7 @@ function saveProdEntry(){
 
   const outputs = rawOutputs.map(o=>{
     const price = o.manualPrice > 0 ? o.manualPrice : autoUnitPrice;
-    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin};
+    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin, samsung:o.samsung};
   });
 
   if(!inputs.length && !outputs.length){alert('투입 또는 생산 항목을 입력해주세요.');return;}
@@ -5213,6 +5372,7 @@ function saveProdEntry(){
         packunit:out.packunit||'', productId:out.productId||'',
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
         note:`${jobType}완료 ${dateFormatted} #${jobNo}`,
+        ...samsungTxnFields(out.samsung),
         _isUser:true, _isProdOut:true, _prodId:entry.id
       });
     }
@@ -5286,11 +5446,19 @@ function openEditProdEntry(id){
     const pr=document.getElementById(`prod-out-price-${n}`);
     const pk=document.getElementById(`prod-out-packunit-${n}`);
     const pid=document.getElementById(`prod-out-product-id-${n}`);
+    const sw=normalizeSamsungMeta(out.samsung || out);
     if(p)p.value=out.product||'';
     if(pk)pk.value=out.packunit||'';
     if(pid)pid.value=out.productId||'';
     if(o){o.value=out.origin||'';o.removeAttribute('readonly');}
     if(l)l.value=out.lot||''; if(q)q.value=out.qty||0; if(pr)pr.value=out.price||0;
+    const swVendor=document.getElementById(`prod-out-sw-vendor-${n}`);
+    const swProduct=document.getElementById(`prod-out-sw-product-${n}`);
+    if(swVendor && sw?.vendorId){
+      swVendor.value=sw.vendorId;
+      refreshProdOutSamsungProducts(n, sw.productRowId || '');
+      if(swProduct) swProduct.value=sw.productRowId || '';
+    }
   });
   toast('수정할 내용 변경 후 ✓ 생산일보 저장을 누르세요.',4000);
 }
@@ -10294,6 +10462,95 @@ function isSameSamsungVendorProduct(row, productId, spec){
   return String(row.productId) === String(productId) && samsungSpecKey(row.spec) === samsungSpecKey(spec);
 }
 
+function samsungVendorOptionsHtml(selectedId='', placeholder='-- 거래처 선택 --'){
+  return `<option value="">${htmlEscape(placeholder)}</option>` + samsungVendors.map(v =>
+    `<option value="${htmlEscape(v.id)}" ${String(v.id)===String(selectedId)?'selected':''}>${htmlEscape(v.name)}</option>`
+  ).join('');
+}
+
+function samsungProductRowsForVendor(vendorId, productId='', productName=''){
+  const v = samsungVendors.find(x => String(x.id) === String(vendorId));
+  if(!v) return [];
+  const targetId = String(productId || '').trim();
+  const targetName = bulkOutboundIdentityKey(productName || '');
+  return (v.products || [])
+    .map(row => {
+      const lp = (labelProducts || []).find(x => String(x.id) === String(row.productId));
+      return { row, lp };
+    })
+    .filter(({row, lp}) => {
+      if(targetId) return String(row.productId) === targetId;
+      if(targetName && lp) return bulkOutboundIdentityKey(lp.name || '') === targetName;
+      return true;
+    });
+}
+
+function samsungProductOptionLabel(row, lp){
+  const productLabel = lp ? samsungProductLabel(lp) : '(삭제된 품목)';
+  return `${productLabel}${row.spec ? ' / ' + row.spec : ' / 스펙 없음'}`;
+}
+
+function samsungProductOptionsHtml(vendorId, productId='', productName='', selectedRowId=''){
+  if(!vendorId) return '<option value="">-- 삼성 거래처 선택 --</option>';
+  const rows = samsungProductRowsForVendor(vendorId, productId, productName);
+  if(!rows.length) return '<option value="">-- 등록된 납품품목/스펙 없음 --</option>';
+  return '<option value="">-- 선택 안 함 --</option>' + rows.map(({row, lp}) =>
+    `<option value="${htmlEscape(row.id)}" ${String(row.id)===String(selectedRowId)?'selected':''}>${htmlEscape(samsungProductOptionLabel(row, lp))}</option>`
+  ).join('');
+}
+
+function getSamsungProductMeta(vendorId, productRowId){
+  const v = samsungVendors.find(x => String(x.id) === String(vendorId));
+  if(!v) return null;
+  const row = (v.products || []).find(p => String(p.id) === String(productRowId));
+  if(!row) return null;
+  const lp = (labelProducts || []).find(x => String(x.id) === String(row.productId));
+  return {
+    vendorId: v.id,
+    vendorName: v.name,
+    productRowId: row.id,
+    productId: row.productId || '',
+    productName: lp?.name || '',
+    origin: lp?.origin || '',
+    packunit: lp?.packunit || '',
+    spec: row.spec || '',
+    targetWeekly: parseAppNumber(row.targetWeekly)
+  };
+}
+
+function normalizeSamsungMeta(src){
+  if(!src) return null;
+  const raw = src.samsung && typeof src.samsung === 'object' ? src.samsung : src;
+  const vendorId = raw.vendorId || raw.samsungVendorId || '';
+  const productRowId = raw.productRowId || raw.samsungProductRowId || '';
+  if(!vendorId || !productRowId) return null;
+  const fresh = getSamsungProductMeta(vendorId, productRowId);
+  return {
+    vendorId,
+    vendorName: fresh?.vendorName || raw.vendorName || raw.samsungVendorName || '',
+    productRowId,
+    productId: fresh?.productId || raw.productId || raw.samsungProductId || '',
+    productName: fresh?.productName || raw.productName || raw.samsungProductName || '',
+    origin: fresh?.origin || raw.origin || '',
+    packunit: fresh?.packunit || raw.packunit || '',
+    spec: fresh?.spec || raw.spec || raw.samsungSpec || '',
+    targetWeekly: parseAppNumber(fresh?.targetWeekly ?? raw.targetWeekly)
+  };
+}
+
+function samsungTxnFields(meta){
+  const m = normalizeSamsungMeta(meta);
+  return {
+    samsungVendorId: m?.vendorId || '',
+    samsungVendorName: m?.vendorName || '',
+    samsungProductRowId: m?.productRowId || '',
+    samsungProductId: m?.productId || '',
+    samsungProductName: m?.productName || '',
+    samsungSpec: m?.spec || '',
+    samsung: m ? {...m} : null
+  };
+}
+
 function saveSamsungVendors(){
   localStorage.setItem('dbmt_samsung_vendors', JSON.stringify(samsungVendors));
   if(typeof gsSaveAppData === 'function') gsSaveAppData();
@@ -10421,6 +10678,55 @@ function renderSamsungVendorProducts(){
   }).join('');
 }
 
+function getSamsungStockBuckets(){
+  const buckets = {};
+  const txns = (typeof transactions !== 'undefined' && Array.isArray(transactions)) ? transactions : userTransactions;
+  txns.forEach(t => {
+    const meta = normalizeSamsungMeta(t);
+    if(!meta) return;
+    const type = String(t.type || '');
+    const weight = parseAppNumber(t.weight);
+    if(!weight) return;
+    let delta = 0;
+    if(type === '입고' || type === '생산입고') delta = weight;
+    else if(type === '출고' || type === '사용') delta = -weight;
+    else return;
+    const product = String(t.product || meta.productName || '').trim();
+    const packunit = String(t.packunit || meta.packunit || '').trim();
+    const origin = normalizeOriginName(t.origin || meta.origin || '');
+    const lot = String(t.lot || '').trim();
+    const key = [meta.vendorId, meta.productRowId, product, packunit, originKey(origin), lot].join('|');
+    if(!buckets[key]){
+      buckets[key] = {
+        vendorId: meta.vendorId,
+        vendorName: meta.vendorName,
+        productRowId: meta.productRowId,
+        productId: meta.productId,
+        product,
+        packunit,
+        origin,
+        lot,
+        spec: meta.spec || '',
+        targetWeekly: parseAppNumber(meta.targetWeekly),
+        totalIn: 0,
+        totalOut: 0,
+        stock: 0
+      };
+    }
+    if(delta > 0) buckets[key].totalIn += delta;
+    else buckets[key].totalOut += Math.abs(delta);
+    buckets[key].stock += delta;
+  });
+  return Object.values(buckets)
+    .filter(r => Math.abs(r.stock) > 0.01 || r.totalIn > 0 || r.totalOut > 0)
+    .sort((a,b)=>
+      String(a.vendorName||'').localeCompare(String(b.vendorName||''),'ko') ||
+      String(a.product||'').localeCompare(String(b.product||''),'ko') ||
+      String(a.spec||'').localeCompare(String(b.spec||''),'ko') ||
+      String(a.lot||'').localeCompare(String(b.lot||''),'ko')
+    );
+}
+
 function renderSamsungStock(){
   const area = document.getElementById('sw-stock-area');
   if(!area) return;
@@ -10428,46 +10734,36 @@ function renderSamsungStock(){
     area.innerHTML = '<div style="color:#888;text-align:center;padding:20px;font-size:13px;">먼저 거래처를 등록해주세요.</div>';
     return;
   }
-  const stockMap = (typeof getStockMap === 'function') ? getStockMap() : {};
-  // (product, origin, packunit) → 합산 재고
-  const stockByKey = {};
-  Object.values(stockMap).forEach(s => {
-    const key = (s.product||'')+'|'+(s.origin||'')+'|'+(s.packunit||'');
-    stockByKey[key] = (stockByKey[key] || 0) + (parseFloat(s.stock) || 0);
-  });
+  const samsungRows = getSamsungStockBuckets();
   area.innerHTML = samsungVendors.map(v => {
-    const products = v.products || [];
-    if(!products.length){
-      return `<div style="margin-bottom:10px;color:#aaa;font-size:12px;padding:8px 14px;border:1px dashed var(--border);border-radius:6px;">${htmlEscape(v.name)} — 등록 품목 없음</div>`;
+    const rowsForVendor = samsungRows.filter(r => String(r.vendorId) === String(v.id));
+    if(!rowsForVendor.length){
+      return `<div style="margin-bottom:10px;color:#888;font-size:12px;padding:10px 14px;border:1px dashed var(--border);border-radius:6px;">${htmlEscape(v.name)} — 삼성향 생산 재고 없음</div>`;
     }
-    const rows = products.map(p => {
-      const lp = (labelProducts||[]).find(x => String(x.id) === String(p.productId));
-      if(!lp) return '<tr><td colspan="5" style="color:#e74c3c;font-size:11px;">(삭제된 품목)</td></tr>';
-      const key = lp.name+'|'+(lp.origin||'')+'|'+(lp.packunit||'');
-      const stock = stockByKey[key] || 0;
-      const weekly = parseFloat(p.targetWeekly) || 0;
+    const rows = rowsForVendor.map(r => {
+      const stock = parseAppNumber(r.stock);
+      const weekly = parseAppNumber(r.targetWeekly);
       const weeks = weekly > 0 ? (stock / weekly) : null;
-      let stockColor = '#27ae60';
-      if(weekly > 0){
-        if(stock < weekly) stockColor = '#e74c3c';
-        else if(stock < weekly*2) stockColor = '#e67e22';
-      }
+      const stockColor = stock < -0.01 ? '#e74c3c' : (weekly > 0 && stock < weekly ? '#e74c3c' : (weekly > 0 && stock < weekly*2 ? '#e67e22' : '#27ae60'));
       const weeksHtml = (weeks === null) ? '-' : (() => {
         const c = weeks < 1 ? '#e74c3c' : (weeks < 2 ? '#e67e22' : '#27ae60');
         return `<span style="color:${c};font-weight:700;">${weeks.toFixed(1)}주</span>`;
       })();
       return `<tr>
-        <td><strong>${htmlEscape(lp.name)}</strong><span style="color:#888;font-size:11px;"> / ${htmlEscape(lp.origin||'-')} / ${htmlEscape(lp.packunit||'-')}</span></td>
+        <td><strong>${htmlEscape(r.product)}</strong><span style="color:#888;font-size:11px;">${r.packunit ? ' / '+htmlEscape(r.packunit) : ''} / ${htmlEscape(r.origin||'-')}</span></td>
+        <td style="font-size:11px;color:#666;">${htmlEscape(r.spec||'-')}</td>
+        <td style="font-family:monospace;font-size:11px;">${htmlEscape(r.lot||'LOT 없음')}</td>
         <td style="text-align:right;font-family:monospace;color:${stockColor};font-weight:700;">${stock.toLocaleString('ko-KR',{maximumFractionDigits:2})} KG</td>
+        <td style="text-align:right;font-size:11px;">${r.totalIn.toLocaleString('ko-KR',{maximumFractionDigits:2})} KG</td>
+        <td style="text-align:right;font-size:11px;">${r.totalOut.toLocaleString('ko-KR',{maximumFractionDigits:2})} KG</td>
         <td style="text-align:right;">${weekly ? weekly.toLocaleString('ko-KR')+' KG' : '-'}</td>
         <td style="text-align:right;font-size:11px;">${weeksHtml}</td>
-        <td style="font-size:11px;color:#666;">${htmlEscape(p.spec||'')}</td>
       </tr>`;
     }).join('');
     return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-      <div style="background:#eef3fb;padding:8px 14px;font-weight:700;border-bottom:1px solid var(--border);">${htmlEscape(v.name)}</div>
+      <div style="background:#eef3fb;padding:8px 14px;font-weight:700;border-bottom:1px solid var(--border);">${htmlEscape(v.name)} <span style="color:#888;font-size:11px;font-weight:400;">— LOT ${rowsForVendor.length}개</span></div>
       <div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
-        <thead><tr style="background:#fafafa;"><th>품목</th><th style="text-align:right;">현재 재고</th><th style="text-align:right;">예상 주간량</th><th style="text-align:right;">잔여 주수</th><th>작업스펙</th></tr></thead>
+        <thead><tr style="background:#fafafa;"><th>품목</th><th>작업스펙</th><th>LOT</th><th style="text-align:right;">현재 재고</th><th style="text-align:right;">생산입고</th><th style="text-align:right;">출고/사용</th><th style="text-align:right;">예상 주간량</th><th style="text-align:right;">잔여 주수</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
