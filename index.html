@@ -489,6 +489,58 @@
     </div>
   </div>
 
+  <!-- 출고 일괄 입력 그리드 -->
+  <div class="card" id="bulk-outbound-card">
+    <div class="card-title">
+      <div class="ct-bar" style="background:var(--orange);"></div>
+      📤 출고 일괄 입력
+      <span style="font-size:11px;font-weight:400;color:#888;margin-left:6px;">재고 LOT를 선택하고 여러 출고를 한 번에 저장</span>
+    </div>
+    <div class="form-row" style="margin-bottom:10px;">
+      <div class="form-group" style="max-width:160px;">
+        <label>출고일자 (공통)</label>
+        <input type="date" id="bulk-out-date">
+      </div>
+      <div class="form-group" style="max-width:260px;">
+        <label>거래처 일괄 채우기</label>
+        <div style="display:flex;gap:4px;">
+          <input id="bulk-out-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
+          <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
+        </div>
+      </div>
+      <div class="form-group" style="max-width:280px;">
+        <label>비고 일괄 채우기</label>
+        <div style="display:flex;gap:4px;">
+          <input id="bulk-out-note-common" placeholder="비고" style="flex:1;">
+          <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundNote()" title="비어있는 모든 행에 비고 채우기" style="white-space:nowrap;">↓ 적용</button>
+        </div>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="max-height:none;overflow:visible;">
+      <table style="font-size:12px;">
+        <thead><tr>
+          <th style="min-width:250px;">재고 품목 / LOT 선택</th>
+          <th style="min-width:78px;text-align:center;">원산지</th>
+          <th style="min-width:130px;text-align:center;">이력번호</th>
+          <th style="min-width:96px;text-align:right;">현재재고</th>
+          <th style="min-width:120px;">거래처</th>
+          <th style="min-width:96px;text-align:right;">출고중량(KG)</th>
+          <th style="min-width:92px;text-align:right;">단가</th>
+          <th style="min-width:96px;text-align:right;">금액</th>
+          <th style="min-width:110px;">비고</th>
+          <th style="width:34px;"></th>
+        </tr></thead>
+        <tbody id="bulk-outbound-tbody"></tbody>
+      </table>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="addBulkOutboundRow()">+ 행 추가</button>
+      <button class="btn btn-secondary" onclick="addBulkOutboundRows(5)">+ 5행</button>
+      <button class="btn btn-secondary" onclick="clearBulkOutbound()">전체 비우기</button>
+      <button class="btn btn-primary" onclick="saveBulkOutbound()" style="margin-left:auto;">💾 출고 일괄 저장</button>
+    </div>
+  </div>
+
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0;">
@@ -3103,7 +3155,7 @@ function showPage(id, btn){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(btn) btn.classList.add('active');
-  if(id==='p-transactions'){ updateTransactionForm(); initBulkInbound(); }
+  if(id==='p-transactions'){ updateTransactionForm(); initBulkInbound(); initBulkOutbound(); }
   if(id==='p-incheck') initIncheck();
   if(id==='p-schedule') renderScheduleCalendar();
   if(id==='p-production'){renderProduction();initProdForm();updateOriginList();}
@@ -4273,6 +4325,346 @@ function initBulkInbound(){
   if(dateEl && !dateEl.value) dateEl.value = today;
   const tbody = document.getElementById('bulk-inbound-tbody');
   if(tbody && !tbody.children.length) addBulkInboundRows(5);
+}
+
+// ─── 출고 일괄 입력 그리드 ─────────────────────────────────────────────
+function bulkOutboundKeyFromValues(product, lot, origin='', packunit=''){
+  return [
+    priceProductKey(product),
+    String(packunit||'').trim().toLowerCase(),
+    String(lot||'').trim(),
+    originKey(origin||'')
+  ].join('|');
+}
+
+function bulkOutboundStockOptions(){
+  const grouped = {};
+  Object.values(getStockMap()).forEach(s=>{
+    const product = String(s.product||'').trim();
+    const lot = String(s.lot||'').trim();
+    const stock = parseAppNumber(s.stock);
+    if(!product || !lot || stock <= 0.01) return;
+    const key = bulkOutboundKeyFromValues(product, lot, s.origin, s.packunit || '');
+    if(!grouped[key]){
+      grouped[key] = {
+        key,
+        product,
+        packunit: String(s.packunit||'').trim(),
+        lot,
+        origin: normalizeOriginName(s.origin||''),
+        stock: 0,
+        proddate: s.proddate || '',
+        source: s.source || '',
+        prices: []
+      };
+    }
+    grouped[key].stock += stock;
+    if(!grouped[key].proddate && s.proddate) grouped[key].proddate = s.proddate;
+    if(!grouped[key].source && s.source) grouped[key].source = s.source;
+    const price = parseAppNumber(s.price);
+    if(price && !grouped[key].prices.includes(price)) grouped[key].prices.push(price);
+  });
+  return Object.values(grouped).sort((a,b)=>
+    String(a.product).localeCompare(String(b.product),'ko') ||
+    String(a.lot).localeCompare(String(b.lot),'ko') ||
+    String(a.origin).localeCompare(String(b.origin),'ko')
+  );
+}
+
+function bulkOutboundStockLabel(s){
+  const pack = s.packunit ? ` / ${s.packunit}` : '';
+  return `${s.product}${pack} / ${s.origin||'-'} / LOT ${s.lot} / ${Number(s.stock||0).toFixed(2)}KG`;
+}
+
+function bulkOutboundSearchText(s){
+  return `${s.product} ${s.packunit||''} ${s.origin||''} ${s.lot||''} ${s.source||''} ${Number(s.stock||0).toFixed(2)}`;
+}
+
+function bulkOutboundWrap(inp){
+  return inp.closest('td') || inp.closest('.form-group') || inp.parentElement;
+}
+
+function clearBulkOutboundStockSelection(tr){
+  if(!tr) return;
+  ['key','product','origin','lot','packunit','proddate','stock'].forEach(name=>{
+    const el = tr.querySelector(`.bulk-out-${name}`);
+    if(el) el.value = '';
+  });
+  const originEl = tr.querySelector('.bulk-out-origin-cell');
+  const lotEl = tr.querySelector('.bulk-out-lot-cell');
+  const stockEl = tr.querySelector('.bulk-out-stock-cell');
+  if(originEl) originEl.textContent = '-';
+  if(lotEl) lotEl.textContent = '-';
+  if(stockEl) stockEl.textContent = '-';
+  const priceEl = tr.querySelector('.bulk-out-price-input');
+  if(priceEl && priceEl.dataset.autofilled === '1'){
+    priceEl.value = '';
+    priceEl.dataset.autofilled = '';
+  }
+  updateBulkOutboundAmount(tr);
+}
+
+function onBulkOutboundStockSearch(inp, isInput){
+  const wrap = bulkOutboundWrap(inp);
+  if(!wrap) return;
+  const box = wrap.querySelector('.bulk-out-stock-results');
+  if(!box) return;
+  const tr = inp.closest('tr');
+  if(isInput) clearBulkOutboundStockSelection(tr);
+  const q = (inp.value||'').toLowerCase().trim();
+  let list = bulkOutboundStockOptions();
+  if(q) list = list.filter(s=>bulkOutboundSearchText(s).toLowerCase().includes(q));
+  list = list.slice(0, 100);
+  if(!list.length){
+    box.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:#999;">선택 가능한 재고가 없습니다.</div>';
+  } else {
+    box.innerHTML = list.map(s=>{
+      const priceText = s.prices.length ? ` · 원가 ${s.prices.map(p=>Number(p).toLocaleString('ko-KR')).join('/')}` : '';
+      return `<div class="bulk-out-stock-opt" data-key="${htmlEscape(s.key)}" style="padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
+        <strong>${htmlEscape(s.product||'')}</strong>${s.packunit ? '<span style="color:#666;"> / '+htmlEscape(s.packunit)+'</span>' : ''}
+        <div style="color:#666;font-size:11px;">LOT ${htmlEscape(s.lot||'')} · ${htmlEscape(s.origin||'-')} · 현재 ${Number(s.stock||0).toFixed(2)} KG${priceText}</div>
+      </div>`;
+    }).join('');
+    box.querySelectorAll('.bulk-out-stock-opt').forEach(opt=>{
+      opt.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        selectBulkOutboundStock(inp, this.dataset.key);
+      });
+    });
+  }
+  box.style.display = 'block';
+}
+
+function selectBulkOutboundStock(inp, key){
+  const s = bulkOutboundStockOptions().find(x=>x.key === key);
+  if(!s) return;
+  const tr = inp.closest('tr');
+  if(!tr) return;
+  inp.value = bulkOutboundStockLabel(s);
+  const setVal = (cls, val)=>{
+    const el = tr.querySelector(cls);
+    if(el) el.value = val || '';
+  };
+  setVal('.bulk-out-key', s.key);
+  setVal('.bulk-out-product', s.product);
+  setVal('.bulk-out-origin', s.origin);
+  setVal('.bulk-out-lot', s.lot);
+  setVal('.bulk-out-packunit', s.packunit || '');
+  setVal('.bulk-out-proddate', s.proddate || '');
+  setVal('.bulk-out-stock', Number(s.stock||0).toFixed(2));
+  const originEl = tr.querySelector('.bulk-out-origin-cell');
+  const lotEl = tr.querySelector('.bulk-out-lot-cell');
+  const stockEl = tr.querySelector('.bulk-out-stock-cell');
+  if(originEl) originEl.textContent = s.origin || '-';
+  if(lotEl) lotEl.textContent = s.lot || '-';
+  if(stockEl) stockEl.textContent = `${Number(s.stock||0).toFixed(2)} KG`;
+  const weightEl = tr.querySelector('.bulk-out-weight');
+  if(weightEl && !weightEl.value) weightEl.value = Number(s.stock||0).toFixed(2);
+  const noteEl = tr.querySelector('.bulk-out-note');
+  if(noteEl && !noteEl.value && s.proddate) noteEl.value = '생산일: ' + s.proddate;
+  refreshBulkOutboundPrice(tr);
+  updateBulkOutboundAmount(tr);
+  const box = bulkOutboundWrap(inp)?.querySelector('.bulk-out-stock-results');
+  if(box) box.style.display = 'none';
+}
+
+function hideBulkOutboundStockResults(inp){
+  const wrap = bulkOutboundWrap(inp);
+  if(!wrap) return;
+  setTimeout(()=>{
+    const box = wrap.querySelector('.bulk-out-stock-results');
+    if(box) box.style.display = 'none';
+  }, 180);
+}
+
+function addBulkOutboundRow(){
+  const tbody = document.getElementById('bulk-outbound-tbody');
+  if(!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="position:relative;">
+      <input class="bulk-out-stock-input" oninput="onBulkOutboundStockSearch(this,true)" onfocus="onBulkOutboundStockSearch(this,false)" onblur="hideBulkOutboundStockResults(this)" placeholder="재고 품목/LOT 검색..." autocomplete="off" style="width:100%;font-size:12px;padding:5px 6px;">
+      <input type="hidden" class="bulk-out-key"><input type="hidden" class="bulk-out-product"><input type="hidden" class="bulk-out-origin"><input type="hidden" class="bulk-out-lot"><input type="hidden" class="bulk-out-packunit"><input type="hidden" class="bulk-out-proddate"><input type="hidden" class="bulk-out-stock">
+      <div class="bulk-out-stock-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
+    </td>
+    <td class="bulk-out-origin-cell" style="font-size:11px;color:#666;text-align:center;">-</td>
+    <td class="bulk-out-lot-cell" style="font-size:11px;color:#666;text-align:center;font-family:monospace;">-</td>
+    <td class="bulk-out-stock-cell" style="font-size:11px;color:#666;text-align:right;">-</td>
+    <td><input class="bulk-out-trader" list="trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td class="bulk-out-amount-cell" style="font-size:11px;color:#555;text-align:right;">-</td>
+    <td><input class="bulk-out-note" placeholder="비고" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkOutboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addBulkOutboundRows(n){
+  for(let i=0;i<n;i++) addBulkOutboundRow();
+}
+
+function removeBulkOutboundRow(btn){
+  const tr = btn.closest('tr');
+  const tbody = tr ? tr.parentElement : null;
+  if(tr) tr.remove();
+  if(tbody && !tbody.children.length) addBulkOutboundRow();
+}
+
+function clearBulkOutbound(){
+  const tbody = document.getElementById('bulk-outbound-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  addBulkOutboundRows(5);
+}
+
+function refreshBulkOutboundPrice(tr){
+  if(!tr) return;
+  const priceEl = tr.querySelector('.bulk-out-price-input');
+  if(!priceEl) return;
+  if(priceEl.dataset.manual === '1'){
+    updateBulkOutboundAmount(tr);
+    return;
+  }
+  const product = tr.querySelector('.bulk-out-product')?.value || '';
+  const origin = tr.querySelector('.bulk-out-origin')?.value || '';
+  const trader = (tr.querySelector('.bulk-out-trader')?.value || '').trim();
+  const price = product ? (getPrice(product, origin, trader) || 0) : 0;
+  if(price){
+    priceEl.value = price;
+    priceEl.dataset.autofilled = '1';
+  } else if(priceEl.dataset.autofilled === '1') {
+    priceEl.value = '';
+    priceEl.dataset.autofilled = '';
+  }
+  updateBulkOutboundAmount(tr);
+}
+
+function updateBulkOutboundAmount(tr){
+  if(!tr) return;
+  const weight = parseAppNumber(tr.querySelector('.bulk-out-weight')?.value);
+  const price = parseAppNumber(tr.querySelector('.bulk-out-price-input')?.value);
+  const stock = parseAppNumber(tr.querySelector('.bulk-out-stock')?.value);
+  const amountEl = tr.querySelector('.bulk-out-amount-cell');
+  if(amountEl) amountEl.textContent = (weight && price) ? Math.round(weight * price).toLocaleString('ko-KR') : '-';
+  const weightEl = tr.querySelector('.bulk-out-weight');
+  if(weightEl){
+    const over = stock > 0 && weight > stock + 0.01;
+    weightEl.style.background = over ? '#fff3cd' : '';
+    weightEl.title = over ? '현재 재고보다 큰 중량입니다.' : '';
+  }
+}
+
+function applyBulkOutboundTrader(){
+  const common = (document.getElementById('bulk-out-trader-common')?.value || '').trim();
+  if(!common){ toast('공통 거래처를 입력하세요.'); return; }
+  let cnt = 0;
+  document.querySelectorAll('#bulk-outbound-tbody tr').forEach(tr=>{
+    const inp = tr.querySelector('.bulk-out-trader');
+    if(inp && !inp.value.trim()){
+      inp.value = common;
+      cnt++;
+      refreshBulkOutboundPrice(tr);
+    }
+  });
+  toast(cnt ? `${cnt}개 행에 거래처를 채웠습니다.` : '빈 거래처 칸이 없습니다.');
+}
+
+function applyBulkOutboundNote(){
+  const common = (document.getElementById('bulk-out-note-common')?.value || '').trim();
+  if(!common){ toast('공통 비고를 입력하세요.'); return; }
+  let cnt = 0;
+  document.querySelectorAll('#bulk-outbound-tbody .bulk-out-note').forEach(inp=>{
+    if(!inp.value.trim()){ inp.value = common; cnt++; }
+  });
+  toast(cnt ? `${cnt}개 행에 비고를 채웠습니다.` : '빈 비고 칸이 없습니다.');
+}
+
+function saveBulkOutbound(){
+  const date = document.getElementById('bulk-out-date')?.value || '';
+  if(!date){ toast('출고일자를 선택하세요.'); return; }
+  const stockByKey = {};
+  bulkOutboundStockOptions().forEach(s=>{ stockByKey[s.key] = s; });
+  const rows = document.querySelectorAll('#bulk-outbound-tbody tr');
+  const requested = {};
+  const staged = [];
+  let errorMsg = '';
+  rows.forEach((tr, idx)=>{
+    if(errorMsg) return;
+    const key = tr.querySelector('.bulk-out-key')?.value || '';
+    const typed = (tr.querySelector('.bulk-out-stock-input')?.value || '').trim();
+    const trader = (tr.querySelector('.bulk-out-trader')?.value || '').trim();
+    const note = (tr.querySelector('.bulk-out-note')?.value || '').trim();
+    const weight = parseAppNumber(tr.querySelector('.bulk-out-weight')?.value);
+    if(!key && !typed && !trader && !note && !weight) return;
+    if(!key){ errorMsg = `${idx+1}번째 행: 재고 품목/LOT를 검색 목록에서 선택하세요.`; return; }
+    const stockInfo = stockByKey[key];
+    if(!stockInfo){ errorMsg = `${idx+1}번째 행: 현재 재고에서 선택한 LOT를 찾을 수 없습니다. 다시 선택하세요.`; return; }
+    if(weight <= 0){ errorMsg = `${idx+1}번째 행: 출고중량을 입력하세요.`; return; }
+    let price = parseAppNumber(tr.querySelector('.bulk-out-price-input')?.value);
+    if(!price) price = getPrice(stockInfo.product, stockInfo.origin, trader) || 0;
+    if(!price){ errorMsg = `${idx+1}번째 행: 단가를 찾지 못했습니다. 단가를 직접 입력하세요.`; return; }
+    requested[key] = (requested[key] || 0) + weight;
+    staged.push({
+      idx,
+      key,
+      stockInfo,
+      trader,
+      note,
+      weight,
+      price
+    });
+  });
+  if(errorMsg){ toast(errorMsg); return; }
+  Object.keys(requested).some(key=>{
+    const stockInfo = stockByKey[key];
+    if(stockInfo && requested[key] > Number(stockInfo.stock||0) + 0.01){
+      errorMsg = `${stockInfo.product} / LOT ${stockInfo.lot}: 현재 재고 ${Number(stockInfo.stock||0).toFixed(2)}KG보다 출고 합계 ${requested[key].toFixed(2)}KG가 큽니다.`;
+      return true;
+    }
+    return false;
+  });
+  if(errorMsg){ toast(errorMsg); return; }
+  if(!staged.length){ toast('저장할 출고 항목이 없습니다.'); return; }
+  if(!confirm(`출고 ${staged.length}건을 일괄 저장할까요?`)) return;
+  staged.forEach(row=>{
+    const s = row.stockInfo;
+    userTransactions.push({
+      id: Date.now() + Math.random(),
+      date,
+      type:'출고',
+      product: s.product,
+      origin: s.origin,
+      storage: '',
+      packunit: s.packunit || '',
+      trader: row.trader,
+      lot: s.lot,
+      proddate: s.proddate || '',
+      weight: row.weight,
+      price: row.price,
+      amount: Math.round(row.price * row.weight),
+      note: row.note,
+      _isUser:true,
+      _isProdUse:false,
+      _isProdOut:false,
+      _prodId:''
+    });
+  });
+  transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  _stockMapCache = null;
+  save();
+  renderTransactions(); updateProductList(); updateOutProductList(); renderStock();
+  if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
+  initInvoiceDates();
+  clearBulkOutbound();
+  toast(`출고 ${staged.length}건 일괄 저장 완료!`);
+}
+
+function initBulkOutbound(){
+  const dateEl = document.getElementById('bulk-out-date');
+  if(dateEl && !dateEl.value) dateEl.value = today;
+  const tbody = document.getElementById('bulk-outbound-tbody');
+  if(tbody && !tbody.children.length) addBulkOutboundRows(5);
 }
 
 function renderTransactions(){
