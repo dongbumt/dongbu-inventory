@@ -4953,6 +4953,103 @@ function getProdInputStockLabel(s){
   return `${s.product}${packLabel} [${s.lot || ''}] ${s.origin || ''} (${Number(s.stock||0).toFixed(2)}KG${inputPrice?' / '+priceLabel+' '+Number(inputPrice).toLocaleString()+'원':''})`;
 }
 
+function samsungMetaOptionKey(meta){
+  const raw = meta || {};
+  return [raw.vendorId || raw.samsungVendorId || '', raw.productRowId || raw.samsungProductRowId || ''].join('||');
+}
+
+function samsungMetaFromOptionKey(key){
+  const [vendorId, productRowId] = String(key || '').split('||');
+  if(!vendorId || !productRowId) return null;
+  return getSamsungProductMeta(vendorId, productRowId);
+}
+
+function samsungStockBucketOptionLabel(row){
+  const spec = row.spec ? `스펙 ${row.spec}` : '스펙 없음';
+  const lot = row.lot ? `LOT ${row.lot}` : 'LOT 없음';
+  return `${row.vendorName || '삼성'} / ${row.product || row.productName || ''} / ${spec} / ${lot} / ${parseAppNumber(row.stock).toFixed(2)}KG`;
+}
+
+function samsungStockIdentityMatches(row, product, lot, origin='', packunit=''){
+  const productText = String(product || '').trim();
+  const lotText = String(lot || '').trim();
+  const originText = normalizeOriginName(origin || '');
+  const packText = String(packunit || '').trim();
+  if(!productText) return false;
+  return bulkOutboundIdentityKey(row.product || row.productName || '') === bulkOutboundIdentityKey(productText) &&
+    String(row.lot || '').trim() === lotText &&
+    (!originText || sameOriginText(row.origin || '', originText)) &&
+    (!packText || bulkOutboundIdentityKey(row.packunit || '') === bulkOutboundIdentityKey(packText));
+}
+
+function getSamsungStockMatchesForInput(product, lot, origin='', packunit=''){
+  const seen = new Set();
+  return getSamsungStockBuckets()
+    .filter(row => parseAppNumber(row.stock) > 0.01)
+    .filter(row => samsungStockIdentityMatches(row, product, lot, origin, packunit))
+    .filter(row => {
+      const key = samsungMetaOptionKey(row);
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function refreshProdInputSamsungOptions(id, selectedKey=''){
+  const selectEl = document.getElementById(`prod-in-sw-product-${id}`);
+  const labelEl = document.getElementById(`prod-in-sw-label-${id}`);
+  if(!selectEl) return;
+  const currentKey = selectedKey || selectEl.value || '';
+  const product = document.getElementById(`prod-in-product-${id}`)?.value.trim() || '';
+  const lot = document.getElementById(`prod-in-lot-${id}`)?.value.trim() || '';
+  const origin = document.getElementById(`prod-in-origin-${id}`)?.value.trim() || '';
+  const packunit = document.getElementById(`prod-in-packunit-${id}`)?.value.trim() || '';
+  const matches = getSamsungStockMatchesForInput(product, lot, origin, packunit);
+  let chosenKey = currentKey;
+  if(!chosenKey && matches.length === 1) chosenKey = samsungMetaOptionKey(matches[0]);
+  const hasChosen = matches.some(row => samsungMetaOptionKey(row) === chosenKey);
+  let html = '<option value="">-- 삼성 재고 아님 --</option>' + matches.map(row => {
+    const key = samsungMetaOptionKey(row);
+    return `<option value="${htmlEscape(key)}" ${key===chosenKey?'selected':''}>${htmlEscape(samsungStockBucketOptionLabel(row))}</option>`;
+  }).join('');
+  if(chosenKey && !hasChosen){
+    const meta = samsungMetaFromOptionKey(chosenKey);
+    if(meta){
+      const savedLabel = `${meta.vendorName || '삼성'} / ${meta.productName || ''} / ${meta.spec || '스펙 없음'} / 저장된 연결`;
+      html += `<option value="${htmlEscape(chosenKey)}" selected>${htmlEscape(savedLabel)}</option>`;
+    } else {
+      chosenKey = '';
+    }
+  }
+  selectEl.innerHTML = html;
+  selectEl.value = chosenKey || '';
+  updateProdInputSamsungLabel(id);
+}
+
+function updateProdInputSamsungLabel(id){
+  const selectEl = document.getElementById(`prod-in-sw-product-${id}`);
+  const labelEl = document.getElementById(`prod-in-sw-label-${id}`);
+  if(!selectEl || !labelEl) return;
+  const meta = getProdInputSamsungMeta(id);
+  if(meta){
+    labelEl.textContent = `삼성 재고로 연결됨: ${meta.vendorName || ''} / ${meta.productName || ''}${meta.spec ? ' / ' + meta.spec : ''}`;
+    labelEl.style.color = '#1428a0';
+    return;
+  }
+  const hasMatches = Array.from(selectEl.options).some(opt => opt.value);
+  labelEl.textContent = hasMatches ? '삼성 재고 후보가 있습니다. 필요하면 선택하세요.' : '일반 재고로 처리됩니다.';
+  labelEl.style.color = '#667085';
+}
+
+function applyProdInputSamsungStock(id){
+  updateProdInputSamsungLabel(id);
+}
+
+function getProdInputSamsungMeta(id){
+  const key = document.getElementById(`prod-in-sw-product-${id}`)?.value || '';
+  return samsungMetaFromOptionKey(key);
+}
+
 function renderProdInputStockSuggestions(id){
   const input = document.getElementById(`prod-in-sel-${id}`);
   const box = document.getElementById(`prod-in-results-${id}`);
@@ -4997,11 +5094,11 @@ function addProdInputRow(){
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">품목명</label>
-      <input id="prod-in-product-${id}" placeholder="품목명" style="font-size:12px;">
+      <input id="prod-in-product-${id}" placeholder="품목명" oninput="refreshProdInputSamsungOptions(${id})" style="font-size:12px;">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">이력번호</label>
-      <input id="prod-in-lot-${id}" placeholder="LOT" style="font-family:monospace;font-size:11px;">
+      <input id="prod-in-lot-${id}" placeholder="LOT" oninput="refreshProdInputSamsungOptions(${id})" style="font-family:monospace;font-size:11px;">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">투입량(KG)</label>
@@ -5012,8 +5109,18 @@ function addProdInputRow(){
       <input type="number" id="prod-in-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
     <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-in-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
+    <div style="grid-column:1 / -1;display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:8px;align-items:end;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:7px 9px;">
+      <div class="form-group">
+        <label style="font-size:11px;font-weight:800;color:#1428a0;">삼성 재고 연결</label>
+        <select id="prod-in-sw-product-${id}" onchange="applyProdInputSamsungStock(${id})" style="font-size:12px;">
+          <option value="">-- 재고 선택 후 자동 확인 --</option>
+        </select>
+      </div>
+      <div id="prod-in-sw-label-${id}" style="font-size:11px;color:#667085;line-height:1.35;padding-bottom:4px;">재고품목을 선택하면 삼성 LOT 여부를 확인합니다.</div>
+    </div>
   `;
   document.getElementById('prod-input-rows').appendChild(row);
+  refreshProdInputSamsungOptions(id);
 }
 
 function selectProdInputStock(id, product, lot, origin, packunit, stock, source, inputPrice){
@@ -5043,6 +5150,7 @@ function selectProdInputStock(id, product, lot, origin, packunit, stock, source,
     const priceTypeLabel = source === '생산입고' ? '생산입고단가' : '입고단가';
     priceEl.title = autoPrice ? `거래내역 ${priceTypeLabel} 자동입력 (수정 가능)` : `해당 이력번호의 ${priceTypeLabel}를 찾지 못했습니다.`;
   }
+  refreshProdInputSamsungOptions(id);
   updateProdOutputOriginsFromInputs();
   toast(`선택: ${product} [${lot}] 재고 ${Number(stockQty).toFixed(2)}KG${autoPrice?' / 단가 '+autoPrice.toLocaleString()+'원':''}`, 2800);
 }
@@ -5271,7 +5379,8 @@ function saveProdEntry(){
     const manualPrice = parseFloat(document.getElementById(`prod-in-price-${id}`)?.value)||0;
     const p = manualPrice || getPrice(product, origin);
     if(product && qty>0){
-      inputs.push({product,lot,qty,price:p,amount:p*qty,origin,packunit});
+      const samsungMeta = getProdInputSamsungMeta(id);
+      inputs.push({product,lot,qty,price:p,amount:p*qty,origin,packunit,samsung:samsungMeta});
     }
   });
 
@@ -5359,6 +5468,7 @@ function saveProdEntry(){
         packunit:inp.packunit||'',
         trader:'', weight:inp.qty, price:inp.price, amount:inp.amount,
         note:`${jobType}작업 ${dateFormatted} #${jobNo}`,
+        ...samsungTxnFields(inp.samsung),
         _isUser:true, _isProdUse:true, _prodId:entry.id
       });
     }
@@ -5436,6 +5546,8 @@ function openEditProdEntry(id){
     if(sel)sel.value=inp.product ? getProdInputStockLabel({product:inp.product, lot:inp.lot, origin:inp.origin, packunit:inp.packunit, stock:inp.qty, source:'', price:inp.price}) : '';
     if(pk)pk.value=inp.packunit||'';
     if(q)q.value=inp.qty||0;      if(pr)pr.value=inp.price||0;
+    const sw=normalizeSamsungMeta(inp.samsung || inp);
+    refreshProdInputSamsungOptions(n, sw ? samsungMetaOptionKey(sw) : '');
   });
   (entry.outputs||[]).forEach(out=>{
     addProdOutputRow(); const n=prodOutputRowCount;
@@ -10551,6 +10663,34 @@ function samsungTxnFields(meta){
   };
 }
 
+function samsungStockBucketKeyFromValues(meta, product, packunit, origin, lot){
+  return [
+    meta.vendorId,
+    meta.productRowId,
+    String(product || '').trim(),
+    String(packunit || '').trim(),
+    originKey(origin || ''),
+    String(lot || '').trim()
+  ].join('|');
+}
+
+function inferSamsungMetaFromCurrentBuckets(buckets, txn){
+  const product = String(txn.product || '').trim();
+  if(!product) return null;
+  const matches = Object.values(buckets)
+    .filter(row => parseAppNumber(row.stock) > 0.01)
+    .filter(row => samsungStockIdentityMatches(row, product, txn.lot || '', txn.origin || '', txn.packunit || ''));
+  const unique = [];
+  const seen = new Set();
+  matches.forEach(row => {
+    const key = samsungMetaOptionKey(row);
+    if(seen.has(key)) return;
+    seen.add(key);
+    unique.push(row);
+  });
+  return unique.length === 1 ? normalizeSamsungMeta(unique[0]) : null;
+}
+
 function saveSamsungVendors(){
   localStorage.setItem('dbmt_samsung_vendors', JSON.stringify(samsungVendors));
   if(typeof gsSaveAppData === 'function') gsSaveAppData();
@@ -10681,9 +10821,16 @@ function renderSamsungVendorProducts(){
 function getSamsungStockBuckets(){
   const buckets = {};
   const txns = (typeof transactions !== 'undefined' && Array.isArray(transactions)) ? transactions : userTransactions;
-  txns.forEach(t => {
-    const meta = normalizeSamsungMeta(t);
-    if(!meta) return;
+  const stockTxns = txns
+    .map((t, idx) => ({t, idx}))
+    .filter(({t}) => ['입고','생산입고','출고','사용'].includes(String(t.type || '')))
+    .sort((a,b) => {
+      const ad = normProdDate(a.t.date || '');
+      const bd = normProdDate(b.t.date || '');
+      const d = ad.localeCompare(bd);
+      return d || (a.idx - b.idx);
+    });
+  stockTxns.forEach(({t}) => {
     const type = String(t.type || '');
     const weight = parseAppNumber(t.weight);
     if(!weight) return;
@@ -10691,11 +10838,14 @@ function getSamsungStockBuckets(){
     if(type === '입고' || type === '생산입고') delta = weight;
     else if(type === '출고' || type === '사용') delta = -weight;
     else return;
+    let meta = normalizeSamsungMeta(t);
+    if(!meta && type === '사용') meta = inferSamsungMetaFromCurrentBuckets(buckets, t);
+    if(!meta) return;
     const product = String(t.product || meta.productName || '').trim();
     const packunit = String(t.packunit || meta.packunit || '').trim();
     const origin = normalizeOriginName(t.origin || meta.origin || '');
     const lot = String(t.lot || '').trim();
-    const key = [meta.vendorId, meta.productRowId, product, packunit, originKey(origin), lot].join('|');
+    const key = samsungStockBucketKeyFromValues(meta, product, packunit, origin, lot);
     if(!buckets[key]){
       buckets[key] = {
         vendorId: meta.vendorId,
