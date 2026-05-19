@@ -525,28 +525,20 @@
           <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
         </div>
       </div>
-      <div class="form-group" style="max-width:280px;">
-        <label>비고 일괄 채우기</label>
-        <div style="display:flex;gap:4px;">
-          <input id="bulk-out-note-common" placeholder="비고" style="flex:1;">
-          <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundNote()" title="비어있는 모든 행에 비고 채우기" style="white-space:nowrap;">↓ 적용</button>
-        </div>
-      </div>
     </div>
     <div class="tbl-wrap" style="max-height:none;overflow:visible;">
       <table style="font-size:12px;">
         <thead><tr>
-          <th style="min-width:250px;">재고 품목 선택</th>
-          <th style="min-width:78px;text-align:center;">원산지</th>
-          <th style="min-width:130px;text-align:center;">이력번호</th>
-          <th style="min-width:96px;text-align:right;">현재재고</th>
-          <th style="min-width:120px;">거래처</th>
-          <th style="min-width:140px;">삼성거래처</th>
-          <th style="min-width:190px;">삼성 납품품목/스펙</th>
-          <th style="min-width:96px;text-align:right;">출고중량(KG)</th>
-          <th style="min-width:92px;text-align:right;">단가</th>
-          <th style="min-width:96px;text-align:right;">금액</th>
-          <th style="min-width:110px;">비고</th>
+          <th style="min-width:220px;">재고 품목 선택</th>
+          <th style="min-width:70px;text-align:center;">원산지</th>
+          <th style="min-width:112px;text-align:center;">이력번호</th>
+          <th style="min-width:86px;text-align:right;">현재재고</th>
+          <th style="min-width:110px;">거래처</th>
+          <th style="min-width:120px;">삼성거래처</th>
+          <th style="min-width:165px;">삼성 납품품목/스펙</th>
+          <th style="min-width:88px;text-align:right;">출고중량(KG)</th>
+          <th style="min-width:78px;text-align:right;">단가</th>
+          <th style="min-width:88px;text-align:right;">금액</th>
           <th style="width:34px;"></th>
         </tr></thead>
         <tbody id="bulk-outbound-tbody"></tbody>
@@ -4548,8 +4540,6 @@ function selectBulkOutboundStock(inp, key){
   if(stockEl) stockEl.textContent = `${Number(s.stock||0).toFixed(2)} KG`;
   const weightEl = tr.querySelector('.bulk-out-weight');
   if(weightEl && !weightEl.value) weightEl.value = Number(s.stock||0).toFixed(2);
-  const noteEl = tr.querySelector('.bulk-out-note');
-  if(noteEl && !noteEl.value && s.proddate) noteEl.value = '생산일: ' + s.proddate;
   refreshBulkOutboundSamsungProducts(tr);
   refreshBulkOutboundPrice(tr);
   updateBulkOutboundAmount(tr);
@@ -4585,7 +4575,6 @@ function addBulkOutboundRow(){
     <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td class="bulk-out-amount-cell" style="font-size:11px;color:#555;text-align:right;">-</td>
-    <td><input class="bulk-out-note" placeholder="비고" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkOutboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
   `;
   tbody.appendChild(tr);
@@ -4661,16 +4650,6 @@ function applyBulkOutboundTrader(){
   toast(cnt ? `${cnt}개 행에 거래처를 채웠습니다.` : '빈 거래처 칸이 없습니다.');
 }
 
-function applyBulkOutboundNote(){
-  const common = (document.getElementById('bulk-out-note-common')?.value || '').trim();
-  if(!common){ toast('공통 비고를 입력하세요.'); return; }
-  let cnt = 0;
-  document.querySelectorAll('#bulk-outbound-tbody .bulk-out-note').forEach(inp=>{
-    if(!inp.value.trim()){ inp.value = common; cnt++; }
-  });
-  toast(cnt ? `${cnt}개 행에 비고를 채웠습니다.` : '빈 비고 칸이 없습니다.');
-}
-
 function refreshBulkOutboundSamsungProducts(tr, selectedRowId=''){
   if(!tr) return;
   const vendorId = tr.querySelector('.bulk-out-sw-vendor')?.value || '';
@@ -4704,9 +4683,8 @@ function saveBulkOutbound(){
     const key = tr.querySelector('.bulk-out-key')?.value || '';
     const typed = (tr.querySelector('.bulk-out-stock-input')?.value || '').trim();
     const trader = (tr.querySelector('.bulk-out-trader')?.value || '').trim();
-    const note = (tr.querySelector('.bulk-out-note')?.value || '').trim();
     const weight = parseAppNumber(tr.querySelector('.bulk-out-weight')?.value);
-    if(!key && !typed && !trader && !note && !weight) return;
+    if(!key && !typed && !trader && !weight) return;
     if(!key){ errorMsg = `${idx+1}번째 행: 재고 품목을 검색 목록에서 선택하세요.`; return; }
     const stockInfo = stockByKey[key];
     if(!stockInfo){ errorMsg = `${idx+1}번째 행: 현재 재고에서 선택한 항목을 찾을 수 없습니다. 다시 선택하세요.`; return; }
@@ -4722,7 +4700,6 @@ function saveBulkOutbound(){
       key,
       stockInfo,
       trader,
-      note,
       weight,
       price,
       samsung: samsungMeta
@@ -4757,7 +4734,7 @@ function saveBulkOutbound(){
       weight: row.weight,
       price: row.price,
       amount: Math.round(row.price * row.weight),
-      note: row.note,
+      note: '',
       ...samsungTxnFields(row.samsung),
       _isUser:true,
       _isProdUse:false,
