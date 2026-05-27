@@ -48,6 +48,6 @@ if ($CreateVersion -or $DeploymentId) {
   }
 
   if ($DeploymentId) {
-    Invoke-Clasp $clasp.Source redeploy -V $version -d "ERP update $stamp" $DeploymentId
+    Invoke-Clasp $clasp.Source redeploy -V $version $DeploymentId
   }
 }
