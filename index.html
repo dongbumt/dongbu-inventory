@@ -2282,7 +2282,16 @@ function gsShowSync(msg, isErr=false){
   bar.textContent = msg;
   bar.className = 'gs-sync-bar show' + (isErr?' err':'');
   clearTimeout(bar._t);
-  bar._t = setTimeout(()=>{ bar.className='gs-sync-bar'; }, 3000);
+  if(isErr){
+    localStorage.setItem('dbmt_gs_last_error', msg);
+    bar.title = '클릭하면 닫힙니다';
+    bar.onclick = ()=>{ bar.className='gs-sync-bar'; };
+    bar._t = setTimeout(()=>{ bar.className='gs-sync-bar'; }, 30000);
+  } else {
+    bar.onclick = null;
+    bar.title = '';
+    bar._t = setTimeout(()=>{ bar.className='gs-sync-bar'; }, 3000);
+  }
 }
 
 function gsSkipToLocal(){
@@ -2326,7 +2335,20 @@ function gsShowSetup(){
   if(input && GS_URL) input.value = GS_URL;
   const tokenInput = document.getElementById('gs-token-input');
   if(tokenInput && GS_TOKEN) tokenInput.value = GS_TOKEN;
+  const lastError = localStorage.getItem('dbmt_gs_last_error') || '';
   const setup = document.getElementById('gs-setup');
+  const msg = document.getElementById('gs-setup-last-error') || (() => {
+    if(!setup) return null;
+    const el = document.createElement('div');
+    el.id = 'gs-setup-last-error';
+    el.style.cssText = 'margin-top:10px;font-size:12px;color:#c0392b;line-height:1.45;word-break:break-all;';
+    setup.querySelector('div')?.appendChild(el);
+    return el;
+  })();
+  if(msg){
+    msg.textContent = lastError ? `마지막 오류: ${lastError}` : '';
+    msg.style.display = lastError ? 'block' : 'none';
+  }
   if(setup) setup.classList.remove('hidden');
   gsSetStatus(false);
 }
