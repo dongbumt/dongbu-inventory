@@ -3803,7 +3803,7 @@ function onOutProductSelectChange(){
   if(!product){ dispOrig.value=''; onOutProductChange(); return; }
   // 재고에서 해당 품목의 원산지 목록 추출
   const origins = [...new Set(
-    bulkOutboundStockOptions()
+    outboundStockOptionsForEdit()
       .filter(s=>bulkOutboundIdentityKey(s.product) === bulkOutboundIdentityKey(product))
       .filter(s=>!packunit || bulkOutboundIdentityKey(s.packunit || '') === bulkOutboundIdentityKey(packunit))
       .map(s=>s.origin)
@@ -3826,7 +3826,11 @@ function onOutProductChange(){
   const list = document.getElementById('lot-match-list');
   if(!product){ area.style.display='none'; return; }
 
-  const matches = bulkOutboundStockOptions().filter(s=>
+  const editTxn = getEditingTransaction();
+  const matches = outboundStockOptionsForEdit(editTxn).map(s=>({
+    ...s,
+    stock: availableStockForEdit(s, editTxn)
+  })).filter(s=>
     bulkOutboundIdentityKey(s.product) === bulkOutboundIdentityKey(product) &&
     (!packunit || bulkOutboundIdentityKey(s.packunit || '') === bulkOutboundIdentityKey(packunit)) &&
     (!locFilter || stockLocationKey(s.stockLocation || '') === stockLocationKey(locFilter)) &&
@@ -4402,6 +4406,7 @@ function addTransaction(){
     alert('단가표에서 해당 품목/거래처 단가를 찾지 못했습니다.\n단가표를 확인하거나 단가를 직접 입력해주세요.');
     return;
   }
+  const editTxn = getEditingTransaction();
   let selectedStock = null;
   if(type === '출고' || type === '재고이동'){
     if(type === '재고이동' && fromLocation === toLocation){
@@ -4409,7 +4414,7 @@ function addTransaction(){
       return;
     }
     const stockKey = document.getElementById('t-stock-key')?.value || '';
-    const stockOptions = bulkOutboundStockOptions();
+    const stockOptions = outboundStockOptionsForEdit(editTxn);
     if(stockKey) selectedStock = stockOptions.find(s => s.key === stockKey) || null;
     if(!selectedStock && lot){
       const candidates = stockOptions.filter(s =>
@@ -4430,8 +4435,9 @@ function addTransaction(){
       alert((type === '재고이동' ? '이동할' : '출고할') + ' 재고를 아래 목록에서 선택해주세요.');
       return;
     }
-    if(weight > Number(selectedStock.stock || 0) + 0.01){
-      alert(`현재 선택 재고 ${Number(selectedStock.stock||0).toFixed(2)}KG보다 입력중량 ${weight.toFixed(2)}KG가 큽니다.`);
+    const availableStock = availableStockForEdit(selectedStock, editTxn);
+    if(weight > availableStock + 0.01){
+      alert(`현재 선택 재고 ${Number(availableStock||0).toFixed(2)}KG보다 입력중량 ${weight.toFixed(2)}KG가 큽니다.`);
       return;
     }
   }
@@ -4780,6 +4786,78 @@ function bulkOutboundProductOptions(){
       return acc;
     }, [])
     .sort((a,b)=>String(a.product).localeCompare(String(b.product),'ko') || String(a.packunit).localeCompare(String(b.packunit),'ko'));
+}
+
+function getEditingTransaction(){
+  return _editTxnId ? userTransactions.find(x=>String(x.id)===String(_editTxnId)) : null;
+}
+
+function stockOptionFromTransaction(t){
+  if(!t || !['출고','재고이동'].includes(t.type)) return null;
+  const product = String(t.product || '').trim();
+  if(!product) return null;
+  const packunit = String(t.packunit || '').trim();
+  const lot = String(t.lot || '').trim();
+  const origin = normalizeOriginName(t.origin || '');
+  const proddate = stockDateKey(t.stockProddate || t.sourceProddate || t.proddate || '');
+  const price = parseAppNumber(t.stockUnitPrice || t.sourceStockPrice || t.stockPrice || 0);
+  const stockLocation = normalizeStockLocation(t.type === '재고이동' ? (t.fromLocation || t.stockLocation || '') : (t.stockLocation || ''));
+  const key = t.sourceStockKey || bulkOutboundKeyFromValues(product, lot, origin, packunit, proddate, price, stockLocation);
+  return {
+    key,
+    product,
+    packunit,
+    lot,
+    origin,
+    stock: 0,
+    proddate,
+    stockLocation,
+    source: '기존 거래',
+    price,
+    prices: price ? [price] : []
+  };
+}
+
+function sameBulkOutboundStockOption(a, b){
+  if(!a || !b) return false;
+  if(a.key && b.key && a.key === b.key) return true;
+  return bulkOutboundIdentityKey(a.product) === bulkOutboundIdentityKey(b.product) &&
+    bulkOutboundIdentityKey(a.packunit || '') === bulkOutboundIdentityKey(b.packunit || '') &&
+    String(a.lot || '').trim() === String(b.lot || '').trim() &&
+    originKey(a.origin || '') === originKey(b.origin || '') &&
+    stockDateKey(a.proddate || '') === stockDateKey(b.proddate || '') &&
+    stockPriceKey(a.price || 0) === stockPriceKey(b.price || 0) &&
+    stockLocationKey(a.stockLocation || '') === stockLocationKey(b.stockLocation || '');
+}
+
+function outboundStockOptionsForEdit(editTxn=null){
+  const options = bulkOutboundStockOptions();
+  const editOption = stockOptionFromTransaction(editTxn || getEditingTransaction());
+  if(editOption && !options.some(s=>sameBulkOutboundStockOption(s, editOption))){
+    options.push(editOption);
+  }
+  return options;
+}
+
+function availableStockForEdit(selectedStock, editTxn){
+  const current = parseAppNumber(selectedStock?.stock);
+  const editOption = stockOptionFromTransaction(editTxn);
+  if(editOption && sameBulkOutboundStockOption(selectedStock, editOption)){
+    return current + parseAppNumber(editTxn.weight);
+  }
+  return current;
+}
+
+function ensureOutProductOption(product, packunit=''){
+  const sel = document.getElementById('t-product-select');
+  if(!sel || !product) return;
+  const exists = Array.from(sel.options).some(o => o.value === product && (o.dataset.packunit || '') === (packunit || ''));
+  if(exists) return;
+  const opt = document.createElement('option');
+  opt.value = product;
+  opt.dataset.packunit = packunit || '';
+  opt.textContent = product + (packunit ? ' / ' + packunit : '') + ' (기존 거래)';
+  sel.appendChild(opt);
 }
 
 function bulkOutboundStockLabel(s){
@@ -5200,6 +5278,7 @@ function loadTxnToForm(id){
 
   if(t.type==='출고' || t.type==='재고이동'){
     updateOutProductList();
+    ensureOutProductOption(t.product || '', t.packunit || '');
     const sel=document.getElementById('t-product-select');
     const targetPack = t.packunit || '';
     const targetIdx = Array.from(sel.options).findIndex(o => o.value === (t.product||'') && (o.dataset.packunit||'') === targetPack);
