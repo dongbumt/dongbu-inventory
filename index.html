@@ -2596,8 +2596,46 @@ function gsStableStringify(value){
   return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + gsStableStringify(value[k])).join(',') + '}';
 }
 
+function gsHashText(text){
+  text = String(text || '');
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for(let i=0;i<text.length;i++){
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return ((h2 >>> 0).toString(16).padStart(8,'0') + (h1 >>> 0).toString(16).padStart(8,'0'));
+}
+
 function gsCoreFingerprint(payload){
-  return gsStableStringify(gsNormalizeCorePayload(payload));
+  return gsHashText(gsStableStringify(gsNormalizeCorePayload(payload)));
+}
+
+function gsCleanupStorageForLargeWrite(exceptKey=''){
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('dbmt_pre_gs_load_backup_') && k !== 'dbmt_pre_gs_load_backup_latest')
+    .forEach(k => localStorage.removeItem(k));
+  if(exceptKey !== 'dbmt_pre_gs_load_backup_latest') localStorage.removeItem('dbmt_pre_gs_load_backup_latest');
+  if(exceptKey !== GS_PENDING_CORE_KEY) localStorage.removeItem(GS_PENDING_CORE_KEY);
+}
+
+function gsSetLargeLocalStorage(key, value){
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch(e) {
+    gsCleanupStorageForLargeWrite(key);
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch(e2) {
+      console.warn('localStorage 저장공간 부족:', key, e2);
+      return false;
+    }
+  }
 }
 
 function gsReadCoreSnapshot(){
@@ -2609,7 +2647,7 @@ function gsReadCoreSnapshot(){
 }
 
 function gsRememberCoreSnapshot(payload){
-  localStorage.setItem(GS_CORE_SNAPSHOT_KEY, JSON.stringify(gsNormalizeCorePayload(payload)));
+  gsSetLargeLocalStorage(GS_CORE_SNAPSHOT_KEY, JSON.stringify(gsNormalizeCorePayload(payload)));
 }
 
 function gsEntityMap(entity, rows){
@@ -2668,10 +2706,11 @@ function gsMarkPendingCoreSave(payload){
     at: new Date().toISOString(),
     counts: gsCoreCounts(core),
     fingerprint: gsCoreFingerprint(core),
-    patch: gsBuildCorePatch(core),
     data: core
   };
-  localStorage.setItem(GS_PENDING_CORE_KEY, JSON.stringify(pending));
+  if(!gsSetLargeLocalStorage(GS_PENDING_CORE_KEY, JSON.stringify(pending))){
+    gsShowSync('⚠ 브라우저 저장공간이 부족해 대기 저장은 이번 실행 중에만 유지됩니다', true);
+  }
   return pending;
 }
 
