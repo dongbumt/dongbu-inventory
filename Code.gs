@@ -92,7 +92,9 @@ function withScriptLock(fn) {
 const TX_HEADERS = [
   'id','date','type','product','origin','packunit','trader','storage','lot','proddate',
   'weight','price','amount','note','_isUser','_isProdUse','_isProdOut','_prodId',
-  '_isStockAdjust','stockBefore','stockActual','updatedAt','deletedAt'
+  '_isStockAdjust','stockBefore','stockActual',
+  'stockUnitPrice','stockProddate','sourceStockKey','stockLocation','fromLocation','toLocation',
+  'updatedAt','deletedAt'
 ];
 const PRICE_HEADERS = ['id','product','origin','trader','price','updatedAt','deletedAt'];
 const PROD_HEADERS = ['json','id','updatedAt','deletedAt'];
@@ -1075,13 +1077,13 @@ function getRows(sheetName, headers, ss) {
       if (v instanceof Date) {
         v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
       }
-      if (['weight','price','amount','stockBefore','stockActual'].includes(k)) {
+      if (['weight','price','amount','stockBefore','stockActual','stockUnitPrice'].includes(k)) {
         v = parseFloat(v) || 0;
       } else if (k === 'id') {
         // id는 자동 변환 안 함 (도메인별 자연 타입 유지)
         // - 거래내역: Date.now() → number 셀로 저장 → number로 복원
         // - 직원/연차: hrId() → string 셀로 저장 → string으로 복원
-      } else if (['date','proddate'].includes(k)) {
+      } else if (['date','proddate','stockProddate'].includes(k)) {
         if (v instanceof Date) {
           v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
         } else {
@@ -1093,7 +1095,7 @@ function getRows(sheetName, headers, ss) {
             } catch(e) {}
           }
         }
-      } else if (['lot','product','origin','packunit','trader','storage','type','note','updatedAt','deletedAt'].includes(k)) {
+      } else if (['lot','product','origin','packunit','trader','storage','type','note','stockProddate','sourceStockKey','stockLocation','fromLocation','toLocation','updatedAt','deletedAt'].includes(k)) {
         v = String(v || '');
       } else if (['_isUser','_isProdUse','_isProdOut','_isStockAdjust'].includes(k)) {
         v = (v === true || v === 'TRUE' || v === 'true');
