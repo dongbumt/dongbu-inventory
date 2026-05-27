@@ -749,7 +749,6 @@
           <option value="소진">소진</option>
           <option value="">전체(소진포함)</option>
         </select>
-        <button class="btn btn-secondary btn-sm" onclick="openMinusStockCleanup()">마이너스 정리</button>
         <button class="btn btn-secondary btn-sm" onclick="exportStockCSV()">CSV</button>
       </div>
     </div>
@@ -777,36 +776,6 @@
   </div>
 </div>
 
-<div id="minus-stock-cleanup-modal" class="edit-modal-bg hidden">
-  <div class="edit-modal" style="max-width:960px;">
-    <h3>마이너스 재고 정리</h3>
-    <div class="alert alert-info">
-      같은 품목/포장/이력번호/원산지 안에 플러스 재고가 같이 있는 경우에만 서로 상계합니다. 과거 출고 순서는 다시 배정하지 않고, 현재 재고 총량이 바뀌지 않도록 재고조정 내역을 추가합니다.
-    </div>
-    <div id="minus-stock-cleanup-summary" style="font-size:12px;color:#555;margin-bottom:10px;"></div>
-    <div class="tbl-wrap" style="max-height:420px;overflow:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>품목명</th>
-            <th>이력번호</th>
-            <th>원산지</th>
-            <th>마이너스 생산일/단가</th>
-            <th style="text-align:right;">정리수량(KG)</th>
-            <th>차감할 플러스 재고</th>
-            <th>상태</th>
-          </tr>
-        </thead>
-        <tbody id="minus-stock-cleanup-body"></tbody>
-      </table>
-    </div>
-    <div class="btn-row" style="justify-content:flex-end;margin-top:14px;">
-      <button class="btn btn-secondary" onclick="closeMinusStockCleanup()">취소</button>
-      <button class="btn btn-primary" id="minus-stock-cleanup-apply" onclick="applyMinusStockCleanup()">상계 정리 저장</button>
-    </div>
-  </div>
-</div>
-
 <div id="stock-adjust-modal" class="edit-modal-bg hidden">
   <div class="edit-modal" style="max-width:620px;">
     <h3>재고정리</h3>
@@ -814,11 +783,13 @@
     <input type="hidden" id="stock-adj-product">
     <input type="hidden" id="stock-adj-lot">
     <input type="hidden" id="stock-adj-proddate">
+    <input type="hidden" id="stock-adj-packunit">
     <input type="hidden" id="stock-adj-origin">
     <input type="hidden" id="stock-adj-price">
     <div class="form-row">
       <div class="form-group"><label>정리일</label><input type="date" id="stock-adj-date"></div>
       <div class="form-group"><label>품목명</label><input id="stock-adj-product-view" readonly style="background:#f8f9fa;"></div>
+      <div class="form-group"><label>포장단위</label><input id="stock-adj-packunit-view" readonly style="background:#f8f9fa;"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>원산지</label><input id="stock-adj-origin-view" readonly style="background:#f8f9fa;"></div>
@@ -3779,11 +3750,18 @@ function getStockMap(){
     if(!product) return;
     const weight = parseAppNumber(t.weight);
     const unitPrice = getTxnUnitPrice(t);
-    const packunit = String(t.packunit || '').trim();
+    let packunit = String(t.packunit || '').trim();
     const stockProddate = getStockTxnProddate(t);
     const selectedStockPrice = parseAppNumber(t.stockUnitPrice || t.sourceStockPrice || t.stockPrice || 0);
 
     if(t.type==='재고조정'){
+      if(!packunit){
+        const inferredPackunits = [...new Set(Object.values(map)
+          .filter(s => sameStockIdentity(s, product, lot, t.origin, '', unitPrice, stockProddate))
+          .map(s => String(s.packunit || '').trim())
+          .filter(Boolean))];
+        if(inferredPackunits.length === 1) packunit = inferredPackunits[0];
+      }
       const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate);
       bucket.total_adjust += weight;
       bucket.stock += weight;
@@ -5950,20 +5928,22 @@ function renderStock(){
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
-      <td><button class="btn btn-sm" style="background:#3440a0;color:#fff;" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')})">정리</button></td>
+      <td><button class="btn btn-sm" style="background:#3440a0;color:#fff;" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')})">정리</button></td>
     </tr>`;
   }).join('');
 }
 
-function openStockAdjust(product, lot, origin, price, stock, proddate=''){
+function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit=''){
   const set = (id, value) => { const el=document.getElementById(id); if(el) el.value=value; };
   set('stock-adj-product', product || '');
   set('stock-adj-lot', lot || '');
   set('stock-adj-proddate', proddate || '');
+  set('stock-adj-packunit', packunit || '');
   set('stock-adj-origin', origin || '');
   set('stock-adj-price', Number(price)||0);
   set('stock-adj-date', localDateString());
   set('stock-adj-product-view', product || '');
+  set('stock-adj-packunit-view', packunit || '-');
   set('stock-adj-lot-view', lot || '');
   set('stock-adj-proddate-view', proddate || '-');
   set('stock-adj-origin-view', origin || '');
@@ -5992,6 +5972,7 @@ function saveStockAdjust(){
   const product = document.getElementById('stock-adj-product')?.value || '';
   const lot = document.getElementById('stock-adj-lot')?.value || '';
   const proddate = document.getElementById('stock-adj-proddate')?.value || '';
+  const packunit = document.getElementById('stock-adj-packunit')?.value || '';
   const origin = document.getElementById('stock-adj-origin')?.value || '';
   const price = parseAppNumber(document.getElementById('stock-adj-price')?.value);
   const current = parseAppNumber(document.getElementById('stock-adj-current')?.value);
@@ -6009,6 +5990,7 @@ function saveStockAdjust(){
     product,
     origin,
     storage: '',
+    packunit,
     lot,
     proddate,
     stockProddate: proddate,
@@ -6028,180 +6010,6 @@ function saveStockAdjust(){
   renderTransactions();
   renderStock();
   toast('재고정리 내역이 저장되었습니다.');
-}
-
-let _minusStockCleanupPlan = [];
-
-function minusStockCleanupIdentityKey(s){
-  return [
-    bulkOutboundIdentityKey(s.product),
-    bulkOutboundIdentityKey(s.packunit || ''),
-    String(s.lot || '').trim(),
-    originKey(s.origin || '')
-  ].join('|');
-}
-
-function minusStockLayerLabel(s){
-  const parts = [];
-  parts.push(s.proddate || '생산일 없음');
-  parts.push(s.price ? `${Number(s.price).toLocaleString('ko-KR')}원` : '단가 없음');
-  parts.push(`${Number(s.stock || 0).toFixed(2)}KG`);
-  return parts.join(' / ');
-}
-
-function buildMinusStockCleanupPlan(){
-  invalidateStockMap();
-  const rows = Object.entries(getStockMap()).map(([stockKey, s]) => ({...s, stockKey}));
-  const groups = {};
-  rows.forEach(s => {
-    if(Math.abs(Number(s.stock) || 0) <= 0.01) return;
-    const key = minusStockCleanupIdentityKey(s);
-    if(!groups[key]) groups[key] = [];
-    groups[key].push(s);
-  });
-
-  const plan = [];
-  Object.values(groups).forEach(group => {
-    const positives = group
-      .filter(s => Number(s.stock) > 0.01)
-      .map(s => ({...s, remaining:Number(s.stock) || 0}))
-      .sort((a,b) => (b.remaining || 0) - (a.remaining || 0));
-    const negatives = group
-      .filter(s => Number(s.stock) < -0.01)
-      .sort((a,b) => Math.abs(Number(a.stock)||0) - Math.abs(Number(b.stock)||0));
-
-    negatives.forEach(neg => {
-      const need = Number(Math.abs(Number(neg.stock) || 0).toFixed(2));
-      const available = positives.reduce((sum, p) => sum + Math.max(0, Number(p.remaining) || 0), 0);
-      if(available + 0.01 < need){
-        plan.push({negative:neg, allocations:[], qty:0, shortage:Number((need - available).toFixed(2)), canApply:false});
-        return;
-      }
-
-      let remaining = need;
-      const allocations = [];
-      positives.forEach(pos => {
-        if(remaining <= 0.01 || pos.remaining <= 0.01) return;
-        const qty = Number(Math.min(remaining, pos.remaining).toFixed(2));
-        if(qty <= 0) return;
-        allocations.push({source:pos, qty});
-        pos.remaining = Number((pos.remaining - qty).toFixed(2));
-        remaining = Number((remaining - qty).toFixed(2));
-      });
-
-      plan.push({
-        negative:neg,
-        allocations,
-        qty:need,
-        shortage:Math.max(0, remaining),
-        canApply:remaining <= 0.01
-      });
-    });
-  });
-  return plan;
-}
-
-function openMinusStockCleanup(){
-  _minusStockCleanupPlan = buildMinusStockCleanupPlan();
-  const body = document.getElementById('minus-stock-cleanup-body');
-  const summary = document.getElementById('minus-stock-cleanup-summary');
-  const applyBtn = document.getElementById('minus-stock-cleanup-apply');
-  const applyRows = _minusStockCleanupPlan.filter(x => x.canApply);
-  const skippedRows = _minusStockCleanupPlan.filter(x => !x.canApply);
-  const applyQty = applyRows.reduce((sum, x) => sum + (Number(x.qty) || 0), 0);
-
-  if(summary){
-    summary.innerHTML = `정리 가능 ${applyRows.length}건 / ${applyQty.toFixed(2)}KG` +
-      (skippedRows.length ? ` · 플러스 재고 부족 ${skippedRows.length}건은 제외` : '');
-  }
-  if(applyBtn) applyBtn.disabled = applyRows.length === 0;
-
-  if(body){
-    if(!_minusStockCleanupPlan.length){
-      body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#888;">정리할 마이너스 재고가 없습니다.</td></tr>';
-    } else {
-      body.innerHTML = _minusStockCleanupPlan.map(item => {
-        const n = item.negative;
-        const allocText = item.allocations.length
-          ? item.allocations.map(a => `${htmlEscape(minusStockLayerLabel(a.source))} → ${Number(a.qty).toFixed(2)}KG`).join('<br>')
-          : '-';
-        const status = item.canApply
-          ? '<span class="stock-ok">정리 가능</span>'
-          : `<span class="stock-ng">부족 ${Number(item.shortage || 0).toFixed(2)}KG</span>`;
-        return `<tr style="${item.canApply ? '' : 'background:#fff5f5;'}">
-          <td>${htmlEscape(n.product || '')}${n.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(n.packunit)}</span>` : ''}</td>
-          <td style="font-family:monospace;font-size:11px;">${htmlEscape(n.lot || '-')}</td>
-          <td>${htmlEscape(n.origin || '-')}</td>
-          <td>${htmlEscape(n.proddate || '-')} / ${n.price ? Number(n.price).toLocaleString('ko-KR') + '원' : '-'}</td>
-          <td style="text-align:right;font-weight:700;">${Number(item.qty || Math.abs(n.stock || 0)).toFixed(2)}</td>
-          <td style="font-size:11px;color:#555;">${allocText}</td>
-          <td>${status}</td>
-        </tr>`;
-      }).join('');
-    }
-  }
-
-  document.getElementById('minus-stock-cleanup-modal')?.classList.remove('hidden');
-}
-
-function closeMinusStockCleanup(){
-  document.getElementById('minus-stock-cleanup-modal')?.classList.add('hidden');
-}
-
-function pushMinusCleanupAdjust(row, weight, date, note, idBase, seq){
-  const price = parseAppNumber(row.price);
-  userTransactions.push({
-    id: idBase + seq,
-    date,
-    type: '재고조정',
-    trader: '마이너스정리',
-    product: row.product || '',
-    origin: row.origin || '',
-    storage: '',
-    packunit: row.packunit || '',
-    lot: row.lot || '',
-    proddate: row.proddate || '',
-    stockProddate: row.proddate || '',
-    stockUnitPrice: price,
-    weight:Number(Number(weight).toFixed(2)),
-    price,
-    amount: Math.round(Number(weight) * price),
-    note,
-    _isUser:true,
-    _isStockAdjust:true,
-    _isMinusCleanup:true
-  });
-}
-
-function applyMinusStockCleanup(){
-  const plan = (_minusStockCleanupPlan.length ? _minusStockCleanupPlan : buildMinusStockCleanupPlan()).filter(x => x.canApply);
-  if(!plan.length){
-    alert('상계 정리 가능한 마이너스 재고가 없습니다.');
-    return;
-  }
-  if(!confirm(`마이너스 재고 ${plan.length}건을 상계 정리합니다.\n현재 총 재고량은 바꾸지 않고 재고조정 내역만 추가됩니다.`)) return;
-
-  const date = localDateString();
-  const idBase = Date.now() * 1000;
-  let seq = 0;
-  plan.forEach(item => {
-    const neg = item.negative;
-    const qty = Number(item.qty || 0);
-    const label = `${neg.product || ''} / ${neg.lot || 'LOT 없음'} / ${neg.proddate || '생산일 없음'} / ${neg.price ? Number(neg.price).toLocaleString('ko-KR') + '원' : '단가 없음'}`;
-    pushMinusCleanupAdjust(neg, qty, date, `마이너스 상계정리: ${label} 0 처리 (+${qty.toFixed(2)}KG)`, idBase, ++seq);
-    item.allocations.forEach(a => {
-      const src = a.source;
-      const srcLabel = `${src.product || ''} / ${src.lot || 'LOT 없음'} / ${src.proddate || '생산일 없음'} / ${src.price ? Number(src.price).toLocaleString('ko-KR') + '원' : '단가 없음'}`;
-      pushMinusCleanupAdjust(src, -a.qty, date, `마이너스 상계정리: ${label} 보정용 차감 (${srcLabel}, -${Number(a.qty).toFixed(2)}KG)`, idBase, ++seq);
-    });
-  });
-
-  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  save();
-  closeMinusStockCleanup();
-  renderTransactions();
-  renderStock();
-  toast('마이너스 재고 상계 정리가 저장되었습니다.');
 }
 
 // ─── 부자재 관리 ───────────────────────────────────────────
