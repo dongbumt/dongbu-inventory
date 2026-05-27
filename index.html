@@ -2116,14 +2116,6 @@
             <input id="lbl-grade" placeholder="(선택)" oninput="updateLabelPreview()">
           </div>
           <div class="form-group">
-            <label>도축장명</label>
-            <input id="lbl-slaughter" oninput="updateLabelPreview()">
-          </div>
-          <div class="form-group">
-            <label>도체번호</label>
-            <input id="lbl-carcass" placeholder="(선택)" oninput="updateLabelPreview()">
-          </div>
-          <div class="form-group">
             <label>제조일</label>
             <input id="lbl-mfgdate" type="date" oninput="updateLabelPreview();autoSetExpiry()">
           </div>
@@ -2393,9 +2385,7 @@ function applyTraceInfoToLabel(d){
   };
   set('lbl-product', d.product || '');
   set('lbl-grade', d.grade || '');
-  set('lbl-slaughter', d.slaughterHouse || '');
   set('lbl-origin', d.origin || '');
-  set('lbl-carcass', d.carcassNo || d.cattleNo || d.pigNo || d.animalNo || '');
   set('lbl-itemno', d.itemno || '');
   set('lbl-storage', d.storage || '');
   const tmpSel = document.getElementById('lbl-temptype');
@@ -10572,31 +10562,25 @@ function buildLabelBody(d){
   var rows = '';
 
   // 제품명
-  rows += '<div style="'+bb+pad+sh+'min-height:18pt;display:flex;align-items:center;">'
+  rows += '<div style="'+bb+pad+sh+'min-height:22pt;display:flex;align-items:center;">'
     + '<span style="font-size:6pt;">제품명: </span>'
     + '<strong style="font-size:'+((d.product||'').length>8?'11':'13')+'pt;">'+( d.product||'　')+'</strong>'
     + '</div>';
 
   // 성별및등급 | 원산지
-  rows += '<div style="display:flex;'+bb+sh+'min-height:15pt;">'
+  rows += '<div style="display:flex;'+bb+sh+'min-height:17pt;">'
     + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;">성별및등급: <span style="font-size:9.1pt;">'+(d.grade||'')+'</span></div>'
     + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;">원산지: <strong style="font-size:10.4pt;">'+(d.origin||'')+'</strong></div>'
     + '</div>';
 
-  // 도축장명 | 도체번호
-  rows += '<div style="display:flex;'+bb+sh+'min-height:14pt;">'
-    + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;">도축장명: <span style="font-size:8.5pt;">'+(d.slaughter||'')+'</span></div>'
-    + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;">도체번호: '+(d.carcass||'')+'</div>'
-    + '</div>';
-
   // 제조일및소비기한
-  rows += '<div style="'+bb+pad+sh+'min-height:17pt;display:flex;align-items:center;">'
+  rows += '<div style="'+bb+pad+sh+'min-height:20pt;display:flex;align-items:center;">'
     + '<span style="font-size:6pt;">제조일및소비기한: </span>'
     + '<strong style="font-size:10pt;">'+(d.mfgdate||'')+'～ '+(d.expdate||'')+'</strong>'
     + '</div>';
 
   // 중량 | 품목보고번호
-  rows += '<div style="display:flex;align-items:stretch;'+bb+sh+'min-height:34pt;">'
+  rows += '<div style="display:flex;align-items:stretch;'+bb+sh+'min-height:36pt;">'
     + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;flex-wrap:wrap;">'
     +   '<span style="font-size:6pt;margin-right:3pt;">중량:</span>'
     +   '<span style="font-size:23.4pt;font-weight:900;line-height:1.1;">'+(d.weight||'0.00')+'</span>'
@@ -10609,24 +10593,24 @@ function buildLabelBody(d){
     + '</div>';
 
   // 이력번호
-  rows += '<div style="'+bb+pad+sh+'min-height:25pt;">'
+  rows += '<div style="'+bb+pad+sh+'min-height:28pt;">'
     + '<div style="font-size:6pt;font-weight:700;">이력번호</div>'
     + (d.lotBarcodeHTML||'')
     + '</div>';
 
   // 원료및함량
-  rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:13pt;display:flex;align-items:center;">원료및함량: <strong>'+(d.ingredients||'')+'</strong></div>';
+  rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:15pt;display:flex;align-items:center;">원료및함량: <strong>'+(d.ingredients||'')+'</strong></div>';
 
   // 보관방법
   var storageText = (d.temptype==='냉장') ? '-2℃ ~ 5℃이하 냉장보관' : '-18℃이하 냉동보관';
   var frozenNote  = (d.temptype==='냉장') ? '' : '<div style="font-size:6pt;text-align:center;">이미 냉동된바 있으니 해동후 재냉동 시키지 마십시오</div>';
-  rows += '<div style="'+bb+pad+sh+'min-height:20pt;">'
+  rows += '<div style="'+bb+pad+sh+'min-height:22pt;">'
     + '<div style="font-size:6pt;font-weight:700;">보관방법 &nbsp; '+storageText+'</div>'
     + frozenNote
     + '</div>';
 
   // 하단 정보
-  rows += '<div style="padding:1pt 2pt 0;font-size:5.8pt;flex:1 1 0;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;">'
+  rows += '<div style="padding:2pt 2pt 0;font-size:5.8pt;flex:1 1 0;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
     +   '<div style="flex:1;line-height:1.25;">'
     +     '<div style="font-size:6.5pt;">· 허가번호: '+(d.licenseno||'')+'</div>'
@@ -10884,8 +10868,6 @@ function updateLabelPreview(){
   const product      = v('lbl-product');
   const origin       = v('lbl-origin');
   const grade        = v('lbl-grade');
-  const slaughter    = v('lbl-slaughter');
-  const carcass      = v('lbl-carcass');
   const mfgdate      = fmtLblDate(v('lbl-mfgdate'));
   const expdate      = fmtLblDate(v('lbl-expdate'));
   const weight       = v('lbl-weight');
@@ -10907,7 +10889,7 @@ function updateLabelPreview(){
   applyLabelPreviewSize();
 
   el.innerHTML = buildLabelBody({
-    product, origin, grade, slaughter, carcass,
+    product, origin, grade,
     mfgdate, expdate, weight, itemno, ingredients,
     licenseno, prodtype, packaging, storage, manufacturer,
     phone, address, temptype, crossFacilityNotice,
@@ -10942,8 +10924,6 @@ function printLabel(){
   const product      = v('lbl-product');
   const origin       = v('lbl-origin');
   const grade        = v('lbl-grade');
-  const slaughter    = v('lbl-slaughter');
-  const carcass      = v('lbl-carcass');
   const mfgdate      = fmtLblDate(v('lbl-mfgdate'));
   const expdate      = fmtLblDate(v('lbl-expdate'));
   const weight       = v('lbl-weight');
@@ -10980,7 +10960,7 @@ function printLabel(){
   </style></head><body>
   <div class="lbl-label">
     ${buildLabelBody({
-      product, origin, grade, slaughter, carcass,
+      product, origin, grade,
       mfgdate, expdate, weight, itemno, ingredients,
       licenseno, prodtype, packaging, storage, manufacturer,
       phone, address, temptype, crossFacilityNotice, lotBarcodeHTML: lotBcHTML,
@@ -10999,7 +10979,7 @@ function saveLabelTemplate(){
   if(!name) return;
   const v = id => document.getElementById(id)?.value || '';
   const tpl = { id: Date.now(), name, size: getLabelSizeConfig().key };
-  ['product','origin','grade','slaughter','carcass','weight','itemno',
+  ['product','origin','grade','weight','itemno',
    'ingredients','licenseno','prodtype','packaging','storage',
    'manufacturer','phone','address'].forEach(k => { tpl[k] = v('lbl-'+k); });
   labelTemplates.unshift(tpl);
@@ -11012,7 +10992,7 @@ function loadLabelTemplate(id){
   const tpl = labelTemplates.find(t=>t.id===id); if(!tpl) return;
   const sizeEl = document.getElementById('lbl-size');
   if(sizeEl) sizeEl.value = tpl.size || '7x10';
-  ['product','origin','grade','slaughter','carcass','weight','itemno',
+  ['product','origin','grade','weight','itemno',
    'ingredients','licenseno','prodtype','packaging','storage',
    'manufacturer','phone','address'].forEach(k => {
     const el = document.getElementById('lbl-'+k);
