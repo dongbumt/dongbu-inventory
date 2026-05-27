@@ -2140,8 +2140,8 @@
             <div id="trace-result" style="display:none;margin-top:6px;font-size:11px;padding:8px;background:#f0f7ff;border-radius:4px;border:1px solid #bbd4f0;"></div>
           </div>
           <div class="form-group" style="grid-column:1/-1;">
-            <label>원료및함량</label>
-            <input id="lbl-ingredients" placeholder="예) 돼지고기100%" oninput="updateLabelPreview()">
+            <label>원료 및 함량</label>
+            <input id="lbl-ingredients" placeholder="예) 돼지고기 100%" oninput="updateLabelPreview()">
           </div>
 
         </div>
@@ -10549,6 +10549,11 @@ function labelCrossFacilityNotice(){
   return '본 제품은 소고기, 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
 }
 
+function formatLabelIngredients(value){
+  const text = htmlEscape(String(value || '').trim());
+  return text.replace(/돼지고기\s*/g, '<span style="display:inline-block;background:#000;color:#fff;padding:0.7pt 2.2pt;margin-right:2pt;line-height:1.1;">돼지고기</span> ');
+}
+
 
 // ── 라벨 공통 body HTML (미리보기·출력 공유 / pt 인라인 스타일) ─────────
 function buildLabelBody(d){
@@ -10563,7 +10568,7 @@ function buildLabelBody(d){
 
   // 제품명
   rows += '<div style="'+bb+pad+sh+'min-height:22pt;display:flex;align-items:center;">'
-    + '<span style="font-size:6pt;">제품명: </span>'
+    + '<span style="font-size:6pt;margin-right:5pt;">제품명: </span>'
     + '<strong style="font-size:'+((d.product||'').length>8?'11':'13')+'pt;">'+( d.product||'　')+'</strong>'
     + '</div>';
 
@@ -10598,8 +10603,8 @@ function buildLabelBody(d){
     + (d.lotBarcodeHTML||'')
     + '</div>';
 
-  // 원료및함량
-  rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:15pt;display:flex;align-items:center;">원료및함량: <strong>'+(d.ingredients||'')+'</strong></div>';
+  // 원료 및 함량
+  rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:15pt;display:flex;align-items:center;">원료 및 함량 <strong style="margin-left:8pt;font-size:8pt;">'+formatLabelIngredients(d.ingredients)+'</strong></div>';
 
   // 보관방법
   var storageText = (d.temptype==='냉장') ? '-2℃ ~ 5℃이하 냉장보관' : '-18℃이하 냉동보관';
@@ -10612,7 +10617,7 @@ function buildLabelBody(d){
   // 하단 정보
   rows += '<div style="padding:2pt 2pt 0;font-size:5.8pt;flex:1 1 0;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
-    +   '<div style="flex:1;line-height:1.25;">'
+    +   '<div style="flex:1;line-height:1.42;display:flex;flex-direction:column;gap:0.5pt;padding-right:2pt;">'
     +     '<div style="font-size:6.5pt;">· 허가번호: '+(d.licenseno||'')+'</div>'
     +     '<div>· 축산물가공품의유형: '+(d.prodtype||'')+'</div>'
     +     '<div>· 포장재질: '+(d.packaging||'')+'</div>'
@@ -10623,7 +10628,7 @@ function buildLabelBody(d){
     +   '</div>'
     +   '<div style="display:flex;flex-direction:column;align-items:center;margin-left:2pt;flex-shrink:0;">'
     +   '<div style="font-size:11pt;font-weight:900;border:1.5pt solid #000;padding:1pt 3pt;">'+(d.temptype||'냉동')+'</div>'
-    +   '<div style="margin-top:8pt;text-align:center;">'
+    +   '<div style="margin-top:14pt;text-align:center;">'
     +     '<img src="'+other+'" style="height:33pt;width:auto;display:block;margin:0 auto 1pt;">'
     +     '<img src="'+haccp+'" style="height:33pt;width:auto;">'
     +   '</div>'
