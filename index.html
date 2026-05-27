@@ -10539,6 +10539,26 @@ function applyLabelProduct(){
   updateLabelPreview();
 }
 
+function getSelectedLabelMeatType(){
+  const sel = document.getElementById('lbl-product-select');
+  const pidx = sel && sel.value !== '' ? parseInt(sel.value) : -1;
+  const selected = pidx >= 0 ? labelProducts[pidx] : null;
+  const meat = String(selected?.meattype || '').trim();
+  if(meat === '돼지고기' || meat === '소고기') return meat;
+
+  const ingredients = String(document.getElementById('lbl-ingredients')?.value || '');
+  if(ingredients.includes('돼지고기')) return '돼지고기';
+  if(ingredients.includes('소고기')) return '소고기';
+  return '';
+}
+
+function labelCrossFacilityNotice(){
+  const meat = getSelectedLabelMeatType();
+  if(meat === '돼지고기') return '본 제품은 소고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
+  if(meat === '소고기') return '본 제품은 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
+  return '본 제품은 소고기, 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
+}
+
 
 // ── 라벨 공통 body HTML (미리보기·출력 공유 / pt 인라인 스타일) ─────────
 function buildLabelBody(d){
@@ -10615,7 +10635,7 @@ function buildLabelBody(d){
     +     '<div>· 반품및교환: 제조원및판매원 하단 표시</div>'
     +     '<div>· 부정,불량 축산물 신고는 국번없이 1399</div>'
     +     '<div>· 동봉되는 흡습제는 먹지마시오</div>'
-    +     '<div>· 본 제품은 소고기, 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다</div>'
+    +     '<div>· '+(d.crossFacilityNotice || labelCrossFacilityNotice())+'</div>'
     +   '</div>'
     +   '<div style="display:flex;flex-direction:column;align-items:center;margin-left:2pt;flex-shrink:0;">'
     +   '<div style="font-size:11pt;font-weight:900;border:1.5pt solid #000;padding:1pt 3pt;">'+(d.temptype||'냉동')+'</div>'
@@ -10880,6 +10900,7 @@ function updateLabelPreview(){
   const manufacturer = v('lbl-manufacturer') || LBL_DEFAULTS.manufacturer;
   const phone        = v('lbl-phone')        || LBL_DEFAULTS.phone;
   const address      = v('lbl-address')      || LBL_DEFAULTS.address;
+  const crossFacilityNotice = labelCrossFacilityNotice();
 
   const el = document.getElementById('lbl-preview');
   if(!el) return;
@@ -10889,7 +10910,7 @@ function updateLabelPreview(){
     product, origin, grade, slaughter, carcass,
     mfgdate, expdate, weight, itemno, ingredients,
     licenseno, prodtype, packaging, storage, manufacturer,
-    phone, address, temptype,
+    phone, address, temptype, crossFacilityNotice,
     lotBarcodeHTML: lot
       ? `<svg id="lbl-bc-lot" style="width:100%;height:14pt;display:block;"></svg>
          <div style="font-size:5.5pt;text-align:center;letter-spacing:0.5pt;">${lot}</div>`
@@ -10937,6 +10958,7 @@ function printLabel(){
   const manufacturer = v('lbl-manufacturer') || LBL_DEFAULTS.manufacturer;
   const phone        = v('lbl-phone')        || LBL_DEFAULTS.phone;
   const address      = v('lbl-address')      || LBL_DEFAULTS.address;
+  const crossFacilityNotice = labelCrossFacilityNotice();
 
   function getSvgStr(id){
     const el = document.querySelector(id);
@@ -10961,7 +10983,7 @@ function printLabel(){
       product, origin, grade, slaughter, carcass,
       mfgdate, expdate, weight, itemno, ingredients,
       licenseno, prodtype, packaging, storage, manufacturer,
-      phone, address, temptype, lotBarcodeHTML: lotBcHTML,
+      phone, address, temptype, crossFacilityNotice, lotBarcodeHTML: lotBcHTML,
     })}
   </div>
   </body></html>`;
