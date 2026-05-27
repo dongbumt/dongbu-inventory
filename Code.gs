@@ -596,30 +596,77 @@ const DOMAIN_SHEETS = {
   },
   samsungVendors: {
     name: '삼성웰스토리거래처',
-    headers: ['id','name','note','products'],
+    headers: ['id','name','note','productRowId','productId','spec','targetWeekly','productNote'],
     toRows: function(arr) {
-      return (arr || []).map(function(v) {
-        return {
-          id:       String(v.id == null ? '' : v.id),
-          name:     v.name || '',
-          note:     v.note || '',
-          products: JSON.stringify(v.products || [])
+      var rows = [];
+      (arr || []).forEach(function(v) {
+        var base = {
+          id:   String(v.id == null ? '' : v.id),
+          name: v.name || '',
+          note: v.note || ''
         };
+        var products = Array.isArray(v.products) ? v.products : [];
+        if (!products.length) {
+          rows.push({
+            id: base.id, name: base.name, note: base.note,
+            productRowId:'', productId:'', spec:'', targetWeekly:'', productNote:''
+          });
+          return;
+        }
+        products.forEach(function(p) {
+          rows.push({
+            id:           base.id,
+            name:         base.name,
+            note:         base.note,
+            productRowId: String(p.id == null ? '' : p.id),
+            productId:    String(p.productId == null ? '' : p.productId),
+            spec:         p.spec || '',
+            targetWeekly: p.targetWeekly == null ? '' : p.targetWeekly,
+            productNote:  p.note || ''
+          });
+        });
       });
+      return rows;
     },
     fromRows: function(rows) {
-      return rows.map(function(r) {
-        var products = [];
-        if (r.products) {
-          try { products = JSON.parse(String(r.products)); } catch(e) { products = []; }
+      var map = {};
+      rows.forEach(function(r) {
+        var id = String(r.id == null ? '' : r.id);
+        if (!id) return;
+        if (!map[id]) {
+          map[id] = {
+            id: id,
+            name: r.name || '',
+            note: r.note || '',
+            products: []
+          };
+        } else {
+          if (r.name) map[id].name = r.name;
+          if (r.note) map[id].note = r.note;
         }
-        return {
-          id:       String(r.id == null ? '' : r.id),
-          name:     r.name || '',
-          note:     r.note || '',
-          products: Array.isArray(products) ? products : []
-        };
+        // 구버전 시트는 거래처 1행에 products JSON을 저장했다.
+        if (r.products) {
+          try {
+            var legacyProducts = JSON.parse(String(r.products));
+            if (Array.isArray(legacyProducts)) {
+              legacyProducts.forEach(function(p) {
+                map[id].products.push(p);
+              });
+            }
+          } catch(e) {}
+          return;
+        }
+        if (r.productRowId || r.productId || r.spec) {
+          map[id].products.push({
+            id:           String(r.productRowId || ''),
+            productId:    String(r.productId || ''),
+            spec:         r.spec || '',
+            targetWeekly: r.targetWeekly === '' || r.targetWeekly == null ? 0 : (Number(r.targetWeekly) || 0),
+            note:         r.productNote || ''
+          });
+        }
       });
+      return Object.keys(map).map(function(id) { return map[id]; });
     }
   },
   // 다음 도메인은 점진적으로 추가

@@ -3213,7 +3213,8 @@ function gsSaveAppData(){
   Object.entries(APP_DATA_REGISTRY).forEach(([k,r]) => { payload[k] = r.get(); });
   gsPost('saveAppData', payload).catch(err => {
     console.error('GS appData 저장 오류:', err);
-    gsShowSync('⚠ 보조데이터 저장 실패', true);
+    const detail = String(err?.message || err || '').trim();
+    gsShowSync(`⚠ 보조데이터 저장 실패${detail ? ' — ' + detail : ''}`, true);
   });
 }
 
