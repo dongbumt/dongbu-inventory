@@ -3218,6 +3218,13 @@ const APP_DATA_REGISTRY = {
 
 // ── 앱 전체 데이터 GS 저장 (레지스트리 기반, 자동) ──
 function gsSaveAppData(){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseSaveAppData().catch(err => {
+      console.error('Supabase appData 저장 오류:', err);
+      gsShowSync('⚠ Supabase 보조데이터 저장 실패 — 로컬 데이터는 보존됨', true);
+    });
+    return;
+  }
   if(!GS_ONLINE || !GS_LOAD_OK) return;
   const payload = {};
   Object.entries(APP_DATA_REGISTRY).forEach(([k,r]) => { payload[k] = r.get(); });
@@ -3226,6 +3233,19 @@ function gsSaveAppData(){
     const detail = String(err?.message || err || '').trim();
     gsShowSync(`⚠ 보조데이터 저장 실패${detail ? ' — ' + detail : ''}`, true);
   });
+}
+
+async function supabaseSaveCore(payload){
+  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  await sbRpc('dbmt_sync_transactions', {p_password: password, p_rows: payload.transactions || []});
+  await sbRpc('dbmt_sync_production', {p_password: password, p_rows: payload.prod || []});
+  await sbRpc('dbmt_sync_prices', {p_password: password, p_rows: payload.prices || []});
+  gsShowSync('✅ Supabase 저장 완료');
+}
+
+async function supabaseSaveAppData(){
+  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData()});
 }
 
 function gsAssertCanWriteCoreData(nextData){
@@ -3251,12 +3271,26 @@ function save(){
   localStorage.setItem('dbmt_prices',            JSON.stringify(prices));
   localStorage.setItem('dbmt_user_prod',         JSON.stringify(userProdEntries));
 
-  // 2) Google Sheets 저장
+  // 2) Supabase 저장 (활성화된 경우)
   const payload = {
       transactions: userTransactions,
       prod:         userProdEntries,
       prices:       prices,
     };
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseSaveCore(payload).catch(err=>{
+      console.error('Supabase 저장 오류:', err);
+      gsShowSync('⚠ Supabase 저장 실패 — Google Sheets로 재시도합니다', true);
+      if(gsAssertCanWriteCoreData(payload)){
+        const core = gsNormalizeCorePayload(payload);
+        const patch = gsBuildCorePatch(core);
+        if(gsPatchHasChanges(patch)) gsPost('saveCorePatch', patch).catch(e=>console.error('GS fallback 저장 오류:', e));
+      }
+    });
+    return;
+  }
+
+  // 3) Google Sheets 저장
   gsMarkPendingCoreSave(payload);
   if(gsAssertCanWriteCoreData(payload)){
     const core = gsNormalizeCorePayload(payload);
