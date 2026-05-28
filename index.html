@@ -3329,6 +3329,46 @@ function saveProductionRows(entry, transactionRows, deletedProdId){
   save();
 }
 
+function ensurePriceId(row){
+  if(row && !row.id) row.id = `price_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return row;
+}
+
+async function supabaseSavePriceRows(rows, deletedIds, forceFull=false){
+  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  try{
+    if(forceFull){
+      await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
+      return;
+    }
+    const upsertRows = asArray(rows).map(ensurePriceId);
+    if(upsertRows.length){
+      await sbRpc('dbmt_upsert_prices', {p_password: password, p_rows: upsertRows});
+    }
+    const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
+    for(const id of deleteIds){
+      await sbRpc('dbmt_delete_price', {p_password: password, p_id: id});
+    }
+    gsShowSync('Supabase price save complete');
+  } catch(err){
+    console.warn('Supabase price row save failed; falling back to full core sync:', err);
+    await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
+  }
+}
+
+function savePriceRows(rows, deletedIds, forceFull=false){
+  localStorage.setItem('dbmt_prices', JSON.stringify(prices));
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseSavePriceRows(rows, deletedIds, forceFull).catch(err=>{
+      console.error('Supabase price save error:', err);
+      const detail = String(err?.message || err || '').slice(0, 180);
+      gsShowSync(`Supabase price save failed${detail ? ': ' + detail : ''}`, true);
+    });
+    return;
+  }
+  save();
+}
+
 async function supabaseSaveAppData(){
   const password = GS_TOKEN || DEFAULT_GS_TOKEN;
   await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData()});
@@ -7379,12 +7419,14 @@ function savePrice(){
   const trader  = document.getElementById('pr-trader').value.trim();
   const price   = parseInt(document.getElementById('pr-price').value)||0;
   const editIdx = parseInt(document.getElementById('pr-edit-idx').value);
+  let savedPrice = null;
 
   if(!product){ alert('품목명을 입력해주세요.'); return; }
   if(price < 0){ alert('단가는 0 이상이어야 합니다.'); return; }
 
   if(editIdx >= 0){
-    prices[editIdx] = {product, origin, trader, price};
+    prices[editIdx] = ensurePriceId({...prices[editIdx], product, origin, trader, price});
+    savedPrice = prices[editIdx];
     toast(`수정 완료: ${product} (${origin}${trader?' · '+trader:''}) → ${price.toLocaleString()}원`);
   } else {
     const dup = prices.findIndex(p=>samePriceText(p.product, product) && sameOriginText(p.origin, origin) && samePriceText(p.trader, trader));
@@ -7394,13 +7436,16 @@ ${product} / ${origin}${trader?' / '+trader:''} → ${prices[dup].price.toLocale
 
 단가를 ${price.toLocaleString()}원으로 덮어씌울까요?`)) return;
       prices[dup].price = price;
+      savedPrice = ensurePriceId(prices[dup]);
       toast(`단가 갱신: ${product} (${origin}) → ${price.toLocaleString()}원`);
     } else {
-      prices.push({product, origin, trader, price});
+      const newPrice = ensurePriceId({product, origin, trader, price});
+      prices.push(newPrice);
+      savedPrice = newPrice;
       toast(`추가 완료: ${product} (${origin}${trader?' · '+trader:''}) ${price.toLocaleString()}원`);
     }
   }
-  save();
+  savePriceRows(savedPrice);
   cancelEditPrice();
   renderPrices();
 }
@@ -7444,8 +7489,9 @@ function deletePrice(i){
   if(!confirm(`삭제하시겠습니까?
 
 ${p.product} / ${p.origin||'-'} — ${p.price.toLocaleString()}원`)) return;
+  const deleteId = p && p.id;
   prices.splice(i,1);
-  save();
+  savePriceRows([], deleteId ? [deleteId] : [], !deleteId);
   cancelEditPrice();
   renderPrices();
   toast(`삭제 완료: ${p.product}`);
