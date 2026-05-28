@@ -3255,6 +3255,26 @@ async function supabaseSaveAppData(){
   await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData()});
 }
 
+async function supabaseDeleteCore(kind, id){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1' || id === undefined || id === null || id === '') return;
+  const fnMap = {
+    transaction: 'dbmt_delete_transaction',
+    production: 'dbmt_delete_production',
+    price: 'dbmt_delete_price',
+  };
+  const fnName = fnMap[kind];
+  if(!fnName) return;
+  await sbRpc(fnName, {p_password: GS_TOKEN || DEFAULT_GS_TOKEN, p_id: String(id)});
+}
+
+function supabaseDeleteCoreLater(kind, id, label){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1' || id === undefined || id === null || id === '') return;
+  supabaseDeleteCore(kind, id).catch(err => {
+    console.error(`Supabase ${kind} delete error:`, err);
+    gsShowSync(`Supabase delete failed - ${label || 'item'} was not deleted on the server`, true);
+  });
+}
+
 function gsAssertCanWriteCoreData(nextData){
   if(!GS_ONLINE || !GS_LOAD_OK) return false;
   const base = GS_REMOTE_COUNTS || {};
@@ -5291,6 +5311,7 @@ function deleteTransaction(id){
   if(!confirm('삭제하시겠습니까?'))return;
   userTransactions=userTransactions.filter(t=>String(t.id)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  supabaseDeleteCoreLater('transaction', id, '거래내역');
   save(); renderTransactions(); renderStock();
 }
 
@@ -5994,9 +6015,12 @@ function clearProdForm(){
 
 function deleteProdEntry(id){
   if(!confirm('삭제하시겠습니까?\n관련 재고(사용/생산입고)도 함께 취소됩니다.'))return;
+  const relatedTxnIds = userTransactions.filter(t=>String(t._prodId)===String(id)).map(t=>t.id).filter(v=>v!==undefined && v!==null && v!=='');
   userProdEntries=userProdEntries.filter(e=>String(e.id)!==String(id));
   userTransactions=userTransactions.filter(t=>String(t._prodId)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  supabaseDeleteCoreLater('production', id, '생산일보');
+  relatedTxnIds.forEach(txnId => supabaseDeleteCoreLater('transaction', txnId, '관련 거래내역'));
   save(); renderProduction(); renderStock(); renderTransactions();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
   toast('생산일보 삭제 완료. 재고가 복원됐습니다.');
@@ -7348,7 +7372,9 @@ function deletePrice(i){
   if(!confirm(`삭제하시겠습니까?
 
 ${p.product} / ${p.origin||'-'} — ${p.price.toLocaleString()}원`)) return;
+  const deleteId = p && p.id;
   prices.splice(i,1);
+  supabaseDeleteCoreLater('price', deleteId, '단가');
   save();
   cancelEditPrice();
   renderPrices();

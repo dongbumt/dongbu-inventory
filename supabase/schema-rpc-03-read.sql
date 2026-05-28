@@ -14,19 +14,19 @@ begin
   return jsonb_build_object(
     'transactions',
       coalesce((
-        select jsonb_agg(raw order by date nulls last, id)
+        select jsonb_agg(raw || jsonb_build_object('id', id) order by date nulls last, id)
         from public.transactions
         where deleted_at is null
       ), '[]'::jsonb),
     'prod',
       coalesce((
-        select jsonb_agg(raw order by work_date nulls last, id)
+        select jsonb_agg(raw || jsonb_build_object('id', id) order by work_date nulls last, id)
         from public.production_entries
         where deleted_at is null
       ), '[]'::jsonb),
     'prices',
       coalesce((
-        select jsonb_agg(raw order by product nulls last, trader nulls last, id)
+        select jsonb_agg(raw || jsonb_build_object('id', id) order by product nulls last, trader nulls last, id)
         from public.prices
         where deleted_at is null
       ), '[]'::jsonb),
