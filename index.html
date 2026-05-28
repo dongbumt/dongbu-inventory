@@ -3271,7 +3271,7 @@ function supabaseDeleteCoreLater(kind, id, label){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1' || id === undefined || id === null || id === '') return;
   supabaseDeleteCore(kind, id).catch(err => {
     console.error(`Supabase ${kind} delete error:`, err);
-    gsShowSync(`Supabase delete failed - ${label || 'item'} was not deleted on the server`, true);
+    console.warn(`Supabase ${label || 'item'} explicit delete failed; waiting for the normal save sync.`);
   });
 }
 
