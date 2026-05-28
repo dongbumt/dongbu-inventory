@@ -2523,7 +2523,8 @@ function gsSetStatus(online){
   const dot = document.getElementById('gs-dot');
   const txt = document.getElementById('gs-status-text');
   if(dot) dot.className = 'gs-dot' + (online ? '' : ' off');
-  if(txt) txt.textContent = online ? '☁ Sheets 연동중' : '오프라인';
+  const provider = localStorage.getItem(SUPABASE_ENABLED_KEY) === '1' ? 'Supabase' : 'Sheets';
+  if(txt) txt.textContent = online ? `☁ ${provider} 연동중` : '오프라인';
 }
 
 function gsReadLocalArray(key){
