@@ -2285,6 +2285,7 @@ let GS_URL = localStorage.getItem('dbmt_gs_url') || DEFAULT_GS_URL;
 let GS_TOKEN = localStorage.getItem('dbmt_gs_token') || DEFAULT_GS_TOKEN;
 const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
+const SUPABASE_ENABLED_KEY = 'dbmt_supabase_enabled';
 
 // 동기화 상태 표시
 function gsShowSync(msg, isErr=false){
@@ -8144,6 +8145,7 @@ async function migrateCurrentDataToSupabase(){
       `단가: ${(verified.prices || []).length}건\n` +
       `보조데이터: ${Object.keys(verified.appData || {}).length}종`;
     sbMigrationStatus(summary);
+    localStorage.setItem(SUPABASE_ENABLED_KEY, '1');
   } catch(err){
     console.error('Supabase migration failed:', err);
     sbMigrationStatus('Supabase 이전 실패: ' + (err?.message || err), true);
@@ -8200,10 +8202,47 @@ async function compareSupabaseWithCurrentData(){
       `보조데이터: 현재 ${localCounts.appData}종 / Supabase ${remoteCounts.appData}종\n\n` +
       (ok ? '결과: 건수가 일치합니다.' : '결과: 건수가 다릅니다. 저장소 전환 전에 확인이 필요합니다.');
     sbMigrationStatus(summary, !ok);
+    if(ok) localStorage.setItem(SUPABASE_ENABLED_KEY, '1');
   } catch(err){
     console.error('Supabase compare failed:', err);
     sbMigrationStatus('Supabase 비교 실패: ' + (err?.message || err), true);
   }
+}
+
+function applySupabasePayload(data){
+  userTransactions = (data.transactions || []).map(t => ({
+    ...t,
+    date: String(t.date || '').replace(/\//g,'-')
+  }));
+  userProdEntries = data.prod || [];
+  prices = data.prices || prices || [];
+  transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+  localStorage.setItem('dbmt_user_prod', JSON.stringify(userProdEntries));
+  localStorage.setItem('dbmt_prices', JSON.stringify(prices));
+
+  const app = data.appData || {};
+  Object.entries(APP_DATA_REGISTRY).forEach(([k, r]) => {
+    if(app[k] !== undefined){
+      r.set(app[k]);
+      localStorage.setItem(r.ls, JSON.stringify(app[k]));
+    }
+  });
+  invalidateStockMap();
+}
+
+async function supabaseInit(){
+  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  if(!password) throw new Error('Supabase 연동 비밀번호가 없습니다.');
+  gsShowSync('Supabase에서 데이터 불러오는 중...');
+  const data = await sbRpc('dbmt_get_all', {p_password: password});
+  applySupabasePayload(data);
+  GS_LOAD_OK = true;
+  gsSetStatus(true);
+  renderAll();
+  renderScheduleCalendar();
+  gsShowSync('✅ Supabase 데이터 로드 완료');
+  return data;
 }
 
 function resetImport(){
@@ -9277,8 +9316,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   localInit();
   renderAll();
 
-  // 2) GAS 백그라운드 동기화 (앱 시작 후 시도)
-  if(!GS_URL){
+  // 2) Supabase 우선 로드, 실패 시 기존 Google Sheets 동기화
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseInit().catch(err=>{
+      console.error('Supabase 초기 로드 실패:', err);
+      gsShowSync('⚠ Supabase 로드 실패 — Google Sheets로 재시도합니다', true);
+      if(GS_URL) gsInit();
+      else gsShowSetup();
+    });
+  } else if(!GS_URL){
     gsShowSetup();
     gsShowSync('Google Sheets URL을 설정하면 동기화됩니다.');
   } else if(localStorage.getItem('dbmt_gs_skip') === '1'){
