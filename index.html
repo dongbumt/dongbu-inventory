@@ -2286,6 +2286,7 @@ let GS_TOKEN = localStorage.getItem('dbmt_gs_token') || DEFAULT_GS_TOKEN;
 const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
 const SUPABASE_ENABLED_KEY = 'dbmt_supabase_enabled';
+const SUPABASE_PENDING_CORE_KEY = 'dbmt_supabase_pending_core_save';
 
 // 동기화 상태 표시
 function gsShowSync(msg, isErr=false){
@@ -3237,10 +3238,16 @@ function gsSaveAppData(){
 
 async function supabaseSaveCore(payload){
   const password = GS_TOKEN || DEFAULT_GS_TOKEN;
-  await sbRpc('dbmt_sync_transactions', {p_password: password, p_rows: payload.transactions || []});
-  await sbRpc('dbmt_sync_production', {p_password: password, p_rows: payload.prod || []});
-  await sbRpc('dbmt_sync_prices', {p_password: password, p_rows: payload.prices || []});
-  gsShowSync('✅ Supabase 저장 완료');
+  localStorage.setItem(SUPABASE_PENDING_CORE_KEY, JSON.stringify(payload));
+  try{
+    await sbRpc('dbmt_sync_transactions', {p_password: password, p_rows: payload.transactions || []});
+    await sbRpc('dbmt_sync_production', {p_password: password, p_rows: payload.prod || []});
+    await sbRpc('dbmt_sync_prices', {p_password: password, p_rows: payload.prices || []});
+    localStorage.removeItem(SUPABASE_PENDING_CORE_KEY);
+    gsShowSync('✅ Supabase 저장 완료');
+  } catch(err){
+    throw err;
+  }
 }
 
 async function supabaseSaveAppData(){
@@ -3280,12 +3287,7 @@ function save(){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveCore(payload).catch(err=>{
       console.error('Supabase 저장 오류:', err);
-      gsShowSync('⚠ Supabase 저장 실패 — Google Sheets로 재시도합니다', true);
-      if(gsAssertCanWriteCoreData(payload)){
-        const core = gsNormalizeCorePayload(payload);
-        const patch = gsBuildCorePatch(core);
-        if(gsPatchHasChanges(patch)) gsPost('saveCorePatch', patch).catch(e=>console.error('GS fallback 저장 오류:', e));
-      }
+      gsShowSync('⚠ Supabase 저장 실패 — 로컬 변경사항을 보존했습니다', true);
     });
     return;
   }
@@ -9321,7 +9323,7 @@ function renderLeaves(){
   }).join('');
 }
 window.addEventListener('beforeunload', (e)=>{
-  if(gsReadPendingCoreSave()){
+  if(gsReadPendingCoreSave() || localStorage.getItem(SUPABASE_PENDING_CORE_KEY)){
     e.preventDefault();
     e.returnValue = '';
   }
@@ -9350,13 +9352,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   localInit();
   renderAll();
 
-  // 2) Supabase 우선 로드, 실패 시 기존 Google Sheets 동기화
+  // 2) Supabase 우선 로드
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseInit().catch(err=>{
       console.error('Supabase 초기 로드 실패:', err);
-      gsShowSync('⚠ Supabase 로드 실패 — Google Sheets로 재시도합니다', true);
-      if(GS_URL) gsInit();
-      else gsShowSetup();
+      gsSetStatus(false);
+      gsShowSync('⚠ Supabase 로드 실패 — 현재 로컬 데이터로 실행 중입니다', true);
     });
   } else if(!GS_URL){
     gsShowSetup();
