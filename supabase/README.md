@@ -29,6 +29,7 @@ Editor query for each file:
 7. `schema-rpc-04a-sync-transactions.sql`
 8. `schema-rpc-04b-sync-production.sql`
 9. `schema-rpc-04c-sync-prices.sql`
+10. `schema-rpc-05-delete.sql`
 
 `schema-rpc.sql` contains the same setup in one file, but the split files are
 easier to run safely in the Supabase dashboard.
@@ -43,6 +44,8 @@ This creates:
 - `dbmt_sync_transactions(password, rows)`
 - `dbmt_sync_production(password, rows)`
 - `dbmt_sync_prices(password, rows)`
+- `dbmt_upsert_transactions(password, rows)`
+- `dbmt_delete_transaction(password, id)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.

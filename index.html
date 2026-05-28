@@ -3259,6 +3259,42 @@ async function supabaseSaveCore(payload){
   }
 }
 
+function asArray(value){
+  if(Array.isArray(value)) return value.filter(Boolean);
+  return value ? [value] : [];
+}
+
+async function supabaseSaveTransactionRows(rows, deletedIds){
+  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  const upsertRows = asArray(rows);
+  const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
+  try{
+    if(upsertRows.length){
+      await sbRpc('dbmt_upsert_transactions', {p_password: password, p_rows: upsertRows});
+    }
+    for(const id of deleteIds){
+      await sbRpc('dbmt_delete_transaction', {p_password: password, p_id: id});
+    }
+    gsShowSync('Supabase transaction save complete');
+  } catch(err){
+    console.warn('Supabase transaction row save failed; falling back to full core sync:', err);
+    await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
+  }
+}
+
+function saveTransactionRows(rows, deletedIds){
+  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseSaveTransactionRows(rows, deletedIds).catch(err=>{
+      console.error('Supabase transaction save error:', err);
+      const detail = String(err?.message || err || '').slice(0, 180);
+      gsShowSync(`Supabase transaction save failed${detail ? ': ' + detail : ''}`, true);
+    });
+    return;
+  }
+  save();
+}
+
 async function supabaseSaveAppData(){
   const password = GS_TOKEN || DEFAULT_GS_TOKEN;
   await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData()});
@@ -4351,15 +4387,16 @@ function updateTraderList(){
 
 function updateTxnPrice(id, newPriceStr){
   const newPrice = parseFloat(newPriceStr)||0;
-  const txn = userTransactions.find(t=>t.id===id);
+  const txn = userTransactions.find(t=>String(t.id)===String(id));
   if(!txn) return;
   txn.price  = newPrice;
   txn.amount = Math.round(newPrice * txn.weight);
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   invalidateStockMap();
-  save();
+  saveTransactionRows(txn);
   // 금액 셀만 즉시 업데이트 (전체 re-render 없이)
-  const amtEl = document.getElementById(`txn-amt-${id}`);
+  const domId = String(id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const amtEl = document.getElementById(`txn-amt-${domId}`);
   if(amtEl) amtEl.textContent = txn.amount.toLocaleString();
   updateOutProductList();
   if(document.getElementById('p-stock')?.classList.contains('active')) renderStock();
@@ -4504,6 +4541,7 @@ function addTransaction(){
     return;
   }
 
+  let savedTxn = null;
   if(_editTxnId){
     // 수정 모드: 기존 항목 업데이트
     const t=userTransactions.find(x=>String(x.id)===String(_editTxnId));
@@ -4518,6 +4556,7 @@ function addTransaction(){
       t.toLocation = type === '재고이동' ? toLocation : '';
       t.sourceStockKey = selectedStock ? selectedStock.key : '';
       Object.assign(t, samsungTxnFields(samsungMeta));
+      savedTxn = t;
     }
   } else {
     // 신규 추가
@@ -4532,10 +4571,11 @@ function addTransaction(){
       ...samsungTxnFields(samsungMeta),_isUser:true
     };
     userTransactions.push(newItem);
+    savedTxn = newItem;
   }
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   _stockMapCache=null;
-  save(); renderTransactions(); updateProductList(); clearTransactionForm();
+  saveTransactionRows(savedTxn); renderTransactions(); updateProductList(); clearTransactionForm();
   renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   // 출고면 거래명세서 날짜 목록 갱신
@@ -4754,7 +4794,7 @@ function saveBulkInbound(){
   toAdd.forEach(t => userTransactions.push(t));
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   _stockMapCache = null;
-  save();
+  saveTransactionRows(toAdd);
   renderTransactions(); updateProductList(); renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   clearBulkInbound();
@@ -5197,9 +5237,10 @@ function saveBulkOutbound(){
   if(errorMsg){ toast(errorMsg); return; }
   if(!staged.length){ toast('저장할 출고 항목이 없습니다.'); return; }
   if(!confirm(`출고 ${staged.length}건을 일괄 저장할까요?`)) return;
+  const addedRows = [];
   staged.forEach(row=>{
     const s = row.stockInfo;
-    userTransactions.push({
+    const newTxn = {
       id: Date.now() + Math.random(),
       date,
       type:'출고',
@@ -5223,11 +5264,13 @@ function saveBulkOutbound(){
       _isProdUse:false,
       _isProdOut:false,
       _prodId:''
-    });
+    };
+    userTransactions.push(newTxn);
+    addedRows.push(newTxn);
   });
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   _stockMapCache = null;
-  save();
+  saveTransactionRows(addedRows);
   renderTransactions(); updateProductList(); updateOutProductList(); renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   initInvoiceDates();
@@ -5256,7 +5299,8 @@ function renderTransactions(){
   document.getElementById('t-count').textContent=`(${rows.length}건)`;
   const b=document.getElementById('t-body');
   b.innerHTML=rows.map(t=>{
-    const id = Number(t.id)||0;
+    const id = t.id;
+    const domId = String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
     const isStockAdjust = t.type === '재고조정';
     const date = htmlEscape(t.date);
     const type = htmlEscape(t.type);
@@ -5282,12 +5326,12 @@ function renderTransactions(){
     <td style="text-align:right;padding:2px 4px;">
       ${t._isUser
         ? (isStockAdjust ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
-             onchange="updateTxnPrice(${id}, this.value)"
+             onchange="updateTxnPrice(${jsArg(t.id)}, this.value)"
              style="width:80px;text-align:right;font-size:12px;padding:2px 4px;
                     border:1px solid #ddd;border-radius:4px;background:#fffff8;">`)
         : (price?price.toLocaleString():'-')}
     </td>
-    <td style="text-align:right" id="txn-amt-${id}">${amount?Math.round(amount).toLocaleString():'-'}</td>
+    <td style="text-align:right" id="txn-amt-${domId}">${amount?Math.round(amount).toLocaleString():'-'}</td>
     <td>${note}</td>
     <td style="white-space:nowrap">
       ${t._isUser
@@ -5301,7 +5345,7 @@ function deleteTransaction(id){
   if(!confirm('삭제하시겠습니까?'))return;
   userTransactions=userTransactions.filter(t=>String(t.id)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  save(); renderTransactions(); renderStock();
+  saveTransactionRows([], [id]); renderTransactions(); renderStock();
 }
 
 // ── 거래내역 수정 모달 ──
@@ -8009,8 +8053,9 @@ function doImport(){
   const confirm_msg = `${newItems.length}개의 거래내역을 가져올까요?`;
   if(!confirm(confirm_msg)) return;
 
+  const addedRows = [];
   newItems.forEach(item=>{
-    userTransactions.push({
+    const newTxn = {
       id: Date.now() + Math.random(),
       date: item.date,
       type: item.type,
@@ -8024,11 +8069,13 @@ function doImport(){
       price: item.price,
       amount: item.amount,
       _isUser: true
-    });
+    };
+    userTransactions.push(newTxn);
+    addedRows.push(newTxn);
   });
 
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  save();
+  saveTransactionRows(addedRows);
   renderTransactions();
   updateProductList();
   updateOutProductList();
