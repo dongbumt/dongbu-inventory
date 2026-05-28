@@ -1202,6 +1202,22 @@
   </div>
   <div class="card">
     <div class="card-title">
+      <div class="ct-bar" style="background:#3ecf8e;"></div>
+      Supabase 데이터 이전
+    </div>
+    <div class="alert alert-info" style="margin-bottom:14px;">
+      현재 화면에 로드된 거래내역, 생산일보, 단가, 보조데이터를 Supabase DB로 복사합니다.<br>
+      기존 Google Sheets 데이터는 삭제하지 않고 그대로 둡니다.
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <input id="sb-migration-password" type="password" placeholder="연동 비밀번호" autocomplete="current-password" style="max-width:220px;">
+      <button class="btn btn-success" onclick="migrateCurrentDataToSupabase()">Supabase로 데이터 이전</button>
+      <button class="btn btn-secondary" onclick="checkSupabaseMigrationData()">Supabase 데이터 확인</button>
+    </div>
+    <div id="sb-migration-status" style="margin-top:10px;font-size:12px;color:#2c3e50;line-height:1.7;white-space:pre-wrap;"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">
       <div class="ct-bar" style="background:var(--green);"></div>
       📌 가져오기 안내
     </div>
@@ -2266,6 +2282,8 @@ const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbyGPUL1cKw3hUlot
 const DEFAULT_GS_TOKEN = 'dong540916!';
 let GS_URL = localStorage.getItem('dbmt_gs_url') || DEFAULT_GS_URL;
 let GS_TOKEN = localStorage.getItem('dbmt_gs_token') || DEFAULT_GS_TOKEN;
+const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
 
 // 동기화 상태 표시
 function gsShowSync(msg, isErr=false){
@@ -8024,6 +8042,130 @@ function restoreAllData(input){
   };
   reader.readAsText(file);
   input.value = '';
+}
+
+function sbMigrationStatus(message, isError=false){
+  const el = document.getElementById('sb-migration-status');
+  if(el){
+    el.textContent = message;
+    el.style.color = isError ? '#c0392b' : '#2c3e50';
+  }
+  gsShowSync(message, isError);
+}
+
+function sbMigrationPassword(){
+  return (document.getElementById('sb-migration-password')?.value || GS_TOKEN || DEFAULT_GS_TOKEN || '').trim();
+}
+
+async function sbRpc(fnName, body){
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body || {})
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch(e) { data = text; }
+  if(!res.ok){
+    const msg = data?.message || data?.error || text || `Supabase RPC failed: ${fnName}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function sbCollectAppData(){
+  const payload = {};
+  Object.entries(APP_DATA_REGISTRY).forEach(([key, reg]) => {
+    try { payload[key] = reg.get(); }
+    catch(e) { console.warn('Supabase appData collect failed:', key, e); }
+  });
+  return payload;
+}
+
+function sbChunks(arr, size){
+  const out = [];
+  for(let i=0; i<arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function sbImportRows(fnName, password, rows, label, chunkSize=500){
+  const chunks = sbChunks(Array.isArray(rows) ? rows : [], chunkSize);
+  if(!chunks.length){
+    sbMigrationStatus(`${label}: 보낼 데이터가 없습니다.`);
+    return {count:0};
+  }
+  let sent = 0;
+  for(let i=0; i<chunks.length; i++){
+    await sbRpc(fnName, {p_password: password, p_rows: chunks[i]});
+    sent += chunks[i].length;
+    sbMigrationStatus(`${label}: ${sent}/${rows.length}건 이전 중...`);
+  }
+  return {count:sent};
+}
+
+async function migrateCurrentDataToSupabase(){
+  const password = sbMigrationPassword();
+  if(!password){ alert('Supabase 이전에 사용할 연동 비밀번호를 입력해주세요.'); return; }
+  const tx = Array.isArray(userTransactions) ? userTransactions : [];
+  const prod = Array.isArray(userProdEntries) ? userProdEntries : [];
+  const priceRows = Array.isArray(prices) ? prices : [];
+  const appData = sbCollectAppData();
+  const msg = [
+    `거래내역 ${tx.length}건`,
+    `생산일보 ${prod.length}건`,
+    `단가 ${priceRows.length}건`,
+    `보조데이터 ${Object.keys(appData).length}종`
+  ].join(', ');
+  if(!confirm(`현재 데이터를 Supabase로 복사합니다.\n\n${msg}\n\n기존 Google Sheets 데이터는 삭제하지 않습니다. 계속할까요?`)) return;
+
+  try{
+    sbMigrationStatus('Supabase 이전을 시작합니다...');
+    await sbImportRows('dbmt_import_transactions', password, tx, '거래내역');
+    await sbImportRows('dbmt_import_production', password, prod, '생산일보');
+    await sbImportRows('dbmt_import_prices', password, priceRows, '단가');
+
+    const appEntries = Object.entries(appData);
+    for(let i=0; i<appEntries.length; i++){
+      const [key, value] = appEntries[i];
+      await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: {[key]: value}});
+      sbMigrationStatus(`보조데이터: ${i + 1}/${appEntries.length}종 이전 중...`);
+    }
+
+    const verified = await sbRpc('dbmt_get_all', {p_password: password});
+    const summary =
+      `Supabase 이전 완료\n` +
+      `거래내역: ${(verified.transactions || []).length}건\n` +
+      `생산일보: ${(verified.prod || []).length}건\n` +
+      `단가: ${(verified.prices || []).length}건\n` +
+      `보조데이터: ${Object.keys(verified.appData || {}).length}종`;
+    sbMigrationStatus(summary);
+  } catch(err){
+    console.error('Supabase migration failed:', err);
+    sbMigrationStatus('Supabase 이전 실패: ' + (err?.message || err), true);
+  }
+}
+
+async function checkSupabaseMigrationData(){
+  const password = sbMigrationPassword();
+  if(!password){ alert('Supabase 확인에 사용할 연동 비밀번호를 입력해주세요.'); return; }
+  try{
+    sbMigrationStatus('Supabase 데이터를 확인 중입니다...');
+    const data = await sbRpc('dbmt_get_all', {p_password: password});
+    const summary =
+      `Supabase 현재 데이터\n` +
+      `거래내역: ${(data.transactions || []).length}건\n` +
+      `생산일보: ${(data.prod || []).length}건\n` +
+      `단가: ${(data.prices || []).length}건\n` +
+      `보조데이터: ${Object.keys(data.appData || {}).length}종`;
+    sbMigrationStatus(summary);
+  } catch(err){
+    console.error('Supabase check failed:', err);
+    sbMigrationStatus('Supabase 확인 실패: ' + (err?.message || err), true);
+  }
 }
 
 function resetImport(){
