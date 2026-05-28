@@ -3238,7 +3238,16 @@ function gsSaveAppData(){
 
 async function supabaseSaveCore(payload){
   const password = GS_TOKEN || DEFAULT_GS_TOKEN;
-  localStorage.setItem(SUPABASE_PENDING_CORE_KEY, JSON.stringify(payload));
+  try{
+    localStorage.setItem(SUPABASE_PENDING_CORE_KEY, JSON.stringify({
+      at: new Date().toISOString(),
+      transactions: Array.isArray(payload.transactions) ? payload.transactions.length : 0,
+      prod: Array.isArray(payload.prod) ? payload.prod.length : 0,
+      prices: Array.isArray(payload.prices) ? payload.prices.length : 0,
+    }));
+  } catch(e){
+    console.warn('Supabase pending marker save failed:', e);
+  }
   try{
     await sbRpc('dbmt_sync_transactions', {p_password: password, p_rows: payload.transactions || []});
     await sbRpc('dbmt_sync_production', {p_password: password, p_rows: payload.prod || []});
