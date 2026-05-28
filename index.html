@@ -3295,6 +3295,40 @@ function saveTransactionRows(rows, deletedIds){
   save();
 }
 
+async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId){
+  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  try{
+    if(deletedProdId){
+      await sbRpc('dbmt_delete_production', {p_password: password, p_id: String(deletedProdId)});
+    }
+    if(entry){
+      await sbRpc('dbmt_upsert_production', {p_password: password, p_rows: [entry]});
+    }
+    const txnRows = asArray(transactionRows);
+    if(txnRows.length){
+      await sbRpc('dbmt_upsert_transactions', {p_password: password, p_rows: txnRows});
+    }
+    gsShowSync('Supabase production save complete');
+  } catch(err){
+    console.warn('Supabase production row save failed; falling back to full core sync:', err);
+    await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
+  }
+}
+
+function saveProductionRows(entry, transactionRows, deletedProdId){
+  localStorage.setItem('dbmt_user_prod', JSON.stringify(userProdEntries));
+  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseSaveProductionRows(entry, transactionRows, deletedProdId).catch(err=>{
+      console.error('Supabase production save error:', err);
+      const detail = String(err?.message || err || '').slice(0, 180);
+      gsShowSync(`Supabase production save failed${detail ? ': ' + detail : ''}`, true);
+    });
+    return;
+  }
+  save();
+}
+
 async function supabaseSaveAppData(){
   const password = GS_TOKEN || DEFAULT_GS_TOKEN;
   await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData()});
@@ -5976,6 +6010,7 @@ function saveProdEntry(){
   const [y,m,d] = date.split('-');
   const dateFormatted = `${y}/${m}/${d}`;
 
+  const editingProdId = _editProdId;
   const entry = {
     key:[dateFormatted,jobNo],
     date:dateFormatted,
@@ -5983,20 +6018,23 @@ function saveProdEntry(){
     job_type:jobType,
     inputs, outputs,
     _isUser:true,
-    id:Date.now()
+    id: editingProdId || Date.now()
   };
 
   // 수정 모드: 기존 항목과 관련 트랜잭션 삭제 후 교체
-  if(_editProdId){
-    userProdEntries  =userProdEntries.filter(e=>String(e.id)!==String(_editProdId));
-    userTransactions =userTransactions.filter(t=>String(t._prodId)!==String(_editProdId));
+  let deletedProdId = null;
+  if(editingProdId){
+    deletedProdId = editingProdId;
+    userProdEntries  =userProdEntries.filter(e=>String(e.id)!==String(editingProdId));
+    userTransactions =userTransactions.filter(t=>String(t._prodId)!==String(editingProdId));
     _editProdId=null;
   }
   userProdEntries.push(entry);
+  const productionTxns = [];
   // '사용' 트랜잭션 자동 생성 (투입 재고 차감)
   inputs.forEach(inp=>{
     if(inp.product && inp.qty>0){
-      userTransactions.push({
+      const newTxn = {
         id:Date.now()+Math.random(), date, type:'사용',
         product:inp.product, lot:inp.lot||'', origin:inp.origin||'',
         packunit:inp.packunit||'',
@@ -6008,13 +6046,15 @@ function saveProdEntry(){
         stockLocation: inp.stockLocation || STOCK_LOCATION_DEFAULT,
         ...samsungTxnFields(inp.samsung),
         _isUser:true, _isProdUse:true, _prodId:entry.id
-      });
+      };
+      userTransactions.push(newTxn);
+      productionTxns.push(newTxn);
     }
   });
   // '생산입고' 트랜잭션 자동 생성 (생산품 재고 추가 — 거래내역 입고와 구분)
   outputs.forEach(out=>{
     if(out.product && out.qty>0){
-      userTransactions.push({
+      const newTxn = {
         id:Date.now()+Math.random(), date, type:'생산입고',
         product:out.product, lot:out.lot||'', origin:out.origin||'',
         packunit:out.packunit||'', productId:out.productId||'',
@@ -6023,11 +6063,13 @@ function saveProdEntry(){
         stockLocation: STOCK_LOCATION_DEFAULT,
         ...samsungTxnFields(out.samsung),
         _isUser:true, _isProdOut:true, _prodId:entry.id
-      });
+      };
+      userTransactions.push(newTxn);
+      productionTxns.push(newTxn);
     }
   });
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  save();
+  saveProductionRows(entry, productionTxns, deletedProdId);
   renderProduction();
   renderStock();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
@@ -6051,7 +6093,7 @@ function deleteProdEntry(id){
   userProdEntries=userProdEntries.filter(e=>String(e.id)!==String(id));
   userTransactions=userTransactions.filter(t=>String(t._prodId)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  save(); renderProduction(); renderStock(); renderTransactions();
+  saveProductionRows(null, [], id); renderProduction(); renderStock(); renderTransactions();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
   toast('생산일보 삭제 완료. 재고가 복원됐습니다.');
 }
