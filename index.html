@@ -1213,6 +1213,7 @@
       <input id="sb-migration-password" type="password" placeholder="연동 비밀번호" autocomplete="current-password" style="max-width:220px;">
       <button class="btn btn-success" onclick="migrateCurrentDataToSupabase()">Supabase로 데이터 이전</button>
       <button class="btn btn-secondary" onclick="checkSupabaseMigrationData()">Supabase 데이터 확인</button>
+      <button class="btn btn-primary" onclick="compareSupabaseWithCurrentData()">현재 데이터와 비교</button>
     </div>
     <div id="sb-migration-status" style="margin-top:10px;font-size:12px;color:#2c3e50;line-height:1.7;white-space:pre-wrap;"></div>
   </div>
@@ -8165,6 +8166,43 @@ async function checkSupabaseMigrationData(){
   } catch(err){
     console.error('Supabase check failed:', err);
     sbMigrationStatus('Supabase 확인 실패: ' + (err?.message || err), true);
+  }
+}
+
+async function compareSupabaseWithCurrentData(){
+  const password = sbMigrationPassword();
+  if(!password){ alert('Supabase 비교에 사용할 연동 비밀번호를 입력해주세요.'); return; }
+  try{
+    sbMigrationStatus('Supabase와 현재 데이터를 비교 중입니다...');
+    const data = await sbRpc('dbmt_get_all', {p_password: password});
+    const localCounts = {
+      transactions: Array.isArray(userTransactions) ? userTransactions.length : 0,
+      prod: Array.isArray(userProdEntries) ? userProdEntries.length : 0,
+      prices: Array.isArray(prices) ? prices.length : 0,
+      appData: Object.keys(sbCollectAppData()).length
+    };
+    const remoteCounts = {
+      transactions: (data.transactions || []).length,
+      prod: (data.prod || []).length,
+      prices: (data.prices || []).length,
+      appData: Object.keys(data.appData || {}).length
+    };
+    const ok =
+      localCounts.transactions === remoteCounts.transactions &&
+      localCounts.prod === remoteCounts.prod &&
+      localCounts.prices === remoteCounts.prices &&
+      localCounts.appData === remoteCounts.appData;
+    const summary =
+      `현재 데이터 / Supabase 비교\n` +
+      `거래내역: 현재 ${localCounts.transactions}건 / Supabase ${remoteCounts.transactions}건\n` +
+      `생산일보: 현재 ${localCounts.prod}건 / Supabase ${remoteCounts.prod}건\n` +
+      `단가: 현재 ${localCounts.prices}건 / Supabase ${remoteCounts.prices}건\n` +
+      `보조데이터: 현재 ${localCounts.appData}종 / Supabase ${remoteCounts.appData}종\n\n` +
+      (ok ? '결과: 건수가 일치합니다.' : '결과: 건수가 다릅니다. 저장소 전환 전에 확인이 필요합니다.');
+    sbMigrationStatus(summary, !ok);
+  } catch(err){
+    console.error('Supabase compare failed:', err);
+    sbMigrationStatus('Supabase 비교 실패: ' + (err?.message || err), true);
   }
 }
 
