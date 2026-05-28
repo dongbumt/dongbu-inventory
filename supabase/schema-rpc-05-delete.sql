@@ -1,5 +1,6 @@
 -- DBMT ERP RPC explicit delete helpers
--- Run this after schema-rpc-04c-sync-prices.sql.
+-- Reserved for later use. The current browser app deletes through the normal
+-- dbmt_sync_* save path to keep write order simple.
 
 create or replace function public.dbmt_delete_transaction(p_password text, p_id text)
 returns jsonb
