@@ -10976,51 +10976,51 @@ function buildLabelBody(d){
 
   // 제품명
   rows += '<div style="'+bb+pad+sh+'min-height:22pt;display:flex;align-items:center;">'
-    + '<span style="font-size:6pt;margin-right:5pt;">제품명: </span>'
+    + '<span style="font-size:6pt;font-weight:900;margin-right:5pt;">제품명: </span>'
     + '<strong style="font-size:'+((d.product||'').length>8?'11':'13')+'pt;">'+( d.product||'　')+'</strong>'
     + '</div>';
 
   // 성별및등급 | 원산지
   rows += '<div style="display:flex;'+bb+sh+'min-height:17pt;">'
-    + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;">성별및등급: <span style="font-size:9.1pt;">'+(d.grade||'')+'</span></div>'
-    + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;">원산지: <strong style="font-size:10.4pt;margin-left:6pt;">'+(d.origin||'')+'</strong></div>'
+    + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;">성별및등급:</span> <span style="font-size:9.1pt;">'+(d.grade||'')+'</span></div>'
+    + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;">원산지:</span> <strong style="font-size:10.4pt;margin-left:6pt;">'+(d.origin||'')+'</strong></div>'
     + '</div>';
 
   // 제조 및 소비기한
   rows += '<div style="'+bb+pad+sh+'min-height:20pt;display:flex;align-items:center;">'
-    + '<span style="font-size:6pt;">제조 및 소비기한: </span>'
+    + '<span style="font-size:6pt;font-weight:900;">제조 및 소비기한: </span>'
     + '<strong style="font-size:10pt;margin-left:8pt;">'+(d.mfgdate||'')+'～ '+(d.expdate||'')+'</strong>'
     + '</div>';
 
   // 중량 | 품목보고번호
   rows += '<div style="display:flex;align-items:stretch;'+bb+sh+'min-height:30pt;">'
     + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;">'
-    +   '<span style="font-size:6pt;margin-right:3pt;">중량:</span>'
+    +   '<span style="font-size:6pt;font-weight:900;margin-right:3pt;">중량:</span>'
     +   '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;padding-left:5pt;">'
     +     '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+(d.weight||'0.00')+'</span>'
     +     '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>'
     +   '</div>'
     + '</div>'
     + '<div style="flex:9;'+pad+'font-size:6pt;">'
-    +   '<div>품목보고번호</div>'
+    +   '<div style="font-weight:900;">품목보고번호</div>'
     +   '<div style="font-size:9.1pt;font-weight:700;margin-top:5pt;text-align:center;">'+(d.itemno||'')+'</div>'
     + '</div>'
     + '</div>';
 
   // 이력번호
   rows += '<div style="'+bb+pad+sh+'min-height:15pt;display:flex;align-items:center;gap:4pt;">'
-    + '<span style="font-size:6pt;font-weight:700;flex-shrink:0;">이력번호</span>'
+    + '<span style="font-size:6pt;font-weight:900;flex-shrink:0;">이력번호</span>'
     + '<strong style="font-size:7.2pt;line-height:1.1;word-break:break-all;">'+htmlEscape(d.lotText||'')+'</strong>'
     + '</div>';
 
   // 원료 및 함량
-  rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:15pt;display:flex;align-items:center;">원료 및 함량 <strong style="margin-left:8pt;font-size:8pt;">'+formatLabelIngredients(d.ingredients)+'</strong></div>';
+  rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:15pt;display:flex;align-items:center;"><span style="font-weight:900;">원료 및 함량</span> <strong style="margin-left:8pt;font-size:8pt;">'+formatLabelIngredients(d.ingredients)+'</strong></div>';
 
   // 보관방법
   var storageText = (d.temptype==='냉장') ? '-2℃ ~ 5℃이하 냉장보관' : '-18℃이하 냉동보관';
   var frozenNote  = (d.temptype==='냉장') ? '' : '<div style="font-size:6pt;text-align:center;">이미 냉동된바 있으니 해동후 재냉동 시키지 마십시오</div>';
   rows += '<div style="'+bb+pad+sh+'min-height:22pt;">'
-    + '<div style="font-size:6pt;font-weight:700;">보관방법: &nbsp; '+storageText+'</div>'
+    + '<div style="font-size:6pt;"><span style="font-weight:900;">보관방법:</span> &nbsp; '+storageText+'</div>'
     + frozenNote
     + '</div>';
 
