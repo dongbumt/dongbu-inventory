@@ -10986,22 +10986,24 @@ function buildLabelBody(d){
     + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;">원산지: <strong style="font-size:10.4pt;margin-left:6pt;">'+(d.origin||'')+'</strong></div>'
     + '</div>';
 
-  // 제조일및소비기한
+  // 제조 및 소비기한
   rows += '<div style="'+bb+pad+sh+'min-height:20pt;display:flex;align-items:center;">'
-    + '<span style="font-size:6pt;">제조일및소비기한: </span>'
-    + '<strong style="font-size:10pt;">'+(d.mfgdate||'')+'～ '+(d.expdate||'')+'</strong>'
+    + '<span style="font-size:6pt;">제조 및 소비기한: </span>'
+    + '<strong style="font-size:10pt;margin-left:8pt;">'+(d.mfgdate||'')+'～ '+(d.expdate||'')+'</strong>'
     + '</div>';
 
   // 중량 | 품목보고번호
   rows += '<div style="display:flex;align-items:stretch;'+bb+sh+'min-height:30pt;">'
-    + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;flex-wrap:wrap;">'
+    + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;">'
     +   '<span style="font-size:6pt;margin-right:3pt;">중량:</span>'
-    +   '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+(d.weight||'0.00')+'</span>'
-    +   '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>'
+    +   '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;padding-left:5pt;">'
+    +     '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+(d.weight||'0.00')+'</span>'
+    +     '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>'
+    +   '</div>'
     + '</div>'
     + '<div style="flex:9;'+pad+'font-size:6pt;">'
     +   '<div>품목보고번호</div>'
-    +   '<div style="font-size:9.1pt;font-weight:700;margin-top:5pt;text-align:right;padding-right:2pt;">'+(d.itemno||'')+'</div>'
+    +   '<div style="font-size:9.1pt;font-weight:700;margin-top:5pt;text-align:center;">'+(d.itemno||'')+'</div>'
     + '</div>'
     + '</div>';
 
@@ -11018,7 +11020,7 @@ function buildLabelBody(d){
   var storageText = (d.temptype==='냉장') ? '-2℃ ~ 5℃이하 냉장보관' : '-18℃이하 냉동보관';
   var frozenNote  = (d.temptype==='냉장') ? '' : '<div style="font-size:6pt;text-align:center;">이미 냉동된바 있으니 해동후 재냉동 시키지 마십시오</div>';
   rows += '<div style="'+bb+pad+sh+'min-height:22pt;">'
-    + '<div style="font-size:6pt;font-weight:700;">보관방법 &nbsp; '+storageText+'</div>'
+    + '<div style="font-size:6pt;font-weight:700;">보관방법: &nbsp; '+storageText+'</div>'
     + frozenNote
     + '</div>';
 
