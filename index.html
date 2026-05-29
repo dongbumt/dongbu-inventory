@@ -10959,7 +10959,7 @@ function labelCrossFacilityNotice(){
 function formatLabelIngredients(value){
   const text = htmlEscape(String(value || '').trim());
   const meatBadgeStyle = 'display:inline-block;background:#000;color:#fff;padding:0.7pt 2.2pt;margin-right:2pt;line-height:1.1;-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:inset 0 0 0 9999px #000;';
-  return text.replace(/돼지고기\s*/g, '<span style="'+meatBadgeStyle+'">돼지고기</span> ');
+  return text.replace(/(돼지고기|소고기)\s*/g, '<span style="'+meatBadgeStyle+'">$1</span> ');
 }
 
 
@@ -10972,6 +10972,7 @@ function buildLabelBody(d){
   var pad = 'padding:1.8pt 2.2pt;';
   var oh = 'overflow:hidden;';
   var sh = 'flex-shrink:0;';
+  var manufacturerName = htmlEscape(d.manufacturer || '주식회사 동부엠티').replace(/주식회사\s*동부엠티/g, '주식회사 동부엠티');
   var rows = '';
 
   // 제품명
@@ -10982,7 +10983,7 @@ function buildLabelBody(d){
 
   // 성별및등급 | 원산지
   rows += '<div style="display:flex;'+bb+sh+'min-height:17pt;">'
-    + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;">성별및등급:</span> <span style="font-size:9.1pt;">'+(d.grade||'')+'</span></div>'
+    + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">성별및등급:</span><span style="flex:1;text-align:center;font-size:9.1pt;">'+(d.grade||'')+'</span></div>'
     + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;">원산지:</span> <strong style="font-size:10.4pt;margin-left:6pt;">'+(d.origin||'')+'</strong></div>'
     + '</div>';
 
@@ -11010,7 +11011,7 @@ function buildLabelBody(d){
   // 이력번호
   rows += '<div style="'+bb+pad+sh+'min-height:15pt;display:flex;align-items:center;gap:4pt;">'
     + '<span style="font-size:6pt;font-weight:900;flex-shrink:0;">이력번호</span>'
-    + '<strong style="font-size:7.2pt;line-height:1.1;word-break:break-all;">'+htmlEscape(d.lotText||'')+'</strong>'
+    + '<strong style="font-size:9.1pt;line-height:1.1;word-break:break-all;">'+htmlEscape(d.lotText||'')+'</strong>'
     + '</div>';
 
   // 원료 및 함량
@@ -11047,8 +11048,7 @@ function buildLabelBody(d){
     + '</div>'
     + '<div style="display:flex;align-items:flex-start;margin-top:-18pt;padding-bottom:3pt;line-height:1.12;">'
     +   '<div style="max-width:100%;">'
-    +     '<div style="font-size:6.5pt;">제조판매원</div>'
-    +     '<strong style="font-size:10pt;">'+(d.manufacturer||'')+'</strong>'
+    +     '<div style="display:flex;align-items:baseline;gap:8pt;margin-bottom:1pt;"><span style="font-size:6.5pt;">제조판매원</span><strong style="font-size:10pt;">'+manufacturerName+'</strong></div>'
     +     '<div style="margin-top:1pt;font-size:6.2pt;">'+(d.phone||'')+'</div>'
     +     '<div style="font-size:6.2pt;">'+(d.address||'')+'</div>'
     +   '</div>'
