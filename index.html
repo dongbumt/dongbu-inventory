@@ -4468,6 +4468,11 @@ function updateTxnPrice(id, newPriceStr){
   const newPrice = parseFloat(newPriceStr)||0;
   const txn = userTransactions.find(t=>String(t.id)===String(id));
   if(!txn) return;
+  if(txn.type === '재고이동'){
+    toast('재고이동 단가는 선택한 재고의 입고/생산단가로 고정됩니다.', 2500);
+    renderTransactions();
+    return;
+  }
   txn.price  = newPrice;
   txn.amount = Math.round(newPrice * txn.weight);
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
@@ -4493,6 +4498,21 @@ function autoFillTxnPrice(){
   const trader  = document.getElementById('t-trader')?.value.trim() || '';
   const priceEl = document.getElementById('t-price');
   if(!priceEl) return;
+  if(document.getElementById('t-type')?.value === '재고이동'){
+    const stockPrice = parseAppNumber(document.getElementById('t-stock-price')?.value || 0);
+    if(stockPrice){
+      priceEl.value = stockPrice;
+      priceEl.dataset.autofilled = '1';
+      priceEl.style.background = '#fffbe6';
+      priceEl.title = '선택한 재고의 입고/생산단가가 그대로 적용됩니다.';
+    } else {
+      priceEl.value = '';
+      priceEl.dataset.autofilled = '';
+      priceEl.title = '이동할 재고를 선택하면 입고/생산단가가 자동 적용됩니다.';
+    }
+    updateTxnAmtPreview();
+    return;
+  }
   const match = findPriceRow(product, origin, trader);
   const p = match ? (parseFloat(match.price)||0) : 0;
   if(p){
@@ -4573,7 +4593,7 @@ function addTransaction(){
   }
   const autoPriceEl = document.getElementById('t-price');
   const tablePrice = getPrice(product,origin,trader);
-  const price = parseFloat(autoPriceEl?.value) || tablePrice;
+  let price = parseFloat(autoPriceEl?.value) || tablePrice;
   if(type==='출고' && !price){
     alert('단가표에서 해당 품목/거래처 단가를 찾지 못했습니다.\n단가표를 확인하거나 단가를 직접 입력해주세요.');
     return;
@@ -4612,6 +4632,9 @@ function addTransaction(){
       alert(`현재 선택 재고 ${Number(availableStock||0).toFixed(2)}KG보다 입력중량 ${weight.toFixed(2)}KG가 큽니다.`);
       return;
     }
+  }
+  if(type === '재고이동' && selectedStock){
+    price = parseAppNumber(selectedStock.price);
   }
   const proddateForSave = ((type === '출고' || type === '재고이동') && selectedStock) ? (selectedStock.proddate || proddate) : proddate;
   const samsungMeta = type === '출고' ? getTxnSamsungMeta() : null;
@@ -5381,6 +5404,7 @@ function renderTransactions(){
     const id = t.id;
     const domId = String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
     const isStockAdjust = t.type === '재고조정';
+    const isStockMove = t.type === '재고이동';
     const date = htmlEscape(t.date);
     const type = htmlEscape(t.type);
     const trader = htmlEscape(t.trader || '-');
@@ -5404,7 +5428,7 @@ function renderTransactions(){
     <td style="text-align:right">${weight.toFixed(2)}</td>
     <td style="text-align:right;padding:2px 4px;">
       ${t._isUser
-        ? (isStockAdjust ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
+        ? ((isStockAdjust || isStockMove) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
              onchange="updateTxnPrice(${jsArg(t.id)}, this.value)"
              style="width:80px;text-align:right;font-size:12px;padding:2px 4px;
                     border:1px solid #ddd;border-radius:4px;background:#fffff8;">`)
