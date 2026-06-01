@@ -1941,9 +1941,11 @@
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
       <input type="month" id="exp-month" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
       <button class="btn btn-secondary btn-sm" onclick="renderExpenses()">조회</button>
+      <button class="btn btn-secondary btn-sm" onclick="expSetRelativeMonth(-1)">저번달</button>
       <button class="btn btn-secondary btn-sm" onclick="expSetThisMonth()">이번달</button>
+      <button class="btn btn-secondary btn-sm" onclick="expSetRelativeMonth(1)">다음달</button>
     </div>
-    <!-- 전월/이번달/다음달 합계 -->
+    <!-- 주요 월 합계 -->
     <div id="exp-month-overview-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;"></div>
     <!-- 결제수단별 합계 -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;" id="exp-summary-cards">
@@ -10357,10 +10359,7 @@ function saveExpenses(){
 }
 
 function expSetThisMonth(){
-  const t = new Date();
-  document.getElementById('exp-month').value =
-    t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0');
-  renderExpenses();
+  expSetRelativeMonth(0);
 }
 
 function expMonthKey(date){
@@ -10382,6 +10381,10 @@ function expSetMonth(monthKey){
   const el = document.getElementById('exp-month');
   if(el) el.value = monthKey;
   renderExpenses();
+}
+
+function expSetRelativeMonth(offset){
+  expSetMonth(expShiftMonth(expMonthKey(new Date()), offset));
 }
 
 function clearExpenseForm(){
@@ -10471,23 +10474,28 @@ function renderExpenseMonthOverview(selectedMonth){
   const el = document.getElementById('exp-month-overview-cards');
   if(!el) return;
   const baseMonth = expMonthKey(new Date());
+  const sixMonthKeys = Array.from({length:6}, (_,i)=>expShiftMonth(baseMonth, i-5));
+  const sixMonthRows = expenseList.filter(e => sixMonthKeys.some(k => (e.date||'').startsWith(k)));
+  const sixMonthTotal = sixMonthRows.reduce((s,e)=>s+(parseInt(e.amount)||0),0);
   const cards = [
-    {label:'저번달', key:expShiftMonth(baseMonth, -1), color:'#7f8c8d'},
     {label:'이번달', key:baseMonth, color:'#1a7ab5'},
-    {label:'다음달', key:expShiftMonth(baseMonth, 1), color:'#16a085'},
+    {label:'저번달', key:expShiftMonth(baseMonth, -1), color:'#7f8c8d'},
+    {label:'최근6개월평균', key:'avg6', color:'#16a085', total:Math.round(sixMonthTotal/6), count:sixMonthRows.length, sub:`${expMonthDisplay(sixMonthKeys[0])}~${expMonthDisplay(sixMonthKeys[5])}`},
   ];
   el.innerHTML = cards.map(c=>{
-    const rows = expenseList.filter(e => (e.date||'').startsWith(c.key));
-    const total = rows.reduce((s,e)=>s+(parseInt(e.amount)||0),0);
-    const active = selectedMonth === c.key;
-    return `<button type="button" onclick="expSetMonth('${c.key}')" style="text-align:left;background:${active?'#eef7ff':'#fff'};border:1px solid ${active?c.color:'var(--border)'};border-left:4px solid ${c.color};border-radius:8px;padding:11px 12px;cursor:pointer;font-family:inherit;box-shadow:${active?'0 0 0 2px rgba(26,122,181,.08)':'none'};">
+    const rows = c.key === 'avg6' ? [] : expenseList.filter(e => (e.date||'').startsWith(c.key));
+    const total = c.key === 'avg6' ? c.total : rows.reduce((s,e)=>s+(parseInt(e.amount)||0),0);
+    const count = c.key === 'avg6' ? c.count : rows.length;
+    const active = c.key !== 'avg6' && selectedMonth === c.key;
+    const clickable = c.key !== 'avg6';
+    return `<${clickable?'button':'div'} type="button" ${clickable?`onclick="expSetMonth('${c.key}')"`:''} style="text-align:left;background:${active?'#eef7ff':'#fff'};border:1px solid ${active?c.color:'var(--border)'};border-left:4px solid ${c.color};border-radius:8px;padding:11px 12px;${clickable?'cursor:pointer;':'cursor:default;'}font-family:inherit;box-shadow:${active?'0 0 0 2px rgba(26,122,181,.08)':'none'};">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;">
         <span style="font-size:12px;font-weight:800;color:${c.color};">${c.label}</span>
-        <span style="font-size:11px;color:#888;">${expMonthDisplay(c.key)}</span>
+        <span style="font-size:11px;color:#888;">${c.sub || expMonthDisplay(c.key)}</span>
       </div>
       <div style="font-size:17px;font-weight:800;color:#2c3e50;">${total.toLocaleString()}원</div>
-      <div style="font-size:11px;color:#777;margin-top:3px;">${rows.length}건</div>
-    </button>`;
+      <div style="font-size:11px;color:#777;margin-top:3px;">${count}건</div>
+    </${clickable?'button':'div'}>`;
   }).join('');
 }
 
