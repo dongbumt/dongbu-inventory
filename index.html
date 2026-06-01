@@ -1943,6 +1943,8 @@
       <button class="btn btn-secondary btn-sm" onclick="renderExpenses()">조회</button>
       <button class="btn btn-secondary btn-sm" onclick="expSetThisMonth()">이번달</button>
     </div>
+    <!-- 전월/이번달/다음달 합계 -->
+    <div id="exp-month-overview-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;"></div>
     <!-- 결제수단별 합계 -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;" id="exp-summary-cards">
     </div>
@@ -10361,6 +10363,27 @@ function expSetThisMonth(){
   renderExpenses();
 }
 
+function expMonthKey(date){
+  return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0');
+}
+
+function expShiftMonth(monthKey, offset){
+  const parts = String(monthKey || expMonthKey(new Date())).split('-').map(Number);
+  const d = new Date(parts[0] || new Date().getFullYear(), (parts[1] || 1) - 1 + offset, 1);
+  return expMonthKey(d);
+}
+
+function expMonthDisplay(monthKey){
+  const [y,m] = String(monthKey || '').split('-');
+  return y && m ? `${y}년 ${Number(m)}월` : '';
+}
+
+function expSetMonth(monthKey){
+  const el = document.getElementById('exp-month');
+  if(el) el.value = monthKey;
+  renderExpenses();
+}
+
 function clearExpenseForm(){
   document.getElementById('exp-date').value    = today;
   document.getElementById('exp-paytype').value = '우리카드';
@@ -10444,12 +10467,38 @@ function normalizeExpenseCategory(category){
   return category === '위생용품' ? '위생안전관리' : (category || '');
 }
 
+function renderExpenseMonthOverview(selectedMonth){
+  const el = document.getElementById('exp-month-overview-cards');
+  if(!el) return;
+  const baseMonth = expMonthKey(new Date());
+  const cards = [
+    {label:'저번달', key:expShiftMonth(baseMonth, -1), color:'#7f8c8d'},
+    {label:'이번달', key:baseMonth, color:'#1a7ab5'},
+    {label:'다음달', key:expShiftMonth(baseMonth, 1), color:'#16a085'},
+  ];
+  el.innerHTML = cards.map(c=>{
+    const rows = expenseList.filter(e => (e.date||'').startsWith(c.key));
+    const total = rows.reduce((s,e)=>s+(parseInt(e.amount)||0),0);
+    const active = selectedMonth === c.key;
+    return `<button type="button" onclick="expSetMonth('${c.key}')" style="text-align:left;background:${active?'#eef7ff':'#fff'};border:1px solid ${active?c.color:'var(--border)'};border-left:4px solid ${c.color};border-radius:8px;padding:11px 12px;cursor:pointer;font-family:inherit;box-shadow:${active?'0 0 0 2px rgba(26,122,181,.08)':'none'};">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;">
+        <span style="font-size:12px;font-weight:800;color:${c.color};">${c.label}</span>
+        <span style="font-size:11px;color:#888;">${expMonthDisplay(c.key)}</span>
+      </div>
+      <div style="font-size:17px;font-weight:800;color:#2c3e50;">${total.toLocaleString()}원</div>
+      <div style="font-size:11px;color:#777;margin-top:3px;">${rows.length}건</div>
+    </button>`;
+  }).join('');
+}
+
 function renderExpenses(){
   const monthVal = document.getElementById('exp-month')?.value || '';
   const filtered = monthVal
     ? expenseList.filter(e => (e.date||'').startsWith(monthVal))
     : [...expenseList];
   filtered.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+
+  renderExpenseMonthOverview(monthVal);
 
   // 결제수단별 합계
   const payTotals = {'우리카드':0,'비씨카드':0,'통장입금':0,'현금':0};
