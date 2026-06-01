@@ -10359,7 +10359,7 @@ function saveExpenses(){
 }
 
 function expSetThisMonth(){
-  expSetRelativeMonth(0);
+  expSetMonth(expMonthKey(new Date()));
 }
 
 function expMonthKey(date){
@@ -10384,7 +10384,8 @@ function expSetMonth(monthKey){
 }
 
 function expSetRelativeMonth(offset){
-  expSetMonth(expShiftMonth(expMonthKey(new Date()), offset));
+  const currentMonth = document.getElementById('exp-month')?.value || expMonthKey(new Date());
+  expSetMonth(expShiftMonth(currentMonth, offset));
 }
 
 function clearExpenseForm(){
