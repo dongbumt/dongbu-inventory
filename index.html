@@ -2114,7 +2114,7 @@
       <div style="display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px;">
         <div class="form-group">
           <label>작업일</label>
-          <input id="wo-date" type="date" onchange="renderWorkOrderStockResults(); refreshWorkOrderPreview();">
+          <input id="wo-date" type="date" onchange="onWorkOrderDateChange()">
         </div>
         <div class="form-group">
           <label>작업명</label>
@@ -2141,15 +2141,12 @@
             <option value="10x10">10 × 10cm</option>
           </select>
         </div>
-        <div class="form-group" style="grid-column:1/-1;background:#fff8e8;border:1px solid #f0c040;border-radius:6px;padding:8px;">
-          <label style="color:#e67e22;font-weight:700;">등록 품목에서 라벨 기본값 불러오기</label>
-          <select id="wo-label-product-select" onchange="applyWorkOrderLabelProduct()" style="font-size:13px;padding:6px 8px;border:1px solid #f0c040;border-radius:4px;">
-            <option value="">-- 직접 입력 --</option>
-          </select>
-        </div>
-        <div class="form-group" style="grid-column:1/-1;">
+        <div class="form-group" style="grid-column:1/-1;position:relative;">
           <label>생산물 제품명</label>
-          <input id="wo-product" placeholder="예) 돈등심(작업)" oninput="refreshWorkOrderPreview()">
+          <input id="wo-product" placeholder="품목관리 제품명 검색" autocomplete="off"
+            oninput="renderWorkOrderProductResults()" onfocus="renderWorkOrderProductResults()" onblur="hideWorkOrderProductResultsSoon()">
+          <input type="hidden" id="wo-label-product-id">
+          <div id="wo-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
         </div>
         <div class="form-group">
           <label>원산지</label>
@@ -2238,6 +2235,10 @@
           <select id="lbl-workorder-select" onchange="updateLabelPreview()">
             <option value="">-- 작업지시 선택 --</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label>출력 매수</label>
+          <input id="lbl-print-count" type="number" min="1" step="1" value="1">
         </div>
         <button class="btn btn-primary" onclick="printLabel()" style="width:100%;">라벨 출력</button>
       </div>
@@ -10886,7 +10887,7 @@ function labelCrossFacilityNoticeFromText(product='', ingredients=''){
 }
 
 function initWorkOrderForm(){
-  refreshWorkOrderProductSelect();
+  if(typeof migrateLabelProducts === 'function') migrateLabelProducts();
   const todayStr = localDateString();
   const dateEl = document.getElementById('wo-date');
   if(dateEl && !dateEl.value) dateEl.value = todayStr;
@@ -10899,7 +10900,7 @@ function initWorkOrderForm(){
 }
 
 function resetWorkOrderForm(){
-  ['wo-edit-id','wo-stock-key','wo-title','wo-stock-search','wo-stock-summary','wo-input-weight',
+  ['wo-edit-id','wo-stock-key','wo-label-product-id','wo-title','wo-stock-search','wo-stock-summary','wo-input-weight',
    'wo-product','wo-origin','wo-grade','wo-weight','wo-itemno','wo-lot','wo-ingredients'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
@@ -10913,31 +10914,78 @@ function resetWorkOrderForm(){
   if(tempEl) tempEl.value = '냉동';
   const sizeEl = document.getElementById('wo-label-size');
   if(sizeEl) sizeEl.value = localStorage.getItem('dbmt_label_size') || '7x10';
-  const prodSel = document.getElementById('wo-label-product-select');
-  if(prodSel) prodSel.value = '';
   autoSetWorkOrderExpiry();
   refreshWorkOrderPreview();
 }
 
-function refreshWorkOrderProductSelect(){
-  const sel = document.getElementById('wo-label-product-select');
-  if(!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">-- 직접 입력 --</option>' +
-    (labelProducts || []).map((p, i) =>
-      `<option value="${i}">${htmlEscape(p.name || '')}${p.origin ? ' (' + htmlEscape(p.origin) + ')' : ''}</option>`
-    ).join('');
-  if(current) sel.value = current;
+function onWorkOrderDateChange(){
+  const date = document.getElementById('wo-date')?.value || localDateString();
+  const mfgEl = document.getElementById('wo-mfgdate');
+  if(mfgEl) mfgEl.value = date;
+  autoSetWorkOrderExpiry();
+  renderWorkOrderStockResults();
+  refreshWorkOrderPreview();
 }
 
 function selectedWorkOrderLabelProduct(){
-  const sel = document.getElementById('wo-label-product-select');
-  if(!sel || sel.value === '') return null;
-  return labelProducts[parseInt(sel.value)] || null;
+  const id = document.getElementById('wo-label-product-id')?.value || '';
+  if(id) return (labelProducts || []).find(p => String(p.id || '') === String(id)) || null;
+  const product = String(document.getElementById('wo-product')?.value || '').trim();
+  if(!product) return null;
+  return (labelProducts || []).find(p => samePriceText(p.name || '', product)) || null;
 }
 
-function applyWorkOrderLabelProduct(){
-  const p = selectedWorkOrderLabelProduct();
+function workOrderProductSearchText(p){
+  return [p.name, p.packunit, p.origin, p.meattype, p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
+}
+
+function renderWorkOrderProductResults(){
+  const input = document.getElementById('wo-product');
+  const box = document.getElementById('wo-product-results');
+  const hidden = document.getElementById('wo-label-product-id');
+  if(!input || !box) return;
+  if(hidden && hidden.value){
+    const selected = (labelProducts || []).find(p => String(p.id || '') === String(hidden.value));
+    if(!selected || String(selected.name || '').trim() !== String(input.value || '').trim()) hidden.value = '';
+  }
+  const q = bulkOutboundSearchKey(input.value);
+  let rows = (labelProducts || []).slice();
+  if(q) rows = rows.filter(p => bulkOutboundSearchKey(workOrderProductSearchText(p)).includes(q));
+  rows = rows.slice(0, 80);
+  if(!rows.length){
+    box.innerHTML = '<div style="padding:10px;font-size:12px;color:#999;">품목관리에 등록된 제품이 없습니다.</div>';
+  } else {
+    box.innerHTML = rows.map(p => `
+      <div data-id="${htmlEscape(p.id || '')}" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;"
+        onmousedown="selectWorkOrderLabelProduct(this.dataset.id)">
+        <div style="font-weight:800;color:#2c3e50;">${htmlEscape(p.name || '')}${p.packunit ? ' / ' + htmlEscape(p.packunit) : ''}</div>
+        <div style="color:#666;margin-top:2px;">${htmlEscape([p.origin, p.meattype, p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
+      </div>
+    `).join('');
+  }
+  box.style.display = 'block';
+  refreshWorkOrderPreview();
+}
+
+function hideWorkOrderProductResultsSoon(){
+  setTimeout(() => {
+    const box = document.getElementById('wo-product-results');
+    if(box) box.style.display = 'none';
+  }, 180);
+}
+
+function selectWorkOrderLabelProduct(productId){
+  const p = (labelProducts || []).find(row => String(row.id || '') === String(productId));
+  if(!p) return;
+  const hidden = document.getElementById('wo-label-product-id');
+  if(hidden) hidden.value = p.id || '';
+  applyWorkOrderLabelProduct(p);
+  const box = document.getElementById('wo-product-results');
+  if(box) box.style.display = 'none';
+}
+
+function applyWorkOrderLabelProduct(product){
+  const p = product || selectedWorkOrderLabelProduct();
   if(!p) return;
   const set = (id, value) => {
     const el = document.getElementById(id);
@@ -10948,6 +10996,10 @@ function applyWorkOrderLabelProduct(){
   set('wo-grade', p.grade);
   set('wo-itemno', p.itemno);
   set('wo-ingredients', `${p.meattype || inferLabelMeatType(p.name, '')} 100%`);
+  const stock = findWorkOrderStock(document.getElementById('wo-stock-key')?.value || '');
+  if(stock?.lot) set('wo-lot', stock.lot);
+  const workDate = document.getElementById('wo-date')?.value || localDateString();
+  set('wo-mfgdate', workDate);
   const tempEl = document.getElementById('wo-temptype');
   if(tempEl && p.storage) tempEl.value = p.storage;
   autoSetWorkOrderExpiry();
@@ -11072,6 +11124,7 @@ function collectWorkOrderForm(){
       stock: parseAppNumber(stock.stock)
     } : null,
     inputWeight: parseAppNumber(val('wo-input-weight')),
+    labelProductId: val('wo-label-product-id') || selectedWorkOrderLabelProduct()?.id || '',
     labelSize: val('wo-label-size') || '7x10',
     product,
     origin: val('wo-origin').trim(),
@@ -11114,6 +11167,8 @@ function editWorkOrder(id){
   set('wo-stock-summary', row.sourceStock ? workOrderStockLabel(row.sourceStock) : '');
   set('wo-stock-search', row.sourceStock?.product || '');
   set('wo-input-weight', row.inputWeight ? String(row.inputWeight) : '');
+  const labelProductId = row.labelProductId || ((labelProducts || []).find(p => samePriceText(p.name || '', row.product || ''))?.id || '');
+  set('wo-label-product-id', labelProductId);
   set('wo-label-size', row.labelSize || '7x10');
   set('wo-product', row.product);
   set('wo-origin', row.origin);
@@ -11324,7 +11379,13 @@ function updateSelectedWorkOrderLabelPreview(){
 function printSelectedWorkOrderLabel(){
   const row = selectedLabelWorkOrder();
   if(!row){ alert('출력할 작업지시를 선택해주세요.'); return; }
-  printLabelData(workOrderLabelData(row), row.labelSize || '7x10');
+  printLabelData(workOrderLabelData(row), row.labelSize || '7x10', getLabelPrintCount());
+}
+
+function getLabelPrintCount(){
+  const n = parseInt(document.getElementById('lbl-print-count')?.value || '1', 10);
+  if(!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, 500);
 }
 
 function initLabelForm(){
@@ -11739,8 +11800,9 @@ function saveLabelProduct(){
 
 function migrateLabelProducts(){
   let changed = false;
-  labelProducts = labelProducts.map(p => {
+  labelProducts = labelProducts.map((p, idx) => {
     const next = {...p};
+    if(!next.id){ next.id = `lp_${Date.now()}_${idx}`; changed = true; }
     if(!next.kind){ next.kind = '원료육'; changed = true; }
     if(next.origin){
       const normalized = normalizeOriginName(next.origin);
@@ -11905,18 +11967,19 @@ function updateLabelPreview(){
   });
 }
 
-function printLabelData(data, sizeKey='7x10'){
+function printLabelData(data, sizeKey='7x10', copies=1){
   const sizeCfg = labelSizeConfigByKey(sizeKey);
+  const count = Math.max(1, Math.min(parseInt(copies || 1, 10) || 1, 500));
+  const labelsHtml = Array.from({length: count}, () => `<div class="lbl-label">${buildLabelBody(data)}</div>`).join('');
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <style>
     @page { size: ${sizeCfg.widthCm}cm ${sizeCfg.heightCm}cm; margin: 0; }
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { width:${sizeCfg.widthCm}cm; height:${sizeCfg.heightCm}cm; font-family:'Malgun Gothic','맑은 고딕',sans-serif; font-size:7pt; background:#fff; }
-    .lbl-label { width:${sizeCfg.widthCm}cm; height:${sizeCfg.heightCm}cm; border:2px solid #000; display:flex; flex-direction:column; padding:1.5pt 2pt 4pt; overflow:hidden; box-sizing:border-box; line-height:1.2; font-weight:bold; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body { width:${sizeCfg.widthCm}cm; font-family:'Malgun Gothic','맑은 고딕',sans-serif; font-size:7pt; background:#fff; }
+    .lbl-label { width:${sizeCfg.widthCm}cm; height:${sizeCfg.heightCm}cm; border:2px solid #000; display:flex; flex-direction:column; padding:1.5pt 2pt 4pt; overflow:hidden; box-sizing:border-box; line-height:1.2; font-weight:bold; -webkit-print-color-adjust:exact; print-color-adjust:exact; page-break-after:always; break-after:page; }
+    .lbl-label:last-child { page-break-after:auto; break-after:auto; }
   </style></head><body>
-  <div class="lbl-label">
-    ${buildLabelBody(data)}
-  </div>
+  ${labelsHtml}
   </body></html>`;
 
   const win = window.open('', '_blank', 'width=400,height=600');
@@ -11950,7 +12013,7 @@ function printLabel(){
     temptype: document.getElementById('lbl-temptype')?.value || '냉동',
     crossFacilityNotice: labelCrossFacilityNotice(),
     lotText: v('lbl-lot'),
-  }, getLabelSizeConfig().key);
+  }, getLabelSizeConfig().key, getLabelPrintCount());
 }
 
 function saveLabelTemplate(){
