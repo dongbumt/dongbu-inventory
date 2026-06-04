@@ -133,7 +133,7 @@
       <p style="margin:0 0 8px;font-size:12px;line-height:1.55;color:#555;">
         새 PC에서는 연동 비밀번호만 입력하면 서버 데이터와 연결됩니다.
       </p>
-      <input id="sb-connect-token-input" type="password" placeholder="연동 비밀번호" autocomplete="current-password">
+      <input id="sb-connect-token-input" type="password" placeholder="연동 비밀번호" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" spellcheck="false">
       <button onclick="supabaseSetupStart()" style="width:100%;margin-top:8px;padding:10px;background:#16a085;color:#fff;
         border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Supabase 연결 시작</button>
     </div>
@@ -1210,7 +1210,7 @@
       아래 버튼으로 서버 데이터 건수 확인과 현재 화면 데이터 비교만 수행합니다.
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-      <input id="sb-migration-password" type="password" placeholder="연동 비밀번호" autocomplete="current-password" style="max-width:220px;">
+      <input id="sb-migration-password" type="password" placeholder="연동 비밀번호" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" spellcheck="false" style="max-width:220px;">
       <button class="btn btn-secondary" onclick="checkSupabaseMigrationData()">Supabase 데이터 확인</button>
       <button class="btn btn-primary" onclick="compareSupabaseWithCurrentData()">현재 데이터와 비교</button>
     </div>
@@ -2283,13 +2283,45 @@ const GS_CORE_SNAPSHOT_KEY = 'dbmt_gs_core_snapshot';
 // 회사 공용 Apps Script 웹앱 URL — 각 PC에서 별도 설정 없이 자동 연동된다.
 // 개인이 다른 URL을 쓰려면 설정 화면에서 입력하면 localStorage 값이 우선한다.
 const DEFAULT_GS_URL = 'https://script.google.com/macros/s/AKfycbyGPUL1cKw3hUlotf7_wELbmUj4-yAMzVa03Lx4gXY1Ia_aYrS-3gt8HYdtLHLail9JBQ/exec';
-const DEFAULT_GS_TOKEN = 'dong540916!';
+const DEFAULT_GS_TOKEN = '';
 let GS_URL = localStorage.getItem('dbmt_gs_url') || DEFAULT_GS_URL;
-let GS_TOKEN = localStorage.getItem('dbmt_gs_token') || DEFAULT_GS_TOKEN;
 const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
 const SUPABASE_ENABLED_KEY = 'dbmt_supabase_enabled';
 const SUPABASE_PENDING_CORE_KEY = 'dbmt_supabase_pending_core_save';
+const SUPABASE_SESSION_TOKEN_KEY = 'dbmt_supabase_session_token';
+let GS_TOKEN = readSupabaseSessionPassword();
+try { localStorage.removeItem('dbmt_gs_token'); } catch(e) {}
+
+function readSupabaseSessionPassword(){
+  try { return (sessionStorage.getItem(SUPABASE_SESSION_TOKEN_KEY) || '').trim(); }
+  catch(e){ return ''; }
+}
+
+function setSupabaseSessionPassword(token){
+  GS_TOKEN = (token || '').trim();
+  try { sessionStorage.setItem(SUPABASE_SESSION_TOKEN_KEY, GS_TOKEN); } catch(e) {}
+  try { localStorage.removeItem('dbmt_gs_token'); } catch(e) {}
+}
+
+function clearSupabaseSessionPassword(){
+  GS_TOKEN = '';
+  try { sessionStorage.removeItem(SUPABASE_SESSION_TOKEN_KEY); } catch(e) {}
+  try { localStorage.removeItem('dbmt_gs_token'); } catch(e) {}
+}
+
+function getSupabasePassword(){
+  return (GS_TOKEN || readSupabaseSessionPassword()).trim();
+}
+
+function requireSupabasePassword(){
+  const password = getSupabasePassword();
+  if(!password){
+    gsShowSetup();
+    throw new Error('Supabase 연동 비밀번호가 없습니다. 연결 화면에서 비밀번호를 입력해주세요.');
+  }
+  return password;
+}
 
 // 동기화 상태 표시
 function gsShowSync(msg, isErr=false){
@@ -2315,6 +2347,7 @@ function gsSkipToLocal(){
   if(overlay) overlay.classList.add('hidden');
   const setup = document.getElementById('gs-setup');
   if(setup) setup.classList.add('hidden');
+  clearSupabaseSessionPassword();
   gsSetStatus(false);
   localInit();
   renderAll();
@@ -2334,9 +2367,8 @@ function gsSetupSave(){
   const token = (document.getElementById('gs-token-input')?.value || '').trim();
   if(!token){ alert('연동 비밀번호를 입력하세요.'); return; }
   GS_URL = url;
-  GS_TOKEN = token;
+  setSupabaseSessionPassword(token);
   localStorage.setItem('dbmt_gs_url', url);
-  localStorage.setItem('dbmt_gs_token', token);
   localStorage.removeItem(SUPABASE_ENABLED_KEY);
   localStorage.removeItem('dbmt_gs_skip');
   const setup = document.getElementById('gs-setup');
@@ -2349,8 +2381,7 @@ async function supabaseSetupStart(){
   const token = (document.getElementById('sb-connect-token-input')?.value || document.getElementById('gs-token-input')?.value || '').trim();
   if(!token){ alert('연동 비밀번호를 입력하세요.'); return; }
 
-  GS_TOKEN = token;
-  localStorage.setItem('dbmt_gs_token', token);
+  setSupabaseSessionPassword(token);
   localStorage.setItem(SUPABASE_ENABLED_KEY, '1');
   localStorage.removeItem('dbmt_gs_skip');
 
@@ -2362,6 +2393,7 @@ async function supabaseSetupStart(){
   }catch(err){
     console.error('Supabase setup failed:', err);
     localStorage.removeItem(SUPABASE_ENABLED_KEY);
+    clearSupabaseSessionPassword();
     const detail = err?.message || String(err || '');
     localStorage.setItem('dbmt_gs_last_error', detail);
     gsSetStatus(false);
@@ -2373,6 +2405,7 @@ async function supabaseSetupStart(){
 function gsSetupSkip(){
   localStorage.setItem('dbmt_gs_skip', '1');
   localStorage.removeItem(SUPABASE_ENABLED_KEY);
+  clearSupabaseSessionPassword();
   gsSkipToLocal();
 }
 
@@ -2380,9 +2413,14 @@ function gsShowSetup(){
   const input = document.getElementById('gs-url-input');
   if(input && GS_URL) input.value = GS_URL;
   const tokenInput = document.getElementById('gs-token-input');
-  if(tokenInput && GS_TOKEN) tokenInput.value = GS_TOKEN;
+  if(tokenInput) tokenInput.value = '';
   const sbTokenInput = document.getElementById('sb-connect-token-input');
-  if(sbTokenInput && GS_TOKEN) sbTokenInput.value = GS_TOKEN;
+  if(sbTokenInput){
+    sbTokenInput.value = '';
+    setTimeout(() => {
+      if(document.activeElement !== sbTokenInput) sbTokenInput.value = '';
+    }, 250);
+  }
   const lastError = localStorage.getItem('dbmt_gs_last_error') || '';
   const setup = document.getElementById('gs-setup');
   const msg = document.getElementById('gs-setup-last-error') || (() => {
@@ -3011,15 +3049,7 @@ async function gsInit(){
     try {
       all = await gsGet('getAll');
     } catch(loadErr) {
-      const msgText = String(loadErr?.message || loadErr || '');
-      if(/비밀번호|token|일치하지 않습니다/i.test(msgText) && GS_TOKEN !== DEFAULT_GS_TOKEN){
-        GS_TOKEN = DEFAULT_GS_TOKEN;
-        localStorage.setItem('dbmt_gs_token', GS_TOKEN);
-        all = await gsGet('getAll');
-        gsShowSync('저장된 연동 비밀번호를 기본값으로 복구했습니다.');
-      } else {
-        throw loadErr;
-      }
+      throw loadErr;
     }
     all = {...all, ...gsNormalizeCorePayload(all)};
     // 응답 무결성 검증 — 빈/부분 응답이 로컬 백업과 시트를 덮어쓰지 못하게 차단
@@ -3266,7 +3296,7 @@ function gsSaveAppData(){
 }
 
 async function supabaseSaveCore(payload){
-  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  const password = requireSupabasePassword();
   try{
     localStorage.setItem(SUPABASE_PENDING_CORE_KEY, JSON.stringify({
       at: new Date().toISOString(),
@@ -3294,7 +3324,7 @@ function asArray(value){
 }
 
 async function supabaseSaveTransactionRows(rows, deletedIds){
-  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  const password = requireSupabasePassword();
   const upsertRows = asArray(rows);
   const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
   try{
@@ -3325,7 +3355,7 @@ function saveTransactionRows(rows, deletedIds){
 }
 
 async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId){
-  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  const password = requireSupabasePassword();
   try{
     if(deletedProdId){
       await sbRpc('dbmt_delete_production', {p_password: password, p_id: String(deletedProdId)});
@@ -3364,7 +3394,7 @@ function ensurePriceId(row){
 }
 
 async function supabaseSavePriceRows(rows, deletedIds, forceFull=false){
-  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  const password = requireSupabasePassword();
   try{
     if(forceFull){
       await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
@@ -3399,7 +3429,7 @@ function savePriceRows(rows, deletedIds, forceFull=false){
 }
 
 async function supabaseSaveAppData(){
-  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
+  const password = requireSupabasePassword();
   await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData()});
 }
 
@@ -8213,7 +8243,7 @@ function backupAllData(){
     'dbmt_employees','dbmt_leaves',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
-    'dbmt_label_products','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_token','dbmt_gs_skip'
+    'dbmt_label_products','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
   ];
   const backup = { _version: 2, _date: new Date().toISOString(), data: {} };
   KEYS.forEach(k => {
@@ -8263,7 +8293,7 @@ function sbMigrationStatus(message, isError=false){
 }
 
 function sbMigrationPassword(){
-  return (document.getElementById('sb-migration-password')?.value || GS_TOKEN || DEFAULT_GS_TOKEN || '').trim();
+  return (document.getElementById('sb-migration-password')?.value || getSupabasePassword() || '').trim();
 }
 
 async function sbRpc(fnName, body){
@@ -8443,8 +8473,7 @@ function applySupabasePayload(data){
 }
 
 async function supabaseInit(){
-  const password = GS_TOKEN || DEFAULT_GS_TOKEN;
-  if(!password) throw new Error('Supabase 연동 비밀번호가 없습니다.');
+  const password = requireSupabasePassword();
   gsShowSync('Supabase에서 데이터 불러오는 중...');
   const data = await sbRpc('dbmt_get_all', {p_password: password});
   applySupabasePayload(data);
@@ -9532,7 +9561,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     supabaseInit().catch(err=>{
       console.error('Supabase 초기 로드 실패:', err);
       gsSetStatus(false);
-      gsShowSync('⚠ Supabase 로드 실패 — 현재 로컬 데이터로 실행 중입니다', true);
+      gsShowSetup();
+      gsShowSync('⚠ Supabase 연결 비밀번호를 입력하면 서버 데이터와 동기화됩니다', true);
     });
   } else {
     gsShowSetup();
