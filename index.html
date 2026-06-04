@@ -117,10 +117,10 @@
   </div>
 </div>
 
-<!-- ── Google Sheets 로딩 오버레이 ── -->
+<!-- ── 서버 데이터 로딩 오버레이 ── -->
 <div id="gs-overlay" class="hidden">
   <div class="gs-spinner"></div>
-  <div id="gs-overlay-msg" style="font-size:14px;font-weight:600;">Google Sheets에서 데이터 불러오는 중...</div>
+  <div id="gs-overlay-msg" style="font-size:14px;font-weight:600;">서버에서 데이터 불러오는 중...</div>
   <button onclick="(function(){var o=document.getElementById('gs-overlay');if(o)o.classList.add('hidden');if(typeof gsSkipToLocal==='function')gsSkipToLocal();else if(typeof localInit==='function'){localInit();renderAll();}})()" style="margin-top:16px;padding:8px 20px;background:#fff;color:#1a252f;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">로컬 모드로 실행</button>
 </div>
 
@@ -137,19 +137,9 @@
       <button onclick="supabaseSetupStart()" style="width:100%;margin-top:8px;padding:10px;background:#16a085;color:#fff;
         border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Supabase 연결 시작</button>
     </div>
-    <div style="font-size:13px;font-weight:800;color:#2c3e50;margin-bottom:6px;">Google Sheets 연결</div>
-    <p>
-      아래에 Apps Script 웹앱 URL을 입력하세요.<br>
-      Apps Script → <strong>배포 → 웹앱으로 배포</strong> 후 받은 URL입니다.<br>
-      <span style="color:#e74c3c;font-size:12px;">⚠ 한 번만 입력하면 이 브라우저에 저장됩니다.</span>
-    </p>
-    <input id="gs-url-input" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
-    <input id="gs-token-input" type="password" placeholder="연동 비밀번호" autocomplete="current-password" style="margin-top:8px;">
     <div style="display:flex;gap:8px;">
-      <button onclick="gsSetupSave()" style="flex:1;padding:10px;background:#2980b9;color:#fff;
-        border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">저장 후 시작</button>
       <button onclick="gsSetupSkip()" style="padding:10px 16px;background:#f0f2f5;
-        border:none;border-radius:8px;font-size:13px;cursor:pointer;color:#666;">오프라인으로 사용</button>
+        border:none;border-radius:8px;font-size:13px;cursor:pointer;color:#666;">로컬 임시 실행</button>
     </div>
   </div>
 </div>
@@ -1213,15 +1203,14 @@
   <div class="card">
     <div class="card-title">
       <div class="ct-bar" style="background:#3ecf8e;"></div>
-      Supabase 데이터 이전
+      Supabase 데이터 점검
     </div>
     <div class="alert alert-info" style="margin-bottom:14px;">
-      현재 화면에 로드된 거래내역, 생산일보, 단가, 보조데이터를 Supabase DB로 복사합니다.<br>
-      기존 Google Sheets 데이터는 삭제하지 않고 그대로 둡니다.
+      현재는 Supabase를 기준으로 데이터를 관리합니다.<br>
+      아래 버튼으로 서버 데이터 건수 확인과 현재 화면 데이터 비교만 수행합니다.
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       <input id="sb-migration-password" type="password" placeholder="연동 비밀번호" autocomplete="current-password" style="max-width:220px;">
-      <button class="btn btn-success" onclick="migrateCurrentDataToSupabase()">Supabase로 데이터 이전</button>
       <button class="btn btn-secondary" onclick="checkSupabaseMigrationData()">Supabase 데이터 확인</button>
       <button class="btn btn-primary" onclick="compareSupabaseWithCurrentData()">현재 데이터와 비교</button>
     </div>
@@ -2329,10 +2318,13 @@ function gsSkipToLocal(){
   gsSetStatus(false);
   localInit();
   renderAll();
-  gsShowSync('⚠ 로컬 데이터로 실행 중 (Sheets 연결 건너뜀)', true);
+  gsShowSync('⚠ 로컬 임시 실행 중 — Supabase에 저장되지 않습니다', true);
 }
 
 function gsSetupSave(){
+  alert('Google Sheets 연결은 더 이상 사용하지 않습니다.\nSupabase 연결을 사용해주세요.');
+  gsShowSetup();
+  return;
   const input = document.getElementById('gs-url-input');
   const url = (input?.value || '').trim();
   if(!url){ alert('Apps Script 웹앱 URL을 입력하세요.'); return; }
@@ -2380,6 +2372,7 @@ async function supabaseSetupStart(){
 
 function gsSetupSkip(){
   localStorage.setItem('dbmt_gs_skip', '1');
+  localStorage.removeItem(SUPABASE_ENABLED_KEY);
   gsSkipToLocal();
 }
 
@@ -3260,7 +3253,7 @@ const APP_DATA_REGISTRY = {
   samsungVendors:   { get:()=>samsungVendors,   set:v=>{ samsungVendors=v; },   ls:'dbmt_samsung_vendors'  },
 };
 
-// ── 앱 전체 데이터 GS 저장 (레지스트리 기반, 자동) ──
+// ── 앱 전체 보조데이터 저장 (Supabase 기준) ──
 function gsSaveAppData(){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveAppData().catch(err => {
@@ -3269,14 +3262,7 @@ function gsSaveAppData(){
     });
     return;
   }
-  if(!GS_ONLINE || !GS_LOAD_OK) return;
-  const payload = {};
-  Object.entries(APP_DATA_REGISTRY).forEach(([k,r]) => { payload[k] = r.get(); });
-  gsPost('saveAppData', payload).catch(err => {
-    console.error('GS appData 저장 오류:', err);
-    const detail = String(err?.message || err || '').trim();
-    gsShowSync(`⚠ 보조데이터 저장 실패${detail ? ' — ' + detail : ''}`, true);
-  });
+  gsShowSync('⚠ Supabase 연결 전이라 보조데이터는 로컬에만 저장되었습니다', true);
 }
 
 async function supabaseSaveCore(payload){
@@ -3455,34 +3441,7 @@ function save(){
     return;
   }
 
-  // 3) Google Sheets 저장
-  gsMarkPendingCoreSave(payload);
-  if(gsAssertCanWriteCoreData(payload)){
-    const core = gsNormalizeCorePayload(payload);
-    const patch = gsBuildCorePatch(core);
-    if(!gsPatchHasChanges(patch)){
-      gsRememberCoreSnapshot(core);
-      gsRememberVerifiedCounts(gsCoreCounts(core));
-      gsClearPendingCoreSave();
-      return;
-    }
-    gsPost('saveCorePatch', patch).then((res)=>{
-      if(res?.unconfirmed){
-        gsShowSync('☁ Sheets 저장 요청 전송됨 — 확인 전까지 로컬 변경사항 보존', true);
-        return;
-      }
-      GS_REMOTE_COUNTS = gsCoreCounts(core);
-      gsRememberCoreSnapshot(core);
-      gsRememberVerifiedCounts(GS_REMOTE_COUNTS);
-      gsClearPendingCoreSave();
-      gsShowSync('☁ Google Sheets 저장 완료');
-    }).catch(err=>{
-      console.error('GS 저장 오류:', err);
-      gsShowSync('⚠ Sheets 저장 확인 실패 — 로컬 변경사항 보존 중', true);
-    });
-  } else {
-    gsShowSync('⚠ Sheets 저장 대기 중 — 로컬 변경사항 보존', true);
-  }
+  gsShowSync('⚠ Supabase 연결 전이라 로컬에만 저장되었습니다', true);
 }
 
 // ─── 탭 전환 ───────────────────────────────────────────
@@ -8358,6 +8317,10 @@ async function sbImportRows(fnName, password, rows, label, chunkSize=500){
 }
 
 async function migrateCurrentDataToSupabase(){
+  const migrationDisabledMsg = 'Supabase 데이터 이전 기능은 운영 안정화를 위해 비활성화되었습니다.\n현재는 Supabase 데이터 확인/비교만 사용합니다.';
+  alert(migrationDisabledMsg);
+  sbMigrationStatus(migrationDisabledMsg, true);
+  return;
   const password = sbMigrationPassword();
   if(!password){ alert('Supabase 이전에 사용할 연동 비밀번호를 입력해주세요.'); return; }
   const tx = Array.isArray(userTransactions) ? userTransactions : [];
@@ -9571,14 +9534,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
       gsSetStatus(false);
       gsShowSync('⚠ Supabase 로드 실패 — 현재 로컬 데이터로 실행 중입니다', true);
     });
-  } else if(!GS_URL){
-    gsShowSetup();
-    gsShowSync('Google Sheets URL을 설정하면 동기화됩니다.');
-  } else if(localStorage.getItem('dbmt_gs_skip') === '1'){
-    localStorage.removeItem('dbmt_gs_skip');
-    gsInit();
   } else {
-    gsInit();
+    gsShowSetup();
+    gsShowSync('Supabase 연결을 시작하면 서버 데이터와 동기화됩니다.');
   }
 });
 
