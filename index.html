@@ -189,6 +189,9 @@
   <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">
     🏭 생산일보
   </div>
+  <div class="nav-tab" onclick="showPage('p-prod-loss',this);renderProductionLoss();" id="nav-prod-loss" style="color:#c0392b;font-weight:700;">
+    📉 생산 로스율
+  </div>
   <div class="nav-tab" onclick="showPage('p-workorders',this);renderWorkOrders();" id="nav-workorders" style="color:#6c3483;font-weight:700;">
     📝 작업지시
   </div>
@@ -753,6 +756,92 @@
           <th style="white-space:nowrap;text-align:center;">관리</th>
         </tr></thead>
         <tbody id="prod-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     생산 로스율
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-prod-loss">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:#c0392b;"></div>
+        생산 로스율 비교
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="flex:0 0 auto;gap:4px;">
+          <label style="font-size:11px;font-weight:700;color:#666;">시작일</label>
+          <input type="date" id="ploss-from" style="width:145px;font-size:12px;" onchange="renderProductionLoss()">
+        </div>
+        <div class="form-group" style="flex:0 0 auto;gap:4px;">
+          <label style="font-size:11px;font-weight:700;color:#666;">종료일</label>
+          <input type="date" id="ploss-to" style="width:145px;font-size:12px;" onchange="renderProductionLoss()">
+        </div>
+        <div class="form-group" style="flex:0 0 auto;gap:4px;">
+          <label style="font-size:11px;font-weight:700;color:#666;">품목명</label>
+          <input id="ploss-product" placeholder="품목명 검색..." style="width:170px;font-size:12px;" oninput="renderProductionLoss()">
+        </div>
+        <div class="form-group" style="flex:0 0 auto;gap:4px;">
+          <label style="font-size:11px;font-weight:700;color:#666;">작업유형</label>
+          <select id="ploss-job-type" style="width:110px;font-size:12px;" onchange="renderProductionLoss()">
+            <option value="">전체</option>
+            <option value="생산" selected>생산</option>
+            <option value="묶음">묶음</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0 0 auto;gap:4px;">
+          <label style="font-size:11px;font-weight:700;color:#666;">최소 작업</label>
+          <input type="number" id="ploss-min-count" min="1" step="1" value="1" style="width:84px;font-size:12px;" oninput="renderProductionLoss()">
+        </div>
+        <div class="form-group" style="flex:0 0 auto;gap:4px;">
+          <label style="font-size:11px;font-weight:700;color:#666;">정렬</label>
+          <select id="ploss-sort" style="width:130px;font-size:12px;" onchange="renderProductionLoss()">
+            <option value="lossDesc">로스율 높은순</option>
+            <option value="lossAsc">로스율 낮은순</option>
+            <option value="countDesc">작업건수 많은순</option>
+            <option value="outputDesc">생산량 많은순</option>
+            <option value="productAsc">품목명순</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="clearProductionLossFilters()">전체</button>
+        <button class="btn btn-secondary btn-sm" onclick="setProductionLossThisMonth()">이번달</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportProductionLossCSV()">CSV</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#888;margin-bottom:12px;padding:8px 12px;background:#f8f9fa;border-radius:6px;border-left:3px solid #c0392b;line-height:1.6;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span>로스율 = (투입량 - 생산량) ÷ 투입량 × 100 &nbsp;|&nbsp; 한 작업에 생산품이 여러 개면 생산량 비율로 투입량을 나눠 계산합니다.</span>
+      <span id="ploss-status" style="font-weight:700;color:#c0392b;font-size:12px;"></span>
+    </div>
+    <div class="stat-grid" id="ploss-stats"></div>
+    <div id="ploss-chart" style="display:grid;gap:8px;margin:12px 0 14px;"></div>
+    <div class="tbl-wrap">
+      <table style="table-layout:fixed;width:100%;">
+        <colgroup>
+          <col style="width:23%;">
+          <col style="width:10%;">
+          <col style="width:8%;">
+          <col style="width:12%;">
+          <col style="width:12%;">
+          <col style="width:11%;">
+          <col style="width:10%;">
+          <col style="width:9%;">
+          <col style="width:5%;">
+        </colgroup>
+        <thead><tr>
+          <th>품목명</th>
+          <th>포장단위</th>
+          <th style="text-align:right;">작업건수</th>
+          <th style="text-align:right;">배분 투입량</th>
+          <th style="text-align:right;">생산량</th>
+          <th style="text-align:right;">로스량</th>
+          <th style="text-align:right;">평균 로스율</th>
+          <th style="text-align:right;">최저/최고</th>
+          <th>최근일</th>
+        </tr></thead>
+        <tbody id="ploss-body"></tbody>
       </table>
     </div>
   </div>
@@ -3223,6 +3312,7 @@ function renderAll(){
   updateOutProductList();
   if(typeof updateTransactionForm === 'function') updateTransactionForm();
   if(typeof renderWorkOrders === 'function' && document.getElementById('p-workorders')?.classList.contains('active')) renderWorkOrders();
+  if(typeof renderProductionLoss === 'function' && document.getElementById('p-prod-loss')?.classList.contains('active')) renderProductionLoss();
   if(typeof refreshLabelWorkOrderSelect === 'function' && document.getElementById('p-label')?.classList.contains('active')) refreshLabelWorkOrderSelect();
   if(typeof renderSubMaterials === 'function' && document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
   if(typeof renderFactorySim === 'function' && document.getElementById('p-factorysim')?.classList.contains('active')) renderFactorySim();
@@ -3510,6 +3600,7 @@ function showPage(id, btn){
   if(id==='p-incheck') initIncheck();
   if(id==='p-schedule') renderScheduleCalendar();
   if(id==='p-production'){renderProduction();initProdForm();updateOriginList();}
+  if(id==='p-prod-loss') renderProductionLoss();
   if(id==='p-workorders'){ initWorkOrderForm(); renderWorkOrders(); }
   if(id==='p-stock') renderStock();
   if(id==='p-submaterials') renderSubMaterials();
@@ -6473,6 +6564,255 @@ function renderProduction(){
   }
 
   b.innerHTML = html || `<tr><td colspan="15" style="text-align:center;padding:24px;color:#999;">${(filterFrom||filterTo)?'해당 기간의 생산일보가 없습니다':'데이터가 없습니다'}</td></tr>`;
+}
+
+function productionLossFmtKg(value){
+  return `${parseAppNumber(value).toLocaleString('ko-KR',{maximumFractionDigits:2})} KG`;
+}
+
+function productionLossFmtRate(value){
+  return `${parseAppNumber(value).toLocaleString('ko-KR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;
+}
+
+function productionLossRateColor(rate){
+  const n = parseAppNumber(rate);
+  if(n < 0) return '#1a7ab5';
+  if(n > 5) return 'var(--color-text-danger)';
+  if(n > 2) return '#d35400';
+  return '#1e8449';
+}
+
+function productionLossProductKey(product, packunit=''){
+  return `${String(product||'').trim()}||${String(packunit||'').trim()}`;
+}
+
+function getProductionLossRows(){
+  const filterFrom = document.getElementById('ploss-from')?.value || '';
+  const filterTo = document.getElementById('ploss-to')?.value || '';
+  const productQ = (document.getElementById('ploss-product')?.value || '').toLowerCase().trim();
+  const jobTypeFilter = document.getElementById('ploss-job-type')?.value || '';
+  const minCount = Math.max(1, parseInt(document.getElementById('ploss-min-count')?.value || '1', 10) || 1);
+  const sortKey = document.getElementById('ploss-sort')?.value || 'lossDesc';
+  const groups = new Map();
+  let sourceEntryCount = 0;
+  let skippedEntryCount = 0;
+
+  [...EXCEL_PROD, ...userProdEntries].forEach((entry, index)=>{
+    if(String(entry?.deletedAt || entry?._deletedAt || '').trim()) return;
+    const date = normProdDate(entry.date || entry.workDate || '');
+    if(!date) return;
+    if(filterFrom && date < filterFrom) return;
+    if(filterTo && date > filterTo) return;
+    const jobType = getProdJobType(entry);
+    if(jobTypeFilter && jobType !== jobTypeFilter) return;
+
+    const inputs = Array.isArray(entry.inputs) ? entry.inputs : [];
+    const outputs = Array.isArray(entry.outputs) ? entry.outputs : [];
+    const totalInQty = inputs.reduce((sum, row)=>sum + parseAppNumber(row.qty ?? row.weight), 0);
+    const totalOutQty = outputs.reduce((sum, row)=>sum + parseAppNumber(row.qty ?? row.weight ?? row.outputWeight ?? row.output_weight), 0);
+    if(totalInQty <= 0 || totalOutQty <= 0 || !outputs.length){
+      skippedEntryCount++;
+      return;
+    }
+    sourceEntryCount++;
+
+    const entryId = String(entry.id || `prod_loss_${index}_${date}_${entry.job_no || entry.jobNo || ''}`);
+    const outputGroups = new Map();
+    outputs.forEach(out=>{
+      const product = String(out.product || '').trim();
+      const qty = parseAppNumber(out.qty ?? out.weight ?? out.outputWeight ?? out.output_weight);
+      if(!product || qty <= 0) return;
+      const packunit = String(out.packunit || '').trim();
+      const key = productionLossProductKey(product, packunit);
+      if(!outputGroups.has(key)) outputGroups.set(key, {product, packunit, qty:0});
+      outputGroups.get(key).qty += qty;
+    });
+
+    outputGroups.forEach(out=>{
+      const share = out.qty / totalOutQty;
+      const allocatedInput = totalInQty * share;
+      const lossKg = allocatedInput - out.qty;
+      const lossRate = allocatedInput > 0 ? (lossKg / allocatedInput * 100) : 0;
+      const key = productionLossProductKey(out.product, out.packunit);
+      if(!groups.has(key)){
+        groups.set(key, {
+          product: out.product,
+          packunit: out.packunit,
+          totalInput: 0,
+          totalOutput: 0,
+          totalLoss: 0,
+          entryIds: new Set(),
+          rates: [],
+          minRate: Infinity,
+          maxRate: -Infinity,
+          lastDate: ''
+        });
+      }
+      const group = groups.get(key);
+      group.totalInput += allocatedInput;
+      group.totalOutput += out.qty;
+      group.totalLoss += lossKg;
+      group.entryIds.add(entryId);
+      group.rates.push(lossRate);
+      group.minRate = Math.min(group.minRate, lossRate);
+      group.maxRate = Math.max(group.maxRate, lossRate);
+      if(!group.lastDate || date > group.lastDate) group.lastDate = date;
+    });
+  });
+
+  let rows = Array.from(groups.values()).map(group=>{
+    const lossRate = group.totalInput > 0 ? (group.totalLoss / group.totalInput * 100) : 0;
+    const avgEntryRate = group.rates.length
+      ? group.rates.reduce((sum, rate)=>sum + rate, 0) / group.rates.length
+      : 0;
+    return {
+      product: group.product,
+      packunit: group.packunit,
+      totalInput: group.totalInput,
+      totalOutput: group.totalOutput,
+      totalLoss: group.totalLoss,
+      jobCount: group.entryIds.size,
+      lossRate,
+      avgEntryRate,
+      minRate: Number.isFinite(group.minRate) ? group.minRate : 0,
+      maxRate: Number.isFinite(group.maxRate) ? group.maxRate : 0,
+      lastDate: group.lastDate
+    };
+  });
+
+  if(productQ){
+    rows = rows.filter(row => `${row.product} ${row.packunit}`.toLowerCase().includes(productQ));
+  }
+  rows = rows.filter(row => row.jobCount >= minCount);
+
+  rows.sort((a,b)=>{
+    if(sortKey === 'lossAsc') return a.lossRate - b.lossRate;
+    if(sortKey === 'countDesc') return b.jobCount - a.jobCount || b.lossRate - a.lossRate;
+    if(sortKey === 'outputDesc') return b.totalOutput - a.totalOutput || b.lossRate - a.lossRate;
+    if(sortKey === 'productAsc') return String(a.product||'').localeCompare(String(b.product||''),'ko') || String(a.packunit||'').localeCompare(String(b.packunit||''),'ko');
+    return b.lossRate - a.lossRate || b.totalLoss - a.totalLoss;
+  });
+
+  return { rows, filterFrom, filterTo, productQ, jobTypeFilter, minCount, sortKey, sourceEntryCount, skippedEntryCount };
+}
+
+function renderProductionLoss(){
+  const body = document.getElementById('ploss-body');
+  if(!body) return;
+  const statsEl = document.getElementById('ploss-stats');
+  const chartEl = document.getElementById('ploss-chart');
+  const statusEl = document.getElementById('ploss-status');
+  const { rows, filterFrom, filterTo, productQ, jobTypeFilter, minCount, sourceEntryCount } = getProductionLossRows();
+  const totalInput = rows.reduce((sum,row)=>sum + row.totalInput, 0);
+  const totalOutput = rows.reduce((sum,row)=>sum + row.totalOutput, 0);
+  const totalLoss = rows.reduce((sum,row)=>sum + row.totalLoss, 0);
+  const weightedLossRate = totalInput > 0 ? totalLoss / totalInput * 100 : 0;
+
+  if(statsEl){
+    statsEl.innerHTML = `
+      <div class="stat"><div class="stat-label">비교 품목</div><div class="stat-val">${rows.length.toLocaleString('ko-KR')}</div></div>
+      <div class="stat"><div class="stat-label">대상 작업</div><div class="stat-val">${sourceEntryCount.toLocaleString('ko-KR')}</div></div>
+      <div class="stat"><div class="stat-label">배분 투입량</div><div class="stat-val" style="font-size:18px;">${productionLossFmtKg(totalInput)}</div></div>
+      <div class="stat"><div class="stat-label">생산량</div><div class="stat-val" style="font-size:18px;">${productionLossFmtKg(totalOutput)}</div></div>
+      <div class="stat"><div class="stat-label">전체 로스율</div><div class="stat-val" style="color:${productionLossRateColor(weightedLossRate)};">${productionLossFmtRate(weightedLossRate)}</div></div>
+    `;
+  }
+
+  const statusParts = [];
+  if(filterFrom || filterTo){
+    statusParts.push(filterFrom === filterTo && filterFrom ? filterFrom : `${filterFrom || '~'} ~ ${filterTo || '~'}`);
+  }
+  if(productQ) statusParts.push(`품목 검색`);
+  if(jobTypeFilter) statusParts.push(jobTypeFilter);
+  if(minCount > 1) statusParts.push(`최소 ${minCount}건`);
+  if(statusEl) statusEl.textContent = `${statusParts.length ? statusParts.join(' · ') + ' · ' : ''}${rows.length}품목`;
+
+  if(chartEl){
+    if(!rows.length){
+      chartEl.innerHTML = '<div style="padding:14px;border:1px dashed var(--border);border-radius:8px;color:#888;text-align:center;">비교할 생산 로스율 데이터가 없습니다.</div>';
+    } else {
+      const chartRows = [...rows].sort((a,b)=>b.lossRate - a.lossRate).slice(0, 12);
+      const maxAbs = Math.max(1, ...chartRows.map(row => Math.abs(row.lossRate)));
+      chartEl.innerHTML = `
+        <div style="font-size:12px;font-weight:800;color:#555;">로스율 높은 품목 비교</div>
+        ${chartRows.map(row=>{
+          const width = Math.max(3, Math.min(100, Math.abs(row.lossRate) / maxAbs * 100));
+          const color = productionLossRateColor(row.lossRate);
+          return `<div style="display:grid;grid-template-columns:minmax(140px,1fr) 3fr 70px;gap:8px;align-items:center;font-size:12px;">
+            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;" title="${htmlEscape(row.product)}">${htmlEscape(row.product)}${row.packunit ? ` <span style="color:#1a7ab5;font-size:10px;">${htmlEscape(row.packunit)}</span>` : ''}</div>
+            <div style="height:12px;background:#f1f3f5;border-radius:999px;overflow:hidden;">
+              <div style="height:100%;width:${width}%;background:${color};border-radius:999px;"></div>
+            </div>
+            <div style="text-align:right;font-weight:800;color:${color};">${productionLossFmtRate(row.lossRate)}</div>
+          </div>`;
+        }).join('')}
+      `;
+    }
+  }
+
+  if(!rows.length){
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:#999;">조건에 맞는 생산 로스율 데이터가 없습니다</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(row=>{
+    const rateColor = productionLossRateColor(row.lossRate);
+    return `<tr>
+      <td style="font-weight:700;">${htmlEscape(row.product)}</td>
+      <td>${row.packunit ? `<span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 6px;">${htmlEscape(row.packunit)}</span>` : '-'}</td>
+      <td style="text-align:right;">${row.jobCount.toLocaleString('ko-KR')}</td>
+      <td style="text-align:right;">${productionLossFmtKg(row.totalInput)}</td>
+      <td style="text-align:right;">${productionLossFmtKg(row.totalOutput)}</td>
+      <td style="text-align:right;color:${rateColor};">${productionLossFmtKg(row.totalLoss)}</td>
+      <td style="text-align:right;font-weight:800;color:${rateColor};">${productionLossFmtRate(row.lossRate)}</td>
+      <td style="text-align:right;font-size:11px;color:#666;">${productionLossFmtRate(row.minRate)} / ${productionLossFmtRate(row.maxRate)}</td>
+      <td style="font-size:11px;">${row.lastDate || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setProductionLossThisMonth(){
+  const t = new Date();
+  const y = t.getFullYear();
+  const mo = String(t.getMonth()+1).padStart(2,'0');
+  const last = new Date(y, t.getMonth()+1, 0).getDate();
+  document.getElementById('ploss-from').value = `${y}-${mo}-01`;
+  document.getElementById('ploss-to').value = `${y}-${mo}-${String(last).padStart(2,'0')}`;
+  renderProductionLoss();
+}
+
+function clearProductionLossFilters(){
+  ['ploss-from','ploss-to','ploss-product','ploss-job-type'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const minEl = document.getElementById('ploss-min-count');
+  if(minEl) minEl.value = '1';
+  const sortEl = document.getElementById('ploss-sort');
+  if(sortEl) sortEl.value = 'lossDesc';
+  renderProductionLoss();
+}
+
+function exportProductionLossCSV(){
+  const { rows, filterFrom, filterTo } = getProductionLossRows();
+  const header = ['품목명','포장단위','작업건수','배분 투입량(KG)','생산량(KG)','로스량(KG)','평균 로스율(%)','작업별 평균 로스율(%)','최저 로스율(%)','최고 로스율(%)','최근 작업일'];
+  const body = rows.map(row=>[
+    row.product,
+    row.packunit || '',
+    row.jobCount,
+    row.totalInput.toFixed(2),
+    row.totalOutput.toFixed(2),
+    row.totalLoss.toFixed(2),
+    row.lossRate.toFixed(2),
+    row.avgEntryRate.toFixed(2),
+    row.minRate.toFixed(2),
+    row.maxRate.toFixed(2),
+    row.lastDate || ''
+  ]);
+  const fname = (filterFrom || filterTo)
+    ? `생산_로스율_${filterFrom || ''}~${filterTo || ''}.csv`
+    : '생산_로스율_전체.csv';
+  downloadCSV([header, ...body], fname);
 }
 
 
