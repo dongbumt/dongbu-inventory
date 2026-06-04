@@ -124,10 +124,20 @@
   <button onclick="(function(){var o=document.getElementById('gs-overlay');if(o)o.classList.add('hidden');if(typeof gsSkipToLocal==='function')gsSkipToLocal();else if(typeof localInit==='function'){localInit();renderAll();}})()" style="margin-top:16px;padding:8px 20px;background:#fff;color:#1a252f;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">로컬 모드로 실행</button>
 </div>
 
-<!-- ── Google Sheets URL 초기 설정 화면 ── -->
+<!-- ── 데이터 연동 초기 설정 화면 ── -->
 <div id="gs-setup" class="hidden">
   <div class="gs-setup-box">
-    <h2>🔗 Google Sheets 연동 설정</h2>
+    <h2>🔗 데이터 연동 설정</h2>
+    <div style="border:1px solid #d6eaf8;background:#f4fbff;border-radius:10px;padding:12px;margin-bottom:14px;">
+      <div style="font-size:14px;font-weight:800;color:#1a7ab5;margin-bottom:6px;">Supabase 연결</div>
+      <p style="margin:0 0 8px;font-size:12px;line-height:1.55;color:#555;">
+        새 PC에서는 연동 비밀번호만 입력하면 서버 데이터와 연결됩니다.
+      </p>
+      <input id="sb-connect-token-input" type="password" placeholder="연동 비밀번호" autocomplete="current-password">
+      <button onclick="supabaseSetupStart()" style="width:100%;margin-top:8px;padding:10px;background:#16a085;color:#fff;
+        border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Supabase 연결 시작</button>
+    </div>
+    <div style="font-size:13px;font-weight:800;color:#2c3e50;margin-bottom:6px;">Google Sheets 연결</div>
     <p>
       아래에 Apps Script 웹앱 URL을 입력하세요.<br>
       Apps Script → <strong>배포 → 웹앱으로 배포</strong> 후 받은 URL입니다.<br>
@@ -2335,11 +2345,37 @@ function gsSetupSave(){
   GS_TOKEN = token;
   localStorage.setItem('dbmt_gs_url', url);
   localStorage.setItem('dbmt_gs_token', token);
+  localStorage.removeItem(SUPABASE_ENABLED_KEY);
   localStorage.removeItem('dbmt_gs_skip');
   const setup = document.getElementById('gs-setup');
   if(setup) setup.classList.add('hidden');
   gsShowSync('Google Sheets URL 저장 완료');
   gsInit();
+}
+
+async function supabaseSetupStart(){
+  const token = (document.getElementById('sb-connect-token-input')?.value || document.getElementById('gs-token-input')?.value || '').trim();
+  if(!token){ alert('연동 비밀번호를 입력하세요.'); return; }
+
+  GS_TOKEN = token;
+  localStorage.setItem('dbmt_gs_token', token);
+  localStorage.setItem(SUPABASE_ENABLED_KEY, '1');
+  localStorage.removeItem('dbmt_gs_skip');
+
+  try{
+    await supabaseInit();
+    const setup = document.getElementById('gs-setup');
+    if(setup) setup.classList.add('hidden');
+    gsShowSync('✅ Supabase 연결 완료');
+  }catch(err){
+    console.error('Supabase setup failed:', err);
+    localStorage.removeItem(SUPABASE_ENABLED_KEY);
+    const detail = err?.message || String(err || '');
+    localStorage.setItem('dbmt_gs_last_error', detail);
+    gsSetStatus(false);
+    gsShowSync('⚠ Supabase 연결 실패 — 비밀번호 또는 연결 상태를 확인하세요', true);
+    gsShowSetup();
+  }
 }
 
 function gsSetupSkip(){
@@ -2352,6 +2388,8 @@ function gsShowSetup(){
   if(input && GS_URL) input.value = GS_URL;
   const tokenInput = document.getElementById('gs-token-input');
   if(tokenInput && GS_TOKEN) tokenInput.value = GS_TOKEN;
+  const sbTokenInput = document.getElementById('sb-connect-token-input');
+  if(sbTokenInput && GS_TOKEN) sbTokenInput.value = GS_TOKEN;
   const lastError = localStorage.getItem('dbmt_gs_last_error') || '';
   const setup = document.getElementById('gs-setup');
   const msg = document.getElementById('gs-setup-last-error') || (() => {
