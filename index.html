@@ -655,6 +655,7 @@
     <div class="form-row">
       <div class="form-group"><label>작업일</label><input type="date" id="prod-date" onchange="autoSetJobNo()"></div>
       <div class="form-group"><label>작업번호</label><input id="prod-job-no" placeholder="1" style="width:80px;"></div>
+      <div class="form-group" style="flex:1;min-width:220px;"><label>비고(선택)</label><input id="prod-note" placeholder="예) 삼성 납품용, 재작업, 테스트 생산 등"></div>
       <div class="form-group"><label>작업유형</label>
         <select id="prod-job-type" style="width:120px;">
           <option value="생산">생산</option>
@@ -5685,6 +5686,8 @@ let prodOutputRowCount = 0;
 
 function initProdForm(){
   document.getElementById('prod-date').value = today;
+  const noteEl = document.getElementById('prod-note');
+  if(noteEl) noteEl.value = '';
   const jobTypeEl = document.getElementById('prod-job-type');
   if(jobTypeEl) jobTypeEl.value = '생산';
   autoSetJobNo();
@@ -5996,10 +5999,6 @@ function addProdOutputRow(){
       <input type="number" id="prod-out-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
     <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-out-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
-    <div class="form-group" style="grid-column:1 / -1;">
-      <label style="font-size:11px;font-weight:700;color:#666;">생산 비고(선택)</label>
-      <input id="prod-out-note-${id}" placeholder="예) 삼성 납품용, 재작업, 테스트 생산 등" style="font-size:12px;">
-    </div>
     <div style="grid-column:1 / -1;display:grid;grid-template-columns:minmax(180px,230px) minmax(260px,1fr) 1fr;gap:8px;align-items:end;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:7px 9px;">
       <div class="form-group">
         <label style="font-size:11px;font-weight:800;color:#1428a0;">삼성 하위 거래처</label>
@@ -6146,6 +6145,7 @@ function getProdOutSamsungMeta(id){
 function saveProdEntry(){
   const date = document.getElementById('prod-date').value;
   const jobNo = document.getElementById('prod-job-no').value.trim() || '1';
+  const jobNote = document.getElementById('prod-note')?.value.trim() || '';
   const jobType = document.getElementById('prod-job-type')?.value || '생산';
   if(!date){alert('작업일을 입력해주세요.');return;}
 
@@ -6186,7 +6186,6 @@ function saveProdEntry(){
     const lot = document.getElementById(`prod-out-lot-${id}`)?.value.trim();
     const qty = parseFloat(el.value)||0;
     const manualPrice = parseFloat(document.getElementById(`prod-out-price-${id}`)?.value)||0;
-    const note = document.getElementById(`prod-out-note-${id}`)?.value.trim() || '';
     if(product && qty>0){
       const registered = findLabelProductForProduction(product, packunit, productId);
       if(!registered){
@@ -6199,7 +6198,7 @@ function saveProdEntry(){
         return;
       }
       const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
-      rawOutputs.push({product: registered.name || product, productId: registered.id || productId, packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, note, samsung:samsungMeta});
+      rawOutputs.push({product: registered.name || product, productId: registered.id || productId, packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta});
     }
   });
   if(invalidOutputProduct){
@@ -6220,7 +6219,7 @@ function saveProdEntry(){
 
   const outputs = rawOutputs.map(o=>{
     const price = o.manualPrice > 0 ? o.manualPrice : autoUnitPrice;
-    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin, note:o.note||'', samsung:o.samsung};
+    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin, samsung:o.samsung};
   });
 
   if(!inputs.length && !outputs.length){alert('투입 또는 생산 항목을 입력해주세요.');return;}
@@ -6235,6 +6234,7 @@ function saveProdEntry(){
     date:dateFormatted,
     job_no:jobNo,
     job_type:jobType,
+    note:jobNote,
     inputs, outputs,
     _isUser:true,
     id: editingProdId || Date.now()
@@ -6258,7 +6258,7 @@ function saveProdEntry(){
         product:inp.product, lot:inp.lot||'', origin:inp.origin||'',
         packunit:inp.packunit||'',
         trader:'', weight:inp.qty, price:inp.price, amount:inp.amount,
-        note:`${jobType}작업 ${dateFormatted} #${jobNo}`,
+        note:`${jobType}작업 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         proddate: inp.proddate || '',
         stockProddate: inp.proddate || '',
         stockUnitPrice: inp.stockUnitPrice || inp.price || '',
@@ -6278,7 +6278,7 @@ function saveProdEntry(){
         product:out.product, lot:out.lot||'', origin:out.origin||'',
         packunit:out.packunit||'', productId:out.productId||'',
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
-        note:`${jobType}완료 ${dateFormatted} #${jobNo}${out.note ? ' / ' + out.note : ''}`,
+        note:`${jobType}완료 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         stockLocation: STOCK_LOCATION_DEFAULT,
         ...samsungTxnFields(out.samsung),
         _isUser:true, _isProdOut:true, _prodId:entry.id
@@ -6297,6 +6297,8 @@ function saveProdEntry(){
 }
 
 function clearProdForm(){
+  const noteEl = document.getElementById('prod-note');
+  if(noteEl) noteEl.value = '';
   const jobTypeEl = document.getElementById('prod-job-type');
   if(jobTypeEl) jobTypeEl.value = '생산';
   document.getElementById('prod-input-rows').innerHTML='';
@@ -6327,6 +6329,8 @@ function openEditProdEntry(id){
   showPage('p-production',document.getElementById('nav-production'));
   document.getElementById('prod-date').value  =(entry.date||'').replace(/\//g,'-');
   document.getElementById('prod-job-no').value=entry.job_no||'1';
+  const noteEl = document.getElementById('prod-note');
+  if(noteEl) noteEl.value = getProdEntryNote(entry);
   const jobTypeEl = document.getElementById('prod-job-type');
   if(jobTypeEl) jobTypeEl.value = getProdJobType(entry);
   document.getElementById('prod-input-rows').innerHTML ='';
@@ -6364,14 +6368,12 @@ function openEditProdEntry(id){
     const pr=document.getElementById(`prod-out-price-${n}`);
     const pk=document.getElementById(`prod-out-packunit-${n}`);
     const pid=document.getElementById(`prod-out-product-id-${n}`);
-    const note=document.getElementById(`prod-out-note-${n}`);
     const sw=normalizeSamsungMeta(out.samsung || out);
     if(p)p.value=out.product||'';
     if(pk)pk.value=out.packunit||'';
     if(pid)pid.value=out.productId||'';
     if(o){o.value=out.origin||'';o.removeAttribute('readonly');}
     if(l)l.value=out.lot||''; if(q)q.value=out.qty||0; if(pr)pr.value=out.price||0;
-    if(note)note.value=out.note||out.memo||out.remark||'';
     const swVendor=document.getElementById(`prod-out-sw-vendor-${n}`);
     const swProduct=document.getElementById(`prod-out-sw-product-${n}`);
     if(swVendor && sw?.vendorId){
@@ -6416,6 +6418,15 @@ function normProdDate(v){
 
 function getProdJobType(entry){
   return entry?.job_type || entry?.jobType || '생산';
+}
+
+function getProdEntryNote(entry){
+  const direct = String(entry?.note || entry?.job_note || entry?.jobNote || entry?.memo || entry?.remark || '').trim();
+  if(direct) return direct;
+  const legacyNotes = (entry?.outputs || [])
+    .map(out => String(out?.note || out?.memo || out?.remark || '').trim())
+    .filter(Boolean);
+  return [...new Set(legacyNotes)].join(' / ');
 }
 
 function isProductionCountedEntry(entry){
@@ -6491,6 +6502,7 @@ function renderProduction(){
     const outputs=e.outputs||[];
     if(!inputs.length && !outputs.length) return;
     const jobType = getProdJobType(e);
+    const entryNote = getProdEntryNote(e);
     const jobTypeStyle = jobType === '묶음'
       ? 'background:#eef2ff;color:#3440a0;border:1px solid #c7d2fe;'
       : 'background:#fff7e6;color:#d35400;border:1px solid #f6d7a7;';
@@ -6508,11 +6520,10 @@ function renderProduction(){
       const inp=inputs[i];
       const out=outputs[i];
       const isFirst=(i===0);
-      const outNote=out ? String(out.note||out.memo||out.remark||'').trim() : '';
       html+=`<tr${isFirst?' style="border-top:1.5px solid var(--color-border-secondary)"':''}>`;
       // 작업일 (첫행만, rowspan)
       html+=isFirst
-        ?`<td rowspan="${maxRows}" style="vertical-align:top;border-right:.5px solid var(--color-border-tertiary);padding-top:8px;font-size:11px;font-weight:500">${e.date}<br><span style="font-size:10px;color:var(--color-text-secondary);font-weight:400">작업${e.job_no}</span><br><span style="display:inline-block;margin-top:3px;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;${jobTypeStyle}">${jobType}</span></td>`
+        ?`<td rowspan="${maxRows}" style="vertical-align:top;border-right:.5px solid var(--color-border-tertiary);padding-top:8px;font-size:11px;font-weight:500">${e.date}<br><span style="font-size:10px;color:var(--color-text-secondary);font-weight:400">작업${e.job_no}</span><br><span style="display:inline-block;margin-top:3px;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:800;${jobTypeStyle}">${jobType}</span>${entryNote ? `<br><span style="display:block;margin-top:4px;font-size:10px;color:#777;line-height:1.35;">${htmlEscape(entryNote)}</span>` : ''}</td>`
         :'';
       // 투입
       html+=inp
@@ -6526,7 +6537,7 @@ function renderProduction(){
       html+=`<td style="border-left:2px solid var(--color-border-tertiary)"></td>`;
       // 생산
       html+=out
-        ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}${outNote ? `<div style="font-size:10px;color:#777;margin-top:2px;line-height:1.3;">${htmlEscape(outNote)}</div>` : ''}</td><td>${out.origin||''}</td>
+        ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}</td><td>${out.origin||''}</td>
            <td style="text-align:right">${out.qty.toFixed(2)}</td>
            <td style="text-align:right">${out.price?Math.round(out.price).toLocaleString():'-'}</td>
            <td style="text-align:right;font-weight:500">${out.amount?Math.round(out.amount).toLocaleString():'-'}</td>
@@ -8134,12 +8145,13 @@ function exportTransactionsCSV(){
 function exportProductionCSV(){
   const { entries: filtered, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('asc');
 
-  const header=['작업일','작업번호','작업유형','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호','생산비고'];
+  const header=['작업일','작업번호','작업유형','작업비고','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호'];
   const rows=[header];
   filtered.forEach(e=>{
     const inputs =e.inputs ||[];
     const outputs=e.outputs||[];
     const maxRows=Math.max(inputs.length,outputs.length,1);
+    const entryNote = getProdEntryNote(e);
     for(let i=0;i<maxRows;i++){
       const inp=inputs[i];
       const out=outputs[i];
@@ -8147,6 +8159,7 @@ function exportProductionCSV(){
         i===0?normProdDate(e.date):'',
         i===0?e.job_no:'',
         i===0?getProdJobType(e):'',
+        i===0?entryNote:'',
         inp?inp.product:'',
         inp?inp.packunit||'':'',
         inp?inp.origin||'':'',
@@ -8160,8 +8173,7 @@ function exportProductionCSV(){
         out?out.qty.toFixed(2):'',
         out?Math.round(out.price||0):'',
         out?Math.round(out.amount||0):'',
-        out?out.lot||'':'',
-        out?out.note||out.memo||out.remark||'':''
+        out?out.lot||'':''
       ]);
     }
   });
