@@ -5996,6 +5996,10 @@ function addProdOutputRow(){
       <input type="number" id="prod-out-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
     <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-out-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
+    <div class="form-group" style="grid-column:1 / -1;">
+      <label style="font-size:11px;font-weight:700;color:#666;">생산 비고(선택)</label>
+      <input id="prod-out-note-${id}" placeholder="예) 삼성 납품용, 재작업, 테스트 생산 등" style="font-size:12px;">
+    </div>
     <div style="grid-column:1 / -1;display:grid;grid-template-columns:minmax(180px,230px) minmax(260px,1fr) 1fr;gap:8px;align-items:end;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:7px 9px;">
       <div class="form-group">
         <label style="font-size:11px;font-weight:800;color:#1428a0;">삼성 하위 거래처</label>
@@ -6182,6 +6186,7 @@ function saveProdEntry(){
     const lot = document.getElementById(`prod-out-lot-${id}`)?.value.trim();
     const qty = parseFloat(el.value)||0;
     const manualPrice = parseFloat(document.getElementById(`prod-out-price-${id}`)?.value)||0;
+    const note = document.getElementById(`prod-out-note-${id}`)?.value.trim() || '';
     if(product && qty>0){
       const registered = findLabelProductForProduction(product, packunit, productId);
       if(!registered){
@@ -6194,7 +6199,7 @@ function saveProdEntry(){
         return;
       }
       const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
-      rawOutputs.push({product: registered.name || product, productId: registered.id || productId, packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta});
+      rawOutputs.push({product: registered.name || product, productId: registered.id || productId, packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, note, samsung:samsungMeta});
     }
   });
   if(invalidOutputProduct){
@@ -6215,7 +6220,7 @@ function saveProdEntry(){
 
   const outputs = rawOutputs.map(o=>{
     const price = o.manualPrice > 0 ? o.manualPrice : autoUnitPrice;
-    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin, samsung:o.samsung};
+    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin, note:o.note||'', samsung:o.samsung};
   });
 
   if(!inputs.length && !outputs.length){alert('투입 또는 생산 항목을 입력해주세요.');return;}
@@ -6273,7 +6278,7 @@ function saveProdEntry(){
         product:out.product, lot:out.lot||'', origin:out.origin||'',
         packunit:out.packunit||'', productId:out.productId||'',
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
-        note:`${jobType}완료 ${dateFormatted} #${jobNo}`,
+        note:`${jobType}완료 ${dateFormatted} #${jobNo}${out.note ? ' / ' + out.note : ''}`,
         stockLocation: STOCK_LOCATION_DEFAULT,
         ...samsungTxnFields(out.samsung),
         _isUser:true, _isProdOut:true, _prodId:entry.id
@@ -6359,12 +6364,14 @@ function openEditProdEntry(id){
     const pr=document.getElementById(`prod-out-price-${n}`);
     const pk=document.getElementById(`prod-out-packunit-${n}`);
     const pid=document.getElementById(`prod-out-product-id-${n}`);
+    const note=document.getElementById(`prod-out-note-${n}`);
     const sw=normalizeSamsungMeta(out.samsung || out);
     if(p)p.value=out.product||'';
     if(pk)pk.value=out.packunit||'';
     if(pid)pid.value=out.productId||'';
     if(o){o.value=out.origin||'';o.removeAttribute('readonly');}
     if(l)l.value=out.lot||''; if(q)q.value=out.qty||0; if(pr)pr.value=out.price||0;
+    if(note)note.value=out.note||out.memo||out.remark||'';
     const swVendor=document.getElementById(`prod-out-sw-vendor-${n}`);
     const swProduct=document.getElementById(`prod-out-sw-product-${n}`);
     if(swVendor && sw?.vendorId){
@@ -6501,6 +6508,7 @@ function renderProduction(){
       const inp=inputs[i];
       const out=outputs[i];
       const isFirst=(i===0);
+      const outNote=out ? String(out.note||out.memo||out.remark||'').trim() : '';
       html+=`<tr${isFirst?' style="border-top:1.5px solid var(--color-border-secondary)"':''}>`;
       // 작업일 (첫행만, rowspan)
       html+=isFirst
@@ -6518,7 +6526,7 @@ function renderProduction(){
       html+=`<td style="border-left:2px solid var(--color-border-tertiary)"></td>`;
       // 생산
       html+=out
-        ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}</td><td>${out.origin||''}</td>
+        ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}${outNote ? `<div style="font-size:10px;color:#777;margin-top:2px;line-height:1.3;">${htmlEscape(outNote)}</div>` : ''}</td><td>${out.origin||''}</td>
            <td style="text-align:right">${out.qty.toFixed(2)}</td>
            <td style="text-align:right">${out.price?Math.round(out.price).toLocaleString():'-'}</td>
            <td style="text-align:right;font-weight:500">${out.amount?Math.round(out.amount).toLocaleString():'-'}</td>
@@ -8126,7 +8134,7 @@ function exportTransactionsCSV(){
 function exportProductionCSV(){
   const { entries: filtered, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('asc');
 
-  const header=['작업일','작업번호','작업유형','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호'];
+  const header=['작업일','작업번호','작업유형','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호','생산비고'];
   const rows=[header];
   filtered.forEach(e=>{
     const inputs =e.inputs ||[];
@@ -8152,7 +8160,8 @@ function exportProductionCSV(){
         out?out.qty.toFixed(2):'',
         out?Math.round(out.price||0):'',
         out?Math.round(out.amount||0):'',
-        out?out.lot||'':''
+        out?out.lot||'':'',
+        out?out.note||out.memo||out.remark||'':''
       ]);
     }
   });
