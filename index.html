@@ -3297,6 +3297,7 @@ function localInit(){
   invalidateStockMap();
   userTransactions = JSON.parse(localStorage.getItem('dbmt_user_transactions')||'[]');
   userProdEntries  = JSON.parse(localStorage.getItem('dbmt_user_prod')||'[]');
+  normalizeLocalTransactionIds();
   const localPrices = localStorage.getItem('dbmt_prices');
   if(localPrices) { try{ prices = JSON.parse(localPrices); }catch(e){} }
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
@@ -3440,9 +3441,54 @@ function asArray(value){
   return value ? [value] : [];
 }
 
+let appIdSeq = 0;
+function makeAppId(prefix='id'){
+  appIdSeq += 1;
+  return `${prefix}_${Date.now().toString(36)}_${appIdSeq.toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function makeProductionTxnId(prodId, kind, index){
+  const cleanProdId = String(prodId || makeAppId('prod')).replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `tx_${cleanProdId}_${kind}_${index}`;
+}
+
+function ensureUniqueRowIds(rows, prefix='row'){
+  if(!Array.isArray(rows)) return false;
+  const seen = new Set();
+  let changed = false;
+  rows.forEach(row=>{
+    if(!row) return;
+    let id = String(row.id ?? '').trim();
+    if(!id || seen.has(id)){
+      do {
+        id = makeAppId(prefix);
+      } while(seen.has(id));
+      row.id = id;
+      changed = true;
+    }
+    seen.add(id);
+  });
+  return changed;
+}
+
+function normalizeLocalTransactionIds(){
+  const changed = ensureUniqueRowIds(userTransactions, 'tx');
+  if(changed){
+    localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+    transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  }
+  return changed;
+}
+
+function normalizeRowsForUpsert(rows, prefix='row'){
+  const copy = asArray(rows).map(row => ({...row}));
+  ensureUniqueRowIds(copy, prefix);
+  return copy;
+}
+
 async function supabaseSaveTransactionRows(rows, deletedIds){
   const password = requireSupabasePassword();
-  const upsertRows = asArray(rows);
+  const upsertRows = normalizeRowsForUpsert(rows, 'tx');
   const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
   try{
     if(upsertRows.length){
@@ -3480,7 +3526,7 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
     if(entry){
       await sbRpc('dbmt_upsert_production', {p_password: password, p_rows: [entry]});
     }
-    const txnRows = asArray(transactionRows);
+    const txnRows = normalizeRowsForUpsert(transactionRows, 'tx');
     if(txnRows.length){
       await sbRpc('dbmt_upsert_transactions', {p_password: password, p_rows: txnRows});
     }
@@ -3492,6 +3538,7 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
 }
 
 function saveProductionRows(entry, transactionRows, deletedProdId){
+  normalizeLocalTransactionIds();
   localStorage.setItem('dbmt_user_prod', JSON.stringify(userProdEntries));
   localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
@@ -6237,7 +6284,7 @@ function saveProdEntry(){
     note:jobNote,
     inputs, outputs,
     _isUser:true,
-    id: editingProdId || Date.now()
+    id: editingProdId || makeAppId('prod')
   };
 
   // 수정 모드: 기존 항목과 관련 트랜잭션 삭제 후 교체
@@ -6251,10 +6298,10 @@ function saveProdEntry(){
   userProdEntries.push(entry);
   const productionTxns = [];
   // '사용' 트랜잭션 자동 생성 (투입 재고 차감)
-  inputs.forEach(inp=>{
+  inputs.forEach((inp, index)=>{
     if(inp.product && inp.qty>0){
       const newTxn = {
-        id:Date.now()+Math.random(), date, type:'사용',
+        id:makeProductionTxnId(entry.id, 'use', index), date, type:'사용',
         product:inp.product, lot:inp.lot||'', origin:inp.origin||'',
         packunit:inp.packunit||'',
         trader:'', weight:inp.qty, price:inp.price, amount:inp.amount,
@@ -6271,10 +6318,10 @@ function saveProdEntry(){
     }
   });
   // '생산입고' 트랜잭션 자동 생성 (생산품 재고 추가 — 거래내역 입고와 구분)
-  outputs.forEach(out=>{
+  outputs.forEach((out, index)=>{
     if(out.product && out.qty>0){
       const newTxn = {
-        id:Date.now()+Math.random(), date, type:'생산입고',
+        id:makeProductionTxnId(entry.id, 'out', index), date, type:'생산입고',
         product:out.product, lot:out.lot||'', origin:out.origin||'',
         packunit:out.packunit||'', productId:out.productId||'',
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
