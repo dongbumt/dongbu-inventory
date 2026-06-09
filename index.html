@@ -3505,6 +3505,7 @@ async function supabaseSaveTransactionRows(rows, deletedIds){
 }
 
 function saveTransactionRows(rows, deletedIds){
+  markLocalCoreChanged();
   localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveTransactionRows(rows, deletedIds).catch(err=>{
@@ -3538,6 +3539,7 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
 }
 
 function saveProductionRows(entry, transactionRows, deletedProdId){
+  markLocalCoreChanged();
   normalizeLocalTransactionIds();
   localStorage.setItem('dbmt_user_prod', JSON.stringify(userProdEntries));
   localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
@@ -3614,7 +3616,7 @@ function gsAssertCanWriteCoreData(nextData){
 }
 
 function save(){
-  invalidateStockMap(); // 거래 변경 시 재고 캐시 초기화
+  markLocalCoreChanged(); // 거래 변경 시 재고 캐시 초기화 + 늦은 원격 로드 덮어쓰기 방지
   // 1) localStorage 항상 저장
   localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
   localStorage.setItem('dbmt_prices',            JSON.stringify(prices));
@@ -4268,6 +4270,12 @@ function selectLot(lot, origin, proddate, stock, price=0, packunit='', stockKey=
 // ─── 재고 맵 캐시 — 거래 변경 시 save()/gsInit()/localInit()에서 무효화 ───
 let _stockMapCache = null;
 function invalidateStockMap(){ _stockMapCache = null; }
+
+let localCoreRevision = 0;
+function markLocalCoreChanged(){
+  localCoreRevision += 1;
+  invalidateStockMap();
+}
 
 // 현재 재고 맵 계산 — total_in/total_use/total_out/stock 모두 동적 계산
 function getStockMap(){
@@ -8909,8 +8917,16 @@ function applySupabasePayload(data){
 
 async function supabaseInit(){
   const password = requireSupabasePassword();
+  const startRevision = localCoreRevision;
   gsShowSync('Supabase에서 데이터 불러오는 중...');
   const data = await sbRpc('dbmt_get_all', {p_password: password});
+  if(localCoreRevision !== startRevision){
+    invalidateStockMap();
+    renderAll();
+    renderScheduleCalendar();
+    gsShowSync('✅ 방금 저장한 로컬 변경사항을 우선 반영했습니다');
+    return data;
+  }
   applySupabasePayload(data);
   GS_LOAD_OK = true;
   gsSetStatus(true);
