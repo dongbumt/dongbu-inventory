@@ -483,107 +483,117 @@
 
   <!-- 입고 일괄 입력 그리드 -->
   <div class="card" id="bulk-inbound-card">
-    <div class="card-title">
-      <div class="ct-bar" style="background:var(--green);"></div>
-      📥 입고 일괄 입력
-      <span style="font-size:11px;font-weight:400;color:#888;margin-left:6px;">여러 품목을 한 번에 입력하고 [일괄 저장]</span>
+    <div class="section-header" style="margin-bottom:10px;">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--green);"></div>
+        📥 입고 일괄 입력
+        <span style="font-size:11px;font-weight:400;color:#888;margin-left:6px;">여러 품목을 한 번에 입력하고 [일괄 저장]</span>
+      </div>
+      <button id="bulk-inbound-toggle" class="btn btn-secondary btn-sm" onclick="toggleBulkCard('inbound')" aria-expanded="false">펼치기</button>
     </div>
-    <div class="form-row" style="margin-bottom:10px;">
-      <div class="form-group" style="max-width:160px;">
-        <label>입고일자 (공통)</label>
-        <input type="date" id="bulk-in-date">
-      </div>
-      <div class="form-group" style="max-width:300px;position:relative;">
-        <label>품목 일괄 채우기</label>
-        <div style="display:flex;gap:4px;">
-          <input id="bulk-in-product-common" class="bulk-in-product" oninput="onBulkProductSearch(this,true)" onfocus="onBulkProductSearch(this,false)" onblur="hideBulkProductResults(this)" placeholder="품목 검색..." autocomplete="off" style="flex:1;">
-          <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundProduct()" title="비어있는 모든 행에 품목 채우기" style="white-space:nowrap;">↓ 적용</button>
+    <div id="bulk-inbound-body" style="display:none;">
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="form-group" style="max-width:160px;">
+          <label>입고일자 (공통)</label>
+          <input type="date" id="bulk-in-date">
         </div>
-        <input type="hidden" class="bulk-in-product-id" id="bulk-in-product-common-id">
-        <div class="bulk-in-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
-      </div>
-      <div class="form-group" style="max-width:260px;">
-        <label>거래처 일괄 채우기</label>
-        <div style="display:flex;gap:4px;">
-          <input id="bulk-in-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
-          <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
+        <div class="form-group" style="max-width:300px;position:relative;">
+          <label>품목 일괄 채우기</label>
+          <div style="display:flex;gap:4px;">
+            <input id="bulk-in-product-common" class="bulk-in-product" oninput="onBulkProductSearch(this,true)" onfocus="onBulkProductSearch(this,false)" onblur="hideBulkProductResults(this)" placeholder="품목 검색..." autocomplete="off" style="flex:1;">
+            <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundProduct()" title="비어있는 모든 행에 품목 채우기" style="white-space:nowrap;">↓ 적용</button>
+          </div>
+          <input type="hidden" class="bulk-in-product-id" id="bulk-in-product-common-id">
+          <div class="bulk-in-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
+        </div>
+        <div class="form-group" style="max-width:260px;">
+          <label>거래처 일괄 채우기</label>
+          <div style="display:flex;gap:4px;">
+            <input id="bulk-in-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
+            <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
+          </div>
+        </div>
+        <div class="form-group" style="max-width:190px;">
+          <label>단가 일괄 채우기</label>
+          <div style="display:flex;gap:4px;">
+            <input id="bulk-in-price-common" type="number" step="1" placeholder="원/KG" style="flex:1;">
+            <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundPrice()" title="비어있는 모든 행에 단가 채우기" style="white-space:nowrap;">↓ 적용</button>
+          </div>
         </div>
       </div>
-      <div class="form-group" style="max-width:190px;">
-        <label>단가 일괄 채우기</label>
-        <div style="display:flex;gap:4px;">
-          <input id="bulk-in-price-common" type="number" step="1" placeholder="원/KG" style="flex:1;">
-          <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundPrice()" title="비어있는 모든 행에 단가 채우기" style="white-space:nowrap;">↓ 적용</button>
-        </div>
+      <div class="tbl-wrap" style="max-height:none;overflow:visible;">
+        <table style="font-size:12px;">
+          <thead><tr>
+            <th style="min-width:210px;">품목 (품목관리 기준)</th>
+            <th style="min-width:78px;text-align:center;">원산지</th>
+            <th style="min-width:54px;text-align:center;">보관</th>
+            <th style="min-width:120px;">거래처</th>
+            <th style="min-width:140px;">이력번호(LOT)</th>
+            <th style="min-width:96px;text-align:right;">중량(KG)</th>
+            <th style="min-width:92px;text-align:right;">단가(선택)</th>
+            <th style="min-width:110px;">비고</th>
+            <th style="width:34px;"></th>
+          </tr></thead>
+          <tbody id="bulk-inbound-tbody"></tbody>
+        </table>
       </div>
-    </div>
-    <div class="tbl-wrap" style="max-height:none;overflow:visible;">
-      <table style="font-size:12px;">
-        <thead><tr>
-          <th style="min-width:210px;">품목 (품목관리 기준)</th>
-          <th style="min-width:78px;text-align:center;">원산지</th>
-          <th style="min-width:54px;text-align:center;">보관</th>
-          <th style="min-width:120px;">거래처</th>
-          <th style="min-width:140px;">이력번호(LOT)</th>
-          <th style="min-width:96px;text-align:right;">중량(KG)</th>
-          <th style="min-width:92px;text-align:right;">단가(선택)</th>
-          <th style="min-width:110px;">비고</th>
-          <th style="width:34px;"></th>
-        </tr></thead>
-        <tbody id="bulk-inbound-tbody"></tbody>
-      </table>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-secondary" onclick="addBulkInboundRow()">+ 행 추가</button>
-      <button class="btn btn-secondary" onclick="addBulkInboundRows(5)">+ 5행</button>
-      <button class="btn btn-secondary" onclick="clearBulkInbound()">전체 비우기</button>
-      <button class="btn btn-primary" onclick="saveBulkInbound()" style="margin-left:auto;">💾 일괄 저장</button>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="addBulkInboundRow()">+ 행 추가</button>
+        <button class="btn btn-secondary" onclick="addBulkInboundRows(5)">+ 5행</button>
+        <button class="btn btn-secondary" onclick="clearBulkInbound()">전체 비우기</button>
+        <button class="btn btn-primary" onclick="saveBulkInbound()" style="margin-left:auto;">💾 일괄 저장</button>
+      </div>
     </div>
   </div>
 
   <!-- 출고 일괄 입력 그리드 -->
   <div class="card" id="bulk-outbound-card">
-    <div class="card-title">
-      <div class="ct-bar" style="background:var(--orange);"></div>
-      📤 출고 일괄 입력
-      <span style="font-size:11px;font-weight:400;color:#888;margin-left:6px;">재고 항목을 선택하고 여러 출고를 한 번에 저장</span>
-    </div>
-    <div class="form-row" style="margin-bottom:10px;">
-      <div class="form-group" style="max-width:160px;">
-        <label>출고일자 (공통)</label>
-        <input type="date" id="bulk-out-date">
+    <div class="section-header" style="margin-bottom:10px;">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:var(--orange);"></div>
+        📤 출고 일괄 입력
+        <span style="font-size:11px;font-weight:400;color:#888;margin-left:6px;">재고 항목을 선택하고 여러 출고를 한 번에 저장</span>
       </div>
-      <div class="form-group" style="max-width:260px;">
-        <label>거래처 일괄 채우기</label>
-        <div style="display:flex;gap:4px;">
-          <input id="bulk-out-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
-          <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
+      <button id="bulk-outbound-toggle" class="btn btn-secondary btn-sm" onclick="toggleBulkCard('outbound')" aria-expanded="false">펼치기</button>
+    </div>
+    <div id="bulk-outbound-body" style="display:none;">
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="form-group" style="max-width:160px;">
+          <label>출고일자 (공통)</label>
+          <input type="date" id="bulk-out-date">
+        </div>
+        <div class="form-group" style="max-width:260px;">
+          <label>거래처 일괄 채우기</label>
+          <div style="display:flex;gap:4px;">
+            <input id="bulk-out-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
+            <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="tbl-wrap" style="max-height:none;overflow:visible;">
-      <table style="font-size:12px;">
-        <thead><tr>
-          <th style="min-width:220px;">재고 품목 선택</th>
-          <th style="min-width:70px;text-align:center;">원산지</th>
-          <th style="min-width:112px;text-align:center;">이력번호</th>
-          <th style="min-width:86px;text-align:right;">현재재고</th>
-          <th style="min-width:110px;">거래처</th>
-          <th style="min-width:120px;">삼성거래처</th>
-          <th style="min-width:165px;">삼성 납품품목/스펙</th>
-          <th style="min-width:88px;text-align:right;">출고중량(KG)</th>
-          <th style="min-width:78px;text-align:right;">단가</th>
-          <th style="min-width:88px;text-align:right;">금액</th>
-          <th style="width:34px;"></th>
-        </tr></thead>
-        <tbody id="bulk-outbound-tbody"></tbody>
-      </table>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-secondary" onclick="addBulkOutboundRow()">+ 행 추가</button>
-      <button class="btn btn-secondary" onclick="addBulkOutboundRows(5)">+ 5행</button>
-      <button class="btn btn-secondary" onclick="clearBulkOutbound()">전체 비우기</button>
-      <button class="btn btn-primary" onclick="saveBulkOutbound()" style="margin-left:auto;">💾 출고 일괄 저장</button>
+      <div class="tbl-wrap" style="max-height:none;overflow:visible;">
+        <table style="font-size:12px;">
+          <thead><tr>
+            <th style="min-width:220px;">재고 품목 선택</th>
+            <th style="min-width:70px;text-align:center;">원산지</th>
+            <th style="min-width:112px;text-align:center;">이력번호</th>
+            <th style="min-width:86px;text-align:right;">현재재고</th>
+            <th style="min-width:110px;">거래처</th>
+            <th style="min-width:120px;">삼성거래처</th>
+            <th style="min-width:165px;">삼성 납품품목/스펙</th>
+            <th style="min-width:88px;text-align:right;">출고중량(KG)</th>
+            <th style="min-width:78px;text-align:right;">단가</th>
+            <th style="min-width:88px;text-align:right;">금액</th>
+            <th style="width:34px;"></th>
+          </tr></thead>
+          <tbody id="bulk-outbound-tbody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="addBulkOutboundRow()">+ 행 추가</button>
+        <button class="btn btn-secondary" onclick="addBulkOutboundRows(5)">+ 5행</button>
+        <button class="btn btn-secondary" onclick="clearBulkOutbound()">전체 비우기</button>
+        <button class="btn btn-primary" onclick="saveBulkOutbound()" style="margin-left:auto;">💾 출고 일괄 저장</button>
+      </div>
     </div>
   </div>
 
@@ -5102,6 +5112,23 @@ function clearTransactionForm(){
   const addBtn = document.getElementById('t-add-btn');
   if(addBtn) addBtn.textContent='+ 추가';
   document.getElementById('t-amount-preview').value='';
+}
+
+function toggleBulkCard(kind, forceOpen){
+  const body = document.getElementById(`bulk-${kind}-body`);
+  const btn = document.getElementById(`bulk-${kind}-toggle`);
+  if(!body) return;
+  const isHidden = body.style.display === 'none' || getComputedStyle(body).display === 'none';
+  const open = typeof forceOpen === 'boolean' ? forceOpen : isHidden;
+  body.style.display = open ? 'block' : 'none';
+  if(btn){
+    btn.textContent = open ? '접기' : '펼치기';
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if(open){
+    if(kind === 'inbound') initBulkInbound();
+    if(kind === 'outbound') initBulkOutbound();
+  }
 }
 
 // ─── 입고 일괄 입력 그리드 ───────────────────────────────
