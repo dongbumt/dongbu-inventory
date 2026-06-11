@@ -875,7 +875,7 @@
         전체 재고현황
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" oninput="renderStock()">
+        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" oninput="scheduleRenderStock()">
         <select id="stock-location-filter" style="font-size:12px;padding:7px 10px;width:auto;" onchange="renderStock()">
           <option value="">전체 지점</option>
           <option value="가공장">가공장</option>
@@ -7116,13 +7116,21 @@ function exportProductionLossCSV(){
 // ─── 재고현황 ───────────────────────────────────────────
 // 엑셀 재고현황 시트 직접 데이터 (SUMIFS 계산값 그대로)
 const EXCEL_STOCK = [];
+let stockRenderTimer = null;
+
+function scheduleRenderStock(delay=180){
+  if(stockRenderTimer) clearTimeout(stockRenderTimer);
+  stockRenderTimer = setTimeout(()=>{
+    stockRenderTimer = null;
+    renderStock();
+  }, delay);
+}
 
 function renderStock(){
   const q=document.getElementById('stock-search').value.toLowerCase();
   const el_sf=document.getElementById('stock-filter-status'); const filterStatus=el_sf ? (el_sf.value??'재고') : '재고';
   const locationFilter = document.getElementById('stock-location-filter')?.value || '';
 
-  invalidateStockMap();
   const stockMap=getStockMap();
   const locFilterEl = document.getElementById('stock-location-filter');
   if(locFilterEl){
