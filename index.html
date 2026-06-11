@@ -308,7 +308,8 @@
       </div>
       <div class="form-group" style="max-width:130px;"><label>예상 주간량(KG)</label><input id="sw-prod-weekly" type="number" step="0.01" placeholder="0"></div>
       <div class="form-group" style="flex:1;min-width:180px;"><label>작업스펙</label><input id="sw-prod-spec" placeholder="예: 5KG진공, 부분작업"></div>
-      <div class="form-group" style="flex:0;"><label>&nbsp;</label><button class="btn btn-primary" onclick="addSamsungVendorProduct()">+ 품목 추가</button></div>
+      <div class="form-group" style="flex:0;"><label>&nbsp;</label><button id="sw-prod-save-btn" class="btn btn-primary" onclick="addSamsungVendorProduct()">+ 품목 추가</button></div>
+      <div class="form-group" style="flex:0;"><label>&nbsp;</label><button id="sw-prod-cancel-btn" class="btn btn-secondary" onclick="cancelSamsungVendorProductEdit()" style="display:none;">취소</button></div>
     </div>
     <div style="font-size:11px;color:#888;margin:6px 0 0;">💡 <strong>단가는 단가표</strong>의 (품목·원산지·거래처) 단가를 자동 사용합니다. 같은 품목도 작업스펙이 다르면 별도 품목으로 등록됩니다.</div>
     <div id="sw-prod-area" style="margin-top:14px;"></div>
@@ -12717,6 +12718,7 @@ function renderLabelTemplates(){
 // 🏬 삼성웰스토리 관리
 // ══════════════════════════════════════════
 let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || '[]');
+let samsungVendorProductEditTarget = null;
 
 function samsungVendorId(){
   return 'sw_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
@@ -12855,6 +12857,46 @@ function saveSamsungVendors(){
   if(typeof gsSaveAppData === 'function') gsSaveAppData();
 }
 
+function findSamsungVendorProduct(vendorId, productRowId){
+  const vendor = samsungVendors.find(x => String(x.id) === String(vendorId));
+  if(!vendor) return null;
+  const row = (vendor.products || []).find(p => String(p.id) === String(productRowId));
+  return row ? { vendor, row } : null;
+}
+
+function hasSamsungVendorProductDuplicate(vendor, productId, spec, ignoreRowId=''){
+  return (vendor?.products || []).some(p =>
+    String(p.id) !== String(ignoreRowId || '') &&
+    isSameSamsungVendorProduct(p, productId, spec)
+  );
+}
+
+function setSamsungVendorProductFormMode(isEdit){
+  const saveBtn = document.getElementById('sw-prod-save-btn');
+  const cancelBtn = document.getElementById('sw-prod-cancel-btn');
+  const vendorEl = document.getElementById('sw-prod-vendor');
+  if(saveBtn) saveBtn.textContent = isEdit ? '✓ 수정 저장' : '+ 품목 추가';
+  if(cancelBtn) cancelBtn.style.display = isEdit ? 'inline-flex' : 'none';
+  if(vendorEl) vendorEl.disabled = !!isEdit;
+}
+
+function clearSamsungVendorProductInputs(keepVendor=true){
+  if(!keepVendor){
+    const vendorEl = document.getElementById('sw-prod-vendor');
+    if(vendorEl) vendorEl.value = '';
+  }
+  ['sw-prod-product','sw-prod-product-id','sw-prod-spec','sw-prod-weekly'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+}
+
+function cancelSamsungVendorProductEdit(){
+  samsungVendorProductEditTarget = null;
+  clearSamsungVendorProductInputs(true);
+  setSamsungVendorProductFormMode(false);
+}
+
 function addSamsungVendor(){
   const name = (document.getElementById('sw-vendor-name')?.value || '').trim();
   const note = (document.getElementById('sw-vendor-note')?.value || '').trim();
@@ -12888,21 +12930,64 @@ function addSamsungVendorProduct(){
   const v = samsungVendors.find(x => x.id === vendorId);
   if(!v) return;
   if(!v.products) v.products = [];
-  if(v.products.find(p => isSameSamsungVendorProduct(p, productId, spec))){
+
+  if(samsungVendorProductEditTarget){
+    const found = findSamsungVendorProduct(
+      samsungVendorProductEditTarget.vendorId,
+      samsungVendorProductEditTarget.productRowId
+    );
+    if(!found){ toast('수정할 품목을 찾을 수 없습니다. 다시 선택하세요.'); cancelSamsungVendorProductEdit(); return; }
+    if(hasSamsungVendorProductDuplicate(found.vendor, productId, spec, found.row.id)){
+      toast('이미 등록된 품목/작업스펙 조합입니다.'); return;
+    }
+    found.row.productId = productId;
+    found.row.spec = spec;
+    found.row.targetWeekly = targetWeekly;
+    saveSamsungVendors();
+    cancelSamsungVendorProductEdit();
+    renderSamsung();
+    toast('품목이 수정되었습니다.');
+    return;
+  }
+
+  if(hasSamsungVendorProductDuplicate(v, productId, spec)){
     toast('이미 등록된 품목/작업스펙 조합입니다.'); return;
   }
   v.products.push({ id: samsungProductRowId(), productId, spec, targetWeekly, note: '' });
   saveSamsungVendors();
-  ['sw-prod-product','sw-prod-product-id','sw-prod-spec','sw-prod-weekly'].forEach(id=>{
-    const el = document.getElementById(id); if(el) el.value = '';
-  });
+  clearSamsungVendorProductInputs(true);
   renderSamsung();
   toast('품목이 추가되었습니다.');
+}
+
+function editSamsungVendorProduct(vendorId, productRowId){
+  const found = findSamsungVendorProduct(vendorId, productRowId);
+  if(!found) return;
+  const lp = (labelProducts || []).find(x => String(x.id) === String(found.row.productId));
+  const vendorEl = document.getElementById('sw-prod-vendor');
+  const productEl = document.getElementById('sw-prod-product');
+  const productIdEl = document.getElementById('sw-prod-product-id');
+  const specEl = document.getElementById('sw-prod-spec');
+  const weeklyEl = document.getElementById('sw-prod-weekly');
+  if(vendorEl) vendorEl.value = found.vendor.id;
+  if(productEl) productEl.value = lp ? bulkProductLabel(lp) : '(삭제된 품목)';
+  if(productIdEl) productIdEl.value = found.row.productId || '';
+  if(specEl) specEl.value = found.row.spec || '';
+  if(weeklyEl) weeklyEl.value = parseAppNumber(found.row.targetWeekly) || '';
+  samsungVendorProductEditTarget = { vendorId: found.vendor.id, productRowId: found.row.id };
+  setSamsungVendorProductFormMode(true);
+  document.getElementById('sw-prod-product')?.scrollIntoView({behavior:'smooth', block:'center'});
+  toast('수정할 내용을 변경 후 [수정 저장]을 누르세요.', 2500);
 }
 
 function deleteSamsungVendorProduct(vendorId, productRowId){
   const v = samsungVendors.find(x => x.id === vendorId);
   if(!v || !v.products) return;
+  if(samsungVendorProductEditTarget &&
+     String(samsungVendorProductEditTarget.vendorId) === String(vendorId) &&
+     String(samsungVendorProductEditTarget.productRowId) === String(productRowId)){
+    cancelSamsungVendorProductEdit();
+  }
   v.products = v.products.filter(p => p.id !== productRowId);
   saveSamsungVendors();
   renderSamsung();
@@ -12964,13 +13049,16 @@ function renderSamsungVendorProducts(){
         <td style="text-align:right;">${priceCell}</td>
         <td style="text-align:right;">${p.targetWeekly ? p.targetWeekly.toLocaleString('ko-KR')+' KG' : '-'}</td>
         <td style="font-size:11px;color:#666;">${htmlEscape(p.spec||'')}</td>
-        <td style="text-align:center;"><button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 7px;" onclick="deleteSamsungVendorProduct('${v.id}','${p.id}')">✕</button></td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button class="btn btn-sm" style="background:#2980b9;color:#fff;font-size:11px;padding:2px 7px;margin-right:3px;" onclick="editSamsungVendorProduct(${jsArg(v.id)},${jsArg(p.id)})">수정</button>
+          <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 7px;" onclick="deleteSamsungVendorProduct(${jsArg(v.id)},${jsArg(p.id)})">삭제</button>
+        </td>
       </tr>`;
     }).join('');
     return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
       <div style="background:#eef3fb;padding:8px 14px;font-weight:700;border-bottom:1px solid var(--border);">${htmlEscape(v.name)} <span style="color:#888;font-size:11px;font-weight:400;">— ${products.length}개 품목</span></div>
       <div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
-        <thead><tr style="background:#fafafa;"><th>품목</th><th style="text-align:right;">단가</th><th style="text-align:right;">예상 주간량</th><th>작업스펙</th><th style="width:50px;text-align:center;">관리</th></tr></thead>
+        <thead><tr style="background:#fafafa;"><th>품목</th><th style="text-align:right;">단가</th><th style="text-align:right;">예상 주간량</th><th>작업스펙</th><th style="width:96px;text-align:center;">관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
