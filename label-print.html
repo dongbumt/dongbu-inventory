@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>동부엠티 라벨 출력</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #fff;
+      --line: #d8dee6;
+      --text: #1f2933;
+      --muted: #667085;
+      --blue: #1d4ed8;
+      --green: #15803d;
+      --red: #b42318;
+      --amber: #b45309;
+      --soft-blue: #eef4ff;
+      --soft-green: #ecfdf3;
+      --soft-red: #fff1f3;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Malgun Gothic", "Segoe UI", sans-serif;
+      font-size: 12px;
+      letter-spacing: 0;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 9px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button:hover { border-color: #98a2b3; }
+    button.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    button.success {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+    button.danger {
+      background: var(--soft-red);
+      border-color: #fda29b;
+      color: var(--red);
+    }
+    button.ghost {
+      background: transparent;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    input, select {
+      width: 100%;
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 5px 8px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .topbar {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 10px;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 130px;
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .brand .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--amber);
+    }
+
+    .connect {
+      display: grid;
+      grid-template-columns: minmax(120px, 180px) auto auto auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .connect a {
+      color: var(--blue);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 9px;
+      background: #fff;
+      white-space: nowrap;
+    }
+
+    .shell {
+      height: calc(100vh - 44px);
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 8px;
+      padding: 8px;
+      overflow: hidden;
+    }
+
+    .panel {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 9px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+      font-weight: 800;
+    }
+
+    .panel-body { padding: 8px; }
+
+    .left {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+    }
+
+    .order-list {
+      height: 100%;
+      overflow: auto;
+      border-top: 1px solid var(--line);
+    }
+
+    .order-row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      border: 0;
+      border-bottom: 1px solid #edf1f5;
+      border-radius: 0;
+      padding: 8px;
+      text-align: left;
+      background: #fff;
+    }
+
+    .order-row.active { background: var(--soft-blue); }
+    .order-main {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+    .order-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 800;
+    }
+    .order-sub {
+      color: var(--muted);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .order-badge {
+      font-size: 11px;
+      color: var(--green);
+      background: var(--soft-green);
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-weight: 800;
+    }
+
+    .right {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .status {
+      display: none;
+      padding: 7px 9px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-weight: 700;
+    }
+    .status.show { display: block; }
+    .status.ok { color: var(--green); border-color: #abefc6; background: var(--soft-green); }
+    .status.warn { color: var(--amber); border-color: #fedf89; background: #fffaeb; }
+    .status.err { color: var(--red); border-color: #fda29b; background: var(--soft-red); }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(90px, 1fr));
+      gap: 6px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 7px 8px;
+      background: #fff;
+      min-width: 0;
+    }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 3px;
+    }
+    .metric strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 15px;
+    }
+
+    .print-line {
+      display: grid;
+      grid-template-columns: 1.2fr 84px 84px auto auto;
+      gap: 6px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .selected-title {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+    }
+    .selected-title strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 22px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .tag.active { color: var(--green); border-color: #abefc6; background: var(--soft-green); }
+    .tag.void { color: var(--red); border-color: #fda29b; background: var(--soft-red); }
+
+    .history-wrap {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 12px;
+    }
+    th, td {
+      border-bottom: 1px solid #edf1f5;
+      padding: 6px;
+      text-align: left;
+      vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #fbfcfd;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .table-scroll {
+      min-height: 0;
+      overflow: auto;
+    }
+    .actions {
+      display: flex;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .actions button {
+      padding: 4px 7px;
+      min-height: 26px;
+    }
+
+    .empty {
+      padding: 18px 8px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    @media (max-width: 860px) {
+      .topbar {
+        height: auto;
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .connect {
+        grid-template-columns: 1fr auto auto auto;
+      }
+      .shell {
+        height: auto;
+        min-height: calc(100vh - 86px);
+        grid-template-columns: 1fr;
+        overflow: visible;
+      }
+      .left, .right { min-height: 360px; }
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .print-line { grid-template-columns: 1fr 70px 80px; }
+      .print-line button { grid-column: span 1; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .topbar, .shell { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span><span>라벨 출력</span></div>
+    <div class="connect">
+      <input id="app-password" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="비밀번호">
+      <button id="connect-btn" class="primary" type="button">연결</button>
+      <button id="reload-btn" type="button">새로고침</button>
+      <a href="index.html">ERP</a>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="panel left">
+      <div class="panel-head">
+        <span>작업지시</span>
+        <span id="order-count" class="tag">0건</span>
+      </div>
+      <div class="panel-body">
+        <div class="filters">
+          <input id="date-filter" type="date">
+          <button id="today-btn" type="button">오늘</button>
+          <button id="all-btn" type="button">전체</button>
+        </div>
+        <div class="search-row">
+          <input id="search-filter" type="search" placeholder="품목, LOT, 작업명 검색">
+          <button id="clear-search-btn" type="button">지움</button>
+        </div>
+      </div>
+      <div id="order-list" class="order-list">
+        <div class="empty">연결 후 작업지시를 불러옵니다.</div>
+      </div>
+    </section>
+
+    <section class="right">
+      <div id="status" class="status"></div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span>선택 작업</span>
+          <span id="selected-size" class="tag">-</span>
+        </div>
+        <div class="panel-body">
+          <div class="selected-title">
+            <strong id="selected-name">작업지시를 선택하세요.</strong>
+            <span id="selected-date" class="tag">-</span>
+          </div>
+          <div class="summary-grid">
+            <div class="metric"><span>투입량</span><strong id="metric-input">-</strong></div>
+            <div class="metric"><span>라벨 중량</span><strong id="metric-label-weight">-</strong></div>
+            <div class="metric"><span>출력 생산량</span><strong id="metric-output">-</strong></div>
+            <div class="metric"><span>로스량</span><strong id="metric-loss">-</strong></div>
+            <div class="metric"><span>수율</span><strong id="metric-yield">-</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span>출력</span>
+          <span id="active-count" class="tag active">0장</span>
+        </div>
+        <div class="panel-body">
+          <div class="print-line">
+            <div class="field">
+              <label>제품명</label>
+              <input id="print-product" type="text" readonly>
+            </div>
+            <div class="field">
+              <label>매수</label>
+              <input id="print-copies" type="number" min="1" max="500" value="1">
+            </div>
+            <div class="field">
+              <label>크기</label>
+              <select id="print-size">
+                <option value="7x10">7x10</option>
+                <option value="10x10">10x10</option>
+              </select>
+            </div>
+            <button id="print-btn" class="success" type="button">출력</button>
+            <button id="preview-btn" type="button">미리보기</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel history-wrap">
+        <div class="panel-head">
+          <span>출력이력</span>
+          <span id="history-count" class="tag">0건</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:128px;">바코드</th>
+                <th>품목</th>
+                <th style="width:74px;">중량</th>
+                <th style="width:74px;">상태</th>
+                <th style="width:118px;">출력시간</th>
+                <th style="width:116px;">관리</th>
+              </tr>
+            </thead>
+            <tbody id="history-body">
+              <tr><td colspan="6" class="empty">작업지시를 선택하세요.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
+
+    const state = {
+      password: '',
+      workOrders: [],
+      labelProducts: [],
+      logs: [],
+      selectedId: '',
+      loading: false,
+      allDates: false,
+    };
+
+    const CODE39 = {
+      '0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw',
+      '5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn',
+      'A':'wnnnnwnnw','B':'nnwnnwnnw','C':'wnwnnwnnn','D':'nnnnwwnnw','E':'wnnnwwnnn',
+      'F':'nnwnwwnnn','G':'nnnnnwwnw','H':'wnnnnwwnn','I':'nnwnnwwnn','J':'nnnnwwwnn',
+      'K':'wnnnnnnww','L':'nnwnnnnww','M':'wnwnnnnwn','N':'nnnnwnnww','O':'wnnnwnnwn',
+      'P':'nnwnwnnwn','Q':'nnnnnnwww','R':'wnnnnnwwn','S':'nnwnnnwwn','T':'nnnnwnwwn',
+      'U':'wwnnnnnnw','V':'nwwnnnnnw','W':'wwwnnnnnn','X':'nwnnwnnnw','Y':'wwnnwnnnn',
+      'Z':'nwwnwnnnn','-':'nwnnnnwnw','.':'wwnnnnwnn',' ':'nwwnnnwnn','$':'nwnwnwnnn',
+      '/':'nwnwnnnwn','+':'nwnnnwnwn','%':'nnnwnwnwn','*':'nwnnwnwnn'
+    };
+
+    const DEFAULTS = {
+      licenseno: '제025-0293093호',
+      prodtype: '식품의유형',
+      packaging: '내포장(PE), 외포장(종이)',
+      storage: '-18℃이하 냉동보관',
+      manufacturer: '주식회사 동부엠티',
+      phone: '032-766-1812',
+      address: '인천광역시 서구 소담2로 36, 2동 201호'
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      $('date-filter').value = todayString();
+
+      $('connect-btn').addEventListener('click', connect);
+      $('reload-btn').addEventListener('click', refreshData);
+      $('today-btn').addEventListener('click', () => {
+        state.allDates = false;
+        $('date-filter').value = todayString();
+        renderAll();
+      });
+      $('all-btn').addEventListener('click', () => {
+        state.allDates = true;
+        $('date-filter').value = '';
+        renderAll();
+      });
+      $('date-filter').addEventListener('change', () => {
+        state.allDates = !$('date-filter').value;
+        renderAll();
+      });
+      $('search-filter').addEventListener('input', renderAll);
+      $('clear-search-btn').addEventListener('click', () => {
+        $('search-filter').value = '';
+        renderAll();
+      });
+      $('print-btn').addEventListener('click', printSelectedLabels);
+      $('preview-btn').addEventListener('click', previewSelectedLabel);
+      $('print-size').addEventListener('change', () => {
+        const order = selectedOrder();
+        if(order) order.labelSize = $('print-size').value;
+      });
+
+      renderAll();
+    });
+
+    function $(id){ return document.getElementById(id); }
+
+    function html(value){
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function toNumber(value){
+      if(value === null || value === undefined || value === '') return 0;
+      const n = Number(String(value).replace(/,/g, ''));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function kg(value){
+      const n = toNumber(value);
+      return n ? `${n.toLocaleString('ko-KR', {maximumFractionDigits: 2})} kg` : '-';
+    }
+
+    function pct(value){
+      if(!Number.isFinite(value)) return '-';
+      return `${value.toLocaleString('ko-KR', {minimumFractionDigits: 1, maximumFractionDigits: 1})}%`;
+    }
+
+    function todayString(){
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function formatDate(value){
+      if(!value) return '';
+      const s = String(value).slice(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.replaceAll('-', '.') : String(value);
+    }
+
+    function formatTime(value){
+      if(!value) return '';
+      const d = new Date(value);
+      if(Number.isNaN(d.getTime())) return String(value);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return `${mm}/${dd} ${hh}:${mi}`;
+    }
+
+    function normalizeArray(value){
+      if(Array.isArray(value)) return value;
+      if(typeof value === 'string'){
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch(e) {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    function setStatus(message, type=''){
+      const el = $('status');
+      el.className = `status ${message ? 'show' : ''} ${type}`;
+      el.textContent = message || '';
+    }
+
+    async function connect(){
+      const password = $('app-password').value.trim();
+      if(!password){
+        setStatus('비밀번호를 입력하세요.', 'warn');
+        return;
+      }
+      state.password = password;
+      await refreshData();
+    }
+
+    async function refreshData(){
+      const password = $('app-password').value.trim() || state.password;
+      if(!password){
+        setStatus('비밀번호를 입력하세요.', 'warn');
+        return;
+      }
+      setLoading(true);
+      setStatus('Supabase 연결 중...', 'warn');
+      try {
+        const data = await sbRpc('dbmt_get_all', {p_password: password});
+        const appData = data?.appData || {};
+        state.password = password;
+        state.workOrders = normalizeArray(appData.workOrders);
+        state.labelProducts = normalizeArray(appData.labelProducts);
+        state.logs = normalizeArray(appData.labelPrintLogs);
+        const filterDate = $('date-filter')?.value || '';
+        if(!state.allDates && filterDate && state.workOrders.length && !state.workOrders.some(row => String(row.date || '') === filterDate)){
+          state.allDates = true;
+          $('date-filter').value = '';
+        }
+        const visibleRows = filteredOrders();
+        const exists = visibleRows.some(row => String(row.id) === String(state.selectedId));
+        state.selectedId = exists ? state.selectedId : (visibleRows[0]?.id || '');
+        renderAll();
+        setStatus(`연결됨: 작업지시 ${state.workOrders.length}건, 출력이력 ${state.logs.length}건`, 'ok');
+      } catch(err) {
+        setStatus(`연결 실패: ${err.message || err}`, 'err');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function sbRpc(fnName, body){
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body || {})
+      });
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch(e) { data = text; }
+      if(!res.ok){
+        const msg = data?.message || data?.error || text || `Supabase RPC failed: ${fnName}`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    function setLoading(isLoading){
+      state.loading = isLoading;
+      ['connect-btn','reload-btn','print-btn','preview-btn'].forEach(id => {
+        const el = $(id);
+        if(el) el.disabled = isLoading;
+      });
+    }
+
+    async function saveLogs(){
+      if(!state.password) throw new Error('비밀번호가 없습니다.');
+      await sbRpc('dbmt_import_app_data', {
+        p_password: state.password,
+        p_payload: {labelPrintLogs: state.logs}
+      });
+    }
+
+    function renderAll(){
+      renderOrders();
+      renderSelected();
+      renderHistory();
+    }
+
+    function filteredOrders(){
+      const search = $('search-filter')?.value.trim().toLowerCase() || '';
+      const date = $('date-filter')?.value || '';
+      return state.workOrders
+        .filter(row => state.allDates || !date || String(row.date || '') === date)
+        .filter(row => {
+          if(!search) return true;
+          const hay = [row.title, row.product, row.lot, row.origin, row.sourceStock?.lot].join(' ').toLowerCase();
+          return hay.includes(search);
+        })
+        .sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')) || String(a.product || '').localeCompare(String(b.product || ''), 'ko'));
+    }
+
+    function renderOrders(){
+      const rows = filteredOrders();
+      if(rows.length && !rows.some(row => String(row.id) === String(state.selectedId))){
+        state.selectedId = rows[0].id;
+      }
+      $('order-count').textContent = `${rows.length}건`;
+      const list = $('order-list');
+      if(!rows.length){
+        list.innerHTML = `<div class="empty">${state.workOrders.length ? '조건에 맞는 작업지시가 없습니다.' : '작업지시가 없습니다.'}</div>`;
+        return;
+      }
+      list.innerHTML = rows.map(row => {
+        const logs = activeLogsForOrder(row.id);
+        const activeWeight = logs.reduce((sum, log) => sum + toNumber(log.labelWeight), 0);
+        const title = row.title || row.product || '이름 없음';
+        const sub = `${row.date || '-'} / ${row.product || '-'} / LOT ${row.lot || row.sourceStock?.lot || '-'}`;
+        const active = String(row.id) === String(state.selectedId) ? ' active' : '';
+        return `
+          <button class="order-row${active}" type="button" data-id="${html(row.id)}">
+            <span class="order-main">
+              <span class="order-title">${html(title)}</span>
+              <span class="order-sub">${html(sub)}</span>
+            </span>
+            <span class="order-badge">${kg(activeWeight)}</span>
+          </button>`;
+      }).join('');
+      list.querySelectorAll('.order-row').forEach(btn => {
+        btn.addEventListener('click', () => selectOrder(btn.dataset.id));
+      });
+    }
+
+    function selectOrder(id){
+      state.selectedId = id;
+      renderAll();
+    }
+
+    function selectedOrder(){
+      return state.workOrders.find(row => String(row.id) === String(state.selectedId)) || null;
+    }
+
+    function logsForOrder(orderId){
+      return state.logs
+        .filter(log => String(log.workOrderId) === String(orderId))
+        .sort((a,b) => String(b.printedAt || b.createdAt || '').localeCompare(String(a.printedAt || a.createdAt || '')));
+    }
+
+    function activeLogsForOrder(orderId){
+      return logsForOrder(orderId).filter(log => log.status !== 'void');
+    }
+
+    function renderSelected(){
+      const row = selectedOrder();
+      if(!row){
+        $('selected-name').textContent = '작업지시를 선택하세요.';
+        $('selected-date').textContent = '-';
+        $('selected-size').textContent = '-';
+        $('print-product').value = '';
+        $('print-size').value = '7x10';
+        $('metric-input').textContent = '-';
+        $('metric-label-weight').textContent = '-';
+        $('metric-output').textContent = '-';
+        $('metric-loss').textContent = '-';
+        $('metric-yield').textContent = '-';
+        $('active-count').textContent = '0장';
+        return;
+      }
+      const active = activeLogsForOrder(row.id);
+      const inputWeight = toNumber(row.inputWeight);
+      const labelWeight = toNumber(row.weight);
+      const outputWeight = active.reduce((sum, log) => sum + toNumber(log.labelWeight), 0);
+      const lossWeight = inputWeight ? inputWeight - outputWeight : 0;
+      const yieldRate = inputWeight ? outputWeight / inputWeight * 100 : NaN;
+      const size = row.labelSize || '7x10';
+
+      $('selected-name').textContent = row.title || row.product || '이름 없음';
+      $('selected-date').textContent = row.date || '-';
+      $('selected-size').textContent = size;
+      $('print-product').value = row.product || '';
+      $('print-size').value = size;
+      $('metric-input').textContent = kg(inputWeight);
+      $('metric-label-weight').textContent = kg(labelWeight);
+      $('metric-output').textContent = kg(outputWeight);
+      $('metric-loss').textContent = inputWeight ? kg(lossWeight) : '-';
+      $('metric-yield').textContent = pct(yieldRate);
+      $('active-count').textContent = `${active.length.toLocaleString('ko-KR')}장`;
+    }
+
+    function renderHistory(){
+      const row = selectedOrder();
+      const body = $('history-body');
+      if(!row){
+        $('history-count').textContent = '0건';
+        body.innerHTML = '<tr><td colspan="6" class="empty">작업지시를 선택하세요.</td></tr>';
+        return;
+      }
+      const rows = logsForOrder(row.id);
+      $('history-count').textContent = `${rows.length}건`;
+      if(!rows.length){
+        body.innerHTML = '<tr><td colspan="6" class="empty">출력이력이 없습니다.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(log => {
+        const isVoid = log.status === 'void';
+        return `
+          <tr>
+            <td title="${html(log.code)}">${html(log.code || '-')}</td>
+            <td>${html(log.product || log.workOrderSnapshot?.product || '-')}</td>
+            <td>${kg(log.labelWeight)}</td>
+            <td><span class="tag ${isVoid ? 'void' : 'active'}">${isVoid ? '삭제됨' : '정상'}</span></td>
+            <td>${html(formatTime(log.printedAt))}</td>
+            <td>
+              <div class="actions">
+                <button type="button" data-act="reprint" data-id="${html(log.id)}">재출력</button>
+                <button type="button" class="danger" data-act="void" data-id="${html(log.id)}" ${isVoid ? 'disabled' : ''}>삭제</button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+      body.querySelectorAll('button[data-act]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if(btn.dataset.act === 'reprint') reprintLog(btn.dataset.id);
+          if(btn.dataset.act === 'void') voidLog(btn.dataset.id);
+        });
+      });
+    }
+
+    function printCount(){
+      const n = parseInt($('print-copies').value || '1', 10);
+      return Math.max(1, Math.min(Number.isFinite(n) ? n : 1, 500));
+    }
+
+    async function printSelectedLabels(){
+      const row = selectedOrder();
+      if(!row){
+        setStatus('작업지시를 선택하세요.', 'warn');
+        return;
+      }
+      const win = window.open('', '_blank', 'width=420,height=720');
+      if(!win){
+        setStatus('팝업이 차단되어 출력창을 열 수 없습니다.', 'err');
+        return;
+      }
+
+      const count = printCount();
+      const batchId = `LPB-${compactDateTime()}-${hashText(`${row.id}-${Date.now()}`).slice(0, 5)}`;
+      const records = Array.from({length: count}, (_, index) => makePrintLog(row, batchId, index + 1));
+      const previousLogs = state.logs.slice();
+      state.logs = [...records, ...state.logs];
+      renderAll();
+      setLoading(true);
+      setStatus('출력이력 저장 중...', 'warn');
+      try {
+        await saveLogs();
+        writePrintDocument(win, records, $('print-size').value || row.labelSize || '7x10');
+        setStatus(`출력 저장됨: ${records.length}장`, 'ok');
+      } catch(err) {
+        state.logs = previousLogs;
+        win.close();
+        renderAll();
+        setStatus(`출력 저장 실패: ${err.message || err}`, 'err');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function previewSelectedLabel(){
+      const row = selectedOrder();
+      if(!row){
+        setStatus('작업지시를 선택하세요.', 'warn');
+        return;
+      }
+      const sample = makePrintLog(row, 'PREVIEW', 1);
+      sample.code = 'PREVIEW-0001';
+      const win = window.open('', '_blank', 'width=420,height=720');
+      if(!win){
+        setStatus('팝업이 차단되어 미리보기를 열 수 없습니다.', 'err');
+        return;
+      }
+      writePrintDocument(win, [sample], $('print-size').value || row.labelSize || '7x10', true);
+    }
+
+    async function reprintLog(id){
+      const log = state.logs.find(item => String(item.id) === String(id));
+      if(!log){
+        setStatus('출력이력을 찾을 수 없습니다.', 'err');
+        return;
+      }
+      const win = window.open('', '_blank', 'width=420,height=720');
+      if(!win){
+        setStatus('팝업이 차단되어 출력창을 열 수 없습니다.', 'err');
+        return;
+      }
+      const previousLogs = state.logs.map(item => ({...item}));
+      log.reprintCount = toNumber(log.reprintCount) + 1;
+      log.lastReprintedAt = new Date().toISOString();
+      renderHistory();
+      setLoading(true);
+      setStatus('재출력 기록 저장 중...', 'warn');
+      try {
+        await saveLogs();
+        writePrintDocument(win, [log], log.sizeKey || log.workOrderSnapshot?.labelSize || '7x10');
+        setStatus(`재출력 저장됨: ${log.code}`, 'ok');
+      } catch(err) {
+        state.logs = previousLogs;
+        win.close();
+        renderAll();
+        setStatus(`재출력 저장 실패: ${err.message || err}`, 'err');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function voidLog(id){
+      const idx = state.logs.findIndex(item => String(item.id) === String(id));
+      if(idx < 0){
+        setStatus('출력이력을 찾을 수 없습니다.', 'err');
+        return;
+      }
+      const reason = prompt('삭제 사유', '잘못 출력');
+      if(reason === null) return;
+      const previousLogs = state.logs.map(item => ({...item}));
+      state.logs[idx] = {
+        ...state.logs[idx],
+        status: 'void',
+        voidedAt: new Date().toISOString(),
+        voidReason: reason || '삭제'
+      };
+      renderAll();
+      setLoading(true);
+      setStatus('삭제 처리 저장 중...', 'warn');
+      try {
+        await saveLogs();
+        setStatus(`삭제 처리됨: ${state.logs[idx].code}`, 'ok');
+      } catch(err) {
+        state.logs = previousLogs;
+        renderAll();
+        setStatus(`삭제 처리 실패: ${err.message || err}`, 'err');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function makePrintLog(row, batchId, copyNo){
+      const now = new Date().toISOString();
+      const code = makeLabelCode(row, copyNo);
+      return {
+        id: `lpl_${Date.now()}_${copyNo}_${Math.random().toString(36).slice(2, 8)}`,
+        code,
+        batchId,
+        copyNo,
+        workOrderId: String(row.id || ''),
+        status: 'active',
+        printedAt: now,
+        product: row.product || '',
+        lot: row.lot || row.sourceStock?.lot || '',
+        labelWeight: toNumber(row.weight),
+        inputWeight: toNumber(row.inputWeight),
+        sizeKey: $('print-size').value || row.labelSize || '7x10',
+        reprintCount: 0,
+        workOrderSnapshot: snapshotOrder(row)
+      };
+    }
+
+    function snapshotOrder(row){
+      return {
+        id: row.id || '',
+        date: row.date || '',
+        title: row.title || '',
+        product: row.product || '',
+        origin: row.origin || '',
+        grade: row.grade || '',
+        mfgdate: row.mfgdate || row.date || '',
+        expdate: row.expdate || '',
+        weight: toNumber(row.weight),
+        itemno: row.itemno || '',
+        lot: row.lot || row.sourceStock?.lot || '',
+        ingredients: row.ingredients || '',
+        temptype: row.temptype || '냉동',
+        inputWeight: toNumber(row.inputWeight),
+        sourceStock: row.sourceStock || null,
+        labelSize: $('print-size').value || row.labelSize || '7x10'
+      };
+    }
+
+    function makeLabelCode(row, copyNo){
+      const prefix = 'DB';
+      const seed = `${row.id || ''}-${Date.now()}-${copyNo}-${Math.random()}`;
+      return `${prefix}${compactDateTime()}-${hashText(seed).slice(0, 6)}`;
+    }
+
+    function compactDateTime(){
+      const d = new Date();
+      const yy = String(d.getFullYear()).slice(2);
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return `${yy}${mo}${da}${hh}${mi}`;
+    }
+
+    function hashText(text){
+      let h = 2166136261;
+      for(let i = 0; i < text.length; i++){
+        h ^= text.charCodeAt(i);
+        h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+      }
+      return (h >>> 0).toString(36).toUpperCase();
+    }
+
+    function writePrintDocument(win, logs, sizeKey='7x10', preview=false){
+      const size = sizeConfig(sizeKey);
+      const labels = logs.map(log => {
+        const data = labelDataFromLog(log);
+        return `<section class="print-label">${buildLabelBody(data, log.code, preview)}</section>`;
+      }).join('');
+      const doc = `<!DOCTYPE html>
+        <html lang="ko">
+        <head>
+          <meta charset="UTF-8">
+          <title>라벨 출력</title>
+          <style>
+            @page { size: ${size.widthCm}cm ${size.heightCm}cm; margin: 0; }
+            * { box-sizing: border-box; }
+            html, body { margin: 0; padding: 0; background: #fff; }
+            body {
+              width: ${size.widthCm}cm;
+              font-family: "Malgun Gothic", Arial, sans-serif;
+              color: #000;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .print-label {
+              width: ${size.widthCm}cm;
+              height: ${size.heightCm}cm;
+              page-break-after: always;
+              break-after: page;
+              border: 2px solid #000;
+              padding: 3mm 3mm 2.5mm;
+              display: grid;
+              grid-template-rows: auto 1fr auto;
+              gap: 1.8mm;
+              overflow: hidden;
+              background: #fff;
+            }
+            .print-label:last-child { page-break-after: auto; break-after: auto; }
+            .top {
+              display: grid;
+              grid-template-columns: 1fr auto;
+              gap: 2mm;
+              align-items: start;
+              border-bottom: 1px solid #000;
+              padding-bottom: 1.5mm;
+            }
+            .product {
+              font-size: 13pt;
+              font-weight: 900;
+              line-height: 1.15;
+              word-break: keep-all;
+            }
+            .temp {
+              min-width: 14mm;
+              border: 2px solid #000;
+              padding: 1mm 1.5mm;
+              text-align: center;
+              font-size: 12pt;
+              font-weight: 900;
+              line-height: 1.1;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: 22mm 1fr;
+              column-gap: 2mm;
+              row-gap: 1mm;
+              align-content: start;
+              font-size: 7.6pt;
+              line-height: 1.24;
+            }
+            .k { font-weight: 900; }
+            .v { font-weight: 700; min-width: 0; word-break: keep-all; }
+            .weight { font-size: 12pt; font-weight: 900; }
+            .ingredient-chip {
+              display: inline-block;
+              background: #000;
+              color: #fff;
+              padding: 0.2mm 1.2mm 0.35mm;
+              border-radius: 0.5mm;
+              margin-right: 0.8mm;
+              font-weight: 900;
+            }
+            .bottom {
+              display: grid;
+              grid-template-columns: 1fr 20mm;
+              gap: 2mm;
+              align-items: end;
+              border-top: 1px solid #000;
+              padding-top: 1.5mm;
+            }
+            .notice {
+              font-size: 6.4pt;
+              line-height: 1.28;
+              font-weight: 700;
+            }
+            .marks {
+              display: grid;
+              gap: 1mm;
+            }
+            .mark {
+              border: 1.5px solid #000;
+              border-radius: 50%;
+              height: 10mm;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 6pt;
+              font-weight: 900;
+            }
+            .barcode {
+              grid-column: 1 / -1;
+              display: grid;
+              justify-items: center;
+              gap: 0.5mm;
+              margin-top: 0.5mm;
+            }
+            .barcode svg {
+              display: block;
+              width: 100%;
+              max-width: ${size.widthCm === 7 ? '58mm' : '82mm'};
+              height: 12mm;
+            }
+            .barcode-code {
+              font-size: 6.5pt;
+              font-weight: 900;
+              letter-spacing: 0;
+            }
+            .preview-watermark {
+              position: fixed;
+              inset: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 28pt;
+              font-weight: 900;
+              color: rgba(180, 35, 24, 0.18);
+              transform: rotate(-25deg);
+              pointer-events: none;
+            }
+          </style>
+        </head>
+        <body>
+          ${labels}
+          ${preview ? '<div class="preview-watermark">미리보기</div>' : ''}
+          <script>
+            window.onload = function(){ ${preview ? '' : 'window.print();'} };
+          <\/script>
+        </body>
+        </html>`;
+      win.document.open();
+      win.document.write(doc);
+      win.document.close();
+    }
+
+    function labelDataFromLog(log){
+      const row = log.workOrderSnapshot || {};
+      return {
+        product: row.product || log.product || '',
+        origin: row.origin || '',
+        grade: row.grade || '',
+        mfgdate: formatDate(row.mfgdate || row.date || ''),
+        expdate: formatDate(row.expdate || ''),
+        weight: toNumber(log.labelWeight || row.weight).toFixed(2),
+        itemno: row.itemno || '',
+        lot: row.lot || log.lot || '',
+        ingredients: row.ingredients || `${inferMeatType(row.product || log.product || '', '')} 100%`,
+        storage: row.temptype === '냉장' ? '0~10℃ 냉장보관' : DEFAULTS.storage,
+        temptype: row.temptype || '냉동',
+        licenseno: DEFAULTS.licenseno,
+        prodtype: DEFAULTS.prodtype,
+        packaging: DEFAULTS.packaging,
+        manufacturer: DEFAULTS.manufacturer,
+        phone: DEFAULTS.phone,
+        address: DEFAULTS.address,
+        crossNotice: crossFacilityNotice(row.product || log.product || '', row.ingredients || '')
+      };
+    }
+
+    function buildLabelBody(d, code, preview){
+      return `
+        <div class="top">
+          <div class="product">${html(d.product || '-')}</div>
+          <div class="temp">${html(d.temptype || '냉동')}</div>
+        </div>
+        <div class="grid">
+          <div class="k">제품명:</div><div class="v">${html(d.product || '-')}</div>
+          <div class="k">성별및등급:</div><div class="v">${html(d.grade || '-')}</div>
+          <div class="k">원산지:</div><div class="v">${html(d.origin || '-')}</div>
+          <div class="k">제조 및 소비기한:</div><div class="v">${html(d.mfgdate || '-')} / ${html(d.expdate || '-')}</div>
+          <div class="k">중량:</div><div class="v weight">${html(d.weight || '-')} kg</div>
+          <div class="k">품목보고번호</div><div class="v">${html(d.itemno || '-')}</div>
+          <div class="k">이력번호</div><div class="v">${html(d.lot || '-')}</div>
+          <div class="k">원료 및 함량</div><div class="v">${formatIngredients(d.ingredients, d.product)}</div>
+          <div class="k">보관방법:</div><div class="v">${html(d.storage || '-')}</div>
+          <div class="k">허가번호:</div><div class="v">${html(d.licenseno)}</div>
+        </div>
+        <div class="bottom">
+          <div class="notice">
+            ${html(d.prodtype)} / ${html(d.packaging)}<br>
+            제조판매원&nbsp;&nbsp;${html(d.manufacturer)} / ${html(d.phone)}<br>
+            ${html(d.address)}<br>
+            부정,불량 축산물 신고는 국번없이 1399<br>
+            이 제품은 공정거래위원회 고시 소비자 분쟁해결기준에 의거 교환 또는 보상받을 수 있습니다<br>
+            ${html(d.crossNotice)}
+          </div>
+          <div class="marks">
+            <div class="mark">OTHER</div>
+            <div class="mark">HACCP</div>
+          </div>
+          <div class="barcode">
+            ${code39Svg(code)}
+            <div class="barcode-code">${html(code)}${preview ? ' / SAMPLE' : ''}</div>
+          </div>
+        </div>`;
+    }
+
+    function inferMeatType(product='', ingredients=''){
+      const text = `${product} ${ingredients}`;
+      if(/소|우|한우|갈비|사태|차돌|양지|목심|우둔|설도|등심|안심/.test(text)) return '소고기';
+      return '돼지고기';
+    }
+
+    function formatIngredients(value, product=''){
+      const meat = inferMeatType(product, value);
+      const raw = String(value || `${meat} 100%`);
+      const escaped = html(raw);
+      const meatEsc = html(meat);
+      if(escaped.includes(meatEsc)){
+        return escaped.replace(meatEsc, `<span class="ingredient-chip">${meatEsc}</span>`);
+      }
+      return `<span class="ingredient-chip">${meatEsc}</span>${escaped}`;
+    }
+
+    function crossFacilityNotice(product='', ingredients=''){
+      const meat = inferMeatType(product, ingredients);
+      if(meat === '소고기') return '본 제품은 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
+      return '본 제품은 소고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
+    }
+
+    function sizeConfig(size='7x10'){
+      if(size === '10x10') return {widthCm: 10, heightCm: 10};
+      return {widthCm: 7, heightCm: 10};
+    }
+
+    function code39Svg(value){
+      const text = sanitizeCode39(value || 'EMPTY');
+      const encoded = `*${text}*`;
+      const narrow = 2;
+      const wide = 5;
+      const height = 52;
+      let x = 0;
+      const rects = [];
+      for(const ch of encoded){
+        const pattern = CODE39[ch] || CODE39['-'];
+        for(let i = 0; i < pattern.length; i++){
+          const w = pattern[i] === 'w' ? wide : narrow;
+          if(i % 2 === 0) rects.push(`<rect x="${x}" y="0" width="${w}" height="${height}"></rect>`);
+          x += w;
+        }
+        x += narrow;
+      }
+      return `<svg viewBox="0 0 ${x} ${height}" role="img" aria-label="${html(text)}" xmlns="http://www.w3.org/2000/svg">${rects.join('')}</svg>`;
+    }
+
+    function sanitizeCode39(value){
+      const allowed = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%';
+      const clean = String(value).toUpperCase().split('').map(ch => allowed.includes(ch) ? ch : '-').join('');
+      return clean.slice(0, 32) || 'EMPTY';
+    }
+  </script>
+</body>
+</html>

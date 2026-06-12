@@ -207,6 +207,9 @@
   <div class="nav-tab" onclick="showPage('p-label',this);initLabelForm();" id="nav-label" style="color:#8e44ad;font-weight:700;">
     🏷️ 라벨출력
   </div>
+  <div class="nav-tab" onclick="window.open('label-print.html','_blank');" id="nav-label-print-standalone" style="color:#1d4ed8;font-weight:700;">
+    🧾 라벨전용
+  </div>
   <div class="nav-tab" onclick="showPage('p-pangwanbi',this)" id="nav-pangwanbi" style="color:#d35400;font-weight:700;">
     ⚙️ 경비 설정
   </div>
@@ -3410,6 +3413,7 @@ const APP_DATA_REGISTRY = {
   labelTemplates:   { get:()=>labelTemplates,   set:v=>{ labelTemplates=v; },   ls:'dbmt_label_templates'  },
   labelProducts:    { get:()=>labelProducts,    set:v=>{ labelProducts=v; },    ls:'dbmt_label_products'   },
   workOrders:       { get:()=>workOrders,       set:v=>{ workOrders=v; },       ls:'dbmt_work_orders'      },
+  labelPrintLogs:   { get:()=>labelPrintLogs,   set:v=>{ labelPrintLogs=v; },   ls:'dbmt_label_print_logs', readOnly:true },
   subMaterialItems: { get:()=>subMaterialItems, set:v=>{ subMaterialItems=v; }, ls:'dbmt_submaterial_items' },
   subMaterialLots:  { get:()=>subMaterialLots,  set:v=>{ subMaterialLots=v; },  ls:'dbmt_submaterial_lots'  },
   subMaterialCounts:{ get:()=>subMaterialCounts,set:v=>{ subMaterialCounts=v; },ls:'dbmt_submaterial_counts'},
@@ -8917,7 +8921,7 @@ function backupAllData(){
     'dbmt_employees','dbmt_leaves',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
-    'dbmt_label_products','dbmt_work_orders','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
+    'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
   ];
   const backup = { _version: 2, _date: new Date().toISOString(), data: {} };
   KEYS.forEach(k => {
@@ -8993,6 +8997,7 @@ async function sbRpc(fnName, body){
 function sbCollectAppData(){
   const payload = {};
   Object.entries(APP_DATA_REGISTRY).forEach(([key, reg]) => {
+    if(reg.readOnly) return;
     try { payload[key] = reg.get(); }
     catch(e) { console.warn('Supabase appData collect failed:', key, e); }
   });
@@ -11507,6 +11512,7 @@ function showPdfError(msg){
 let labelTemplates = JSON.parse(localStorage.getItem('dbmt_label_templates') || '[]');
 let labelProducts  = JSON.parse(localStorage.getItem('dbmt_label_products')  || '[]');
 let workOrders     = JSON.parse(localStorage.getItem('dbmt_work_orders')     || '[]');
+let labelPrintLogs = JSON.parse(localStorage.getItem('dbmt_label_print_logs') || '[]');
 
 const LBL_DEFAULTS = {
   licenseno:    '제2025-0293093호',
