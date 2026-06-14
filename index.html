@@ -300,19 +300,19 @@
   <!-- 카드 2: 거래처별 납품 품목 -->
   <div class="card">
     <div class="card-title"><div class="ct-bar" style="background:#1428a0;"></div>📦 거래처별 납품 품목</div>
-    <div class="form-row" style="align-items:flex-end;">
-      <div class="form-group" style="min-width:170px;"><label>거래처</label>
+    <div class="form-row sw-product-form">
+      <div class="form-group sw-prod-vendor-field"><label>거래처</label>
         <select id="sw-prod-vendor"><option value="">-- 거래처 선택 --</option></select>
       </div>
-      <div class="form-group" style="flex:1;min-width:240px;position:relative;"><label>품목 (품목관리 기준)</label>
+      <div class="form-group sw-prod-product-field"><label>품목 (품목관리 기준)</label>
         <input id="sw-prod-product" class="bulk-in-product" oninput="onBulkProductSearch(this,true)" onfocus="onBulkProductSearch(this,false)" onblur="hideBulkProductResults(this)" placeholder="품목 검색..." autocomplete="off">
         <input type="hidden" class="bulk-in-product-id" id="sw-prod-product-id">
         <div class="bulk-in-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
       </div>
-      <div class="form-group" style="max-width:130px;"><label>예상 주간량(KG)</label><input id="sw-prod-weekly" type="number" step="0.01" placeholder="0"></div>
-      <div class="form-group" style="flex:1;min-width:180px;"><label>작업스펙</label><input id="sw-prod-spec" placeholder="예: 5KG진공, 부분작업"></div>
-      <div class="form-group" style="flex:0;"><label>&nbsp;</label><button id="sw-prod-save-btn" class="btn btn-primary" onclick="addSamsungVendorProduct()">+ 품목 추가</button></div>
-      <div class="form-group" style="flex:0;"><label>&nbsp;</label><button id="sw-prod-cancel-btn" class="btn btn-secondary" onclick="cancelSamsungVendorProductEdit()" style="display:none;">취소</button></div>
+      <div class="form-group sw-prod-weekly-field"><label>예상 주간량(KG)</label><input id="sw-prod-weekly" type="number" step="0.01" placeholder="0"></div>
+      <div class="form-group sw-prod-spec-field"><label>작업스펙</label><input id="sw-prod-spec" placeholder="예: 5KG진공, 부분작업"></div>
+      <div class="form-group sw-prod-action-field"><label>&nbsp;</label><button id="sw-prod-save-btn" class="btn btn-primary" onclick="addSamsungVendorProduct()">+ 품목 추가</button></div>
+      <div class="form-group sw-prod-action-field"><label>&nbsp;</label><button id="sw-prod-cancel-btn" class="btn btn-secondary" onclick="cancelSamsungVendorProductEdit()" style="display:none;">취소</button></div>
     </div>
     <div style="font-size:11px;color:#888;margin:6px 0 0;">💡 <strong>단가는 단가표</strong>의 (품목·원산지·거래처) 단가를 자동 사용합니다. 같은 품목도 작업스펙이 다르면 별도 품목으로 등록됩니다.</div>
     <div id="sw-prod-area" style="margin-top:14px;"></div>
