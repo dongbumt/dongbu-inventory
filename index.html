@@ -1592,6 +1592,39 @@
     </div>
   </div>
   <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>주말출근 입력</div>
+    <input type="hidden" id="ww-edit-id">
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>직원</label>
+        <select id="ww-emp"><option value="">-- 직원 선택 --</option></select>
+      </div>
+      <div class="form-group"><label>출근일자</label><input id="ww-date" type="date"></div>
+      <div class="form-group" style="max-width:140px;"><label>근무시간</label><input id="ww-hours" type="number" min="0" max="24" step="0.5" placeholder="8"></div>
+      <div class="form-group"><label>사유</label><input id="ww-reason" placeholder="긴급 생산, 출고 대응 등"></div>
+      <div class="form-group" style="flex:0;"><label>&nbsp;</label>
+        <button class="btn btn-primary btn-sm" id="ww-save-btn" onclick="saveWeekendWork()">💾 저장</button>
+        <button class="btn btn-secondary btn-sm" id="ww-cancel-btn" onclick="cancelWeekendWorkEdit()" style="display:none;margin-left:4px;">취소</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#8e44ad;"></div>주말출근 내역 <span id="ww-record-count" style="font-size:12px;font-weight:400;color:#888;"></span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="month" id="ww-record-month" style="width:145px;font-size:12px;" onchange="renderWeekendWorkRecords()">
+        <select id="ww-record-emp" style="width:140px;font-size:12px;" onchange="renderWeekendWorkRecords()"><option value="">전체 직원</option></select>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="max-height:240px;">
+      <table>
+        <thead><tr>
+          <th>출근일자</th><th>직원</th><th style="text-align:right;">근무시간</th><th>사유</th><th style="text-align:center;">관리</th>
+        </tr></thead>
+        <tbody id="ww-record-body"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#16a085;"></div>근태 입력 내역 <span id="lv-record-count" style="font-size:12px;font-weight:400;color:#888;"></span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1625,6 +1658,7 @@
       <span style="background:#e67e22;color:#fff;border-radius:4px;padding:2px 8px;">지각</span>
       <span style="background:#e74c3c;color:#fff;border-radius:4px;padding:2px 8px;">조퇴</span>
       <span style="background:#3498db;color:#fff;border-radius:4px;padding:2px 8px;">예비군/민방위</span>
+      <span style="background:#8e44ad;color:#fff;border-radius:4px;padding:2px 8px;">주말출근</span>
     </div>
     <div id="leave-calendar" style="overflow-x:auto;"></div>
   </div>
@@ -2390,6 +2424,8 @@ function initDOM(){
   if(tDate) tDate.value = today;
   const lvDate=document.getElementById('lv-date'); if(lvDate) lvDate.value=today;
   const lvM=document.getElementById('lv-filter-month'); if(lvM) lvM.value=today.slice(0,7);
+  const wwDate=document.getElementById('ww-date'); if(wwDate) wwDate.value=today;
+  const wwM=document.getElementById('ww-record-month'); if(wwM) wwM.value=today.slice(0,7);
   const schM=document.getElementById('sch-month'); if(schM) schM.value=today.slice(0,7);
   // 헤더 날짜 표시
   const d=new Date();
@@ -3337,6 +3373,13 @@ function renderAll(){
   if(typeof refreshLabelWorkOrderSelect === 'function' && document.getElementById('p-label')?.classList.contains('active')) refreshLabelWorkOrderSelect();
   if(typeof renderSubMaterials === 'function' && document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
   if(typeof renderFactorySim === 'function' && document.getElementById('p-factorysim')?.classList.contains('active')) renderFactorySim();
+  if(document.getElementById('p-leaves')?.classList.contains('active')){
+    renderEmployees();
+    renderLeaves();
+    renderLeaveCalendar();
+    renderLeaveRecords();
+    renderWeekendWorkRecords();
+  }
 }
 
 // ── 사용자가 앱에서 직접 추가 입력한 데이터 ──
@@ -3405,6 +3448,7 @@ const APP_DATA_REGISTRY = {
   scheduleEvents:{ get:()=>scheduleEvents,set:v=>{ scheduleEvents=v; },ls:'dbmt_schedule_events' },
   employees:     { get:()=>employees,     set:v=>{ employees=v; },     ls:'dbmt_employees'   },
   leaveRecs:     { get:()=>leaveRecs,     set:v=>{ leaveRecs=v; },     ls:'dbmt_leaves'      },
+  weekendWorkRecs:{ get:()=>weekendWorkRecs,set:v=>{ weekendWorkRecs=v; },ls:'dbmt_weekend_work' },
   traderInfoMap: { get:()=>traderInfoMap, set:v=>{ traderInfoMap=v; }, ls:'dbmt_trader_info' },
   docChecks:     { get:()=>docChecks,     set:v=>{ docChecks=v; },     ls:'dbmt_doc_checks'  },
   pgbList:       { get:()=>pgbList,       set:v=>{ pgbList=v; },       ls:'dbmt_pangwanbi'   },
@@ -3681,7 +3725,7 @@ function showPage(id, btn){
   if(id==='p-traders') renderTraders();
   if(id==='p-samsung') initSamsung();
   if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
-  if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); }
+  if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); }
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
   if(id==='p-factorysim') renderFactorySim();
   if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
@@ -8918,7 +8962,7 @@ function backupAllData(){
   const KEYS = [
     'dbmt_user_transactions','dbmt_user_prod','dbmt_prices',
     'dbmt_schedule_events',
-    'dbmt_employees','dbmt_leaves',
+    'dbmt_employees','dbmt_leaves','dbmt_weekend_work',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
     'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
@@ -9417,6 +9461,7 @@ function renderDocCheck(){
 // ═══════════════════════════════════════════════════════
 let employees   = JSON.parse(localStorage.getItem('dbmt_employees')||'[]');
 let leaveRecs   = JSON.parse(localStorage.getItem('dbmt_leaves')||'[]');
+let weekendWorkRecs = JSON.parse(localStorage.getItem('dbmt_weekend_work')||'[]');
 let _empEditId  = null;
 let _empSortKey = 'name';
 let _empSortDir = 'asc';
@@ -9492,6 +9537,7 @@ function updateEmpLeaveDisplay() {
 function saveHR(){
   localStorage.setItem('dbmt_employees',  JSON.stringify(employees));
   localStorage.setItem('dbmt_leaves',     JSON.stringify(leaveRecs));
+  localStorage.setItem('dbmt_weekend_work', JSON.stringify(weekendWorkRecs));
   gsSaveAppData();
 }
 function hrId(){ return Date.now() + Math.random().toString(36).slice(2,6); }
@@ -9560,6 +9606,7 @@ function deleteEmployee(id){
   if(!confirm(msg)) return;
   employees  = employees.filter(x=>x.id!==id);
   leaveRecs  = leaveRecs.filter(x=>x.empId!==id);
+  weekendWorkRecs = weekendWorkRecs.filter(x=>x.empId!==id);
   saveHR(); renderEmployees(); renderRetiredEmployees(); renderSalarySummary(); toast('삭제됐습니다.');
 }
 function cancelEmpEdit(){
@@ -9590,10 +9637,10 @@ function renderEmployees(){
   if(!active.length){
     tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:20px;color:#888">등록된 재직 직원이 없습니다.</td></tr>';
     // 셀렉트도 비워주기
-    ['lv-emp','lv-record-emp'].forEach(sid=>{
+    ['lv-emp','lv-record-emp','ww-emp','ww-record-emp'].forEach(sid=>{
       const sel=document.getElementById(sid); if(!sel) return;
       const cur=sel.value;
-      const ph = sid==='lv-record-emp'?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
+      const ph = sid.includes('-record-')?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
       sel.innerHTML = ph;
       if(cur) sel.value=cur;
     });
@@ -9633,10 +9680,10 @@ function renderEmployees(){
       </td></tr>`;
   }).join('');
     // 셀렉트 업데이트 (재직자만)
-  ['lv-emp','lv-record-emp'].forEach(sid=>{
+  ['lv-emp','lv-record-emp','ww-emp','ww-record-emp'].forEach(sid=>{
     const sel=document.getElementById(sid); if(!sel) return;
     const cur=sel.value;
-    const ph = sid==='lv-record-emp'?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
+    const ph = sid.includes('-record-')?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
     sel.innerHTML = ph + active.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
     if(cur) sel.value=cur;
   });
@@ -9955,6 +10002,7 @@ const LV_TYPE_COLOR = {
   '지각':    '#e67e22',
   '조퇴':    '#e74c3c',
   '예비군/민방위':'#3498db',
+  '주말출근':'#8e44ad',
 };
 
 function lvCalToday(){
@@ -10004,6 +10052,12 @@ function renderLeaveCalendar(){
     const emp = employees.find(e=>e.id===r.empId);
     recMap[r.date].push({ name: emp ? emp.name : '?', type: r.type||'연차' });
   });
+  weekendWorkRecs.filter(r=>(r.date||'').startsWith(ym)).forEach(r=>{
+    if(!recMap[r.date]) recMap[r.date] = [];
+    const emp = employees.find(e=>e.id===r.empId);
+    const name = emp ? emp.name : '?';
+    recMap[r.date].push({ name, type: '주말출근', label: `${name} ${formatWorkHours(r.hours)}시간` });
+  });
 
   // 달력 헤더
   let html = `<table style="width:100%;border-collapse:collapse;table-layout:fixed;">
@@ -10031,7 +10085,10 @@ function renderLeaveCalendar(){
         const numColor = col===0?'#e74c3c':col===6?'#2980b9':'#333';
         html += `<td style="padding:4px;border:1px solid #eee;vertical-align:top;min-height:60px;background:${isWeekend?'#f8f8ff':'#fff'};">
           <div style="font-size:12px;font-weight:700;color:${numColor};margin-bottom:2px;">${day}</div>
-          ${recs.map(r=>`<div style="background:${LV_TYPE_COLOR[r.type]||'#999'};color:#fff;border-radius:3px;padding:1px 4px;font-size:10px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.name} - ${r.type}">${r.name} ${r.type}</div>`).join('')}
+          ${recs.map(r=>{
+            const label = r.label || `${r.name} ${r.type}`;
+            return `<div style="background:${LV_TYPE_COLOR[r.type]||'#999'};color:#fff;border-radius:3px;padding:1px 4px;font-size:10px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${htmlEscape(r.name)} - ${htmlEscape(r.type)}">${htmlEscape(label)}</div>`;
+          }).join('')}
         </td>`;
         day++;
       }
@@ -10134,6 +10191,113 @@ function renderLeaveRecords(){
     </tr>`;
   }).join('');
 }
+
+function formatWorkHours(hours){
+  const n = parseAppNumber(hours);
+  return n.toLocaleString('ko-KR', { maximumFractionDigits: 1 });
+}
+
+function isWeekendWorkDate(dateStr){
+  if(!dateStr) return false;
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d)) return false;
+  return d.getDay() === 0 || d.getDay() === 6;
+}
+
+function saveWeekendWork(){
+  const empId  = document.getElementById('ww-emp')?.value || '';
+  const date   = document.getElementById('ww-date')?.value || '';
+  const hours  = parseAppNumber(document.getElementById('ww-hours')?.value || 0);
+  const reason = document.getElementById('ww-reason')?.value.trim() || '';
+  const editId = document.getElementById('ww-edit-id')?.value || '';
+
+  if(!empId || !date){ toast('직원과 출근일자를 선택하세요.'); return; }
+  if(!(hours > 0)){ toast('근무시간을 입력하세요.'); return; }
+  if(hours > 24){ toast('근무시간은 24시간 이하로 입력하세요.'); return; }
+  if(!isWeekendWorkDate(date) && !confirm('선택한 날짜가 주말이 아닙니다. 그래도 주말출근으로 저장할까요?')) return;
+
+  const obj = { id: editId || hrId(), empId, date, hours, reason };
+  if(editId){
+    const idx = weekendWorkRecs.findIndex(r=>r.id===editId);
+    if(idx >= 0) weekendWorkRecs[idx] = obj;
+  } else {
+    weekendWorkRecs.push(obj);
+  }
+
+  saveHR();
+  cancelWeekendWorkEdit(false);
+  renderLeaves();
+  renderLeaveCalendar();
+  renderWeekendWorkRecords();
+  toast(editId ? '주말출근 기록이 수정됐습니다.' : '주말출근 기록이 저장됐습니다.');
+}
+
+function editWeekendWork(id){
+  const rec = weekendWorkRecs.find(r=>r.id===id);
+  if(!rec) return;
+  const editEl = document.getElementById('ww-edit-id'); if(editEl) editEl.value = rec.id;
+  const empEl = document.getElementById('ww-emp'); if(empEl) empEl.value = rec.empId || '';
+  const dateEl = document.getElementById('ww-date'); if(dateEl) dateEl.value = rec.date || '';
+  const hoursEl = document.getElementById('ww-hours'); if(hoursEl) hoursEl.value = rec.hours || '';
+  const reasonEl = document.getElementById('ww-reason'); if(reasonEl) reasonEl.value = rec.reason || '';
+  const saveBtn = document.getElementById('ww-save-btn'); if(saveBtn) saveBtn.textContent = '수정 저장';
+  const cancelBtn = document.getElementById('ww-cancel-btn'); if(cancelBtn) cancelBtn.style.display = '';
+  document.getElementById('ww-date')?.focus();
+}
+
+function deleteWeekendWork(id){
+  if(!confirm('주말출근 기록을 삭제할까요?')) return;
+  weekendWorkRecs = weekendWorkRecs.filter(r=>r.id!==id);
+  if(document.getElementById('ww-edit-id')?.value === id) cancelWeekendWorkEdit(false);
+  saveHR();
+  renderLeaves();
+  renderLeaveCalendar();
+  renderWeekendWorkRecords();
+  toast('삭제됐습니다.');
+}
+
+function cancelWeekendWorkEdit(shouldRender=true){
+  const editEl = document.getElementById('ww-edit-id'); if(editEl) editEl.value = '';
+  const hoursEl = document.getElementById('ww-hours'); if(hoursEl) hoursEl.value = '';
+  const reasonEl = document.getElementById('ww-reason'); if(reasonEl) reasonEl.value = '';
+  const saveBtn = document.getElementById('ww-save-btn'); if(saveBtn) saveBtn.textContent = '💾 저장';
+  const cancelBtn = document.getElementById('ww-cancel-btn'); if(cancelBtn) cancelBtn.style.display = 'none';
+  if(shouldRender) renderWeekendWorkRecords();
+}
+
+function renderWeekendWorkRecords(){
+  const tbody = document.getElementById('ww-record-body');
+  if(!tbody) return;
+  const monthEl = document.getElementById('ww-record-month');
+  if(monthEl && !monthEl.value) monthEl.value = localMonthString();
+  const ym = monthEl?.value || '';
+  const empFilter = document.getElementById('ww-record-emp')?.value || '';
+  let rows = weekendWorkRecs.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || String(b.id||'').localeCompare(String(a.id||'')));
+  if(ym) rows = rows.filter(r=>(r.date||'').startsWith(ym));
+  if(empFilter) rows = rows.filter(r=>r.empId===empFilter);
+
+  const totalHours = rows.reduce((s,r)=>s+parseAppNumber(r.hours), 0);
+  const countEl = document.getElementById('ww-record-count');
+  if(countEl) countEl.textContent = `(${rows.length}건 / ${formatWorkHours(totalHours)}시간)`;
+
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:18px;">주말출근 입력 내역이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>{
+    const emp = employees.find(e=>e.id===r.empId);
+    return `<tr>
+      <td style="white-space:nowrap;">${htmlEscape(r.date || '')}</td>
+      <td><strong>${htmlEscape(emp?.name || '-')}</strong></td>
+      <td style="text-align:right;">${formatWorkHours(r.hours)}시간</td>
+      <td>${htmlEscape(r.reason || '-')}</td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:4px;" onclick="editWeekendWork('${r.id}')">수정</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteWeekendWork('${r.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
 function renderLeaves(){
   const tbody = document.getElementById('lv-summary-tbody'); if(!tbody) return;
   const thead = document.getElementById('lv-summary-thead'); if(!thead) return;
@@ -10153,14 +10317,16 @@ function renderLeaves(){
 
   if(!employees.length){
     thead.innerHTML = '';
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#888">직원 없음</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#888">직원 없음</td></tr>';
     return;
   }
 
   // 전체 직원 기준 기록 있는 달 파악 (활성 월 컬럼만 표시)
   const yearRecs = leaveRecs.filter(r=>(r.date||'').startsWith(String(selY)));
+  const yearWeekendRecs = weekendWorkRecs.filter(r=>(r.date||'').startsWith(String(selY)));
   const activeMonthSet = new Set();
   yearRecs.forEach(r=>{ const m = (r.date||'').slice(5,7); if(m) activeMonthSet.add(m); });
+  yearWeekendRecs.forEach(r=>{ const m = (r.date||'').slice(5,7); if(m) activeMonthSet.add(m); });
   const activeMMs = Array.from(activeMonthSet).sort(); // ['01','03','04',...]
 
   // 헤더 생성
@@ -10172,43 +10338,54 @@ function renderLeaves(){
     <th>직원</th>
     <th style="text-align:right;">총 연차</th>
     <th style="text-align:right;">잔여 연차</th>
+    <th style="text-align:right;">주말출근</th>
+    <th style="text-align:right;">근무시간</th>
     ${activeMMs.map(mm=>`<th style="text-align:center;">${MONTH_LABEL[mm]}</th>`).join('')}
     ${!activeMMs.length ? '<th style="text-align:center;">내역</th>' : ''}
   </tr>`;
 
   // 월별 배지 셀 생성
-  function monthCell(mRecs){
-    if(!mRecs.length) return `<td style="text-align:center;color:#ddd;">-</td>`;
+  function monthCell(mRecs, mWeekendRecs=[]){
+    if(!mRecs.length && !mWeekendRecs.length) return `<td style="text-align:center;color:#ddd;">-</td>`;
     const leave = mRecs.filter(r=>r.type==='연차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
     const half  = mRecs.filter(r=>r.type==='오전반차'||r.type==='오후반차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
     const late  = mRecs.filter(r=>r.type==='지각').length;
     const early = mRecs.filter(r=>r.type==='조퇴').length;
     const reserve = mRecs.filter(r=>r.type==='예비군/민방위').length;
+    const weekendHours = mWeekendRecs.reduce((s,r)=>s+parseAppNumber(r.hours), 0);
     const badges = [];
     if(leave) badges.push(`<span style="background:#27ae60;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">연${leave}일</span>`);
     if(half)  badges.push(`<span style="background:#f39c12;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">반${half}일</span>`);
     if(late)  badges.push(`<span style="background:#e67e22;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">지${late}</span>`);
     if(early) badges.push(`<span style="background:#e74c3c;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">조${early}</span>`);
     if(reserve) badges.push(`<span style="background:#3498db;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">예${reserve}</span>`);
+    if(mWeekendRecs.length) badges.push(`<span style="background:#8e44ad;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">주${mWeekendRecs.length}회/${formatWorkHours(weekendHours)}h</span>`);
     return `<td style="text-align:center;white-space:nowrap;"><div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;">${badges.join('')}</div></td>`;
   }
 
   // 직원별 1행
   tbody.innerHTML = employees.map(emp=>{
     const recs  = yearRecs.filter(r=>r.empId===emp.id);
+    const wwRecs = yearWeekendRecs.filter(r=>r.empId===emp.id);
     const total = calcTotalLeave(emp.hireDate, selY);
     const usedLeave = recs.filter(r=>r.type==='연차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
     const usedHalf  = recs.filter(r=>r.type==='오전반차'||r.type==='오후반차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
     const rem = total - usedLeave - usedHalf;
+    const weekendHours = wwRecs.reduce((s,r)=>s+parseAppNumber(r.hours), 0);
 
     const monthCells = activeMMs.length
-      ? activeMMs.map(mm => monthCell(recs.filter(r=>(r.date||'').startsWith(selY+'-'+mm)))).join('')
+      ? activeMMs.map(mm => monthCell(
+          recs.filter(r=>(r.date||'').startsWith(selY+'-'+mm)),
+          wwRecs.filter(r=>(r.date||'').startsWith(selY+'-'+mm))
+        )).join('')
       : `<td style="text-align:center;color:#bbb;font-size:12px;">기록 없음</td>`;
 
     return `<tr>
       <td style="font-weight:700;">${emp.name}<br><span style="font-size:11px;color:#888;font-weight:400;">${emp.position||''}</span></td>
       <td style="text-align:right;">${total}일</td>
       <td style="text-align:right;font-weight:700;color:${rem<3?'var(--red)':'var(--green)'};">${rem}일</td>
+      <td style="text-align:right;">${wwRecs.length ? wwRecs.length + '회' : '-'}</td>
+      <td style="text-align:right;">${weekendHours ? formatWorkHours(weekendHours) + '시간' : '-'}</td>
       ${monthCells}
     </tr>`;
   }).join('');
