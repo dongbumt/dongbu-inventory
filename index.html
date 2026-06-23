@@ -11720,6 +11720,130 @@ function parsePdfText(text, cardType){
   };
 }
 
+let _pdfCompareView = {
+  filter: 'all',
+  rows: [],
+  summary: null
+};
+
+function pdfCompareStatusMeta(status){
+  const map = {
+    matched: { label:'매칭됨', color:'#27ae60', bg:'#eefaf2', border:'#b7e3c5' },
+    missing: { label:'누락', color:'#c0392b', bg:'#fff5f5', border:'#ffcdd2' },
+    review:  { label:'확인필요', color:'#d35400', bg:'#fff8ef', border:'#f5c98a' },
+    extra:   { label:'입력자료만 있음', color:'#7f8c8d', bg:'#f7f9fa', border:'#d9dee3' }
+  };
+  return map[status] || map.missing;
+}
+
+function pdfCompareBadge(status){
+  const m = pdfCompareStatusMeta(status);
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:64px;padding:3px 8px;border-radius:999px;background:${m.bg};border:1px solid ${m.border};color:${m.color};font-size:11px;font-weight:700;">${m.label}</span>`;
+}
+
+function pdfExpenseLine(expense){
+  if(!expense) return '<span style="color:#c0392b;font-weight:700;">입력자료 없음</span>';
+  const amount = parseAppNumber(expense.amount);
+  return `
+    <div style="font-size:12px;line-height:1.55;">
+      <div><strong>${htmlEscape(expense.date || '')}</strong> <span style="color:#555;">${htmlEscape(expense.store || '-')}</span></div>
+      <div style="color:#666;">${htmlEscape(expense.item || expense.category || '-')}</div>
+      <div style="font-weight:800;color:#2c3e50;">${amount.toLocaleString()}원</div>
+    </div>
+  `;
+}
+
+function pdfRowCandidateText(candidates){
+  if(!candidates?.length) return '';
+  return `<div style="margin-top:6px;font-size:11px;color:#d35400;line-height:1.45;">
+    후보: ${candidates.slice(0,2).map(e=>`${htmlEscape(e.date || '')} ${htmlEscape(e.store || '')} ${parseAppNumber(e.amount).toLocaleString()}원`).join(' / ')}
+  </div>`;
+}
+
+function findPdfCompareCandidates(pdfRow, expenses){
+  const pDate = pdfDateMs(pdfRow.date);
+  return expenses
+    .filter(e=>{
+      const amountDiff = Math.abs(parseAppNumber(e.amount) - pdfRow.amount);
+      const dayDiff = Math.abs(pdfDateMs(e.date) - pDate) / 86400000;
+      return (amountDiff === 0 && dayDiff <= 7) || (dayDiff <= 1 && amountDiff > 0 && amountDiff <= 1000);
+    })
+    .sort((a,b)=>{
+      const aDay = Math.abs(pdfDateMs(a.date) - pDate);
+      const bDay = Math.abs(pdfDateMs(b.date) - pDate);
+      const aAmt = Math.abs(parseAppNumber(a.amount) - pdfRow.amount);
+      const bAmt = Math.abs(parseAppNumber(b.amount) - pdfRow.amount);
+      return aAmt - bAmt || aDay - bDay;
+    })
+    .slice(0,3);
+}
+
+function pdfCompareCounts(rows){
+  return rows.reduce((acc,r)=>{ acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
+}
+
+function pdfCompareFilterButton(filter, label, count){
+  const active = _pdfCompareView.filter === filter;
+  const bg = active ? '#2c3e50' : '#fff';
+  const color = active ? '#fff' : '#34495e';
+  return `<button class="btn btn-sm" style="font-size:11px;padding:5px 10px;background:${bg};color:${color};border-color:#bdc3c7;" onclick="setPdfCompareFilter('${filter}')">${label} ${count}</button>`;
+}
+
+function setPdfCompareFilter(filter){
+  _pdfCompareView.filter = filter || 'all';
+  renderPdfCompareRows();
+}
+
+function renderPdfCompareRows(){
+  const tbody = document.getElementById('pdf-compare-tbody');
+  const buttons = document.getElementById('pdf-compare-filters');
+  if(!tbody) return;
+  const rows = _pdfCompareView.rows || [];
+  const counts = pdfCompareCounts(rows);
+  if(buttons){
+    buttons.innerHTML = [
+      pdfCompareFilterButton('all', '전체', rows.length),
+      pdfCompareFilterButton('missing', '누락', counts.missing || 0),
+      pdfCompareFilterButton('review', '확인필요', counts.review || 0),
+      pdfCompareFilterButton('matched', '매칭됨', counts.matched || 0),
+      pdfCompareFilterButton('extra', '입력자료만', counts.extra || 0)
+    ].join('');
+  }
+
+  const filtered = _pdfCompareView.filter === 'all'
+    ? rows
+    : rows.filter(r=>r.status === _pdfCompareView.filter);
+
+  if(!filtered.length){
+    tbody.innerHTML = '<tr><td colspan="4" style="padding:22px;text-align:center;color:#888;">표시할 항목이 없습니다.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(row=>{
+    const meta = pdfCompareStatusMeta(row.status);
+    const pdf = row.pdf;
+    const exp = row.expense;
+    const rowBg = row.status === 'matched' ? '#fbfffc' : row.status === 'extra' ? '#f8f9fa' : row.status === 'review' ? '#fffaf2' : '#fffafa';
+    const pdfCell = pdf ? `
+      <div style="font-size:12px;line-height:1.55;">
+        <div><strong>${htmlEscape(pdf.date || '')}</strong> <span style="color:#555;">${htmlEscape(pdf.merchant || '-')}</span></div>
+        <div style="font-weight:800;color:#2c3e50;">${parseAppNumber(pdf.amount).toLocaleString()}원</div>
+      </div>
+    ` : '<span style="color:#7f8c8d;font-weight:700;">PDF에 없음</span>';
+    const action = row.status === 'missing' || row.status === 'review'
+      ? `<button class="btn btn-sm" style="background:#e74c3c;color:#fff;font-size:11px;padding:4px 8px;" onclick="prefillFromPdf(${jsArg(pdf.date)},${jsArg(pdf.merchant)},${parseAppNumber(pdf.amount)},${jsArg(row.cardType)})">추가입력</button>`
+      : exp?.id
+        ? `<button class="btn btn-sm" style="font-size:11px;padding:4px 8px;" onclick="editExpense(${JSON.stringify(exp.id)})">입력자료 수정</button>`
+        : '<span style="font-size:11px;color:#999;">-</span>';
+    return `<tr style="background:${rowBg};border-left:4px solid ${meta.border};">
+      <td style="vertical-align:top;padding:9px 10px;border-bottom:1px solid #eef0f2;">${pdfCell}</td>
+      <td style="vertical-align:top;padding:9px 10px;border-bottom:1px solid #eef0f2;">${pdfExpenseLine(exp)}${pdfRowCandidateText(row.candidates)}</td>
+      <td style="vertical-align:top;text-align:center;padding:9px 8px;border-bottom:1px solid #eef0f2;white-space:nowrap;">${pdfCompareBadge(row.status)}</td>
+      <td style="vertical-align:top;text-align:center;padding:9px 8px;border-bottom:1px solid #eef0f2;white-space:nowrap;">${action}</td>
+    </tr>`;
+  }).join('');
+}
+
 function showPdfCompare(parsed, cardType){
   document.getElementById('pdf-loading').style.display = 'none';
   const parsedInfo = Array.isArray(parsed) ? { transactions: parsed, statementPeriod: inferPdfTransactionPeriod(parsed) } : (parsed || {});
@@ -11757,68 +11881,72 @@ function showPdfCompare(parsed, cardType){
     : 'PDF 거래일 기준';
   const pdfTotal = pdfRows.reduce((s,p)=>s+p.amount,0);
   const expenseTotal = cardExpenses.reduce((s,e)=>s+parseAppNumber(e.amount),0);
+  const compareRows = pdfRows.map(p=>{
+    const candidates = p.matched ? [] : findPdfCompareCandidates(p, remainingExpenses);
+    return {
+      type: 'pdf',
+      status: p.matched ? 'matched' : (candidates.length ? 'review' : 'missing'),
+      pdf: p,
+      expense: p.match,
+      candidates,
+      cardType
+    };
+  }).concat(remainingExpenses.map(e=>({
+    type: 'expense',
+    status: 'extra',
+    pdf: null,
+    expense: e,
+    candidates: [],
+    cardType
+  })));
 
   const area = document.getElementById('pdf-compare-area');
   const grid = document.getElementById('pdf-compare-grid');
   area.style.display = 'block';
+  grid.style.display = 'block';
+  grid.style.gridTemplateColumns = 'none';
+  grid.style.gap = '0';
+  _pdfCompareView = {
+    filter: 'all',
+    rows: compareRows,
+    summary: { periodLabel, pdfTotal, expenseTotal, pdfRows, cardExpenses, missing, matched, remainingExpenses }
+  };
 
   grid.innerHTML = `
-    <div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#8e44ad;">
-        📄 PDF 전체 거래 (${pdfRows.length}건)
+    <div style="position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="font-size:12px;color:#555;line-height:1.65;">
+          <strong style="font-size:13px;color:#8e44ad;">카드명세서 비교</strong><br>
+          비교기간: <strong>${htmlEscape(periodLabel)}</strong>
+          <span style="margin-left:10px;">PDF ${pdfRows.length}건 / ${pdfTotal.toLocaleString()}원</span>
+          <span style="margin-left:10px;">입력자료 ${cardExpenses.length}건 / ${expenseTotal.toLocaleString()}원</span>
+        </div>
+        <div style="font-size:12px;line-height:1.65;text-align:right;">
+          <span style="color:#27ae60;font-weight:800;">매칭 ${matched.length}건</span>
+          <span style="color:#c0392b;font-weight:800;margin-left:10px;">누락 ${missing.length}건</span>
+          <span style="color:#7f8c8d;font-weight:800;margin-left:10px;">입력자료만 ${remainingExpenses.length}건</span>
+        </div>
       </div>
-      <div style="font-size:12px;color:#666;background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6;">
-        비교기간: <strong>${htmlEscape(periodLabel)}</strong><br>
-        PDF 합계: <strong>${pdfTotal.toLocaleString()}원</strong><br>
-        입력자료: <strong>${cardExpenses.length}건 / ${expenseTotal.toLocaleString()}원</strong>
-      </div>
-      ${pdfRows.map(p=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;margin-bottom:5px;border-radius:8px;background:${p.matched?'#f0fff0':'#fff5f5'};border:1px solid ${p.matched?'#b2dfdb':'#ffcdd2'};">
-          <div>
-            <span style="font-size:11px;color:#666;">${htmlEscape(p.date)}</span>
-            <span style="margin-left:8px;font-size:12px;">${htmlEscape(p.merchant)}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-weight:700;font-size:13px;">${p.amount.toLocaleString()}원</span>
-            ${p.matched
-              ? `<span style="color:#27ae60;font-size:12px;" title="${htmlEscape(p.match?.date || '')} ${htmlEscape(p.match?.store || '')}">✅ 입력됨</span>`
-              : `<button class="btn btn-sm" style="background:#e74c3c;color:#fff;font-size:11px;padding:3px 8px;" onclick="prefillFromPdf(${jsArg(p.date)},${jsArg(p.merchant)},${p.amount},${jsArg(cardType)})">+ 추가</button>`
-            }
-          </div>
-        </div>`).join('')}
+      <div id="pdf-compare-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;"></div>
     </div>
-    <div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#e74c3c;">
-        ❌ 누락 항목 (${missing.length}건) — ${missing.reduce((s,p)=>s+p.amount,0).toLocaleString()}원
-      </div>
-      ${missing.length === 0
-        ? '<div style="color:#27ae60;padding:20px;text-align:center;">✅ 누락된 항목이 없습니다!</div>'
-        : missing.map(p=>`
-          <div style="padding:10px;margin-bottom:8px;border-radius:8px;background:#fff5f5;border:1px solid #ffcdd2;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <div style="font-size:11px;color:#666;">${htmlEscape(p.date)}</div>
-                <div style="font-size:13px;font-weight:600;">${htmlEscape(p.merchant)}</div>
-              </div>
-              <div style="text-align:right;">
-                <div style="font-weight:700;color:#e74c3c;">${p.amount.toLocaleString()}원</div>
-                <button class="btn btn-sm" style="background:#e74c3c;color:#fff;font-size:11px;margin-top:4px;" onclick="prefillFromPdf(${jsArg(p.date)},${jsArg(p.merchant)},${p.amount},${jsArg(cardType)})">입력 폼으로</button>
-              </div>
-            </div>
-          </div>`).join('')}
-      <div style="margin-top:16px;font-size:13px;font-weight:700;color:#27ae60;">
-        ✅ 매칭됨 (${matched.length}건)
-      </div>
-      ${remainingExpenses.length ? `
-        <div style="margin-top:12px;font-size:13px;font-weight:700;color:#d35400;">
-          ⚠ 입력자료만 있는 항목 (${remainingExpenses.length}건)
-        </div>
-        <div style="margin-top:6px;font-size:11px;color:#777;line-height:1.5;">
-          PDF 이용기간 안에 입력되어 있지만 PDF 거래와 날짜±1일/금액 기준으로 맞지 않는 항목입니다.
-        </div>
-      ` : ''}
+    <div class="tbl-wrap" style="max-height:680px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+      <table style="width:100%;border-collapse:collapse;min-width:920px;">
+        <thead style="position:sticky;top:0;z-index:4;background:#f8f9fa;">
+          <tr>
+            <th style="width:34%;padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);">PDF 명세서</th>
+            <th style="width:38%;padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);">입력된 지출자료</th>
+            <th style="width:14%;padding:9px 8px;text-align:center;border-bottom:1px solid var(--border);">상태</th>
+            <th style="width:14%;padding:9px 8px;text-align:center;border-bottom:1px solid var(--border);">작업</th>
+          </tr>
+        </thead>
+        <tbody id="pdf-compare-tbody"></tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:#777;margin-top:8px;line-height:1.5;">
+      매칭 기준은 금액 일치와 날짜 ±1일입니다. 확인필요는 같은 기간 안에서 금액 또는 날짜가 비슷한 입력 후보가 있는 항목입니다.
     </div>
   `;
+  renderPdfCompareRows();
 }
 
 function prefillFromPdf(date, merchant, amount, cardType){
