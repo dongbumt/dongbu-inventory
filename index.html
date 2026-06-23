@@ -11731,6 +11731,7 @@ function pdfCompareStatusMeta(status){
     matched: { label:'매칭됨', color:'#27ae60', bg:'#eefaf2', border:'#b7e3c5' },
     missing: { label:'누락', color:'#c0392b', bg:'#fff5f5', border:'#ffcdd2' },
     review:  { label:'확인필요', color:'#d35400', bg:'#fff8ef', border:'#f5c98a' },
+    cancel:  { label:'취소참고', color:'#8e44ad', bg:'#faf5ff', border:'#d7bde2' },
     extra:   { label:'입력자료만 있음', color:'#7f8c8d', bg:'#f7f9fa', border:'#d9dee3' }
   };
   return map[status] || map.missing;
@@ -11782,6 +11783,99 @@ function pdfCompareCounts(rows){
   return rows.reduce((acc,r)=>{ acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
 }
 
+function buildPdfDailyCompareRows(pdfRows, expenses){
+  const map = new Map();
+  const ensure = (date)=>{
+    const key = String(date || '').slice(0,10);
+    if(!key) return null;
+    if(!map.has(key)){
+      map.set(key, {
+        date: key,
+        pdfCount: 0,
+        pdfPositiveCount: 0,
+        pdfCancelCount: 0,
+        pdfGrossTotal: 0,
+        pdfCancelTotal: 0,
+        pdfNetTotal: 0,
+        expenseCount: 0,
+        expenseTotal: 0
+      });
+    }
+    return map.get(key);
+  };
+  pdfRows.forEach(p=>{
+    const row = ensure(p.date); if(!row) return;
+    const amount = parseAppNumber(p.amount);
+    row.pdfCount += 1;
+    row.pdfNetTotal += amount;
+    if(amount < 0){
+      row.pdfCancelCount += 1;
+      row.pdfCancelTotal += amount;
+    } else {
+      row.pdfPositiveCount += 1;
+      row.pdfGrossTotal += amount;
+    }
+  });
+  expenses.forEach(e=>{
+    const row = ensure(e.date); if(!row) return;
+    row.expenseCount += 1;
+    row.expenseTotal += parseAppNumber(e.amount);
+  });
+  return Array.from(map.values()).sort((a,b)=>a.date.localeCompare(b.date)).map(row=>{
+    const diff = row.expenseTotal - row.pdfNetTotal;
+    return {
+      ...row,
+      diff,
+      status: Math.abs(diff) === 0 ? 'matched' : 'missing'
+    };
+  });
+}
+
+function renderPdfDailyCompareTable(rows){
+  if(!rows?.length) return '';
+  const mismatch = rows.filter(r=>r.status !== 'matched');
+  return `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin:4px 0 8px;">
+        <div style="font-size:13px;font-weight:800;color:#34495e;">날짜별 합산 비교</div>
+        <div style="font-size:12px;color:${mismatch.length?'#c0392b':'#27ae60'};font-weight:800;">
+          ${mismatch.length ? `차이 ${mismatch.length}일` : '전체 일치'}
+        </div>
+      </div>
+      <div class="tbl-wrap" style="max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;min-width:780px;">
+          <thead style="position:sticky;top:0;background:#f8f9fa;z-index:3;">
+            <tr>
+              <th style="padding:8px 9px;text-align:left;border-bottom:1px solid var(--border);">날짜</th>
+              <th style="padding:8px 9px;text-align:right;border-bottom:1px solid var(--border);">PDF 순결제합계</th>
+              <th style="padding:8px 9px;text-align:right;border-bottom:1px solid var(--border);">입력 합계</th>
+              <th style="padding:8px 9px;text-align:right;border-bottom:1px solid var(--border);">차이</th>
+              <th style="padding:8px 9px;text-align:center;border-bottom:1px solid var(--border);">취소/반품</th>
+              <th style="padding:8px 9px;text-align:center;border-bottom:1px solid var(--border);">상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r=>{
+              const ok = r.status === 'matched';
+              return `<tr style="background:${ok?'#fbfffc':'#fffafa'};">
+                <td style="padding:8px 9px;border-bottom:1px solid #eef0f2;"><strong>${htmlEscape(r.date)}</strong><br><span style="font-size:11px;color:#777;">PDF ${r.pdfCount}건 / 입력 ${r.expenseCount}건</span></td>
+                <td style="padding:8px 9px;text-align:right;border-bottom:1px solid #eef0f2;font-weight:800;">${r.pdfNetTotal.toLocaleString()}원</td>
+                <td style="padding:8px 9px;text-align:right;border-bottom:1px solid #eef0f2;font-weight:800;">${r.expenseTotal.toLocaleString()}원</td>
+                <td style="padding:8px 9px;text-align:right;border-bottom:1px solid #eef0f2;color:${r.diff?'#c0392b':'#27ae60'};font-weight:800;">${r.diff.toLocaleString()}원</td>
+                <td style="padding:8px 9px;text-align:center;border-bottom:1px solid #eef0f2;font-size:11px;color:#8e44ad;">${r.pdfCancelCount ? `${r.pdfCancelCount}건 / ${r.pdfCancelTotal.toLocaleString()}원` : '-'}</td>
+                <td style="padding:8px 9px;text-align:center;border-bottom:1px solid #eef0f2;">${pdfCompareBadge(ok?'matched':'missing')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:11px;color:#777;margin-top:6px;line-height:1.5;">
+        PDF 순결제합계는 같은 날짜의 결제금액에서 취소/반품 마이너스 금액을 반영한 합계입니다.
+      </div>
+    </div>
+  `;
+}
+
 function pdfCompareFilterButton(filter, label, count){
   const active = _pdfCompareView.filter === filter;
   const bg = active ? '#2c3e50' : '#fff';
@@ -11806,6 +11900,7 @@ function renderPdfCompareRows(){
       pdfCompareFilterButton('missing', '누락', counts.missing || 0),
       pdfCompareFilterButton('review', '확인필요', counts.review || 0),
       pdfCompareFilterButton('matched', '매칭됨', counts.matched || 0),
+      pdfCompareFilterButton('cancel', '취소참고', counts.cancel || 0),
       pdfCompareFilterButton('extra', '입력자료만', counts.extra || 0)
     ].join('');
   }
@@ -11823,7 +11918,7 @@ function renderPdfCompareRows(){
     const meta = pdfCompareStatusMeta(row.status);
     const pdf = row.pdf;
     const exp = row.expense;
-    const rowBg = row.status === 'matched' ? '#fbfffc' : row.status === 'extra' ? '#f8f9fa' : row.status === 'review' ? '#fffaf2' : '#fffafa';
+    const rowBg = row.status === 'matched' ? '#fbfffc' : row.status === 'extra' ? '#f8f9fa' : row.status === 'review' ? '#fffaf2' : row.status === 'cancel' ? '#fdf8ff' : '#fffafa';
     const pdfCell = pdf ? `
       <div style="font-size:12px;line-height:1.55;">
         <div><strong>${htmlEscape(pdf.date || '')}</strong> <span style="color:#555;">${htmlEscape(pdf.merchant || '-')}</span></div>
@@ -11874,18 +11969,21 @@ function showPdfCompare(parsed, cardType){
     }
   });
 
-  const missing  = pdfRows.filter(p=>!p.matched);
+  const missing  = pdfRows.filter(p=>!p.matched && parseAppNumber(p.amount) >= 0);
   const matched  = pdfRows.filter(p=> p.matched);
   const periodLabel = statementPeriod?.start && statementPeriod?.end
     ? `${statementPeriod.start} ~ ${statementPeriod.end}`
     : 'PDF 거래일 기준';
   const pdfTotal = pdfRows.reduce((s,p)=>s+p.amount,0);
   const expenseTotal = cardExpenses.reduce((s,e)=>s+parseAppNumber(e.amount),0);
+  const dailyRows = buildPdfDailyCompareRows(pdfRows, cardExpenses);
+  const dailyMismatch = dailyRows.filter(r=>r.status !== 'matched');
   const compareRows = pdfRows.map(p=>{
     const candidates = p.matched ? [] : findPdfCompareCandidates(p, remainingExpenses);
+    const amount = parseAppNumber(p.amount);
     return {
       type: 'pdf',
-      status: p.matched ? 'matched' : (candidates.length ? 'review' : 'missing'),
+      status: amount < 0 ? 'cancel' : (p.matched ? 'matched' : (candidates.length ? 'review' : 'missing')),
       pdf: p,
       expense: p.match,
       candidates,
@@ -11909,7 +12007,7 @@ function showPdfCompare(parsed, cardType){
   _pdfCompareView = {
     filter: 'all',
     rows: compareRows,
-    summary: { periodLabel, pdfTotal, expenseTotal, pdfRows, cardExpenses, missing, matched, remainingExpenses }
+    summary: { periodLabel, pdfTotal, expenseTotal, pdfRows, cardExpenses, missing, matched, remainingExpenses, dailyRows }
   };
 
   grid.innerHTML = `
@@ -11922,13 +12020,15 @@ function showPdfCompare(parsed, cardType){
           <span style="margin-left:10px;">입력자료 ${cardExpenses.length}건 / ${expenseTotal.toLocaleString()}원</span>
         </div>
         <div style="font-size:12px;line-height:1.65;text-align:right;">
-          <span style="color:#27ae60;font-weight:800;">매칭 ${matched.length}건</span>
-          <span style="color:#c0392b;font-weight:800;margin-left:10px;">누락 ${missing.length}건</span>
+          <span style="color:${dailyMismatch.length?'#c0392b':'#27ae60'};font-weight:800;">날짜합산 ${dailyRows.length - dailyMismatch.length}/${dailyRows.length}일 일치</span>
+          <span style="color:#27ae60;font-weight:800;margin-left:10px;">매칭 ${matched.length}건</span>
+          <span style="color:#c0392b;font-weight:800;margin-left:10px;">누락/확인 ${missing.length}건</span>
           <span style="color:#7f8c8d;font-weight:800;margin-left:10px;">입력자료만 ${remainingExpenses.length}건</span>
         </div>
       </div>
       <div id="pdf-compare-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;"></div>
     </div>
+    ${renderPdfDailyCompareTable(dailyRows)}
     <div class="tbl-wrap" style="max-height:680px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
       <table style="width:100%;border-collapse:collapse;min-width:920px;">
         <thead style="position:sticky;top:0;z-index:4;background:#f8f9fa;">
