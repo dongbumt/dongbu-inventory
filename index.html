@@ -8236,13 +8236,12 @@ function loadShipLog(){
   if(!date){document.getElementById('shiplog-preview').innerHTML='';return;}
   const dayOuts=transactions.filter(t=>t.type==='출고'&&t.date===date);
   if(!dayOuts.length){document.getElementById('shiplog-preview').innerHTML='<div class="alert alert-info">해당 날짜에 출고 내역이 없습니다.</div>';return;}
-  const trader=dayOuts[0].trader||'';
   const [yr,mo,da]=date.split('-');
   let rows='';
   dayOuts.forEach((o,i)=>{
     rows+=`<tr>
       <td style="text-align:center">${i+1}</td>
-      <td>${o.product}</td><td>${trader}</td>
+      <td>${o.product}</td><td>${o.trader||''}</td>
       <td>${o.proddate||'-'}</td>
       <td style="font-family:var(--font-mono);font-size:10px">${o.lot||'-'}</td>
       <td style="text-align:right;font-weight:500">${o.weight.toFixed(2)}</td>
