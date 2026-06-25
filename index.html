@@ -1121,9 +1121,18 @@
       <div class="ct-bar" style="background:var(--red);"></div>
       완제품 출고일지
     </div>
-    <div class="form-row">
+    <div class="form-row" style="align-items:flex-end;">
       <div class="form-group"><label>출고일 선택</label>
-        <select id="ship-date" onchange="loadShipLog()"><option value="">-- 날짜 선택 --</option></select>
+        <select id="ship-date" onchange="syncShipRangeToDate();loadShipLog()"><option value="">-- 날짜 선택 --</option></select>
+      </div>
+      <div class="form-group"><label>기간 시작</label>
+        <input type="date" id="ship-from" style="width:145px;font-size:12px;">
+      </div>
+      <div class="form-group"><label>기간 종료</label>
+        <input type="date" id="ship-to" style="width:145px;font-size:12px;">
+      </div>
+      <div class="form-group"><label>&nbsp;</label>
+        <button class="btn btn-danger btn-sm" onclick="exportShipLogRange()">기간 인쇄</button>
       </div>
     </div>
   </div>
@@ -8235,6 +8244,19 @@ function initShipDates(){
   const dates=[...new Set(transactions.filter(t=>t.type==='출고').map(t=>t.date))].sort((a,b)=>String(b||'').localeCompare(String(a||'')));
   const sel=document.getElementById('ship-date');
   sel.innerHTML='<option value="">-- 날짜 선택 --</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  const baseDate = sel.value || dates[0] || localDateString();
+  const fromEl = document.getElementById('ship-from');
+  const toEl = document.getElementById('ship-to');
+  if(fromEl && !fromEl.value) fromEl.value = baseDate;
+  if(toEl && !toEl.value) toEl.value = baseDate;
+}
+function syncShipRangeToDate(){
+  const date = document.getElementById('ship-date')?.value || '';
+  if(!date) return;
+  const fromEl = document.getElementById('ship-from');
+  const toEl = document.getElementById('ship-to');
+  if(fromEl) fromEl.value = date;
+  if(toEl) toEl.value = date;
 }
 function loadShipLog(){
   const date=document.getElementById('ship-date').value;
@@ -8763,6 +8785,53 @@ function exportShipLogExcel(){
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8"><title>완제품 출고일지 ${yr}-${mo}-${da}</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;padding:10mm;}
+    .shiplog-page{page-break-inside:avoid;}
+    @media print{@page{size:A4;margin:10mm;}body{padding:0;}.shiplog-page{page-break-after:always;}.shiplog-page:last-child{page-break-after:avoid;}}
+    </style></head><body>`+pagesHTML+`</body></html>`);
+  w.document.close();setTimeout(()=>{w.print();},500);
+}
+
+function getShipLogPrintRange(){
+  const fallback = document.getElementById('ship-date')?.value || localDateString();
+  const start = document.getElementById('ship-from')?.value || fallback;
+  const end = document.getElementById('ship-to')?.value || start;
+  if(start > end){
+    alert('기간 시작일이 종료일보다 늦습니다.');
+    return null;
+  }
+  return { start, end };
+}
+
+function getShipLogDatesInRange(start, end){
+  return [...new Set(transactions
+    .filter(t => t.type === '출고' && t.date >= start && t.date <= end)
+    .map(t => t.date)
+    .filter(Boolean))]
+    .sort((a,b)=>String(a||'').localeCompare(String(b||'')));
+}
+
+function buildShipLogPrintPages(date){
+  const dayOuts = transactions.filter(t=>t.type==='출고'&&t.date===date);
+  const pages = [];
+  for(let i=0;i<dayOuts.length;i+=10) pages.push(dayOuts.slice(i,i+10));
+  const totalPages = pages.length;
+  return pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages));
+}
+
+function exportShipLogRange(){
+  const range = getShipLogPrintRange();
+  if(!range) return;
+  const dates = getShipLogDatesInRange(range.start, range.end);
+  if(!dates.length){
+    alert('선택한 기간에 출고 내역이 없습니다.');
+    return;
+  }
+  const pagesHTML = dates.flatMap(date => buildShipLogPrintPages(date)).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head>
+    <meta charset="UTF-8"><title>완제품 출고일지 ${range.start}~${range.end}</title>
     <style>*{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;padding:10mm;}
     .shiplog-page{page-break-inside:avoid;}
