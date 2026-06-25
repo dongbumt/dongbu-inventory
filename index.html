@@ -3599,7 +3599,7 @@ function ensureUniqueRowIds(rows, prefix='row'){
 function normalizeLocalTransactionIds(){
   const changed = ensureUniqueRowIds(userTransactions, 'tx');
   if(changed){
-    localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+    safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
     transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   }
   return changed;
@@ -3631,7 +3631,7 @@ async function supabaseSaveTransactionRows(rows, deletedIds){
 
 function saveTransactionRows(rows, deletedIds){
   markLocalCoreChanged();
-  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+  safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveTransactionRows(rows, deletedIds).catch(err=>{
       console.error('Supabase transaction save error:', err);
@@ -3666,8 +3666,8 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
 function saveProductionRows(entry, transactionRows, deletedProdId){
   markLocalCoreChanged();
   normalizeLocalTransactionIds();
-  localStorage.setItem('dbmt_user_prod', JSON.stringify(userProdEntries));
-  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
+  safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
+  safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveProductionRows(entry, transactionRows, deletedProdId).catch(err=>{
       console.error('Supabase production save error:', err);
@@ -3707,7 +3707,7 @@ async function supabaseSavePriceRows(rows, deletedIds, forceFull=false){
 }
 
 function savePriceRows(rows, deletedIds, forceFull=false){
-  localStorage.setItem('dbmt_prices', JSON.stringify(prices));
+  safeLocalStorageSet('dbmt_prices', JSON.stringify(prices), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSavePriceRows(rows, deletedIds, forceFull).catch(err=>{
       console.error('Supabase price save error:', err);
@@ -3743,9 +3743,9 @@ function gsAssertCanWriteCoreData(nextData){
 function save(){
   markLocalCoreChanged(); // 거래 변경 시 재고 캐시 초기화 + 늦은 원격 로드 덮어쓰기 방지
   // 1) localStorage 항상 저장
-  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
-  localStorage.setItem('dbmt_prices',            JSON.stringify(prices));
-  localStorage.setItem('dbmt_user_prod',         JSON.stringify(userProdEntries));
+  safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
+  safeLocalStorageSet('dbmt_prices',            JSON.stringify(prices), true);
+  safeLocalStorageSet('dbmt_user_prod',         JSON.stringify(userProdEntries), true);
 
   // 2) Supabase 저장 (활성화된 경우)
   const payload = {
@@ -4468,7 +4468,11 @@ function selectTxnStock(key){
   if(area) area.style.display = 'none';
   const box = document.getElementById('t-stock-search-results');
   if(box) box.style.display = 'none';
-  refreshTxnSamsungProducts();
+  const samsungVendorId = document.getElementById('t-samsung-vendor')?.value || '';
+  const samsungRowId = document.getElementById('t-samsung-product')?.value || '';
+  const samsungMeta = samsungRowId ? getSamsungProductMeta(samsungVendorId, samsungRowId) : null;
+  const keepSamsungRow = samsungMeta && bulkOutboundIdentityKey(samsungMeta.productName || '') === bulkOutboundIdentityKey(s.product || '');
+  refreshTxnSamsungProducts(keepSamsungRow ? samsungRowId : '');
   autoFillTxnPrice();
   toast('재고 선택: ' + (s.product || ''));
 }
@@ -13478,6 +13482,15 @@ function samsungProductOptionLabel(row, lp){
 function samsungProductOptionsHtml(vendorId, productId='', productName='', selectedRowId=''){
   if(!vendorId) return '<option value="">-- 삼성 거래처 선택 --</option>';
   const rows = samsungProductRowsForVendor(vendorId, productId, productName);
+  const selectedId = String(selectedRowId || '').trim();
+  if(selectedId && !rows.some(({row}) => String(row.id) === selectedId)){
+    const v = samsungVendors.find(x => String(x.id) === String(vendorId));
+    const selectedRow = (v?.products || []).find(row => String(row.id) === selectedId);
+    if(selectedRow){
+      const lp = (labelProducts || []).find(x => String(x.id) === String(selectedRow.productId));
+      rows.push({ row: selectedRow, lp });
+    }
+  }
   if(!rows.length) return '<option value="">-- 등록된 납품품목/스펙 없음 --</option>';
   return '<option value="">-- 선택 안 함 --</option>' + rows.map(({row, lp}) =>
     `<option value="${htmlEscape(row.id)}" ${String(row.id)===String(selectedRowId)?'selected':''}>${htmlEscape(samsungProductOptionLabel(row, lp))}</option>`
