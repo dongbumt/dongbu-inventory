@@ -12868,14 +12868,8 @@ function formatLabelIngredients(value){
 }
 
 function haccpMarkHtml(){
-  return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="height:33pt;width:33pt;display:block;" aria-label="HACCP">'
-    + '<circle cx="50" cy="50" r="46" fill="#fff" stroke="#000" stroke-width="4"/>'
-    + '<text x="50" y="30" text-anchor="middle" font-family="Malgun Gothic, Arial, sans-serif" font-size="8.5" font-weight="800">식품안전관리인증</text>'
-    + '<text x="50" y="55" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="24" font-weight="900">HACCP</text>'
-    + '<path d="M24 66 Q50 78 76 66" fill="none" stroke="#444" stroke-width="8" stroke-linecap="round"/>'
-    + '<path d="M17 74 Q50 99 83 74 L83 87 Q50 103 17 87 Z" fill="#000"/>'
-    + '<text x="50" y="88" text-anchor="middle" font-family="Malgun Gothic, Arial, sans-serif" font-size="7.2" font-weight="800" fill="#fff">식품의약품안전처</text>'
-    + '</svg>';
+  const src = new URL('HACCP2.png', document.baseURI).href;
+  return '<img src="'+htmlEscape(src)+'" alt="HACCP" style="height:33pt;width:33pt;object-fit:contain;display:block;">';
 }
 
 

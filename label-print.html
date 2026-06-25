@@ -1147,6 +1147,12 @@
               display: grid;
               gap: 1mm;
             }
+            .mark-img {
+              width: 10mm;
+              height: 10mm;
+              display: block;
+              object-fit: contain;
+            }
             .mark {
               border: 1.5px solid #000;
               border-radius: 50%;
@@ -1255,13 +1261,17 @@
           </div>
           <div class="marks">
             <div class="mark">OTHER</div>
-            <div class="mark">HACCP</div>
+            <img class="mark-img" src="${html(haccpMarkSrc())}" alt="HACCP">
           </div>
           <div class="barcode">
             ${code39Svg(code)}
             <div class="barcode-code">${html(code)}${preview ? ' / SAMPLE' : ''}</div>
           </div>
         </div>`;
+    }
+
+    function haccpMarkSrc(){
+      return new URL('HACCP2.png', document.baseURI).href;
     }
 
     function inferMeatType(product='', ingredients=''){
