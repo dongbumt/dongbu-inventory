@@ -376,7 +376,7 @@
         </div>
         <!-- 출고: 재고품목 검색 -->
         <div id="t-stock-search-wrap" style="display:none;position:relative;">
-          <input id="t-stock-search" placeholder="재고 품목 검색..." oninput="onTxnStockSearch(true)" onfocus="onTxnStockSearch(false)" onblur="hideTxnStockResults()" autocomplete="off">
+          <input id="t-stock-search" placeholder="재고 품목 검색..." oninput="onTxnStockSearch(true)" onfocus="onTxnStockSearch(false)" onblur="hideTxnStockResults()" onkeydown="if(event.key==='Enter'){event.preventDefault();autoSelectTxnStockFromSearch(true);}" autocomplete="off">
           <div id="t-stock-search-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
         </div>
         <!-- 출고: 저장 호환용 숨은 선택값 -->
@@ -4308,6 +4308,42 @@ function onTxnStockSearch(isInput=false){
   box.style.display = 'block';
 }
 
+function getFilteredTxnStockSearchOptions(){
+  const input = document.getElementById('t-stock-search');
+  const q = (input?.value || '').toLowerCase().trim();
+  const qCompact = bulkOutboundSearchKey(q);
+  let list = getTxnStockSearchOptions();
+  if(q){
+    list = list.filter(s=>{
+      const text = bulkOutboundSearchText(s).toLowerCase();
+      return text.includes(q) || bulkOutboundSearchKey(text).includes(qCompact);
+    });
+  }
+  return list;
+}
+
+function autoSelectTxnStockFromSearch(showToast=false){
+  const keyEl = document.getElementById('t-stock-key');
+  if(keyEl?.value){
+    return getTxnStockSearchOptions().find(s=>s.key === keyEl.value) || null;
+  }
+  const input = document.getElementById('t-stock-search');
+  const text = (input?.value || '').trim();
+  if(!text) return null;
+  const allOptions = getTxnStockSearchOptions();
+  const normalizedText = bulkOutboundSearchKey(text);
+  const exact = allOptions.filter(s =>
+    s.key === text ||
+    bulkOutboundSearchKey(bulkOutboundStockLabel(s)) === normalizedText
+  );
+  const list = exact.length ? exact : getFilteredTxnStockSearchOptions();
+  const picked = exact.length === 1 ? exact[0] : (list.length === 1 ? list[0] : null);
+  if(!picked) return null;
+  selectTxnStock(picked.key);
+  if(showToast) toast('재고 선택: ' + (picked.product || ''));
+  return picked;
+}
+
 function hideTxnStockResults(){
   setTimeout(()=>{
     const box = document.getElementById('t-stock-search-results');
@@ -5024,6 +5060,7 @@ function getTxnSamsungMeta(){
 function addTransaction(){
   const date=document.getElementById('t-date').value;
   const type=document.getElementById('t-type').value;
+  if(type === '출고' || type === '재고이동') autoSelectTxnStockFromSearch(false);
   const product=getTProduct();
   const origin=getTOrigin();
   const storage=getTStorage();
@@ -5130,7 +5167,7 @@ function addTransaction(){
   }
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   _stockMapCache=null;
-  saveTransactionRows(savedTxn); renderTransactions(); updateProductList(); clearTransactionForm();
+  saveTransactionRows(savedTxn); renderTransactions(); updateProductList(); updateOutProductList(); clearTransactionForm();
   renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   // 출고면 거래명세서 날짜 목록 갱신
