@@ -5167,18 +5167,24 @@ function addTransaction(){
   }
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   _stockMapCache=null;
-  saveTransactionRows(savedTxn); renderTransactions(); updateProductList(); updateOutProductList(); clearTransactionForm();
+  const wasEditTxn = !!_editTxnId;
+  saveTransactionRows(savedTxn);
+  clearTransactionForm();
+  renderTransactions(); updateProductList(); updateOutProductList();
   renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   // 출고면 거래명세서 날짜 목록 갱신
   if(type==='출고') initInvoiceDates();
-  toast(_editTxnId ? '거래내역 수정 완료!' : '거래내역 추가 완료!');
+  toast(wasEditTxn ? '거래내역 수정 완료!' : '거래내역 추가 완료!');
 }
 function clearTransactionForm(){
-  ['t-product-input','t-stock-search','t-origin-input','t-trader','t-lot','t-note','t-price','t-packunit','t-stock-key','t-stock-price'].forEach(id=>{
+  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-stock-key','t-stock-price'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
-  const stockResults=document.getElementById('t-stock-search-results'); if(stockResults) stockResults.style.display='none';
+  const stockResults=document.getElementById('t-stock-search-results'); if(stockResults){ stockResults.style.display='none'; stockResults.innerHTML=''; }
+  const managedResults=document.getElementById('t-product-managed-results'); if(managedResults){ managedResults.style.display='none'; managedResults.innerHTML=''; }
+  const lotArea=document.getElementById('lot-match-area'); if(lotArea) lotArea.style.display='none';
+  const lotList=document.getElementById('lot-match-list'); if(lotList) lotList.innerHTML='';
   const sel=document.getElementById('t-product-select'); if(sel) sel.value='';
   const msel=document.getElementById('t-product-managed'); if(msel) msel.value='';
   const mosel=document.getElementById('t-origin-managed'); if(mosel) mosel.value='';
@@ -5186,18 +5192,22 @@ function clearTransactionForm(){
   const locsel=document.getElementById('t-stock-location'); if(locsel) locsel.value=STOCK_LOCATION_DEFAULT;
   const fromsel=document.getElementById('t-move-from'); if(fromsel) fromsel.value=STOCK_LOCATION_DEFAULT;
   const tosel=document.getElementById('t-move-to'); if(tosel) tosel.value=STOCK_LOCATION_SECONDARY;
-  const disp=document.getElementById('t-origin-display'); if(disp) disp.value='';
   clearTxnSamsungControls();
-  document.getElementById('t-weight').value='';
-  document.getElementById('t-proddate').value='';
-  document.getElementById('t-date').value=today;
+  const weightEl = document.getElementById('t-weight');
+  if(weightEl){ weightEl.value=''; weightEl.style.background=''; weightEl.title=''; }
+  const priceEl = document.getElementById('t-price');
+  if(priceEl){ priceEl.dataset.autofilled=''; priceEl.style.background='#fffbe6'; priceEl.title=''; }
+  const proddateEl = document.getElementById('t-proddate'); if(proddateEl) proddateEl.value='';
+  const dateEl = document.getElementById('t-date'); if(dateEl) dateEl.value=today;
   // 수정 모드 초기화
   _editTxnId = null;
   const banner = document.getElementById('t-edit-banner');
   if(banner) banner.style.display='none';
   const addBtn = document.getElementById('t-add-btn');
   if(addBtn) addBtn.textContent='+ 추가';
-  document.getElementById('t-amount-preview').value='';
+  const amountEl = document.getElementById('t-amount-preview');
+  if(amountEl) amountEl.value='';
+  updateTransactionForm();
 }
 
 function toggleBulkCard(kind, forceOpen){
