@@ -475,6 +475,7 @@
     <div id="t-edit-banner" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#856404;">
       ✏️ <strong>수정 모드</strong> — 내용을 수정한 후 [수정 저장] 버튼을 누르세요.
     </div>
+    <div id="t-save-status" style="display:none;background:#eafaf1;border:1px solid #abebc6;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#1e8449;font-weight:700;"></div>
     <div class="btn-row">
       <button id="t-add-btn" class="btn btn-primary" onclick="addTransaction()">+ 추가</button>
       <button class="btn btn-secondary" onclick="clearTransactionForm()">초기화</button>
@@ -5228,16 +5229,34 @@ function addTransaction(){
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   _stockMapCache=null;
   const wasEditTxn = !!_editTxnId;
+  const savedProduct = product;
   saveTransactionRows(savedTxn);
-  clearTransactionForm();
+  clearTransactionForm({resetType:true});
   renderTransactions(); updateProductList(); updateOutProductList();
   renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   // 출고면 거래명세서 날짜 목록 갱신
   if(type==='출고') initInvoiceDates();
+  showTransactionSaveStatus(wasEditTxn
+    ? `수정 저장 완료 — ${savedProduct || '거래내역'} 항목이 반영됐고 입력칸을 초기화했습니다.`
+    : `거래내역 추가 완료 — ${savedProduct || '신규 항목'} 항목이 저장됐고 입력칸을 초기화했습니다.`);
   toast(wasEditTxn ? '거래내역 수정 완료!' : '거래내역 추가 완료!');
 }
-function clearTransactionForm(){
+
+function showTransactionSaveStatus(message){
+  const el = document.getElementById('t-save-status');
+  if(!el) return;
+  el.textContent = message || '';
+  el.style.display = message ? 'block' : 'none';
+  clearTimeout(el._t);
+  if(message){
+    el._t = setTimeout(()=>{ el.style.display='none'; }, 9000);
+  }
+}
+
+function clearTransactionForm(options={}){
+  const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
+  showTransactionSaveStatus('');
   ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-stock-key','t-stock-price'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
@@ -5267,6 +5286,8 @@ function clearTransactionForm(){
   if(addBtn) addBtn.textContent='+ 추가';
   const amountEl = document.getElementById('t-amount-preview');
   if(amountEl) amountEl.value='';
+  const typeEl = document.getElementById('t-type');
+  if(resetType && typeEl) typeEl.value='입고';
   updateTransactionForm();
 }
 
@@ -6040,6 +6061,7 @@ function loadTxnToForm(id){
   const t=userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
   _editTxnId=id;
+  showTransactionSaveStatus('');
 
   // 구분 먼저 설정 후 폼 모드 전환
   document.getElementById('t-type').value = t.type||'입고';
