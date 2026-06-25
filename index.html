@@ -653,6 +653,11 @@
         <input type="date" id="incheck-date" onchange="renderIncheck()" style="width:145px;font-size:12px;">
         <button class="btn btn-secondary btn-sm" onclick="setIncheckToday()">오늘</button>
         <button class="btn btn-primary btn-sm" onclick="printIncheck()">인쇄</button>
+        <span style="font-size:12px;color:#666;margin-left:6px;">기간</span>
+        <input type="date" id="incheck-from" style="width:145px;font-size:12px;">
+        <span style="font-size:12px;color:#888;">~</span>
+        <input type="date" id="incheck-to" style="width:145px;font-size:12px;">
+        <button class="btn btn-primary btn-sm" onclick="printIncheckRange()">기간 인쇄</button>
         <button class="btn btn-secondary btn-sm" onclick="exportIncheckCSV()">CSV 저장</button>
       </div>
     </div>
@@ -8409,12 +8414,21 @@ ${p.product} / ${p.origin||'-'} — ${p.price.toLocaleString()}원`)) return;
 function initIncheck(){
   const dateEl = document.getElementById('incheck-date');
   if(dateEl && !dateEl.value) dateEl.value = localDateString();
+  const fromEl = document.getElementById('incheck-from');
+  const toEl = document.getElementById('incheck-to');
+  if(fromEl && !fromEl.value) fromEl.value = dateEl?.value || localDateString();
+  if(toEl && !toEl.value) toEl.value = dateEl?.value || localDateString();
   renderIncheck();
 }
 
 function setIncheckToday(){
+  const todayValue = localDateString();
   const dateEl = document.getElementById('incheck-date');
-  if(dateEl) dateEl.value = localDateString();
+  const fromEl = document.getElementById('incheck-from');
+  const toEl = document.getElementById('incheck-to');
+  if(dateEl) dateEl.value = todayValue;
+  if(fromEl) fromEl.value = todayValue;
+  if(toEl) toEl.value = todayValue;
   renderIncheck();
 }
 
@@ -8575,6 +8589,50 @@ function printIncheck(){
       body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#111;padding:10mm;}
       @media print{@page{size:A4 landscape;margin:8mm 17mm 8mm 8mm;}body{padding:0;}}
     </style></head><body>${buildIncheckHTML(date, rows, true)}</body></html>`);
+  w.document.close();
+  setTimeout(()=>w.print(), 400);
+}
+
+function getIncheckPrintRange(){
+  const fallback = document.getElementById('incheck-date')?.value || localDateString();
+  const start = document.getElementById('incheck-from')?.value || fallback;
+  const end = document.getElementById('incheck-to')?.value || start;
+  if(start > end){
+    alert('기간 시작일이 종료일보다 늦습니다.');
+    return null;
+  }
+  return { start, end };
+}
+
+function getIncheckDatesInRange(start, end){
+  return [...new Set(transactions
+    .filter(t => t.type === '입고' && t.date >= start && t.date <= end)
+    .map(t => t.date)
+    .filter(Boolean))]
+    .sort((a,b)=>String(a||'').localeCompare(String(b||'')));
+}
+
+function printIncheckRange(){
+  const range = getIncheckPrintRange();
+  if(!range) return;
+  const dates = getIncheckDatesInRange(range.start, range.end);
+  if(!dates.length){
+    alert('선택한 기간에 입고 내역이 없습니다.');
+    return;
+  }
+  const pages = dates.map(date =>
+    `<section class="incheck-print-page">${buildIncheckHTML(date, getIncheckRows(date), true)}</section>`
+  ).join('');
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+    <title>원부재료 입고검사일지 ${range.start}~${range.end}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#111;padding:10mm;}
+      .incheck-print-page{page-break-after:always;margin-bottom:12mm;}
+      .incheck-print-page:last-child{page-break-after:auto;margin-bottom:0;}
+      @media print{@page{size:A4 landscape;margin:8mm 17mm 8mm 8mm;}body{padding:0;}.incheck-print-page{margin-bottom:0;break-after:page;}.incheck-print-page:last-child{break-after:auto;}}
+    </style></head><body>${pages}</body></html>`);
   w.document.close();
   setTimeout(()=>w.print(), 400);
 }
