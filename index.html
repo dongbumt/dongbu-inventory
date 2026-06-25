@@ -2493,10 +2493,40 @@ function requireSupabasePassword(){
   return password;
 }
 
+function isStorageQuotaError(err){
+  return /quota|exceeded|QUOTA/i.test(String(err?.name || '') + ' ' + String(err?.message || err || ''));
+}
+
+function safeLocalStorageSet(key, value, optional=false){
+  try{
+    localStorage.setItem(key, value);
+    return true;
+  }catch(err){
+    console.warn('localStorage 저장 실패:', key, err);
+    if(isStorageQuotaError(err) && optional){
+      try{ localStorage.removeItem(key); }catch(e){}
+      return false;
+    }
+    throw err;
+  }
+}
+
+function cacheAppDataValue(key, reg, value){
+  if(!reg?.ls) return;
+  if(reg.readOnly || reg.localCache === false){
+    try{ localStorage.removeItem(reg.ls); }catch(e){}
+    return;
+  }
+  safeLocalStorageSet(reg.ls, JSON.stringify(value), true);
+}
+
 function supabaseFriendlyError(err){
   const detail = String(err?.message || err || '').trim();
   if(/invalid app password/i.test(detail)){
     return '비밀번호가 맞지 않습니다. dong540916! 를 정확히 입력해주세요.';
+  }
+  if(/Storage|setItem|quota|exceeded/i.test(detail)){
+    return '브라우저 임시 저장공간이 가득 찼습니다. 연결 상태 초기화 후 다시 시도해주세요.';
   }
   if(/Failed to fetch|NetworkError|Load failed|ERR_INTERNET|ERR_NAME|ERR_CONNECTION|CORS/i.test(detail)){
     return '이 PC 또는 브라우저가 Supabase 서버에 접속하지 못했습니다. 인터넷 연결, 보안 프로그램, 브라우저 차단 여부를 확인해주세요.';
@@ -2510,6 +2540,7 @@ function supabaseFriendlyError(err){
 function supabaseResetConnectionState(){
   localStorage.removeItem(SUPABASE_ENABLED_KEY);
   localStorage.removeItem(SUPABASE_PENDING_CORE_KEY);
+  localStorage.removeItem('dbmt_label_print_logs');
   localStorage.removeItem('dbmt_gs_last_error');
   localStorage.removeItem('dbmt_gs_skip');
   clearSupabaseSessionPassword();
@@ -2528,7 +2559,7 @@ function gsShowSync(msg, isErr=false){
   bar.className = 'gs-sync-bar show' + (isErr?' err':'');
   clearTimeout(bar._t);
   if(isErr){
-    localStorage.setItem('dbmt_gs_last_error', msg);
+    safeLocalStorageSet('dbmt_gs_last_error', msg, true);
     bar.title = '클릭하면 닫힙니다';
     bar.onclick = ()=>{ bar.className='gs-sync-bar'; };
     bar._t = setTimeout(()=>{ bar.className='gs-sync-bar'; }, 30000);
@@ -2594,7 +2625,7 @@ async function supabaseSetupStart(){
     const detail = supabaseFriendlyError(err);
     gsSetStatus(false);
     gsShowSync('⚠ Supabase 연결 실패 — ' + detail, true);
-    localStorage.setItem('dbmt_gs_last_error', detail);
+    safeLocalStorageSet('dbmt_gs_last_error', detail, true);
     gsShowSetup();
   }
 }
@@ -3339,7 +3370,7 @@ async function gsInit(){
     Object.entries(APP_DATA_REGISTRY).forEach(([k, r]) => {
       if(app[k] !== undefined){
         r.set(app[k]);
-        localStorage.setItem(r.ls, JSON.stringify(app[k]));
+        cacheAppDataValue(k, r, app[k]);
       }
     });
     renderAll();
@@ -9257,15 +9288,15 @@ function applySupabasePayload(data){
   userProdEntries = data.prod || [];
   prices = data.prices || prices || [];
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
-  localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
-  localStorage.setItem('dbmt_user_prod', JSON.stringify(userProdEntries));
-  localStorage.setItem('dbmt_prices', JSON.stringify(prices));
+  safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
+  safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
+  safeLocalStorageSet('dbmt_prices', JSON.stringify(prices), true);
 
   const app = data.appData || {};
   Object.entries(APP_DATA_REGISTRY).forEach(([k, r]) => {
     if(app[k] !== undefined){
       r.set(app[k]);
-      localStorage.setItem(r.ls, JSON.stringify(app[k]));
+      cacheAppDataValue(k, r, app[k]);
     }
   });
   invalidateStockMap();
@@ -10513,10 +10544,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
       console.error('Supabase 초기 로드 실패:', err);
       gsSetStatus(false);
       const detail = supabaseFriendlyError(err);
-      localStorage.setItem('dbmt_gs_last_error', detail);
+      safeLocalStorageSet('dbmt_gs_last_error', detail, true);
       gsShowSetup();
       gsShowSync('⚠ Supabase 자동 연결 실패 — ' + detail, true);
-      localStorage.setItem('dbmt_gs_last_error', detail);
+      safeLocalStorageSet('dbmt_gs_last_error', detail, true);
     });
   } else {
     gsShowSetup();
