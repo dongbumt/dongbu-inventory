@@ -7223,10 +7223,11 @@ function renderProductionLoss(){
     if(!rows.length){
       chartEl.innerHTML = '<div style="padding:14px;border:1px dashed var(--border);border-radius:8px;color:#888;text-align:center;">비교할 생산 로스율 데이터가 없습니다.</div>';
     } else {
-      const chartRows = [...rows].sort((a,b)=>b.lossRate - a.lossRate).slice(0, 12);
+      const chartLimit = 20;
+      const chartRows = [...rows].sort((a,b)=>b.lossRate - a.lossRate).slice(0, chartLimit);
       const maxAbs = Math.max(1, ...chartRows.map(row => Math.abs(row.lossRate)));
       chartEl.innerHTML = `
-        <div style="font-size:12px;font-weight:800;color:#555;">로스율 높은 품목 비교</div>
+        <div style="font-size:12px;font-weight:800;color:#555;">로스율 높은 품목 비교 상위 ${chartLimit}개</div>
         ${chartRows.map(row=>{
           const width = Math.max(3, Math.min(100, Math.abs(row.lossRate) / maxAbs * 100));
           const color = productionLossRateColor(row.lossRate);
