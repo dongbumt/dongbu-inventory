@@ -6690,11 +6690,11 @@ function saveProdEntry(){
   const totalInAmt = inputs.reduce((s,i)=>s+i.amount, 0);
   const filledAmt  = rawOutputs.filter(o=>o.manualPrice>0).reduce((s,o)=>s+o.manualPrice*o.qty, 0);
   const emptyQty   = rawOutputs.filter(o=>o.manualPrice<=0).reduce((s,o)=>s+o.qty, 0);
-  const autoUnitPrice = emptyQty > 0 ? Math.round((totalInAmt - filledAmt) / emptyQty) : 0;
+  const autoUnitPrice = emptyQty > 0 ? Math.ceil((totalInAmt - filledAmt) / emptyQty) : 0;
 
   const outputs = rawOutputs.map(o=>{
     const price = o.manualPrice > 0 ? o.manualPrice : autoUnitPrice;
-    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin, samsung:o.samsung};
+    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin, samsung:o.samsung};
   });
 
   if(!inputs.length && !outputs.length){alert('투입 또는 생산 항목을 입력해주세요.');return;}
@@ -7014,8 +7014,8 @@ function renderProduction(){
       html+=out
         ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}</td><td>${out.origin||''}</td>
            <td style="text-align:right">${out.qty.toFixed(2)}</td>
-           <td style="text-align:right">${out.price?Math.round(out.price).toLocaleString():'-'}</td>
-           <td style="text-align:right;font-weight:500">${out.amount?Math.round(out.amount).toLocaleString():'-'}</td>
+           <td style="text-align:right">${out.price?Math.ceil(out.price).toLocaleString():'-'}</td>
+           <td style="text-align:right;font-weight:500">${out.amount?Math.ceil(out.amount).toLocaleString():'-'}</td>
            <td style="font-family:var(--font-mono);font-size:11px">${out.lot||'-'}</td>`
         :'<td colspan="6"></td>';
       html+='<td></td>'; // 관리열(소계행에서 처리)
@@ -8720,8 +8720,8 @@ function exportProductionCSV(){
         out?out.packunit||'':'',
         out?out.origin||'':'',
         out?out.qty.toFixed(2):'',
-        out?Math.round(out.price||0):'',
-        out?Math.round(out.amount||0):'',
+        out?Math.ceil(out.price||0):'',
+        out?Math.ceil(out.amount||0):'',
         out?out.lot||'':''
       ]);
     }
