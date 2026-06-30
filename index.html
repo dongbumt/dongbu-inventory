@@ -1609,6 +1609,24 @@
     </div>
   </div>
   <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#c0392b;"></div>💸 연차초과 급여공제 입력</div>
+    <input type="hidden" id="ld-edit-id">
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>직원</label>
+        <select id="ld-emp" onchange="setLeaveDeductionDefaultDaily()"><option value="">-- 직원 선택 --</option></select>
+      </div>
+      <div class="form-group" style="max-width:145px;"><label>적용월</label><input id="ld-month" type="month"></div>
+      <div class="form-group" style="max-width:120px;"><label>공제일수</label><input id="ld-days" type="number" min="0" step="0.5" placeholder="2" oninput="updateLeaveDeductionAmount()"></div>
+      <div class="form-group" style="max-width:150px;"><label>1일 공제액</label><input id="ld-daily" type="number" min="0" step="1" placeholder="월급÷30" oninput="updateLeaveDeductionAmount()"></div>
+      <div class="form-group" style="max-width:160px;"><label>총 공제액</label><input id="ld-total" readonly style="background:#f8f9fa;font-weight:700;color:#c0392b;"></div>
+      <div class="form-group"><label>비고</label><input id="ld-note" placeholder="예) 6월 급여에서 초과연차 2일 공제"></div>
+      <div class="form-group" style="flex:0;"><label>&nbsp;</label>
+        <button class="btn btn-danger btn-sm" id="ld-save-btn" onclick="saveLeaveDeduction()">💾 저장</button>
+        <button class="btn btn-secondary btn-sm" id="ld-cancel-btn" onclick="cancelLeaveDeductionEdit()" style="display:none;margin-left:4px;">취소</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
     <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>주말출근 입력</div>
     <input type="hidden" id="ww-edit-id">
     <div class="form-row" style="align-items:flex-end;">
@@ -1655,6 +1673,23 @@
           <th>날짜</th><th>직원</th><th>구분</th><th style="text-align:right;">차감일수</th><th>사유</th><th style="text-align:center;">관리</th>
         </tr></thead>
         <tbody id="lv-record-body"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#c0392b;"></div>연차초과 급여공제 내역 <span id="ld-record-count" style="font-size:12px;font-weight:400;color:#888;"></span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="month" id="ld-record-month" style="width:145px;font-size:12px;" onchange="renderLeaveDeductions()">
+        <select id="ld-record-emp" style="width:140px;font-size:12px;" onchange="renderLeaveDeductions()"><option value="">전체 직원</option></select>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="max-height:260px;">
+      <table>
+        <thead><tr>
+          <th>적용월</th><th>직원</th><th style="text-align:right;">공제일수</th><th style="text-align:right;">1일 공제액</th><th style="text-align:right;">총 공제액</th><th>비고</th><th style="text-align:center;">관리</th>
+        </tr></thead>
+        <tbody id="ld-record-body"></tbody>
       </table>
     </div>
   </div>
@@ -2445,6 +2480,8 @@ function initDOM(){
   const lvM=document.getElementById('lv-filter-month'); if(lvM) lvM.value=today.slice(0,7);
   const wwDate=document.getElementById('ww-date'); if(wwDate) wwDate.value=today;
   const wwM=document.getElementById('ww-record-month'); if(wwM) wwM.value=today.slice(0,7);
+  const ldM=document.getElementById('ld-month'); if(ldM) ldM.value=today.slice(0,7);
+  const ldRM=document.getElementById('ld-record-month'); if(ldRM) ldRM.value=today.slice(0,7);
   const schM=document.getElementById('sch-month'); if(schM) schM.value=today.slice(0,7);
   // 헤더 날짜 표시
   const d=new Date();
@@ -3456,6 +3493,7 @@ function renderAll(){
     renderLeaveCalendar();
     renderLeaveRecords();
     renderWeekendWorkRecords();
+    renderLeaveDeductions();
   }
 }
 
@@ -3526,6 +3564,7 @@ const APP_DATA_REGISTRY = {
   employees:     { get:()=>employees,     set:v=>{ employees=v; },     ls:'dbmt_employees'   },
   leaveRecs:     { get:()=>leaveRecs,     set:v=>{ leaveRecs=v; },     ls:'dbmt_leaves'      },
   weekendWorkRecs:{ get:()=>weekendWorkRecs,set:v=>{ weekendWorkRecs=v; },ls:'dbmt_weekend_work' },
+  leaveDeductRecs:{ get:()=>leaveDeductRecs,set:v=>{ leaveDeductRecs=v; },ls:'dbmt_leave_deductions' },
   traderInfoMap: { get:()=>traderInfoMap, set:v=>{ traderInfoMap=v; }, ls:'dbmt_trader_info' },
   docChecks:     { get:()=>docChecks,     set:v=>{ docChecks=v; },     ls:'dbmt_doc_checks'  },
   pgbList:       { get:()=>pgbList,       set:v=>{ pgbList=v; },       ls:'dbmt_pangwanbi'   },
@@ -3802,7 +3841,7 @@ function showPage(id, btn){
   if(id==='p-traders') renderTraders();
   if(id==='p-samsung') initSamsung();
   if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
-  if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); }
+  if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); renderLeaveDeductions(); }
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
   if(id==='p-factorysim') renderFactorySim();
   if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
@@ -9224,7 +9263,7 @@ function backupAllData(){
   const KEYS = [
     'dbmt_user_transactions','dbmt_user_prod','dbmt_prices',
     'dbmt_schedule_events',
-    'dbmt_employees','dbmt_leaves','dbmt_weekend_work',
+    'dbmt_employees','dbmt_leaves','dbmt_weekend_work','dbmt_leave_deductions',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
     'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
@@ -9735,6 +9774,7 @@ function renderDocCheck(){
 let employees   = JSON.parse(localStorage.getItem('dbmt_employees')||'[]');
 let leaveRecs   = JSON.parse(localStorage.getItem('dbmt_leaves')||'[]');
 let weekendWorkRecs = JSON.parse(localStorage.getItem('dbmt_weekend_work')||'[]');
+let leaveDeductRecs = JSON.parse(localStorage.getItem('dbmt_leave_deductions')||'[]');
 let _empEditId  = null;
 let _empSortKey = 'name';
 let _empSortDir = 'asc';
@@ -9811,6 +9851,7 @@ function saveHR(){
   localStorage.setItem('dbmt_employees',  JSON.stringify(employees));
   localStorage.setItem('dbmt_leaves',     JSON.stringify(leaveRecs));
   localStorage.setItem('dbmt_weekend_work', JSON.stringify(weekendWorkRecs));
+  localStorage.setItem('dbmt_leave_deductions', JSON.stringify(leaveDeductRecs));
   gsSaveAppData();
 }
 function hrId(){ return Date.now() + Math.random().toString(36).slice(2,6); }
@@ -9880,6 +9921,7 @@ function deleteEmployee(id){
   employees  = employees.filter(x=>x.id!==id);
   leaveRecs  = leaveRecs.filter(x=>x.empId!==id);
   weekendWorkRecs = weekendWorkRecs.filter(x=>x.empId!==id);
+  leaveDeductRecs = leaveDeductRecs.filter(x=>x.empId!==id);
   saveHR(); renderEmployees(); renderRetiredEmployees(); renderSalarySummary(); toast('삭제됐습니다.');
 }
 function cancelEmpEdit(){
@@ -9910,7 +9952,7 @@ function renderEmployees(){
   if(!active.length){
     tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:20px;color:#888">등록된 재직 직원이 없습니다.</td></tr>';
     // 셀렉트도 비워주기
-    ['lv-emp','lv-record-emp','ww-emp','ww-record-emp'].forEach(sid=>{
+    ['lv-emp','lv-record-emp','ww-emp','ww-record-emp','ld-emp','ld-record-emp'].forEach(sid=>{
       const sel=document.getElementById(sid); if(!sel) return;
       const cur=sel.value;
       const ph = sid.includes('-record-')?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
@@ -9953,7 +9995,7 @@ function renderEmployees(){
       </td></tr>`;
   }).join('');
     // 셀렉트 업데이트 (재직자만)
-  ['lv-emp','lv-record-emp','ww-emp','ww-record-emp'].forEach(sid=>{
+  ['lv-emp','lv-record-emp','ww-emp','ww-record-emp','ld-emp','ld-record-emp'].forEach(sid=>{
     const sel=document.getElementById(sid); if(!sel) return;
     const cur=sel.value;
     const ph = sid.includes('-record-')?'<option value="">전체 직원</option>':'<option value="">-- 직원 선택 --</option>';
@@ -10465,6 +10507,156 @@ function renderLeaveRecords(){
   }).join('');
 }
 
+function leaveDeductionYearKey(month){
+  return String(month || '').slice(0, 4);
+}
+
+function defaultLeaveDeductionDaily(empId){
+  const emp = employees.find(e=>e.id===empId);
+  const salary = parseFloat(emp?.monthlySalary) || DEFAULT_MONTHLY_SALARY;
+  return Math.round(salary / 30);
+}
+
+function formatLeaveDeductionDays(days){
+  const n = parseAppNumber(days);
+  return n.toLocaleString('ko-KR', { maximumFractionDigits: 1 });
+}
+
+function setLeaveDeductionDefaultDaily(){
+  const empId = document.getElementById('ld-emp')?.value || '';
+  const dailyEl = document.getElementById('ld-daily');
+  if(dailyEl && empId) dailyEl.value = defaultLeaveDeductionDaily(empId);
+  updateLeaveDeductionAmount();
+}
+
+function updateLeaveDeductionAmount(){
+  const days = parseAppNumber(document.getElementById('ld-days')?.value || 0);
+  const daily = parseAppNumber(document.getElementById('ld-daily')?.value || 0);
+  const totalEl = document.getElementById('ld-total');
+  if(totalEl) totalEl.value = days > 0 && daily > 0 ? Math.round(days * daily).toLocaleString('ko-KR') + ' 원' : '';
+}
+
+function resetLeaveDeductionForm(){
+  const editEl = document.getElementById('ld-edit-id'); if(editEl) editEl.value = '';
+  const empEl = document.getElementById('ld-emp'); if(empEl) empEl.value = '';
+  const monthEl = document.getElementById('ld-month'); if(monthEl) monthEl.value = localMonthString();
+  ['ld-days','ld-daily','ld-total','ld-note'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  const saveBtn = document.getElementById('ld-save-btn'); if(saveBtn) saveBtn.textContent = '💾 저장';
+  const cancelBtn = document.getElementById('ld-cancel-btn'); if(cancelBtn) cancelBtn.style.display = 'none';
+}
+
+function cancelLeaveDeductionEdit(shouldRender=true){
+  resetLeaveDeductionForm();
+  if(shouldRender) renderLeaveDeductions();
+}
+
+function saveLeaveDeduction(){
+  const empId = document.getElementById('ld-emp')?.value || '';
+  const month = document.getElementById('ld-month')?.value || '';
+  const days = parseAppNumber(document.getElementById('ld-days')?.value || 0);
+  let dailyAmount = parseAppNumber(document.getElementById('ld-daily')?.value || 0);
+  const note = document.getElementById('ld-note')?.value.trim() || '';
+  const editId = document.getElementById('ld-edit-id')?.value || '';
+  if(!empId || !month){ toast('직원과 적용월을 선택하세요.'); return; }
+  if(days <= 0){ toast('공제일수를 입력하세요.'); return; }
+  if(dailyAmount <= 0) dailyAmount = defaultLeaveDeductionDaily(empId);
+  const amount = Math.round(days * dailyAmount);
+  const obj = {
+    id: editId || hrId(),
+    empId, month,
+    type: '연차초과공제',
+    days, dailyAmount, amount, note,
+    updatedAt: new Date().toISOString()
+  };
+  if(editId){
+    const idx = leaveDeductRecs.findIndex(r=>r.id===editId);
+    if(idx >= 0) leaveDeductRecs[idx] = {...leaveDeductRecs[idx], ...obj};
+  } else {
+    obj.createdAt = obj.updatedAt;
+    leaveDeductRecs.push(obj);
+  }
+  saveHR();
+  cancelLeaveDeductionEdit(false);
+  renderLeaves();
+  renderLeaveDeductions();
+  toast(editId ? '연차초과 공제 기록이 수정됐습니다.' : '연차초과 공제 기록이 저장됐습니다.');
+}
+
+function editLeaveDeduction(id){
+  const rec = leaveDeductRecs.find(r=>r.id===id);
+  if(!rec) return;
+  const editEl = document.getElementById('ld-edit-id'); if(editEl) editEl.value = rec.id;
+  const empEl = document.getElementById('ld-emp'); if(empEl) empEl.value = rec.empId || '';
+  const monthEl = document.getElementById('ld-month'); if(monthEl) monthEl.value = rec.month || localMonthString();
+  const daysEl = document.getElementById('ld-days'); if(daysEl) daysEl.value = rec.days || '';
+  const dailyEl = document.getElementById('ld-daily'); if(dailyEl) dailyEl.value = rec.dailyAmount || '';
+  const noteEl = document.getElementById('ld-note'); if(noteEl) noteEl.value = rec.note || '';
+  updateLeaveDeductionAmount();
+  const saveBtn = document.getElementById('ld-save-btn'); if(saveBtn) saveBtn.textContent = '수정 저장';
+  const cancelBtn = document.getElementById('ld-cancel-btn'); if(cancelBtn) cancelBtn.style.display = '';
+  document.getElementById('ld-days')?.focus();
+}
+
+function deleteLeaveDeduction(id){
+  if(!confirm('연차초과 급여공제 기록을 삭제할까요?')) return;
+  leaveDeductRecs = leaveDeductRecs.filter(r=>r.id!==id);
+  if(document.getElementById('ld-edit-id')?.value === id) resetLeaveDeductionForm();
+  saveHR();
+  renderLeaves();
+  renderLeaveDeductions();
+  toast('삭제됐습니다.');
+}
+
+function leaveDeductionDays(empId, year){
+  const y = String(year || new Date().getFullYear());
+  return leaveDeductRecs
+    .filter(r=>r.empId===empId && leaveDeductionYearKey(r.month)===y)
+    .reduce((s,r)=>s+parseAppNumber(r.days), 0);
+}
+
+function leaveDeductionAmount(empId, year){
+  const y = String(year || new Date().getFullYear());
+  return leaveDeductRecs
+    .filter(r=>r.empId===empId && leaveDeductionYearKey(r.month)===y)
+    .reduce((s,r)=>s+parseAppNumber(r.amount), 0);
+}
+
+function renderLeaveDeductions(){
+  const tbody = document.getElementById('ld-record-body');
+  if(!tbody) return;
+  const monthEl = document.getElementById('ld-record-month');
+  if(monthEl && !monthEl.value) monthEl.value = localMonthString();
+  const ym = monthEl?.value || '';
+  const empFilter = document.getElementById('ld-record-emp')?.value || '';
+  let rows = leaveDeductRecs.slice().sort((a,b)=>String(b.month||'').localeCompare(String(a.month||'')) || String(b.id||'').localeCompare(String(a.id||'')));
+  if(ym) rows = rows.filter(r=>r.month===ym);
+  if(empFilter) rows = rows.filter(r=>r.empId===empFilter);
+  const countEl = document.getElementById('ld-record-count');
+  const totalAmount = rows.reduce((s,r)=>s+parseAppNumber(r.amount), 0);
+  if(countEl) countEl.textContent = `(${rows.length}건 / ${totalAmount.toLocaleString('ko-KR')}원)`;
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:18px;">연차초과 급여공제 내역이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>{
+    const emp = employees.find(e=>e.id===r.empId);
+    return `<tr>
+      <td style="white-space:nowrap;">${htmlEscape(r.month || '')}</td>
+      <td><strong>${htmlEscape(emp?.name || '-')}</strong></td>
+      <td style="text-align:right;">${formatLeaveDeductionDays(r.days)}일</td>
+      <td style="text-align:right;">${parseAppNumber(r.dailyAmount).toLocaleString('ko-KR')}원</td>
+      <td style="text-align:right;font-weight:700;color:#c0392b;">${parseAppNumber(r.amount).toLocaleString('ko-KR')}원</td>
+      <td>${htmlEscape(r.note || '-')}</td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:4px;" onclick="editLeaveDeduction('${r.id}')">수정</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteLeaveDeduction('${r.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
 function formatWorkHours(hours){
   const n = parseAppNumber(hours);
   return n.toLocaleString('ko-KR', { maximumFractionDigits: 1 });
@@ -10590,16 +10782,18 @@ function renderLeaves(){
 
   if(!employees.length){
     thead.innerHTML = '';
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#888">직원 없음</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#888">직원 없음</td></tr>';
     return;
   }
 
   // 전체 직원 기준 기록 있는 달 파악 (활성 월 컬럼만 표시)
   const yearRecs = leaveRecs.filter(r=>(r.date||'').startsWith(String(selY)));
   const yearWeekendRecs = weekendWorkRecs.filter(r=>(r.date||'').startsWith(String(selY)));
+  const yearDeductRecs = leaveDeductRecs.filter(r=>leaveDeductionYearKey(r.month)===String(selY));
   const activeMonthSet = new Set();
   yearRecs.forEach(r=>{ const m = (r.date||'').slice(5,7); if(m) activeMonthSet.add(m); });
   yearWeekendRecs.forEach(r=>{ const m = (r.date||'').slice(5,7); if(m) activeMonthSet.add(m); });
+  yearDeductRecs.forEach(r=>{ const m = (r.month||'').slice(5,7); if(m) activeMonthSet.add(m); });
   const activeMMs = Array.from(activeMonthSet).sort(); // ['01','03','04',...]
 
   // 헤더 생성
@@ -10610,7 +10804,10 @@ function renderLeaves(){
   thead.innerHTML = `<tr>
     <th>직원</th>
     <th style="text-align:right;">총 연차</th>
-    <th style="text-align:right;">잔여 연차</th>
+    <th style="text-align:right;">사용 연차</th>
+    <th style="text-align:right;">잔여/초과</th>
+    <th style="text-align:right;">공제처리</th>
+    <th style="text-align:right;">미처리</th>
     <th style="text-align:right;">주말출근</th>
     <th style="text-align:right;">근무시간</th>
     ${activeMMs.map(mm=>`<th style="text-align:center;">${MONTH_LABEL[mm]}</th>`).join('')}
@@ -10618,14 +10815,15 @@ function renderLeaves(){
   </tr>`;
 
   // 월별 배지 셀 생성
-  function monthCell(mRecs, mWeekendRecs=[]){
-    if(!mRecs.length && !mWeekendRecs.length) return `<td style="text-align:center;color:#ddd;">-</td>`;
+  function monthCell(mRecs, mWeekendRecs=[], mDeductRecs=[]){
+    if(!mRecs.length && !mWeekendRecs.length && !mDeductRecs.length) return `<td style="text-align:center;color:#ddd;">-</td>`;
     const leave = mRecs.filter(r=>r.type==='연차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
     const half  = mRecs.filter(r=>r.type==='오전반차'||r.type==='오후반차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
     const late  = mRecs.filter(r=>r.type==='지각').length;
     const early = mRecs.filter(r=>r.type==='조퇴').length;
     const reserve = mRecs.filter(r=>r.type==='예비군/민방위').length;
     const weekendHours = mWeekendRecs.reduce((s,r)=>s+parseAppNumber(r.hours), 0);
+    const deductDays = mDeductRecs.reduce((s,r)=>s+parseAppNumber(r.days), 0);
     const badges = [];
     if(leave) badges.push(`<span style="background:#27ae60;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">연${leave}일</span>`);
     if(half)  badges.push(`<span style="background:#f39c12;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">반${half}일</span>`);
@@ -10633,6 +10831,7 @@ function renderLeaves(){
     if(early) badges.push(`<span style="background:#e74c3c;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">조${early}</span>`);
     if(reserve) badges.push(`<span style="background:#3498db;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">예${reserve}</span>`);
     if(mWeekendRecs.length) badges.push(`<span style="background:#8e44ad;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">주${mWeekendRecs.length}회/${formatWorkHours(weekendHours)}h</span>`);
+    if(deductDays) badges.push(`<span style="background:#c0392b;color:#fff;border-radius:3px;padding:1px 5px;font-size:11px;">공제${formatLeaveDeductionDays(deductDays)}일</span>`);
     return `<td style="text-align:center;white-space:nowrap;"><div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;">${badges.join('')}</div></td>`;
   }
 
@@ -10640,23 +10839,33 @@ function renderLeaves(){
   tbody.innerHTML = employees.map(emp=>{
     const recs  = yearRecs.filter(r=>r.empId===emp.id);
     const wwRecs = yearWeekendRecs.filter(r=>r.empId===emp.id);
+    const deductRecs = yearDeductRecs.filter(r=>r.empId===emp.id);
     const total = calcTotalLeave(emp.hireDate, selY);
     const usedLeave = recs.filter(r=>r.type==='연차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
     const usedHalf  = recs.filter(r=>r.type==='오전반차'||r.type==='오후반차').reduce((s,r)=>s+(parseFloat(r.days)||0),0);
-    const rem = total - usedLeave - usedHalf;
+    const usedDays = usedLeave + usedHalf;
+    const rem = total - usedDays;
+    const overDays = Math.max(0, -rem);
+    const deductedDays = deductRecs.reduce((s,r)=>s+parseAppNumber(r.days), 0);
+    const deductedAmount = deductRecs.reduce((s,r)=>s+parseAppNumber(r.amount), 0);
+    const pendingDays = Math.max(0, overDays - deductedDays);
     const weekendHours = wwRecs.reduce((s,r)=>s+parseAppNumber(r.hours), 0);
 
     const monthCells = activeMMs.length
       ? activeMMs.map(mm => monthCell(
           recs.filter(r=>(r.date||'').startsWith(selY+'-'+mm)),
-          wwRecs.filter(r=>(r.date||'').startsWith(selY+'-'+mm))
+          wwRecs.filter(r=>(r.date||'').startsWith(selY+'-'+mm)),
+          deductRecs.filter(r=>(r.month||'').endsWith('-'+mm))
         )).join('')
       : `<td style="text-align:center;color:#bbb;font-size:12px;">기록 없음</td>`;
 
     return `<tr>
       <td style="font-weight:700;">${emp.name}<br><span style="font-size:11px;color:#888;font-weight:400;">${emp.position||''}</span></td>
       <td style="text-align:right;">${total}일</td>
-      <td style="text-align:right;font-weight:700;color:${rem<3?'var(--red)':'var(--green)'};">${rem}일</td>
+      <td style="text-align:right;">${formatLeaveDeductionDays(usedDays)}일</td>
+      <td style="text-align:right;font-weight:700;color:${rem<0?'var(--red)':rem<3?'var(--orange)':'var(--green)'};">${rem<0?'-':''}${formatLeaveDeductionDays(Math.abs(rem))}일</td>
+      <td style="text-align:right;color:${deductedDays?'#c0392b':'#888'};">${deductedDays ? formatLeaveDeductionDays(deductedDays) + '일' : '-'}${deductedAmount ? `<br><span style="font-size:10px;color:#777;">${deductedAmount.toLocaleString('ko-KR')}원</span>` : ''}</td>
+      <td style="text-align:right;font-weight:700;color:${pendingDays?'#c0392b':'#888'};">${pendingDays ? formatLeaveDeductionDays(pendingDays) + '일' : '-'}</td>
       <td style="text-align:right;">${wwRecs.length ? wwRecs.length + '회' : '-'}</td>
       <td style="text-align:right;">${weekendHours ? formatWorkHours(weekendHours) + '시간' : '-'}</td>
       ${monthCells}
