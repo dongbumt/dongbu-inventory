@@ -2052,6 +2052,7 @@
         <select id="exp-paytype">
           <option value="우리카드">우리카드</option>
           <option value="비씨카드">비씨카드</option>
+          <option value="주유카드">주유카드</option>
           <option value="통장입금">통장입금</option>
           <option value="현금">현금</option>
         </select>
@@ -2110,7 +2111,7 @@
     <!-- 주요 월 합계 -->
     <div id="exp-month-overview-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;"></div>
     <!-- 결제수단별 합계 -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;" id="exp-summary-cards">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px;" id="exp-summary-cards">
     </div>
     <!-- 카테고리별 합계 -->
     <div id="exp-category-summary" style="margin-bottom:4px;"></div>
@@ -2155,6 +2156,7 @@
       <select id="pdf-card-type" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
         <option value="우리카드">우리카드</option>
         <option value="비씨카드">비씨카드</option>
+        <option value="주유카드">주유카드</option>
       </select>
       <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">
         📄 PDF 파일 선택
@@ -11651,7 +11653,7 @@ function updateExpStoreList(){
 }
 
 const EXP_PAY_COLORS = {
-  '우리카드':'#1a7ab5', '비씨카드':'#8e44ad', '통장입금':'#27ae60', '현금':'#e67e22'
+  '우리카드':'#1a7ab5', '비씨카드':'#8e44ad', '주유카드':'#d35400', '통장입금':'#27ae60', '현금':'#e67e22'
 };
 const EXP_CAT_LIST = ['소모품','포장재','원부자재','식대','차량유지비','사무용품','시설유지보수','위생안전관리','복리후생','접대비','공과금','기타'];
 
@@ -11698,7 +11700,7 @@ function renderExpenses(){
   renderExpenseMonthOverview(monthVal);
 
   // 결제수단별 합계
-  const payTotals = {'우리카드':0,'비씨카드':0,'통장입금':0,'현금':0};
+  const payTotals = {'우리카드':0,'비씨카드':0,'주유카드':0,'통장입금':0,'현금':0};
   filtered.forEach(e=>{ if(payTotals[e.paytype]!==undefined) payTotals[e.paytype]+=e.amount; });
   const grandTotal = filtered.reduce((s,e)=>s+e.amount,0);
   const summaryEl = document.getElementById('exp-summary-cards');
@@ -11706,6 +11708,7 @@ function renderExpenses(){
     const cards = [
       {label:'우리카드',val:payTotals['우리카드'],color:'#1a7ab5'},
       {label:'비씨카드',val:payTotals['비씨카드'],color:'#8e44ad'},
+      {label:'주유카드',val:payTotals['주유카드'],color:'#d35400'},
       {label:'통장입금',val:payTotals['통장입금'],color:'#27ae60'},
       {label:'현금',val:payTotals['현금'],color:'#e67e22'},
       {label:'전체 합계',val:grandTotal,color:'#2c3e50'},
