@@ -3581,6 +3581,32 @@ const APP_DATA_REGISTRY = {
   samsungVendors:   { get:()=>samsungVendors,   set:v=>{ samsungVendors=v; },   ls:'dbmt_samsung_vendors'  },
 };
 
+const APP_DATA_LABELS = {
+  scheduleEvents: '일정',
+  employees: '직원정보',
+  leaveRecs: '근태 기록',
+  weekendWorkRecs: '주말출근',
+  leaveDeductRecs: '연차 공제',
+  traderInfoMap: '거래처 정보',
+  docChecks: '문서 점검',
+  pgbList: '판관비',
+  expenseList: '지출',
+  costCalcHistory: '원가계산',
+  labelTemplates: '라벨 양식',
+  labelProducts: '라벨 품목',
+  workOrders: '작업지시',
+  labelPrintLogs: '라벨 출력 이력',
+  subMaterialItems: '부자재 품목',
+  subMaterialLots: '부자재 입고',
+  subMaterialCounts: '부자재 실사',
+  factorySimScenarios: '공장 시뮬레이션',
+  samsungVendors: '삼성웰스토리 거래처',
+};
+
+function appDataDisplayName(key){
+  return APP_DATA_LABELS[key] ? `${APP_DATA_LABELS[key]}(${key})` : key;
+}
+
 // ── 앱 전체 보조데이터 저장 (Supabase 기준) ──
 function gsSaveAppData(){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
@@ -9442,30 +9468,56 @@ async function compareSupabaseWithCurrentData(){
   try{
     sbMigrationStatus('Supabase와 현재 데이터를 비교 중입니다...');
     const data = await sbRpc('dbmt_get_all', {p_password: password});
+    const localAppData = sbCollectAppData();
+    const remoteAppData = data.appData || {};
+    const localAppKeys = Object.keys(localAppData).sort();
+    const remoteAppKeys = Object.keys(remoteAppData).sort();
+    const localAppKeySet = new Set(localAppKeys);
+    const remoteManagedAppKeys = remoteAppKeys.filter(key => localAppKeySet.has(key));
+    const missingRemoteAppKeys = localAppKeys.filter(key => remoteAppData[key] === undefined);
+    const extraRemoteAppKeys = remoteAppKeys.filter(key => !localAppKeySet.has(key));
     const localCounts = {
       transactions: Array.isArray(userTransactions) ? userTransactions.length : 0,
       prod: Array.isArray(userProdEntries) ? userProdEntries.length : 0,
       prices: Array.isArray(prices) ? prices.length : 0,
-      appData: Object.keys(sbCollectAppData()).length
+      appData: localAppKeys.length
     };
     const remoteCounts = {
       transactions: (data.transactions || []).length,
       prod: (data.prod || []).length,
       prices: (data.prices || []).length,
-      appData: Object.keys(data.appData || {}).length
+      appData: remoteManagedAppKeys.length,
+      appDataTotal: remoteAppKeys.length
     };
-    const ok =
+    const coreOk =
       localCounts.transactions === remoteCounts.transactions &&
       localCounts.prod === remoteCounts.prod &&
-      localCounts.prices === remoteCounts.prices &&
-      localCounts.appData === remoteCounts.appData;
+      localCounts.prices === remoteCounts.prices;
+    const appDataOk = missingRemoteAppKeys.length === 0;
+    const ok = coreOk && appDataOk;
+    const appDataCountText =
+      `보조데이터: 현재 ${localCounts.appData}종 / Supabase 관리대상 ${remoteCounts.appData}종` +
+      (remoteCounts.appDataTotal !== remoteCounts.appData ? ` (전체 ${remoteCounts.appDataTotal}종)` : '') +
+      `\n`;
+    const appDataDiffText = [
+      missingRemoteAppKeys.length ? `Supabase에 없는 보조데이터: ${missingRemoteAppKeys.map(appDataDisplayName).join(', ')}` : '',
+      extraRemoteAppKeys.length ? `Supabase에만 있는 보조데이터: ${extraRemoteAppKeys.map(appDataDisplayName).join(', ')}` : ''
+    ].filter(Boolean).join('\n');
+    const resultText = !coreOk
+      ? '결과: 핵심 데이터 건수가 다릅니다. 저장소 전환 전에 확인이 필요합니다.'
+      : !appDataOk
+        ? '결과: Supabase에 없는 보조데이터가 있습니다. 저장소 전환 전에 확인이 필요합니다.'
+        : extraRemoteAppKeys.length
+          ? '결과: 핵심 데이터가 일치합니다. Supabase에만 있는 보조데이터는 현재 화면에서 직접 저장하지 않는 항목입니다.'
+          : '결과: 건수가 일치합니다.';
     const summary =
       `현재 데이터 / Supabase 비교\n` +
       `거래내역: 현재 ${localCounts.transactions}건 / Supabase ${remoteCounts.transactions}건\n` +
       `생산일보: 현재 ${localCounts.prod}건 / Supabase ${remoteCounts.prod}건\n` +
       `단가: 현재 ${localCounts.prices}건 / Supabase ${remoteCounts.prices}건\n` +
-      `보조데이터: 현재 ${localCounts.appData}종 / Supabase ${remoteCounts.appData}종\n\n` +
-      (ok ? '결과: 건수가 일치합니다.' : '결과: 건수가 다릅니다. 저장소 전환 전에 확인이 필요합니다.');
+      appDataCountText +
+      (appDataDiffText ? `\n${appDataDiffText}\n\n` : '\n') +
+      resultText;
     sbMigrationStatus(summary, !ok);
     if(ok) localStorage.setItem(SUPABASE_ENABLED_KEY, '1');
   } catch(err){
