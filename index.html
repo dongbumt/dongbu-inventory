@@ -8117,21 +8117,43 @@ function initInvoiceDates(){
   if(saved) sel.value = saved;
 }
 
-function calcPrevUnpaid(date, trader){
-  // ── 거래처별 초기 잔액 설정 ──
-  const CONFIG = {
-    '동원홈푸드': { baseDate:'2026-01-20', baseAmt:5685000, payDay:1, payPrevMonth:true },
-    '이유푸드':   { baseDate:'2026-03-06', baseAmt:3145000, payDay:1, payPrevMonth:true },
+const INVOICE_UNPAID_CONFIG = {
+  '동원홈푸드': { baseDate:'2026-01-20', baseAmt:5685000, payDay:1, payPrevMonth:true },
+  '이유푸드':   { baseDate:'2026-03-06', baseAmt:3145000, payDay:1, payPrevMonth:true },
+};
+
+function invoiceOutAmount(t){
+  return Number(t?.amount || 0) || Math.round((Number(t?.price || 0) || 0) * (Number(t?.weight || 0) || 0));
+}
+
+function getInvoiceUnpaidConfig(trader){
+  const name = String(trader || '').trim();
+  if(!name) return null;
+  const custom = INVOICE_UNPAID_CONFIG[name] || {};
+  const firstOutDate = userTransactions
+    .filter(t => t.type==='출고' && String(t.trader || '').trim()===name && t.date)
+    .map(t => String(t.date).slice(0, 10))
+    .sort()[0];
+  if(!custom.baseDate && !firstOutDate) return null;
+  return {
+    baseDate: custom.baseDate || firstOutDate,
+    baseAmt: Number(custom.baseAmt || 0) || 0,
+    payDay: custom.payDay || 1,
+    payPrevMonth: custom.payPrevMonth !== false
   };
-  const cfg = CONFIG[trader];
-  if(!cfg) return 0;
+}
+
+function calcPrevUnpaid(date, trader){
+  const name = String(trader || '').trim();
+  const cfg = getInvoiceUnpaidConfig(name);
+  if(!date || !cfg) return 0;
   if(date <= cfg.baseDate) return cfg.baseAmt;
 
   // 기준일 이후 ~ 명세서 날짜 전날까지 해당 거래처 출고 누적
   const outs = userTransactions.filter(t=>
-    t.type==='출고' && (t.trader||'')===trader && t.date>=cfg.baseDate && t.date<date
+    t.type==='출고' && String(t.trader||'').trim()===name && t.date>=cfg.baseDate && t.date<date
   );
-  let balance = cfg.baseAmt + outs.reduce((s,t)=>s+(t.amount||0),0);
+  let balance = cfg.baseAmt + outs.reduce((s,t)=>s+invoiceOutAmount(t),0);
 
   // 매월 payDay일 전달 매출액 입금 처리
   if(cfg.payDay && cfg.payPrevMonth){
@@ -8147,9 +8169,9 @@ function calcPrevUnpaid(date, trader){
         const prevY=m===1?y-1:y;
         const prevYM=`${prevY}-${String(prevM).padStart(2,'0')}`;
         const paid=userTransactions.filter(t=>
-          t.type==='출고' && (t.trader||'')===trader &&
-          t.date.slice(0,7)===prevYM && t.date>=cfg.baseDate
-        ).reduce((s,t)=>s+(t.amount||0),0);
+          t.type==='출고' && String(t.trader||'').trim()===name &&
+          t.date && t.date.slice(0,7)===prevYM && t.date>=cfg.baseDate
+        ).reduce((s,t)=>s+invoiceOutAmount(t),0);
         balance-=paid;
       }
       m++; if(m>12){m=1;y++;}
