@@ -1496,7 +1496,10 @@
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-employees">
   <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#c0392b;"></div>👥 직원 등록·수정</div>
+    <div class="section-header" style="margin-bottom:10px;">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#c0392b;"></div>👥 직원 등록·수정</div>
+      <button class="btn btn-secondary btn-sm" onclick="lockHrMenu()">🔒 잠금</button>
+    </div>
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group"><label>이름 <span style="color:var(--red)">*</span></label><input id="emp-name" placeholder="홍길동"></div>
       <div class="form-group"><label>직책</label><input id="emp-pos" placeholder="예) 작업반장"></div>
@@ -1584,7 +1587,10 @@
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-leaves">
   <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#27ae60;"></div>📅 근태 입력</div>
+    <div class="section-header" style="margin-bottom:10px;">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#27ae60;"></div>📅 근태 입력</div>
+      <button class="btn btn-secondary btn-sm" onclick="lockHrMenu()">🔒 잠금</button>
+    </div>
     <input type="hidden" id="lv-edit-id">
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group"><label>직원</label>
@@ -3846,8 +3852,112 @@ function save(){
   gsShowSync('⚠ Supabase 연결 전이라 로컬에만 저장되었습니다', true);
 }
 
+const HR_LOCK_SESSION_KEY = 'dbmt_hr_menu_unlocked';
+const HR_LOCK_PASSWORD_HASH = 'e982589ecbd4d4445fe66f211a86ef19a9b0da59cce20381e77e351963febc63';
+const HR_LOCK_PAGES = new Set(['p-employees', 'p-leaves']);
+
+function isHrLockedPage(id){
+  return HR_LOCK_PAGES.has(id);
+}
+
+function isHrMenuUnlocked(){
+  try { return sessionStorage.getItem(HR_LOCK_SESSION_KEY) === '1'; }
+  catch(e){ return false; }
+}
+
+function setHrMenuUnlocked(){
+  try { sessionStorage.setItem(HR_LOCK_SESSION_KEY, '1'); } catch(e) {}
+}
+
+async function hrPasswordHash(text){
+  if(window.crypto?.subtle && window.TextEncoder){
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  return '';
+}
+
+async function verifyHrPassword(password){
+  const hash = await hrPasswordHash(password || '');
+  if(hash) return hash === HR_LOCK_PASSWORD_HASH;
+  return (password || '') === ['dong', '540', '916', '!'].join('');
+}
+
+function ensureHrLockModal(){
+  let modal = document.getElementById('hr-lock-modal');
+  if(modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'hr-lock-modal';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.42);align-items:center;justify-content:center;padding:18px;';
+  modal.innerHTML = `
+    <div style="width:min(420px,100%);background:#fff;border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.25);padding:22px;">
+      <div style="font-size:18px;font-weight:900;color:#2c3e50;margin-bottom:8px;">🔒 인사/근태 메뉴 잠금</div>
+      <div style="font-size:12px;color:#666;line-height:1.55;margin-bottom:14px;">직원정보와 근태관리 메뉴는 암호 확인 후 열립니다.</div>
+      <input id="hr-lock-password" type="password" placeholder="암호 입력" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" spellcheck="false"
+        style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;margin-bottom:8px;">
+      <div id="hr-lock-error" style="display:none;color:#e74c3c;font-size:12px;margin-bottom:10px;">암호가 맞지 않습니다.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" id="hr-lock-cancel">취소</button>
+        <button type="button" class="btn btn-primary" id="hr-lock-submit">확인</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function requestHrMenuUnlock(){
+  if(isHrMenuUnlocked()) return Promise.resolve(true);
+  const modal = ensureHrLockModal();
+  const input = modal.querySelector('#hr-lock-password');
+  const error = modal.querySelector('#hr-lock-error');
+  const submit = modal.querySelector('#hr-lock-submit');
+  const cancel = modal.querySelector('#hr-lock-cancel');
+  return new Promise(resolve => {
+    const close = ok => {
+      modal.style.display = 'none';
+      input.value = '';
+      error.style.display = 'none';
+      submit.disabled = false;
+      resolve(ok);
+    };
+    const tryUnlock = async () => {
+      submit.disabled = true;
+      error.style.display = 'none';
+      if(await verifyHrPassword(input.value)){
+        setHrMenuUnlocked();
+        close(true);
+        return;
+      }
+      submit.disabled = false;
+      error.style.display = 'block';
+      input.focus();
+      input.select();
+    };
+    submit.onclick = tryUnlock;
+    cancel.onclick = () => close(false);
+    input.onkeydown = e => {
+      if(e.key === 'Enter') tryUnlock();
+      if(e.key === 'Escape') close(false);
+    };
+    modal.onclick = e => { if(e.target === modal) close(false); };
+    modal.style.display = 'flex';
+    setTimeout(() => input.focus(), 0);
+  });
+}
+
+function lockHrMenu(){
+  try { sessionStorage.removeItem(HR_LOCK_SESSION_KEY); } catch(e) {}
+  if(document.getElementById('p-employees')?.classList.contains('active') ||
+     document.getElementById('p-leaves')?.classList.contains('active')){
+    showPage('p-schedule', document.getElementById('nav-schedule'));
+  }
+  if(typeof toast === 'function') toast('인사/근태 메뉴를 잠갔습니다.');
+}
+
 // ─── 탭 전환 ───────────────────────────────────────────
-function showPage(id, btn){
+async function showPage(id, btn){
+  if(isHrLockedPage(id) && !await requestHrMenuUnlock()) return false;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
