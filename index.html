@@ -3853,7 +3853,7 @@ function save(){
 }
 
 const HR_LOCK_SESSION_KEY = 'dbmt_hr_menu_unlocked_v2';
-const HR_LOCK_PASSWORD_HASH = 'e982589ecbd4d4445fe66f211a86ef19a9b0da59cce20381e77e351963febc63';
+const HR_LOCK_PASSWORD_HASH = '1dfe4293ae0aa26b19bdcd3555adf5aebe076fb3d85f83a5d691fe548d75daaa';
 const HR_LOCK_PAGES = new Set(['p-employees', 'p-leaves']);
 try { sessionStorage.removeItem('dbmt_hr_menu_unlocked'); } catch(e) {}
 
@@ -3889,7 +3889,7 @@ async function hrPasswordHash(text){
 async function verifyHrPassword(password){
   const hash = await hrPasswordHash(password || '');
   if(hash) return hash === HR_LOCK_PASSWORD_HASH;
-  return (password || '') === ['dong', '540', '916', '!'].join('');
+  return (password || '') === ['lee', '540', '916', '!'].join('');
 }
 
 function ensureHrLockModal(){
