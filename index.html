@@ -3852,10 +3852,10 @@ function save(){
   gsShowSync('⚠ Supabase 연결 전이라 로컬에만 저장되었습니다', true);
 }
 
-const HR_LOCK_SESSION_KEY = 'dbmt_hr_menu_unlocked_v2';
 const HR_LOCK_PASSWORD_HASH = '1dfe4293ae0aa26b19bdcd3555adf5aebe076fb3d85f83a5d691fe548d75daaa';
 const HR_LOCK_PAGES = new Set(['p-employees', 'p-leaves']);
-try { sessionStorage.removeItem('dbmt_hr_menu_unlocked'); } catch(e) {}
+const HR_LOCK_SESSION_KEYS = ['dbmt_hr_menu_unlocked', 'dbmt_hr_menu_unlocked_v2'];
+try { HR_LOCK_SESSION_KEYS.forEach(key => sessionStorage.removeItem(key)); } catch(e) {}
 
 function isHrLockedPage(id){
   return HR_LOCK_PAGES.has(id);
@@ -3865,17 +3865,8 @@ function isHrMenuActive(){
   return [...HR_LOCK_PAGES].some(id => document.getElementById(id)?.classList.contains('active'));
 }
 
-function isHrMenuUnlocked(){
-  try { return sessionStorage.getItem(HR_LOCK_SESSION_KEY) === '1'; }
-  catch(e){ return false; }
-}
-
-function setHrMenuUnlocked(){
-  try { sessionStorage.setItem(HR_LOCK_SESSION_KEY, '1'); } catch(e) {}
-}
-
 function clearHrMenuUnlock(){
-  try { sessionStorage.removeItem(HR_LOCK_SESSION_KEY); } catch(e) {}
+  try { HR_LOCK_SESSION_KEYS.forEach(key => sessionStorage.removeItem(key)); } catch(e) {}
 }
 
 async function hrPasswordHash(text){
@@ -3916,7 +3907,7 @@ function ensureHrLockModal(){
 }
 
 function requestHrMenuUnlock(){
-  if(isHrMenuUnlocked()) return Promise.resolve(true);
+  clearHrMenuUnlock();
   const modal = ensureHrLockModal();
   const input = modal.querySelector('#hr-lock-password');
   const error = modal.querySelector('#hr-lock-error');
@@ -3934,7 +3925,6 @@ function requestHrMenuUnlock(){
       submit.disabled = true;
       error.style.display = 'none';
       if(await verifyHrPassword(input.value)){
-        setHrMenuUnlocked();
         close(true);
         return;
       }
