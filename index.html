@@ -245,6 +245,9 @@
   <div class="nav-tab" onclick="showPage('p-factorysim',this);renderFactorySim();" id="nav-factorysim" style="color:#0f766e;font-weight:700;">
     🏗 확장공장 시뮬레이터
   </div>
+  <div class="nav-tab" onclick="showPage('p-change-log',this);renderDataChangeLog();" id="nav-change-log" style="color:#475467;font-weight:700;">
+    🧾 변경이력
+  </div>
 </nav>
 
 <main class="main">
@@ -2003,6 +2006,62 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     변경이력
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-change-log">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#475467;"></div>데이터 변경이력</div>
+      <div style="font-size:12px;color:#667085;">최신 변경사항부터 표시됩니다.</div>
+    </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group" style="max-width:180px;">
+        <label>기간 시작</label>
+        <input type="date" id="cl-from" onchange="renderDataChangeLog()">
+      </div>
+      <div class="form-group" style="max-width:180px;">
+        <label>기간 종료</label>
+        <input type="date" id="cl-to" onchange="renderDataChangeLog()">
+      </div>
+      <div class="form-group" style="max-width:220px;">
+        <label>메뉴</label>
+        <select id="cl-menu" onchange="renderDataChangeLog()">
+          <option value="">전체 메뉴</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>검색</label>
+        <input id="cl-search" placeholder="품목, 거래처, 내용 검색" oninput="renderDataChangeLog()">
+      </div>
+      <div class="form-group" style="flex:0;">
+        <label>&nbsp;</label>
+        <button class="btn btn-secondary btn-sm" onclick="resetDataChangeLogFilters()">초기화</button>
+      </div>
+    </div>
+    <div id="cl-summary" style="font-size:12px;color:#667085;margin-top:4px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="tbl-wrap" style="max-height:680px;">
+      <table style="font-size:12px;">
+        <thead>
+          <tr>
+            <th style="min-width:150px;">변경일시</th>
+            <th style="min-width:120px;">메뉴</th>
+            <th style="min-width:90px;">구분</th>
+            <th>변경 내용</th>
+            <th style="min-width:120px;">대상</th>
+          </tr>
+        </thead>
+        <tbody id="cl-tbody">
+          <tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">변경이력이 없습니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="tab-panel" id="p-pangwanbi">
 
   <!-- 인건비 자동계산 -->
@@ -3476,6 +3535,7 @@ function localInit(){
   const localPrices = localStorage.getItem('dbmt_prices');
   if(localPrices) { try{ prices = JSON.parse(localPrices); }catch(e){} }
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
 }
 
 // 전체 렌더
@@ -3493,6 +3553,7 @@ function renderAll(){
   if(typeof refreshLabelWorkOrderSelect === 'function' && document.getElementById('p-label')?.classList.contains('active')) refreshLabelWorkOrderSelect();
   if(typeof renderSubMaterials === 'function' && document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
   if(typeof renderFactorySim === 'function' && document.getElementById('p-factorysim')?.classList.contains('active')) renderFactorySim();
+  if(typeof renderDataChangeLog === 'function' && document.getElementById('p-change-log')?.classList.contains('active')) renderDataChangeLog();
   if(document.getElementById('p-leaves')?.classList.contains('active')){
     renderEmployees();
     renderLeaves();
@@ -3565,6 +3626,8 @@ function jsArg(value){
 // ── 앱데이터 레지스트리 ──────────────────────────────────
 // 새 메뉴 추가 시 여기에만 항목을 추가하면 GS 연동 자동 적용
 // { get: 변수 getter, set: 변수 setter, ls: localStorage 키 }
+let dataChangeLogs = JSON.parse(localStorage.getItem('dbmt_change_logs') || '[]');
+
 const APP_DATA_REGISTRY = {
   scheduleEvents:{ get:()=>scheduleEvents,set:v=>{ scheduleEvents=v; },ls:'dbmt_schedule_events' },
   employees:     { get:()=>employees,     set:v=>{ employees=v; },     ls:'dbmt_employees'   },
@@ -3585,6 +3648,7 @@ const APP_DATA_REGISTRY = {
   subMaterialCounts:{ get:()=>subMaterialCounts,set:v=>{ subMaterialCounts=v; },ls:'dbmt_submaterial_counts'},
   factorySimScenarios:{ get:()=>factorySimScenarios,set:v=>{ factorySimScenarios=v; },ls:'dbmt_factory_sim_scenarios'},
   samsungVendors:   { get:()=>samsungVendors,   set:v=>{ samsungVendors=v; },   ls:'dbmt_samsung_vendors'  },
+  dataChangeLogs:   { get:()=>dataChangeLogs,   set:v=>{ dataChangeLogs=Array.isArray(v)?v:[]; }, ls:'dbmt_change_logs' },
 };
 
 const APP_DATA_LABELS = {
@@ -3607,14 +3671,265 @@ const APP_DATA_LABELS = {
   subMaterialCounts: '부자재 실사',
   factorySimScenarios: '공장 시뮬레이션',
   samsungVendors: '삼성웰스토리 거래처',
+  dataChangeLogs: '변경이력',
 };
 
 function appDataDisplayName(key){
   return APP_DATA_LABELS[key] ? `${APP_DATA_LABELS[key]}(${key})` : key;
 }
 
+const DATA_CHANGE_LOG_LIMIT = 5000;
+const DATA_CHANGE_MENU_BY_APP_KEY = {
+  scheduleEvents: '일정관리',
+  employees: '직원정보',
+  leaveRecs: '근태관리',
+  weekendWorkRecs: '근태관리',
+  leaveDeductRecs: '근태관리',
+  traderInfoMap: '거래처 관리',
+  docChecks: '서류체크',
+  pgbList: '경비 설정',
+  expenseList: '지출관리',
+  costCalcHistory: '원가계산기',
+  labelTemplates: '라벨출력',
+  labelProducts: '품목관리',
+  workOrders: '작업지시',
+  subMaterialItems: '부자재 관리',
+  subMaterialLots: '부자재 관리',
+  subMaterialCounts: '부자재 관리',
+  factorySimScenarios: '확장공장 시뮬레이터',
+  samsungVendors: '삼성웰스토리',
+};
+const DATA_CHANGE_MENU_ORDER = [
+  '일정관리','품목관리','거래처 관리','삼성웰스토리','거래내역','생산일보','단가표',
+  '작업지시','부자재 관리','라벨출력','경비 설정','원가계산기','서류체크',
+  '직원정보','근태관리','지출관리','확장공장 시뮬레이터'
+];
+
+let dataChangeAppDataSigs = null;
+let dataChangeLogSyncTimer = null;
+
+function dataChangeId(){
+  return `cl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeDataChangeLogs(){
+  if(!Array.isArray(dataChangeLogs)) dataChangeLogs = [];
+  dataChangeLogs = dataChangeLogs
+    .filter(Boolean)
+    .sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')))
+    .slice(0, DATA_CHANGE_LOG_LIMIT);
+}
+
+function saveDataChangeLogsLocal(){
+  normalizeDataChangeLogs();
+  safeLocalStorageSet('dbmt_change_logs', JSON.stringify(dataChangeLogs), true);
+}
+
+function syncDataChangeLogsSoon(){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return;
+  if(!getSupabasePassword()) return;
+  clearTimeout(dataChangeLogSyncTimer);
+  dataChangeLogSyncTimer = setTimeout(() => {
+    sbRpc('dbmt_import_app_data', {p_password: getSupabasePassword(), p_payload: {dataChangeLogs}})
+      .catch(err => console.warn('변경이력 Supabase 저장 실패:', err));
+  }, 800);
+}
+
+function recordDataChange(entry={}, opts={}){
+  const log = {
+    id: dataChangeId(),
+    at: new Date().toISOString(),
+    menu: entry.menu || '기타',
+    action: entry.action || '변경',
+    target: entry.target || '',
+    summary: entry.summary || '',
+    refId: entry.refId || '',
+  };
+  dataChangeLogs.unshift(log);
+  saveDataChangeLogsLocal();
+  if(opts.sync !== false) syncDataChangeLogsSoon();
+  if(document.getElementById('p-change-log')?.classList.contains('active')) renderDataChangeLog();
+  return log;
+}
+
+function dataChangeRowSummary(row){
+  if(!row) return '';
+  return [
+    row.date || row.workDate || row.month || '',
+    row.type || row.job_type || row.jobType || '',
+    row.product || row.name || row.trader || row.store || row.title || '',
+    row.origin || '',
+    row.lot || '',
+    row.weight ? Number(row.weight).toLocaleString('ko-KR') + 'KG' : '',
+    row.price ? Number(row.price).toLocaleString('ko-KR') + '원' : '',
+  ].filter(Boolean).join(' / ');
+}
+
+function recordTransactionChange(rows, deletedIds){
+  const upserts = asArray(rows);
+  const deletes = asArray(deletedIds);
+  if(upserts.length){
+    const sample = upserts[0] || {};
+    recordDataChange({
+      menu:'거래내역',
+      action: upserts.length > 1 ? '일괄 저장' : '저장',
+      target: sample.product || sample.type || '',
+      summary: upserts.length > 1 ? `${upserts.length}건 저장` : dataChangeRowSummary(sample),
+      refId: sample.id || ''
+    });
+  }
+  if(deletes.length){
+    recordDataChange({
+      menu:'거래내역',
+      action:'삭제',
+      target: deletes.length > 1 ? `${deletes.length}건` : String(deletes[0]),
+      summary: deletes.length > 1 ? `${deletes.length}건 삭제` : `거래내역 삭제: ${deletes[0]}`,
+      refId: String(deletes[0] || '')
+    });
+  }
+}
+
+function recordProductionChange(entry, transactionRows, deletedProdId){
+  if(deletedProdId){
+    recordDataChange({menu:'생산일보', action:'삭제', target:String(deletedProdId), summary:`생산일보 삭제: ${deletedProdId}`, refId:String(deletedProdId)});
+    return;
+  }
+  if(entry){
+    const outputs = Array.isArray(entry.outputs) ? entry.outputs : [];
+    const outNames = outputs.map(o => o.product).filter(Boolean).slice(0, 3).join(', ');
+    recordDataChange({
+      menu:'생산일보',
+      action:'저장',
+      target: entry.job_no ? `작업 ${entry.job_no}` : (entry.id || ''),
+      summary: `${entry.date || entry.workDate || ''}${outNames ? ' / ' + outNames : ''}`,
+      refId: entry.id || ''
+    });
+  }
+}
+
+function recordPriceChange(rows, deletedIds){
+  const upserts = asArray(rows);
+  const deletes = asArray(deletedIds);
+  if(upserts.length){
+    const sample = upserts[0] || {};
+    recordDataChange({
+      menu:'단가표',
+      action: upserts.length > 1 ? '일괄 저장' : '저장',
+      target: sample.product || '',
+      summary: upserts.length > 1 ? `${upserts.length}건 저장` : dataChangeRowSummary(sample),
+      refId: sample.id || ''
+    });
+  }
+  if(deletes.length){
+    recordDataChange({
+      menu:'단가표',
+      action:'삭제',
+      target: deletes.length > 1 ? `${deletes.length}건` : String(deletes[0]),
+      summary: deletes.length > 1 ? `${deletes.length}건 삭제` : `단가 삭제: ${deletes[0]}`,
+      refId: String(deletes[0] || '')
+    });
+  }
+}
+
+function dataChangeAppDataSignatures(){
+  const sigs = {};
+  Object.entries(APP_DATA_REGISTRY).forEach(([key, reg]) => {
+    if(key === 'dataChangeLogs' || reg.readOnly) return;
+    try{ sigs[key] = gsHashText(gsStableStringify(reg.get())); }
+    catch(e){ sigs[key] = 'error'; }
+  });
+  return sigs;
+}
+
+function resetDataChangeAppDataBaseline(){
+  dataChangeAppDataSigs = dataChangeAppDataSignatures();
+}
+
+function recordAppDataChanges(){
+  const next = dataChangeAppDataSignatures();
+  if(!dataChangeAppDataSigs){
+    dataChangeAppDataSigs = next;
+    return;
+  }
+  Object.keys(next).forEach(key => {
+    if(next[key] === dataChangeAppDataSigs[key]) return;
+    recordDataChange({
+      menu: DATA_CHANGE_MENU_BY_APP_KEY[key] || APP_DATA_LABELS[key] || '보조데이터',
+      action:'저장',
+      target: APP_DATA_LABELS[key] || key,
+      summary: `${APP_DATA_LABELS[key] || key} 변경사항 저장`
+    }, {sync:false});
+  });
+  dataChangeAppDataSigs = next;
+}
+
+function dataChangeMenuOptions(){
+  const current = document.getElementById('cl-menu')?.value || '';
+  const menus = [...new Set([...DATA_CHANGE_MENU_ORDER, ...dataChangeLogs.map(l => l.menu).filter(Boolean)])];
+  const sel = document.getElementById('cl-menu');
+  if(!sel) return;
+  sel.innerHTML = '<option value="">전체 메뉴</option>' + menus.map(m => `<option value="${htmlEscape(m)}">${htmlEscape(m)}</option>`).join('');
+  sel.value = menus.includes(current) ? current : '';
+}
+
+function filteredDataChangeLogs(){
+  normalizeDataChangeLogs();
+  const from = document.getElementById('cl-from')?.value || '';
+  const to = document.getElementById('cl-to')?.value || '';
+  const menu = document.getElementById('cl-menu')?.value || '';
+  const q = String(document.getElementById('cl-search')?.value || '').trim().toLowerCase();
+  return dataChangeLogs.filter(log => {
+    const day = String(log.at || '').slice(0, 10);
+    if(from && day < from) return false;
+    if(to && day > to) return false;
+    if(menu && log.menu !== menu) return false;
+    if(q){
+      const hay = [log.menu, log.action, log.target, log.summary, log.refId].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function formatDataChangeTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(Number.isNaN(d.getTime())) return String(iso);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderDataChangeLog(){
+  dataChangeMenuOptions();
+  const rows = filteredDataChangeLogs();
+  const summary = document.getElementById('cl-summary');
+  if(summary) summary.textContent = `표시 ${rows.length.toLocaleString()}건 / 전체 ${dataChangeLogs.length.toLocaleString()}건`;
+  const tbody = document.getElementById('cl-tbody');
+  if(!tbody) return;
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">조건에 맞는 변경이력이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.slice(0, 1000).map(log => `
+    <tr>
+      <td style="white-space:nowrap;color:#667085;">${htmlEscape(formatDataChangeTime(log.at))}</td>
+      <td><span style="font-weight:800;color:#34495e;">${htmlEscape(log.menu || '')}</span></td>
+      <td>${htmlEscape(log.action || '')}</td>
+      <td>${htmlEscape(log.summary || '')}</td>
+      <td style="color:#667085;">${htmlEscape(log.target || log.refId || '')}</td>
+    </tr>
+  `).join('');
+}
+
+function resetDataChangeLogFilters(){
+  ['cl-from','cl-to','cl-search'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  const menu = document.getElementById('cl-menu'); if(menu) menu.value='';
+  renderDataChangeLog();
+}
+
 // ── 앱 전체 보조데이터 저장 (Supabase 기준) ──
 function gsSaveAppData(){
+  recordAppDataChanges();
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveAppData().catch(err => {
       console.error('Supabase appData 저장 오류:', err);
@@ -3718,6 +4033,7 @@ async function supabaseSaveTransactionRows(rows, deletedIds){
 
 function saveTransactionRows(rows, deletedIds){
   markLocalCoreChanged();
+  recordTransactionChange(rows, deletedIds);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveTransactionRows(rows, deletedIds).catch(err=>{
@@ -3753,6 +4069,7 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
 function saveProductionRows(entry, transactionRows, deletedProdId){
   markLocalCoreChanged();
   normalizeLocalTransactionIds();
+  recordProductionChange(entry, transactionRows, deletedProdId);
   safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
@@ -3794,6 +4111,7 @@ async function supabaseSavePriceRows(rows, deletedIds, forceFull=false){
 }
 
 function savePriceRows(rows, deletedIds, forceFull=false){
+  recordPriceChange(rows, deletedIds);
   safeLocalStorageSet('dbmt_prices', JSON.stringify(prices), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSavePriceRows(rows, deletedIds, forceFull).catch(err=>{
@@ -3978,6 +4296,7 @@ async function showPage(id, btn){
   if(id==='p-samsung') initSamsung();
   if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
   if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); renderLeaveDeductions(); }
+  if(id==='p-change-log') renderDataChangeLog();
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
   if(id==='p-factorysim') renderFactorySim();
   if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
@@ -7646,7 +7965,7 @@ function saveStockAdjust(){
   if(!product){ alert('조정할 품목 정보가 없습니다.'); return; }
   if(Math.abs(diff) < 0.01){ alert('현재 전산재고와 실제 재고가 같습니다.'); return; }
   const note = `재고정리: 전산 ${current.toFixed(2)}KG → 실사 ${actual.toFixed(2)}KG (${diff >= 0 ? '+' : ''}${diff.toFixed(2)}KG)${memo ? ' / ' + memo : ''}`;
-  userTransactions.push({
+  const adjustTxn = {
     id: Date.now(),
     date,
     type: '재고조정',
@@ -7668,9 +7987,10 @@ function saveStockAdjust(){
     _isStockAdjust: true,
     stockBefore: current,
     stockActual: actual
-  });
+  };
+  userTransactions.push(adjustTxn);
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  save();
+  saveTransactionRows(adjustTxn);
   closeStockAdjust();
   renderTransactions();
   renderStock();
@@ -9424,7 +9744,7 @@ function backupAllData(){
     'dbmt_employees','dbmt_leaves','dbmt_weekend_work','dbmt_leave_deductions',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
-    'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
+    'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_change_logs','dbmt_gs_url','dbmt_gs_skip'
   ];
   const backup = { _version: 2, _date: new Date().toISOString(), data: {} };
   KEYS.forEach(k => {
@@ -9678,6 +9998,7 @@ function applySupabasePayload(data){
     }
   });
   invalidateStockMap();
+  if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
 }
 
 async function supabaseInit(){
@@ -13912,6 +14233,7 @@ function saveLabelTemplate(){
    'manufacturer','phone','address'].forEach(k => { tpl[k] = v('lbl-'+k); });
   labelTemplates.unshift(tpl);
   localStorage.setItem('dbmt_label_templates', JSON.stringify(labelTemplates));
+  gsSaveAppData();
   renderLabelTemplates();
   toast('템플릿이 저장됐습니다.');
 }
@@ -13934,6 +14256,7 @@ function deleteLabelTemplate(id){
   if(!confirm('이 템플릿을 삭제할까요?')) return;
   labelTemplates = labelTemplates.filter(t=>t.id!==id);
   localStorage.setItem('dbmt_label_templates', JSON.stringify(labelTemplates));
+  gsSaveAppData();
   renderLabelTemplates();
 }
 
