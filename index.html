@@ -218,6 +218,9 @@
   <div class="nav-tab" onclick="showPage('p-costcalc',this)" id="nav-costcalc" style="color:#8e44ad;font-weight:700;">
     🧮 원가계산기
   </div>
+  <div class="nav-tab" onclick="showPage('p-costcompare',this);renderCostCompare();" id="nav-costcompare" style="color:#9b59b6;font-weight:700;">
+    📊 생산원가비교
+  </div>
   <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">
     🧾 거래명세서
   </div>
@@ -1881,6 +1884,62 @@
           <th style="text-align:center;">관리</th>
         </tr></thead>
         <tbody id="cc-history-tbody"><tr><td colspan="9" style="text-align:center;padding:20px;color:#888">저장된 계산이 없습니다.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     생산원가비교
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-costcompare">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#9b59b6;"></div>생산원가비교</div>
+      <div style="font-size:12px;color:#667085;">원가계산기에 저장된 계산 내역 중 2~3개를 선택해 비교합니다.</div>
+    </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group">
+        <label>기준안</label>
+        <select id="ccc-base" onchange="renderCostCompare()"><option value="">-- 기준안 선택 --</option></select>
+      </div>
+      <div class="form-group">
+        <label>비교안 1</label>
+        <select id="ccc-compare-1" onchange="renderCostCompare()"><option value="">-- 비교안 선택 --</option></select>
+      </div>
+      <div class="form-group">
+        <label>비교안 2</label>
+        <select id="ccc-compare-2" onchange="renderCostCompare()"><option value="">-- 선택 안 함 --</option></select>
+      </div>
+      <div class="form-group" style="flex:0;">
+        <label>&nbsp;</label>
+        <button class="btn btn-secondary btn-sm" onclick="resetCostCompare()">초기화</button>
+      </div>
+    </div>
+    <div id="ccc-hint" style="font-size:12px;color:#667085;margin-top:4px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>비교 결과</div>
+    <div id="ccc-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px;"></div>
+    <div class="tbl-wrap" style="max-height:none;">
+      <table style="font-size:12px;">
+        <thead id="ccc-head"></thead>
+        <tbody id="ccc-body">
+          <tr><td style="text-align:center;padding:20px;color:#888;">비교할 저장 내역을 선택해주세요.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>원자재 구성 비교</div>
+    <div class="tbl-wrap" style="max-height:520px;">
+      <table style="font-size:12px;">
+        <thead id="ccc-mat-head"></thead>
+        <tbody id="ccc-mat-body">
+          <tr><td style="text-align:center;padding:20px;color:#888;">비교할 저장 내역을 선택해주세요.</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -3553,6 +3612,7 @@ function renderAll(){
   if(typeof refreshLabelWorkOrderSelect === 'function' && document.getElementById('p-label')?.classList.contains('active')) refreshLabelWorkOrderSelect();
   if(typeof renderSubMaterials === 'function' && document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
   if(typeof renderFactorySim === 'function' && document.getElementById('p-factorysim')?.classList.contains('active')) renderFactorySim();
+  if(typeof renderCostCompare === 'function' && document.getElementById('p-costcompare')?.classList.contains('active')) renderCostCompare();
   if(typeof renderDataChangeLog === 'function' && document.getElementById('p-change-log')?.classList.contains('active')) renderDataChangeLog();
   if(document.getElementById('p-leaves')?.classList.contains('active')){
     renderEmployees();
@@ -4298,6 +4358,7 @@ async function showPage(id, btn){
   if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); renderLeaveDeductions(); }
   if(id==='p-change-log') renderDataChangeLog();
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
+  if(id==='p-costcompare') renderCostCompare();
   if(id==='p-factorysim') renderFactorySim();
   if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
 }
@@ -11869,6 +11930,215 @@ function renderCostHistory(){
       <button class="btn btn-sm btn-danger"    onclick="deleteCostCalc(${e.id})">삭제</button>
     </td>
   </tr>`).join('');
+}
+
+function costCompareRecordId(row){
+  return String(row?.id || '');
+}
+
+function costCompareTitle(row){
+  const date = row?.date || '';
+  const names = row?.names || '이름 없는 계산';
+  const cost = row?.costPerKg ? ` / ${fmt(row.costPerKg)}원/KG` : '';
+  return `${date} · ${names}${cost}`;
+}
+
+function costCompareOptions(selected='', blankLabel='-- 선택 --'){
+  const rows = (Array.isArray(costCalcHistory) ? costCalcHistory : [])
+    .slice()
+    .sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id || 0) - Number(a.id || 0));
+  return `<option value="">${blankLabel}</option>` + rows.map(row => {
+    const id = costCompareRecordId(row);
+    return `<option value="${htmlEscape(id)}"${id === String(selected || '') ? ' selected' : ''}>${htmlEscape(costCompareTitle(row))}</option>`;
+  }).join('');
+}
+
+function selectedCostCompareRows(){
+  const ids = ['ccc-base','ccc-compare-1','ccc-compare-2']
+    .map(id => String(document.getElementById(id)?.value || ''))
+    .filter(Boolean);
+  const seen = new Set();
+  return ids.map(id => (costCalcHistory || []).find(row => costCompareRecordId(row) === id))
+    .filter(row => {
+      const id = costCompareRecordId(row);
+      if(!row || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+}
+
+function costCompareNumber(row, field){
+  const n = Number(row?.[field]);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatCostCompareValue(value, type){
+  if(!Number.isFinite(value)) return '-';
+  if(type === 'kg') return `${fmtD(value)} KG`;
+  if(type === 'person') return value ? `${fmtD(value)} 명` : '-';
+  if(type === 'moneyKg') return value ? `${fmt(value)} 원/KG` : '-';
+  if(type === 'percent') return `${fmtD(value)} %`;
+  return value ? `${fmt(value)} 원` : '-';
+}
+
+function costCompareDelta(value, base, type, lowerBetter=false){
+  if(!Number.isFinite(value) || !Number.isFinite(base) || value === base) return '';
+  const diff = value - base;
+  const good = lowerBetter ? diff < 0 : diff > 0;
+  const sign = diff > 0 ? '+' : '';
+  const pct = base ? ` (${sign}${(diff / Math.abs(base) * 100).toFixed(1)}%)` : '';
+  const color = good ? '#1e8449' : '#c0392b';
+  return `<div style="font-size:11px;color:${color};font-weight:800;margin-top:2px;">${sign}${formatCostCompareValue(diff, type)}${pct}</div>`;
+}
+
+function costCompareMetricCell(row, baseRow, metric, idx){
+  const value = costCompareNumber(row, metric.field);
+  const base = costCompareNumber(baseRow, metric.field);
+  const delta = idx === 0 ? '<div style="font-size:11px;color:#98a2b3;margin-top:2px;">기준</div>' : costCompareDelta(value, base, metric.type, metric.lowerBetter);
+  return `${formatCostCompareValue(value, metric.type)}${delta}`;
+}
+
+function parseCostCompareMaterials(row){
+  try{
+    const parsed = JSON.parse(row?.materials || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  }catch(e){
+    return [];
+  }
+}
+
+function costCompareMaterialSummary(row){
+  const mats = parseCostCompareMaterials(row);
+  const input = mats.reduce((s,m)=>s+(Number(m.qty)||0),0);
+  const rawCost = mats.reduce((s,m)=>s+(Number(m.qty)||0)*(Number(m.price)||0),0);
+  const output = mats.reduce((s,m)=>s+(Number(m.qty)||0)*(1-(Number(m.loss)||0)/100),0);
+  const avgPrice = input ? rawCost / input : 0;
+  const lossRate = input ? (1 - output / input) * 100 : 0;
+  const names = mats.length ? mats.map(m => {
+    const parts = [
+      m.name || '미입력',
+      m.origin ? `(${m.origin})` : '',
+      m.qty ? `${fmtD(Number(m.qty))}KG` : '',
+      m.price ? `${fmt(Number(m.price))}원/KG` : '',
+      m.loss ? `로스 ${fmtD(Number(m.loss))}%` : ''
+    ].filter(Boolean);
+    return htmlEscape(parts.join(' / '));
+  }).join('<br>') : '-';
+  return {names, input, rawCost, avgPrice, lossRate};
+}
+
+function renderCostCompare(){
+  const baseEl = document.getElementById('ccc-base');
+  if(!baseEl) return;
+  const rows = Array.isArray(costCalcHistory) ? costCalcHistory : [];
+  const current = {
+    base: baseEl.value,
+    c1: document.getElementById('ccc-compare-1')?.value || '',
+    c2: document.getElementById('ccc-compare-2')?.value || '',
+  };
+  const sortedIds = rows.slice()
+    .sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id || 0) - Number(a.id || 0))
+    .map(costCompareRecordId);
+  if(!current.base && sortedIds[0]) current.base = sortedIds[0];
+  if(!current.c1 && sortedIds[1]) current.c1 = sortedIds[1];
+
+  baseEl.innerHTML = costCompareOptions(current.base, '-- 기준안 선택 --');
+  baseEl.value = current.base;
+  const c1El = document.getElementById('ccc-compare-1');
+  const c2El = document.getElementById('ccc-compare-2');
+  if(c1El){ c1El.innerHTML = costCompareOptions(current.c1, '-- 비교안 선택 --'); c1El.value = current.c1; }
+  if(c2El){ c2El.innerHTML = costCompareOptions(current.c2, '-- 선택 안 함 --'); c2El.value = current.c2; }
+
+  const selected = selectedCostCompareRows();
+  const hint = document.getElementById('ccc-hint');
+  if(hint) hint.textContent = rows.length ? `저장된 계산 내역 ${rows.length}건 중 ${selected.length}건 선택됨` : '원가계산기에서 계산 결과를 먼저 저장해주세요.';
+
+  const head = document.getElementById('ccc-head');
+  const body = document.getElementById('ccc-body');
+  const summary = document.getElementById('ccc-summary');
+  const matHead = document.getElementById('ccc-mat-head');
+  const matBody = document.getElementById('ccc-mat-body');
+  if(!head || !body || !summary || !matHead || !matBody) return;
+
+  if(selected.length < 2){
+    summary.innerHTML = '';
+    head.innerHTML = '';
+    body.innerHTML = '<tr><td style="text-align:center;padding:20px;color:#888;">비교할 저장 내역을 2개 이상 선택해주세요.</td></tr>';
+    matHead.innerHTML = '';
+    matBody.innerHTML = '<tr><td style="text-align:center;padding:20px;color:#888;">비교할 저장 내역을 2개 이상 선택해주세요.</td></tr>';
+    return;
+  }
+
+  const cheapest = selected.slice().sort((a,b)=>costCompareNumber(a,'costPerKg')-costCompareNumber(b,'costPerKg'))[0];
+  const highestProfit = selected.slice().sort((a,b)=>costCompareNumber(b,'profit')-costCompareNumber(a,'profit'))[0];
+  const base = selected[0];
+  const bestSaving = costCompareNumber(base,'costPerKg') - costCompareNumber(cheapest,'costPerKg');
+  summary.innerHTML = [
+    {label:'최저 생산단가', value:`${fmt(costCompareNumber(cheapest,'costPerKg'))} 원/KG`, sub:cheapest.names || cheapest.date, color:'#c0392b'},
+    {label:'기준 대비 절감', value:bestSaving > 0 ? `${fmt(bestSaving)} 원/KG` : '-', sub:'기준안보다 낮은 원가', color:'#1e8449'},
+    {label:'최고 매출이익', value:highestProfit.sellPrice ? `${fmt(costCompareNumber(highestProfit,'profit'))} 원` : '-', sub:highestProfit.names || highestProfit.date, color:'#27ae60'},
+  ].map(card => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:#fff;">
+      <div style="font-size:11px;color:#667085;font-weight:800;margin-bottom:4px;">${card.label}</div>
+      <div style="font-size:18px;font-weight:900;color:${card.color};">${card.value}</div>
+      <div style="font-size:11px;color:#98a2b3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${htmlEscape(card.sub || '')}</div>
+    </div>
+  `).join('');
+
+  head.innerHTML = `<tr><th style="min-width:150px;">비교 항목</th>${selected.map((row, idx)=>`
+    <th style="min-width:190px;text-align:right;">${idx === 0 ? '기준안' : '비교안 ' + idx}<br><span style="font-size:11px;color:#667085;font-weight:500;">${htmlEscape(row.date || '')}</span></th>
+  `).join('')}</tr>`;
+  const metrics = [
+    {label:'원자재', field:'names', text:true},
+    {label:'KG당 생산단가', field:'costPerKg', type:'moneyKg', lowerBetter:true},
+    {label:'생산원가 합계', field:'totalCost', type:'money', lowerBetter:true},
+    {label:'원자재비', field:'totRawCost', type:'money', lowerBetter:true},
+    {label:'경비 합계', field:'totExpCost', type:'money', lowerBetter:true},
+    {label:'총 투입중량', field:'totInput', type:'kg'},
+    {label:'실 생산중량', field:'totOutput', type:'kg'},
+    {label:'일일생산량', field:'dailyQty', type:'kg'},
+    {label:'인건비 인원수', field:'workers', type:'person', lowerBetter:true},
+    {label:'판매단가', field:'sellPrice', type:'moneyKg'},
+    {label:'판매가 합계', field:'revenue', type:'money'},
+    {label:'매출이익', field:'profit', type:'money'},
+  ];
+  body.innerHTML = metrics.map(metric => `
+    <tr>
+      <td style="font-weight:800;color:#34495e;">${metric.label}</td>
+      ${selected.map((row, idx) => `
+        <td style="text-align:right;font-weight:${metric.field === 'costPerKg' ? '900' : '600'};">
+          ${metric.text ? htmlEscape(row[metric.field] || '-') : costCompareMetricCell(row, base, metric, idx)}
+        </td>
+      `).join('')}
+    </tr>
+  `).join('');
+
+  matHead.innerHTML = `<tr>
+    <th style="min-width:150px;">구분</th><th>원자재 구성</th>
+    <th style="min-width:110px;text-align:right;">투입중량</th>
+    <th style="min-width:120px;text-align:right;">원자재비</th>
+    <th style="min-width:120px;text-align:right;">평균 매입가</th>
+    <th style="min-width:90px;text-align:right;">평균 로스율</th>
+  </tr>`;
+  matBody.innerHTML = selected.map((row, idx) => {
+    const mat = costCompareMaterialSummary(row);
+    return `<tr>
+      <td style="font-weight:800;">${idx === 0 ? '기준안' : '비교안 ' + idx}<br><span style="font-size:11px;color:#667085;">${htmlEscape(row.date || '')}</span></td>
+      <td style="line-height:1.55;">${mat.names}</td>
+      <td style="text-align:right;">${fmtD(mat.input)} KG</td>
+      <td style="text-align:right;">${fmt(mat.rawCost)} 원</td>
+      <td style="text-align:right;">${mat.avgPrice ? fmt(mat.avgPrice) + ' 원/KG' : '-'}</td>
+      <td style="text-align:right;">${fmtD(mat.lossRate)} %</td>
+    </tr>`;
+  }).join('');
+}
+
+function resetCostCompare(){
+  ['ccc-base','ccc-compare-1','ccc-compare-2'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  renderCostCompare();
 }
 
 // ══════════════════════════════════════════
