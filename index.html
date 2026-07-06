@@ -3825,9 +3825,55 @@ function dataChangeRowSummary(row){
   ].filter(Boolean).join(' / ');
 }
 
-function recordTransactionChange(rows, deletedIds){
+function dataChangeProductionOutputSummary(output){
+  if(!output) return '';
+  const qty = Number(output.qty || output.weight || output.output_weight || 0);
+  return [
+    output.product || output.name || '',
+    qty ? qty.toLocaleString('ko-KR') + 'KG' : '',
+    output.origin || '',
+    output.lot || ''
+  ].filter(Boolean).join(' / ');
+}
+
+function dataChangeProductionSummary(entry){
+  if(!entry) return '';
+  const outputs = Array.isArray(entry.outputs) ? entry.outputs : [];
+  const outputText = outputs.map(dataChangeProductionOutputSummary).filter(Boolean).slice(0, 3).join(', ');
+  const inputs = Array.isArray(entry.inputs) ? entry.inputs : [];
+  const inputText = inputs.map(input => input.product || input.name || '').filter(Boolean).slice(0, 3).join(', ');
+  return [
+    entry.date || entry.workDate || '',
+    entry.job_no ? `작업 ${entry.job_no}` : (entry.jobNo ? `작업 ${entry.jobNo}` : ''),
+    entry.job_type || entry.jobType || '',
+    outputText || entry.product || entry.name || '',
+    inputText ? `투입 ${inputText}` : '',
+    entry.note || ''
+  ].filter(Boolean).join(' / ');
+}
+
+function dataChangeProductionTarget(entry, fallbackId){
+  if(!entry) return String(fallbackId || '');
+  const outputs = Array.isArray(entry.outputs) ? entry.outputs : [];
+  const productText = outputs.map(output => output.product || output.name || '').filter(Boolean).slice(0, 2).join(', ')
+    || entry.product || entry.name || '';
+  const jobText = entry.job_no ? `작업 ${entry.job_no}` : (entry.jobNo ? `작업 ${entry.jobNo}` : '');
+  return [jobText, productText].filter(Boolean).join(' / ') || String(fallbackId || '');
+}
+
+function dataChangeRowsById(rows){
+  const map = new Map();
+  asArray(rows).forEach(row => {
+    if(row && row.id) map.set(String(row.id), row);
+  });
+  return map;
+}
+
+function recordTransactionChange(rows, deletedIds, deletedRows){
   const upserts = asArray(rows);
   const deletes = asArray(deletedIds);
+  const deletedList = asArray(deletedRows);
+  const deletedById = dataChangeRowsById(deletedList);
   if(upserts.length){
     const sample = upserts[0] || {};
     recordDataChange({
@@ -3839,37 +3885,59 @@ function recordTransactionChange(rows, deletedIds){
     });
   }
   if(deletes.length){
+    const sampleId = String(deletes[0] || '');
+    const sampleRow = deletedById.get(sampleId) || deletedList[0];
+    const sampleSummary = dataChangeRowSummary(sampleRow);
     recordDataChange({
       menu:'거래내역',
       action:'삭제',
-      target: deletes.length > 1 ? `${deletes.length}건` : String(deletes[0]),
-      summary: deletes.length > 1 ? `${deletes.length}건 삭제` : `거래내역 삭제: ${deletes[0]}`,
-      refId: String(deletes[0] || '')
+      target: deletes.length > 1 ? `${deletes.length}건` : (sampleRow?.product || sampleRow?.type || sampleId),
+      summary: deletes.length > 1 ? `${deletes.length}건 삭제${sampleSummary ? ' / 예: ' + sampleSummary : ''}` : `거래내역 삭제: ${sampleSummary || sampleId}`,
+      refId: sampleId
     });
   }
 }
 
-function recordProductionChange(entry, transactionRows, deletedProdId){
+function recordProductionChange(entry, transactionRows, deletedProdId, deletedProdEntry){
+  if(deletedProdId && entry){
+    const beforeSummary = dataChangeProductionSummary(deletedProdEntry);
+    const afterSummary = dataChangeProductionSummary(entry);
+    recordDataChange({
+      menu:'생산일보',
+      action:'수정',
+      target:dataChangeProductionTarget(entry, entry.id || deletedProdId),
+      summary:`생산일보 수정: ${beforeSummary || deletedProdId} -> ${afterSummary || entry.id || deletedProdId}`,
+      refId:entry.id || String(deletedProdId)
+    });
+    return;
+  }
   if(deletedProdId){
-    recordDataChange({menu:'생산일보', action:'삭제', target:String(deletedProdId), summary:`생산일보 삭제: ${deletedProdId}`, refId:String(deletedProdId)});
+    const summary = dataChangeProductionSummary(deletedProdEntry);
+    recordDataChange({
+      menu:'생산일보',
+      action:'삭제',
+      target:dataChangeProductionTarget(deletedProdEntry, deletedProdId),
+      summary:`생산일보 삭제: ${summary || deletedProdId}`,
+      refId:String(deletedProdId)
+    });
     return;
   }
   if(entry){
-    const outputs = Array.isArray(entry.outputs) ? entry.outputs : [];
-    const outNames = outputs.map(o => o.product).filter(Boolean).slice(0, 3).join(', ');
     recordDataChange({
       menu:'생산일보',
       action:'저장',
-      target: entry.job_no ? `작업 ${entry.job_no}` : (entry.id || ''),
-      summary: `${entry.date || entry.workDate || ''}${outNames ? ' / ' + outNames : ''}`,
+      target: dataChangeProductionTarget(entry, entry.id || ''),
+      summary: dataChangeProductionSummary(entry),
       refId: entry.id || ''
     });
   }
 }
 
-function recordPriceChange(rows, deletedIds){
+function recordPriceChange(rows, deletedIds, deletedRows){
   const upserts = asArray(rows);
   const deletes = asArray(deletedIds);
+  const deletedList = asArray(deletedRows);
+  const deletedById = dataChangeRowsById(deletedList);
   if(upserts.length){
     const sample = upserts[0] || {};
     recordDataChange({
@@ -3881,12 +3949,15 @@ function recordPriceChange(rows, deletedIds){
     });
   }
   if(deletes.length){
+    const sampleId = String(deletes[0] || '');
+    const sampleRow = deletedById.get(sampleId) || deletedList[0];
+    const sampleSummary = dataChangeRowSummary(sampleRow);
     recordDataChange({
       menu:'단가표',
       action:'삭제',
-      target: deletes.length > 1 ? `${deletes.length}건` : String(deletes[0]),
-      summary: deletes.length > 1 ? `${deletes.length}건 삭제` : `단가 삭제: ${deletes[0]}`,
-      refId: String(deletes[0] || '')
+      target: deletes.length > 1 ? `${deletes.length}건` : (sampleRow?.product || sampleId),
+      summary: deletes.length > 1 ? `${deletes.length}건 삭제${sampleSummary ? ' / 예: ' + sampleSummary : ''}` : `단가 삭제: ${sampleSummary || sampleId}`,
+      refId: sampleId
     });
   }
 }
@@ -4091,9 +4162,9 @@ async function supabaseSaveTransactionRows(rows, deletedIds){
   }
 }
 
-function saveTransactionRows(rows, deletedIds){
+function saveTransactionRows(rows, deletedIds, deletedRows){
   markLocalCoreChanged();
-  recordTransactionChange(rows, deletedIds);
+  recordTransactionChange(rows, deletedIds, deletedRows);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveTransactionRows(rows, deletedIds).catch(err=>{
@@ -4126,10 +4197,10 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
   }
 }
 
-function saveProductionRows(entry, transactionRows, deletedProdId){
+function saveProductionRows(entry, transactionRows, deletedProdId, deletedProdEntry){
   markLocalCoreChanged();
   normalizeLocalTransactionIds();
-  recordProductionChange(entry, transactionRows, deletedProdId);
+  recordProductionChange(entry, transactionRows, deletedProdId, deletedProdEntry);
   safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
@@ -4170,8 +4241,8 @@ async function supabaseSavePriceRows(rows, deletedIds, forceFull=false){
   }
 }
 
-function savePriceRows(rows, deletedIds, forceFull=false){
-  recordPriceChange(rows, deletedIds);
+function savePriceRows(rows, deletedIds, forceFull=false, deletedRows){
+  recordPriceChange(rows, deletedIds, deletedRows);
   safeLocalStorageSet('dbmt_prices', JSON.stringify(prices), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSavePriceRows(rows, deletedIds, forceFull).catch(err=>{
@@ -6620,9 +6691,10 @@ function renderTransactions(){
 }
 function deleteTransaction(id){
   if(!confirm('삭제하시겠습니까?'))return;
+  const deletedTxn = userTransactions.find(t=>String(t.id)===String(id));
   userTransactions=userTransactions.filter(t=>String(t.id)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveTransactionRows([], [id]); renderTransactions(); renderStock();
+  saveTransactionRows([], [id], deletedTxn ? [deletedTxn] : []); renderTransactions(); renderStock();
 }
 
 // ── 거래내역 수정 모달 ──
@@ -7272,8 +7344,10 @@ function saveProdEntry(){
 
   // 수정 모드: 기존 항목과 관련 트랜잭션 삭제 후 교체
   let deletedProdId = null;
+  let deletedProdEntry = null;
   if(editingProdId){
     deletedProdId = editingProdId;
+    deletedProdEntry = userProdEntries.find(e=>String(e.id)===String(editingProdId)) || null;
     userProdEntries  =userProdEntries.filter(e=>String(e.id)!==String(editingProdId));
     userTransactions =userTransactions.filter(t=>String(t._prodId)!==String(editingProdId));
     _editProdId=null;
@@ -7318,7 +7392,7 @@ function saveProdEntry(){
     }
   });
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveProductionRows(entry, productionTxns, deletedProdId);
+  saveProductionRows(entry, productionTxns, deletedProdId, deletedProdEntry);
   renderProduction();
   renderStock();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
@@ -7341,10 +7415,11 @@ function clearProdForm(){
 
 function deleteProdEntry(id){
   if(!confirm('삭제하시겠습니까?\n관련 재고(사용/생산입고)도 함께 취소됩니다.'))return;
+  const deletedProdEntry = userProdEntries.find(e=>String(e.id)===String(id)) || null;
   userProdEntries=userProdEntries.filter(e=>String(e.id)!==String(id));
   userTransactions=userTransactions.filter(t=>String(t._prodId)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveProductionRows(null, [], id); renderProduction(); renderStock(); renderTransactions();
+  saveProductionRows(null, [], id, deletedProdEntry); renderProduction(); renderStock(); renderTransactions();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
   toast('생산일보 삭제 완료. 재고가 복원됐습니다.');
 }
@@ -9004,10 +9079,12 @@ function deletePrice(i){
   const p = prices[i];
   if(!confirm(`삭제하시겠습니까?
 
-${p.product} / ${p.origin||'-'} — ${p.price.toLocaleString()}원`)) return;
+  ${p.product} / ${p.origin||'-'} — ${p.price.toLocaleString()}원`)) return;
   const deleteId = p && p.id;
+  const logDeleteId = deleteId || [p?.product, p?.origin, p?.trader].filter(Boolean).join('|') || String(i);
+  const deletedPrice = p ? {...p, id: logDeleteId} : null;
   prices.splice(i,1);
-  savePriceRows([], deleteId ? [deleteId] : [], !deleteId);
+  savePriceRows([], [logDeleteId], !deleteId, deletedPrice ? [deletedPrice] : []);
   cancelEditPrice();
   renderPrices();
   toast(`삭제 완료: ${p.product}`);
