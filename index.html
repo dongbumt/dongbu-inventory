@@ -10438,8 +10438,28 @@ function saveDocChecks(){
   localStorage.setItem('dbmt_doc_checks', JSON.stringify(docChecks));
   gsSaveAppData();
 }
+function normalizeDocLot(lot){
+  return String(lot||'').trim().replace(/[\s\-‐‑‒–—―]/g,'').toUpperCase();
+}
 function getDocKey(product, origin, lot){
+  return normalizeDocLot(lot) || (product+'||'+origin);
+}
+function getLegacyDocKey(product, origin, lot){
   return String(lot||'').trim() || (product+'||'+origin);
+}
+function getDocKeys(product, origin, lot){
+  const keys = [getDocKey(product, origin, lot), getLegacyDocKey(product, origin, lot)].filter(Boolean);
+  const lotKey = normalizeDocLot(lot);
+  if(lotKey){
+    Object.keys(docChecks || {}).forEach(key=>{
+      if(String(key).includes('||')) return;
+      if(normalizeDocLot(key) === lotKey) keys.push(key);
+    });
+  }
+  return [...new Set(keys)];
+}
+function isDocChecked(row){
+  return getDocKeys(row.product, row.origin, row.lot).some(key=>!!docChecks[key]);
 }
 function isImported(origin){
   return !String(origin||'').includes('국내');
@@ -10447,11 +10467,16 @@ function isImported(origin){
 function getRequiredDoc(origin){
   return isImported(origin) ? '수입신고필증' : '도축검사증명서';
 }
-function toggleDocCheck(key){
-  if(!docChecks[key]) docChecks[key] = false;
-  docChecks[key] = !docChecks[key];
+function toggleDocCheckKeys(keys){
+  const list = asArray(keys).filter(Boolean);
+  if(!list.length) return;
+  const next = !list.some(key=>!!docChecks[key]);
+  list.forEach(key=>{ docChecks[key] = next; });
   saveDocChecks();
   renderDocCheck();
+}
+function toggleDocCheck(key){
+  toggleDocCheckKeys([key]);
 }
 function renderDocCheck(){
   const filterEl = document.getElementById('doc-filter');
@@ -10468,10 +10493,11 @@ function renderDocCheck(){
   const rows = [];
   inbounds.forEach(t=>{
     const lot = String(t.lot||'').trim();
-    if(lot && seenLot.has(lot)) return;
-    if(lot) seenLot.add(lot);
-    const key = getDocKey(t.product, t.origin, t.lot);
-    rows.push({...t, _key: key});
+    const lotKey = normalizeDocLot(lot);
+    if(lotKey && seenLot.has(lotKey)) return;
+    if(lotKey) seenLot.add(lotKey);
+    const keys = getDocKeys(t.product, t.origin, t.lot);
+    rows.push({...t, _key: keys[0], _keys: keys});
   });
 
   let originRows = rows;
@@ -10481,7 +10507,7 @@ function renderDocCheck(){
   const domesticCount = rows.filter(r=>!isImported(r.origin)).length;
   const importedCount = rows.filter(r=>isImported(r.origin)).length;
   const total = originRows.length;
-  const done  = originRows.filter(r=>docChecks[r._key]).length;
+  const done  = originRows.filter(r=>isDocChecked(r)).length;
   const todo  = total - done;
 
   const statsEl = document.getElementById('doc-stats');
@@ -10494,8 +10520,8 @@ function renderDocCheck(){
   `;
 
   let filtered = originRows;
-  if(filter==='미수령') filtered = originRows.filter(r=>!docChecks[r._key]);
-  else if(filter==='수령완료') filtered = originRows.filter(r=>!!docChecks[r._key]);
+  if(filter==='미수령') filtered = originRows.filter(r=>!isDocChecked(r));
+  else if(filter==='수령완료') filtered = originRows.filter(r=>isDocChecked(r));
   if(q) filtered = filtered.filter(r=>(r.product+r.origin+r.lot+r.date).toLowerCase().includes(q));
 
   const tbody = document.getElementById('doc-tbody');
@@ -10505,7 +10531,7 @@ function renderDocCheck(){
     return;
   }
   tbody.innerHTML = filtered.map(r=>{
-    const checked = !!docChecks[r._key];
+    const checked = isDocChecked(r);
     const doc = getRequiredDoc(r.origin);
     const imported = isImported(r.origin);
     const docColor = imported ? '#8e44ad' : '#2980b9';
@@ -10513,7 +10539,7 @@ function renderDocCheck(){
     const checkStyle = checked
       ? 'background:var(--green);color:#fff;border-color:var(--green);'
       : 'background:#fff;color:#ccc;border-color:#ccc;';
-    const keyEsc = r._key.replace(/'/g, "\'");
+    const keysArg = htmlEscape(JSON.stringify(r._keys || [r._key]));
     return `<tr style="${rowBg}">
       <td style="font-size:11px;color:#888">${r.date||'-'}</td>
       <td><strong>${r.product}</strong></td>
@@ -10523,7 +10549,7 @@ function renderDocCheck(){
         background:${imported?'#f3e8ff':'#e8f4fd'};padding:2px 8px;border-radius:10px;">
         ${doc}</span></td>
       <td style="text-align:center;">
-        <button onclick="toggleDocCheck('${keyEsc}')"
+        <button onclick="toggleDocCheckKeys(${keysArg})"
           style="width:32px;height:32px;border-radius:50%;border:2px solid;
           font-size:16px;cursor:pointer;transition:all .2s;${checkStyle}">
           ${checked ? '✓' : ''}
