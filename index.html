@@ -1098,23 +1098,12 @@
     </div>
     <div class="form-row">
       <div class="form-group"><label>출고일 선택</label>
-        <select id="inv-date" onchange="onInvoiceComboChange()"><option value="">-- 날짜 선택 --</option></select>
+        <select id="inv-date" onchange="loadInvoiceByDate()"><option value="">-- 날짜 선택 --</option></select>
       </div>
       <div class="form-group"><label>거래처</label>
         <input id="inv-trader" readonly style="background:#f8f9fa;"></div>
       <div class="form-group"><label>전 미수금액 (자동)</label>
         <input id="inv-prev-unpaid" readonly style="background:#f8f9fa;color:var(--red);font-weight:700;"></div>
-    </div>
-    <div class="form-row" style="align-items:end;">
-      <div class="form-group" style="flex:0 0 auto;"><label>기간 시작</label>
-        <input type="date" id="inv-from" style="width:145px;font-size:12px;"></div>
-      <div class="form-group" style="flex:0 0 auto;"><label>기간 종료</label>
-        <input type="date" id="inv-to" style="width:145px;font-size:12px;"></div>
-      <div class="form-group" style="flex:0 0 auto;"><label>&nbsp;</label>
-        <button class="btn btn-primary btn-sm" onclick="exportInvoiceRange()">기간 인쇄</button></div>
-      <div style="font-size:11px;color:#666;line-height:1.6;padding-bottom:4px;">
-        날짜/거래처를 선택하면 해당 거래처만, 선택하지 않으면 기간 내 거래처별로 거래명세서를 출력합니다.
-      </div>
     </div>
   </div>
   <div class="card">
@@ -8692,33 +8681,6 @@ function initInvoiceDates(){
 
   // 이전 선택 복원 시도
   if(saved) sel.value = saved;
-
-  const fallbackDate = (sel.value ? sel.value.split('|')[0] : '') || allCombos[0]?.date || localDateString();
-  const fromEl = document.getElementById('inv-from');
-  const toEl = document.getElementById('inv-to');
-  if(fromEl && !fromEl.value) fromEl.value = fallbackDate;
-  if(toEl && !toEl.value) toEl.value = fallbackDate;
-}
-
-function getSelectedInvoiceCombo(){
-  const combo = document.getElementById('inv-date')?.value || '';
-  if(!combo) return {date:'', trader:''};
-  const sepIdx = combo.indexOf('|');
-  return {
-    date: sepIdx>=0 ? combo.slice(0, sepIdx) : combo,
-    trader: sepIdx>=0 ? combo.slice(sepIdx+1) : ''
-  };
-}
-
-function onInvoiceComboChange(){
-  const {date} = getSelectedInvoiceCombo();
-  if(date){
-    const fromEl = document.getElementById('inv-from');
-    const toEl = document.getElementById('inv-to');
-    if(fromEl) fromEl.value = date;
-    if(toEl) toEl.value = date;
-  }
-  loadInvoiceByDate();
 }
 
 const INVOICE_UNPAID_CONFIG = {
@@ -8785,12 +8747,7 @@ function calcPrevUnpaid(date, trader){
 }
 function loadInvoiceByDate(){
   const combo=document.getElementById('inv-date').value;
-  if(!combo){
-    document.getElementById('invoice-preview').innerHTML='';
-    document.getElementById('inv-trader').value='';
-    document.getElementById('inv-prev-unpaid').value='';
-    return;
-  }
+  if(!combo){document.getElementById('invoice-preview').innerHTML='';return;}
 
   // 값 형식: "2026-04-16|동원홈푸드"
   const sepIdx = combo.indexOf('|');
@@ -9472,241 +9429,6 @@ function exportInvoiceExcel(){
 </style></head><body>`+area.outerHTML+`</body></html>`);
   w.document.close();
   setTimeout(()=>{w.print();},400);
-}
-
-function invoiceKoreanDate(date){
-  const [yr,mo,da] = String(date || '').split('-');
-  if(!yr || !mo || !da) return date || '';
-  return `${yr}년${mo}월${da}일`;
-}
-
-function invoiceShortDate(date){
-  const [,mo,da] = String(date || '').split('-');
-  return mo && da ? `${mo}.${da}` : (date || '');
-}
-
-function getInvoicePrintRange(){
-  const selected = getSelectedInvoiceCombo();
-  const fallback = selected.date || localDateString();
-  const start = document.getElementById('inv-from')?.value || fallback;
-  const end = document.getElementById('inv-to')?.value || start;
-  if(start > end){
-    alert('기간 시작일이 종료일보다 늦습니다.');
-    return null;
-  }
-  return { start, end, selectedTrader: selected.trader || '' };
-}
-
-function getInvoiceRangeTraders(start, end, selectedTrader=''){
-  if(selectedTrader) return [selectedTrader];
-  const traders = new Set();
-  userTransactions.forEach(t => {
-    if(t.type === '출고' && t.date >= start && t.date <= end && String(t.trader || '').trim()){
-      traders.add(String(t.trader || '').trim());
-    }
-  });
-  EXCEL_INVOICES.forEach(inv => {
-    if(inv.date >= start && inv.date <= end && String(inv.trader || '').trim()){
-      traders.add(String(inv.trader || '').trim());
-    }
-  });
-  return [...traders].sort((a,b)=>a.localeCompare(b,'ko'));
-}
-
-function getInvoiceRangeItems(start, end, trader){
-  const name = String(trader || '').trim();
-  const outs = userTransactions
-    .filter(t => t.type === '출고' && t.date >= start && t.date <= end && String(t.trader || '').trim() === name)
-    .sort((a,b)=>
-      String(a.date || '').localeCompare(String(b.date || '')) ||
-      String(a.product || '').localeCompare(String(b.product || ''), 'ko') ||
-      String(a.lot || '').localeCompare(String(b.lot || ''))
-    );
-  const userDates = new Set(outs.map(t => t.date).filter(Boolean));
-  const items = outs.map(t => ({
-    date: t.date,
-    dateLabel: invoiceShortDate(t.date),
-    product: t.product,
-    origin: t.origin || '',
-    lot: t.lot || '',
-    weight: Number(t.weight || 0),
-    price: Number(t.price || 0),
-    amount: invoiceOutAmount(t),
-    _id: t.id
-  }));
-  EXCEL_INVOICES
-    .filter(inv => inv.date >= start && inv.date <= end && String(inv.trader || '').trim() === name && !userDates.has(inv.date))
-    .sort((a,b)=>String(a.date || '').localeCompare(String(b.date || '')))
-    .forEach(inv => {
-      (inv.items || []).forEach((it, idx) => {
-        items.push({
-          date: inv.date,
-          dateLabel: it.date || invoiceShortDate(inv.date),
-          product: it.product || '',
-          origin: it.origin || '',
-          lot: it.lot || '',
-          weight: Number(it.weight || 0),
-          price: Number(it.price || 0),
-          amount: Number(it.amount || 0) || Math.round((Number(it.price || 0) || 0) * (Number(it.weight || 0) || 0)),
-          _id: it._id || `excel_${inv.date}_${idx}`
-        });
-      });
-    });
-  return items.sort((a,b)=>
-    String(a.date || '').localeCompare(String(b.date || '')) ||
-    String(a.product || '').localeCompare(String(b.product || ''), 'ko') ||
-    String(a.lot || '').localeCompare(String(b.lot || ''))
-  );
-}
-
-function buildInvoicePrintPageHTML({start, end, trader, items, printId='' }){
-  const totalWeight = items.reduce((s,i)=>s+Number(i.weight || 0),0);
-  const totalAmount = items.reduce((s,i)=>s+Number(i.amount || 0),0);
-  const prevUnpaid  = calcPrevUnpaid(start, trader);
-  const totalUnpaid = prevUnpaid + totalAmount;
-  const ti = getTraderInfo(trader);
-  const itemRows = items.map(item => {
-    const amount = Number(item.amount || 0);
-    return `<tr>
-      <td style="text-align:center">${htmlEscape(item.dateLabel || invoiceShortDate(item.date))}</td>
-      <td>${htmlEscape(item.product || '')}</td>
-      <td style="text-align:center">Box</td>
-      <td style="text-align:right">${Number(item.weight || 0).toFixed(2)}</td>
-      <td style="text-align:right">${Number(item.price || 0).toLocaleString()}</td>
-      <td style="text-align:right">${Math.round(amount).toLocaleString()}</td>
-      <td></td>
-      <td style="text-align:right">${Math.round(amount).toLocaleString()}</td>
-    </tr>
-    <tr style="background:#fafafa;">
-      <td colspan="8" style="font-size:10px;color:#666;padding:3px 12px;">
-        ${htmlEscape(item.origin || '')}　이력번호 : ${htmlEscape(item.lot || '')}
-      </td>
-    </tr>`;
-  }).join('');
-
-  return `
-  <div class="invoice-preview invoice-print-page"${printId ? ` id="${printId}"` : ''}>
-    <div class="inv-title">거　래　명　세　서</div>
-    <div style="font-size:11px;margin-bottom:8px;color:#666;text-align:center;">
-      거래기간 : ${invoiceKoreanDate(start)} ～ ${invoiceKoreanDate(end)}　　
-      입금계좌 : 기업(법인) 115-146014-01-014 주식회사동부엠티
-    </div>
-
-    <div class="inv-row">
-      <div class="inv-box">
-        <div class="inv-box-title" style="background:#1a252f;color:#fff;padding:4px;border-radius:4px 4px 0 0;margin:-10px -10px 8px;">공　급　자</div>
-        <div class="inv-line"><span>등록번호</span><span>495-88-01108</span></div>
-        <div class="inv-line"><span>상호</span><span style="font-weight:600;">주식회사 동부엠티</span></div>
-        <div class="inv-line"><span>대표</span><span>이창성</span></div>
-        <div class="inv-line"><span>주소</span><span style="font-size:10px;">인천광역시 서구 소담2로 36, 2동 201호</span></div>
-        <div class="inv-line"><span>업태</span><span>도매및소매업, 제조업</span></div>
-        <div class="inv-line"><span>전화</span><span>070-4609-9290</span></div>
-        <div class="inv-line"><span>팩스</span><span>02-589-6417</span></div>
-      </div>
-      <div class="inv-box">
-        <div class="inv-box-title" style="background:#2980b9;color:#fff;padding:4px;border-radius:4px 4px 0 0;margin:-10px -10px 8px;">공급 받는 자</div>
-        <div class="inv-line"><span>등록번호</span><span>${htmlEscape(ti.regno || '')}</span></div>
-        <div class="inv-line"><span>상호</span><span style="font-weight:600;">${htmlEscape(ti.fullname || trader)}</span></div>
-        <div class="inv-line"><span>대표</span><span>${htmlEscape(ti.ceo || '')}</span></div>
-        <div class="inv-line"><span>주소</span><span style="font-size:10px;">${htmlEscape(ti.addr || '')}</span></div>
-        <div class="inv-line"><span>업태</span><span>${htmlEscape(ti.biz || '')}</span></div>
-      </div>
-    </div>
-
-    <div class="tbl-wrap" style="margin:10px 0;border-radius:6px;">
-      <table style="font-size:11px;">
-        <thead>
-          <tr style="background:#1a252f;color:#fff;">
-            <th style="text-align:center;width:60px;">일자</th>
-            <th>상품명</th>
-            <th style="text-align:center;width:45px;">Box</th>
-            <th style="text-align:right;width:70px;">중량</th>
-            <th style="text-align:right;width:75px;">단가</th>
-            <th style="text-align:right;width:90px;">공급가액</th>
-            <th style="text-align:right;width:55px;">부가세</th>
-            <th style="text-align:right;width:90px;">합계금액</th>
-          </tr>
-        </thead>
-        <tbody>${itemRows}</tbody>
-        <tfoot>
-          <tr style="background:#f0f4f8;font-weight:700;border-top:2px solid #1a252f;">
-            <td colspan="3" style="text-align:center;">합　　계</td>
-            <td style="text-align:right;">${totalWeight.toFixed(2)}</td>
-            <td></td>
-            <td style="text-align:right;">${Math.round(totalAmount).toLocaleString()}</td>
-            <td></td>
-            <td style="text-align:right;">${Math.round(totalAmount).toLocaleString()}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;">
-      <div style="background:#fafafa;border:1px solid #ddd;border-radius:6px;padding:10px;font-size:10px;color:#666;line-height:1.8;">
-        <strong style="color:#333;">원산지 표시 의무 이행 동보</strong><br>
-        매입한 물품은 최종판매 단계까지 한글원산지 표시를 이행하도록 하여야 하며,<br>
-        특히 제3자 양도 시는 동 사항을 서면으로 통보하여 합.<br>
-        물건에 하자 또는 상이품이 있을 시, 거래명세서 작성일로 부터 1주일<br>
-        이내에만 반품이 가능하며, 검수의 의무는 공급받는자에게 있습니다.
-      </div>
-      <div style="text-align:right;white-space:nowrap;">
-        <div style="display:flex;justify-content:space-between;gap:24px;padding:6px 10px;font-size:12px;">
-          <span style="color:#888;">전 미수금액</span>
-          <span style="color:#e74c3c;font-weight:700;">${Math.round(prevUnpaid).toLocaleString()} 원</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;gap:24px;padding:6px 10px;font-size:14px;background:#1a252f;color:#fff;border-radius:6px;margin-top:4px;">
-          <span>총 미수금액</span>
-          <span style="font-weight:700;">${Math.round(totalUnpaid).toLocaleString()} 원</span>
-        </div>
-      </div>
-    </div>
-  </div>`;
-}
-
-function exportInvoiceRange(){
-  const range = getInvoicePrintRange();
-  if(!range) return;
-  const traders = getInvoiceRangeTraders(range.start, range.end, range.selectedTrader);
-  if(!traders.length){
-    alert('선택한 기간에 출고 거래처가 없습니다.');
-    return;
-  }
-  const pages = traders
-    .map(trader => ({trader, items:getInvoiceRangeItems(range.start, range.end, trader)}))
-    .filter(page => page.items.length);
-  if(!pages.length){
-    alert('선택한 기간에 거래명세서로 출력할 출고 내역이 없습니다.');
-    return;
-  }
-  const pagesHTML = pages.map(page => buildInvoicePrintPageHTML({
-    start: range.start,
-    end: range.end,
-    trader: page.trader,
-    items: page.items
-  })).join('');
-  const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html lang="ko"><head>
-    <meta charset="UTF-8">
-    <title>거래명세서 ${range.start}~${range.end}</title>
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0;}
-      body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:11px;color:#222;padding:10mm;}
-      .invoice-preview{max-width:100%;margin-bottom:12mm;}
-      .invoice-print-page{page-break-inside:avoid;}
-      .invoice-print-page:not(:last-child){page-break-after:always;}
-      .inv-title{text-align:center;font-size:18px;font-weight:700;letter-spacing:4px;margin-bottom:8px;}
-      .inv-row{display:flex;gap:10px;margin-bottom:8px;}
-      .inv-box{flex:1;border:1px solid #aaa;border-radius:4px;padding:8px;}
-      .inv-box-title{font-weight:700;background:#1a252f;color:#fff;padding:3px 6px;border-radius:3px 3px 0 0;margin:-8px -8px 6px;font-size:11px;text-align:center;}
-      .inv-line{display:flex;justify-content:space-between;padding:1px 0;font-size:10px;gap:10px;}
-      table{width:100%;border-collapse:collapse;margin:8px 0;}
-      th{background:#1a252f;color:#fff;padding:6px 8px;text-align:center;font-size:10px;}
-      td{padding:5px 8px;border-bottom:1px solid #eee;font-size:10px;}
-      tfoot tr{background:#f0f4f8;font-weight:700;border-top:2px solid #1a252f;}
-      @media print{@page{size:A4;margin:10mm;}body{padding:0;}.invoice-preview{margin-bottom:0;}}
-    </style></head><body>${pagesHTML}</body></html>`);
-  w.document.close();
-  setTimeout(()=>{w.print();},500);
 }
 function exportShipLogExcel(){
   const date=document.getElementById('ship-date').value;
