@@ -1098,12 +1098,20 @@
     </div>
     <div class="form-row">
       <div class="form-group"><label>출고일 선택</label>
-        <select id="inv-date" onchange="loadInvoiceByDate()"><option value="">-- 날짜 선택 --</option></select>
+        <select id="inv-date" onchange="onInvoiceComboChange()"><option value="">-- 날짜 선택 --</option></select>
       </div>
       <div class="form-group"><label>거래처</label>
         <input id="inv-trader" readonly style="background:#f8f9fa;"></div>
       <div class="form-group"><label>전 미수금액 (자동)</label>
         <input id="inv-prev-unpaid" readonly style="background:#f8f9fa;color:var(--red);font-weight:700;"></div>
+    </div>
+    <div class="form-row" style="align-items:end;">
+      <div class="form-group" style="flex:0 0 auto;"><label>기간 시작</label>
+        <input type="date" id="inv-from" style="width:145px;font-size:12px;"></div>
+      <div class="form-group" style="flex:0 0 auto;"><label>기간 종료</label>
+        <input type="date" id="inv-to" style="width:145px;font-size:12px;"></div>
+      <div class="form-group" style="flex:0 0 auto;"><label>&nbsp;</label>
+        <button class="btn btn-primary btn-sm" onclick="exportInvoiceRange()">기간 인쇄</button></div>
     </div>
   </div>
   <div class="card">
@@ -8681,6 +8689,24 @@ function initInvoiceDates(){
 
   // 이전 선택 복원 시도
   if(saved) sel.value = saved;
+
+  const baseDate = (sel.value ? sel.value.split('|')[0] : '') || allCombos[0]?.date || localDateString();
+  const fromEl = document.getElementById('inv-from');
+  const toEl = document.getElementById('inv-to');
+  if(fromEl && !fromEl.value) fromEl.value = baseDate;
+  if(toEl && !toEl.value) toEl.value = baseDate;
+}
+
+function onInvoiceComboChange(){
+  const combo = document.getElementById('inv-date')?.value || '';
+  const date = combo ? combo.split('|')[0] : '';
+  if(date){
+    const fromEl = document.getElementById('inv-from');
+    const toEl = document.getElementById('inv-to');
+    if(fromEl) fromEl.value = date;
+    if(toEl) toEl.value = date;
+  }
+  loadInvoiceByDate();
 }
 
 const INVOICE_UNPAID_CONFIG = {
@@ -9429,6 +9455,102 @@ function exportInvoiceExcel(){
 </style></head><body>`+area.outerHTML+`</body></html>`);
   w.document.close();
   setTimeout(()=>{w.print();},400);
+}
+
+function getInvoicePrintRange(){
+  const sel = document.getElementById('inv-date');
+  const selectedDate = sel?.value ? sel.value.split('|')[0] : '';
+  const fallback = selectedDate || localDateString();
+  const start = document.getElementById('inv-from')?.value || fallback;
+  const end = document.getElementById('inv-to')?.value || start;
+  if(start > end){
+    alert('기간 시작일이 종료일보다 늦습니다.');
+    return null;
+  }
+  return {start, end};
+}
+
+function getInvoiceCombosInRange(start, end){
+  const comboMap = new Map();
+  userTransactions.forEach(t => {
+    if(t.type !== '출고' || !t.date || t.date < start || t.date > end) return;
+    const trader = t.trader || '';
+    comboMap.set(t.date + '|' + trader, {date:t.date, trader});
+  });
+  EXCEL_INVOICES.forEach(inv => {
+    if(!inv.date || inv.date < start || inv.date > end) return;
+    const trader = inv.trader || '';
+    comboMap.set(inv.date + '|' + trader, {date:inv.date, trader});
+  });
+  return [...comboMap.values()]
+    .sort((a,b)=>
+      String(a.date || '').localeCompare(String(b.date || '')) ||
+      String(a.trader || '').localeCompare(String(b.trader || ''), 'ko')
+    )
+    .map(c => c.date + '|' + c.trader);
+}
+
+function exportInvoiceRange(){
+  const range = getInvoicePrintRange();
+  if(!range) return;
+  const combos = getInvoiceCombosInRange(range.start, range.end);
+  if(!combos.length){
+    alert('선택한 기간에 거래명세서로 출력할 출고 내역이 없습니다.');
+    return;
+  }
+
+  const sel = document.getElementById('inv-date');
+  const preview = document.getElementById('invoice-preview');
+  const traderEl = document.getElementById('inv-trader');
+  const unpaidEl = document.getElementById('inv-prev-unpaid');
+  const prevValue = sel?.value || '';
+  const prevPreview = preview?.innerHTML || '';
+  const prevTrader = traderEl?.value || '';
+  const prevUnpaid = unpaidEl?.value || '';
+  const pages = [];
+
+  combos.forEach(combo => {
+    if(sel) sel.value = combo;
+    loadInvoiceByDate();
+    const area = document.getElementById('inv-print-area');
+    if(area) pages.push(area.outerHTML);
+  });
+
+  if(sel) sel.value = prevValue;
+  if(prevValue) loadInvoiceByDate();
+  else{
+    if(preview) preview.innerHTML = prevPreview;
+    if(traderEl) traderEl.value = prevTrader;
+    if(unpaidEl) unpaidEl.value = prevUnpaid;
+  }
+
+  if(!pages.length){
+    alert('선택한 기간에 출력 가능한 거래명세서가 없습니다.');
+    return;
+  }
+
+  const pagesHTML = pages.join('<div style="page-break-after:always"></div>');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head>
+    <meta charset="UTF-8">
+    <title>거래명세서 ${range.start}~${range.end}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:11px;color:#222;padding:10mm;}
+      .invoice-preview{max-width:100%;page-break-inside:avoid;}
+      .inv-title{text-align:center;font-size:18px;font-weight:700;letter-spacing:4px;margin-bottom:8px;}
+      .inv-row{display:flex;gap:10px;margin-bottom:8px;}
+      .inv-box{flex:1;border:1px solid #aaa;border-radius:4px;padding:8px;}
+      .inv-box-title{font-weight:700;background:#1a252f;color:#fff;padding:3px 6px;border-radius:3px 3px 0 0;margin:-8px -8px 6px;font-size:11px;text-align:center;}
+      .inv-line{display:flex;justify-content:space-between;padding:1px 0;font-size:10px;}
+      table{width:100%;border-collapse:collapse;margin:8px 0;}
+      th{background:#1a252f;color:#fff;padding:6px 8px;text-align:center;font-size:10px;}
+      td{padding:5px 8px;border-bottom:1px solid #eee;font-size:10px;}
+      tfoot tr{background:#f0f4f8;font-weight:700;border-top:2px solid #1a252f;}
+      @media print{@page{size:A4;margin:10mm;}body{padding:0;}}
+    </style></head><body>`+pagesHTML+`</body></html>`);
+  w.document.close();
+  setTimeout(()=>{w.print();},500);
 }
 function exportShipLogExcel(){
   const date=document.getElementById('ship-date').value;
