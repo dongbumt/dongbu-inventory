@@ -4265,7 +4265,35 @@ function savePriceRows(rows, deletedIds, forceFull=false, deletedRows){
 
 async function supabaseSaveAppData(){
   const password = requireSupabasePassword();
-  await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData()});
+  await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData({exclude:['docChecks']})});
+}
+
+async function supabaseSaveAppDataKeys(keys){
+  const password = requireSupabasePassword();
+  const payload = {};
+  asArray(keys).forEach(key => {
+    const reg = APP_DATA_REGISTRY[key];
+    if(!reg || reg.readOnly) return;
+    try{ payload[key] = reg.get(); }
+    catch(e){ console.warn('Supabase appData collect failed:', key, e); }
+  });
+  if(keys && !payload.dataChangeLogs && APP_DATA_REGISTRY.dataChangeLogs){
+    payload.dataChangeLogs = dataChangeLogs;
+  }
+  if(!Object.keys(payload).length) return;
+  await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: payload});
+}
+
+function gsSaveAppDataKeys(keys, label='보조데이터'){
+  recordAppDataChanges();
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseSaveAppDataKeys(keys).catch(err => {
+      console.error(`Supabase ${label} 저장 오류:`, err);
+      gsShowSync(`⚠ Supabase ${label} 저장 실패 — 로컬 데이터는 보존됨`, true);
+    });
+    return;
+  }
+  gsShowSync(`⚠ Supabase 연결 전이라 ${label}는 로컬에만 저장되었습니다`, true);
 }
 
 function gsAssertCanWriteCoreData(nextData){
@@ -4430,7 +4458,7 @@ async function showPage(id, btn){
   if(id==='p-invoice') initInvoiceDates();
   if(id==='p-shiplog') initShipDates();
   if(id==='p-prices'){ cancelEditPrice(); renderPrices(); }
-  if(id==='p-doccheck') renderDocCheck();
+  if(id==='p-doccheck') openDocCheckPage();
   if(id==='p-traders') renderTraders();
   if(id==='p-samsung') initSamsung();
   if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
@@ -10077,9 +10105,11 @@ async function sbRpc(fnName, body){
   return data;
 }
 
-function sbCollectAppData(){
+function sbCollectAppData(options={}){
+  const exclude = new Set(asArray(options.exclude));
   const payload = {};
   Object.entries(APP_DATA_REGISTRY).forEach(([key, reg]) => {
+    if(exclude.has(key)) return;
     if(reg.readOnly) return;
     try { payload[key] = reg.get(); }
     catch(e) { console.warn('Supabase appData collect failed:', key, e); }
@@ -10411,6 +10441,9 @@ function renderTraders(){
 
 // ─── 서류체크 ───────────────────────────────────────────
 let docChecks = JSON.parse(localStorage.getItem('dbmt_doc_checks')||'{}');
+let docChecksRevision = 0;
+let docChecksRefreshPromise = null;
+let docChecksLastRefreshAt = 0;
 
 // ─── 단가표 정렬 상태 ───────────────────────────────────────
 let priceSortKey = 'product';
@@ -10435,8 +10468,56 @@ function stockSort(key){
 }
 
 function saveDocChecks(){
+  docChecksRevision++;
   localStorage.setItem('dbmt_doc_checks', JSON.stringify(docChecks));
-  gsSaveAppData();
+  gsSaveAppDataKeys(['docChecks'], '서류체크');
+}
+
+async function refreshDocChecksFromSupabase(force=false){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return false;
+  const password = getSupabasePassword();
+  if(!password) return false;
+  const now = Date.now();
+  if(!force && now - docChecksLastRefreshAt < 5000) return false;
+  if(docChecksRefreshPromise) return docChecksRefreshPromise;
+
+  const startRevision = docChecksRevision;
+  docChecksRefreshPromise = (async () => {
+    const data = await sbRpc('dbmt_get_all', {p_password: password});
+    const remote = data?.appData?.docChecks;
+    docChecksLastRefreshAt = Date.now();
+    if(docChecksRevision !== startRevision) return false;
+    if(remote && typeof remote === 'object' && !Array.isArray(remote)){
+      const before = JSON.stringify(docChecks || {});
+      docChecks = remote;
+      cacheAppDataValue('docChecks', APP_DATA_REGISTRY.docChecks, docChecks);
+      if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
+      return before !== JSON.stringify(docChecks || {});
+    }
+    return false;
+  })();
+
+  try{
+    return await docChecksRefreshPromise;
+  } finally {
+    docChecksRefreshPromise = null;
+  }
+}
+
+function openDocCheckPage(){
+  renderDocCheck();
+  refreshDocChecksFromSupabase(true)
+    .then(changed => {
+      if(changed && document.getElementById('p-doccheck')?.classList.contains('active')){
+        renderDocCheck();
+      }
+    })
+    .catch(err => {
+      console.warn('서류체크 최신 상태 불러오기 실패:', err);
+      if(document.getElementById('p-doccheck')?.classList.contains('active')){
+        gsShowSync('⚠ 서류체크 최신 수령 상태를 불러오지 못했습니다', true);
+      }
+    });
 }
 function normalizeDocLot(lot){
   return String(lot||'').trim().replace(/[\s\-‐‑‒–—―]/g,'').toUpperCase();
