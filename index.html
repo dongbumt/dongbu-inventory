@@ -1175,7 +1175,11 @@
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group">
         <label>품목명</label>
-        <input id="pr-product" list="product-list" placeholder="예) 돈등심(작업)" autocomplete="off">
+        <div style="position:relative;">
+          <input id="pr-product" placeholder="품목명 검색" autocomplete="off"
+            oninput="onPriceProductSearch()" onfocus="showPriceProductSuggestions()" onblur="hidePriceProductSuggestionsSoon()">
+          <div id="pr-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
+        </div>
       </div>
       <div class="form-group" style="max-width:160px;">
         <label>원산지</label>
@@ -9020,7 +9024,95 @@ function loadShipLog(){
 // ─── 단가표 ───────────────────────────────────────────
 // ─── 단가표 CRUD ───────────────────────────────────────────
 
+function ensurePriceProductSourceReady(){
+  if(labelProducts.length && typeof migrateLabelProducts === 'function' && !ensurePriceProductSourceReady._migrated){
+    ensurePriceProductSourceReady._migrated = true;
+    migrateLabelProducts();
+  }
+}
+
+function getPriceProductNames(){
+  ensurePriceProductSourceReady();
+  return [...new Set((labelProducts || []).map(p => p.name).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'ko'));
+}
+
+function getCanonicalPriceProductName(value){
+  const text = String(value || '').trim();
+  if(!text) return '';
+  return getPriceProductNames().find(name => samePriceText(name, text)) || '';
+}
+
+function refreshPriceProductInput(){
+  const input = document.getElementById('pr-product');
+  if(!input) return;
+  const names = getPriceProductNames();
+  input.placeholder = names.length ? '품목명 검색' : '품목관리에서 먼저 품목을 등록하세요';
+  input.title = names.length ? '품목관리 메뉴에 등록된 품목만 선택할 수 있습니다.' : '품목관리 메뉴에서 품목을 먼저 등록하세요.';
+}
+
+function showPriceProductSuggestions(){
+  renderPriceProductSuggestions();
+}
+
+function hidePriceProductSuggestionsSoon(){
+  setTimeout(()=>{
+    const box = document.getElementById('pr-product-results');
+    if(box) box.style.display = 'none';
+  }, 180);
+}
+
+function onPriceProductSearch(){
+  renderPriceProductSuggestions();
+}
+
+function selectPriceProduct(name){
+  const input = document.getElementById('pr-product');
+  if(input) input.value = name || '';
+  const box = document.getElementById('pr-product-results');
+  if(box) box.style.display = 'none';
+  const originEl = document.getElementById('pr-origin');
+  const origins = [...new Set((labelProducts || [])
+    .filter(p => samePriceText(p.name, name))
+    .map(p => normalizeOriginName(p.origin))
+    .filter(Boolean))];
+  if(originEl && !originEl.value && origins.length === 1) originEl.value = origins[0];
+}
+
+function renderPriceProductSuggestions(){
+  const input = document.getElementById('pr-product');
+  const box = document.getElementById('pr-product-results');
+  if(!input || !box) return;
+  const names = getPriceProductNames();
+  if(!names.length){
+    box.innerHTML = '<div style="padding:9px 11px;font-size:12px;color:#888;">품목관리에서 먼저 품목을 등록하세요.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  const q = priceKey(input.value);
+  const filtered = names.filter(name => !q || priceKey(name).includes(q)).slice(0, 80);
+  if(!filtered.length){
+    box.innerHTML = '<div style="padding:9px 11px;font-size:12px;color:#888;">검색 결과 없음</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = filtered.map(name => {
+    const variants = (labelProducts || []).filter(p => samePriceText(p.name, name));
+    const sub = [...new Set(variants.map(p => [
+      normalizeOriginName(p.origin),
+      p.storage || '',
+      p.packunit || ''
+    ].filter(Boolean).join(' · ')).filter(Boolean))].slice(0, 3).join(' / ');
+    return `<button type="button" onclick="selectPriceProduct(${jsArg(name)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
+      <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(name)}</div>
+      <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
+    </button>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
 function renderPrices(){
+  refreshPriceProductInput();
   const q = (document.getElementById('pr-search')?.value||'').toLowerCase();
   const _pd = priceSortDir==='asc'?1:-1;
   const filtered = prices
@@ -9059,14 +9151,19 @@ function renderPrices(){
 
 /* 저장 (추가 or 수정) */
 function savePrice(){
-  const product = document.getElementById('pr-product').value.trim();
+  const rawProduct = document.getElementById('pr-product').value.trim();
+  const product = getCanonicalPriceProductName(rawProduct);
   const origin  = normalizeOriginName(document.getElementById('pr-origin').value);
   const trader  = document.getElementById('pr-trader').value.trim();
   const price   = parseInt(document.getElementById('pr-price').value)||0;
   const editIdx = parseInt(document.getElementById('pr-edit-idx').value);
   let savedPrice = null;
 
-  if(!product){ alert('품목명을 입력해주세요.'); return; }
+  if(!rawProduct){ alert('품목명을 선택해주세요.'); return; }
+  if(!product){
+    alert('단가표 품목명은 품목관리 메뉴에 등록된 품목만 선택할 수 있습니다.\n\n품목관리에 먼저 등록하거나 검색 목록에서 선택해주세요.');
+    return;
+  }
   if(price < 0){ alert('단가는 0 이상이어야 합니다.'); return; }
 
   if(editIdx >= 0){
