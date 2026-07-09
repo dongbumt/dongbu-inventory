@@ -9015,7 +9015,7 @@ function loadShipLog(){
         <th>점검항목</th><th>결과(적합/부적합)</th><th>점검자</th>
       </tr></thead>
       <tbody>
-        ${['보관상태','포장상태','표시사항','배송차량점검'].map(item=>`<tr><td>${item}</td><td style="min-width:120px"></td><td style="min-width:60px"></td></tr>`).join('')}
+        ${['보관상태','포장상태','표시사항','배송차량점검'].map((item, idx)=>`<tr><td>${item}</td><td style="min-width:120px"></td>${idx===0?'<td rowspan="4" style="min-width:80px;text-align:center;vertical-align:middle;"></td>':''}</tr>`).join('')}
       </tbody>
     </table>
   </div>`;
@@ -9762,7 +9762,7 @@ function buildShipLogPageHTML(date,items,pageNo,totalPages){
       itemRows+=`<tr style="height:22px"><td style="${nb};color:#ccc">${(pageNo-1)*10+i+1}</td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${lb}"></td><td style="${b}"></td></tr>`;
     }
   }
-  const checkRows=['보관상태','포장상태','표시사항','배송차량점검'].map(it=>`<tr style="height:22px"><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;">${it}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:100px;"></td><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:60px;"></td></tr>`).join('');
+  const checkRows=['보관상태','포장상태','표시사항','배송차량점검'].map((it, idx)=>`<tr style="height:22px"><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;">${it}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:100px;"></td>${idx===0?'<td rowspan="4" style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:70px;text-align:center;vertical-align:middle;"></td>':''}</tr>`).join('');
   const finalChecks=[['온도','냉장: 0~10°C / 냉동: -18°C 이하','온도계 확인','기준 초과 시 보류'],['유통기한','제조일자 및 유통기한 확인','라벨 확인','기한 초과 즉시 폐기'],['포장상태','밀봉 및 파손 여부','육안 확인','불량 시 재포장/폐기'],['표시사항','원산지·성분·알레르기 표시','라벨 확인','미표시 출고 금지'],['위생상태','이물질 혼입 및 오염 여부','육안 확인','이상 시 격리/폐기']];
   const finalRows=finalChecks.map(([a,b,c,d])=>`<tr style="height:20px"><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${a}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${b}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${c}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:10px;">${d}</td></tr>`).join('');
   return `<div class="shiplog-page" style="background:#fff;border:1px solid #dde1e7;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
