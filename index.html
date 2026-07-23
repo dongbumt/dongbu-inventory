@@ -3778,6 +3778,7 @@ const DATA_CHANGE_MENU_ORDER = [
 ];
 
 let dataChangeAppDataSigs = null;
+let dataChangeAppDataMeta = null;
 let dataChangeLogSyncTimer = null;
 
 function dataChangeId(){
@@ -3881,18 +3882,20 @@ function dataChangeRowsById(rows){
   return map;
 }
 
-function recordTransactionChange(rows, deletedIds, deletedRows){
+function recordTransactionChange(rows, deletedIds, deletedRows, options={}){
   const upserts = asArray(rows);
   const deletes = asArray(deletedIds);
   const deletedList = asArray(deletedRows);
   const deletedById = dataChangeRowsById(deletedList);
   if(upserts.length){
     const sample = upserts[0] || {};
+    const action = options.action || '저장';
+    const logAction = upserts.length > 1 ? (action === '수정' ? '일괄 수정' : '일괄 저장') : action;
     recordDataChange({
       menu:'거래내역',
-      action: upserts.length > 1 ? '일괄 저장' : '저장',
+      action: logAction,
       target: sample.product || sample.type || '',
-      summary: upserts.length > 1 ? `${upserts.length}건 저장` : dataChangeRowSummary(sample),
+      summary: upserts.length > 1 ? `${upserts.length}건 ${action === '수정' ? '수정' : '저장'}` : dataChangeRowSummary(sample),
       refId: sample.id || ''
     });
   }
@@ -3945,18 +3948,20 @@ function recordProductionChange(entry, transactionRows, deletedProdId, deletedPr
   }
 }
 
-function recordPriceChange(rows, deletedIds, deletedRows){
+function recordPriceChange(rows, deletedIds, deletedRows, options={}){
   const upserts = asArray(rows);
   const deletes = asArray(deletedIds);
   const deletedList = asArray(deletedRows);
   const deletedById = dataChangeRowsById(deletedList);
   if(upserts.length){
     const sample = upserts[0] || {};
+    const action = options.action || '저장';
+    const logAction = upserts.length > 1 ? (action === '수정' ? '일괄 수정' : '일괄 저장') : action;
     recordDataChange({
       menu:'단가표',
-      action: upserts.length > 1 ? '일괄 저장' : '저장',
+      action: logAction,
       target: sample.product || '',
-      summary: upserts.length > 1 ? `${upserts.length}건 저장` : dataChangeRowSummary(sample),
+      summary: upserts.length > 1 ? `${upserts.length}건 ${action === '수정' ? '수정' : '저장'}` : dataChangeRowSummary(sample),
       refId: sample.id || ''
     });
   }
@@ -3974,36 +3979,66 @@ function recordPriceChange(rows, deletedIds, deletedRows){
   }
 }
 
-function dataChangeAppDataSignatures(){
-  const sigs = {};
+function dataChangeValueCount(value){
+  if(Array.isArray(value)) return value.length;
+  if(value && typeof value === 'object') return Object.keys(value).length;
+  return value === undefined || value === null || value === '' ? 0 : 1;
+}
+
+function dataChangeAppDataSnapshot(){
+  const snap = {};
   Object.entries(APP_DATA_REGISTRY).forEach(([key, reg]) => {
     if(key === 'dataChangeLogs' || reg.readOnly) return;
-    try{ sigs[key] = gsHashText(gsStableStringify(reg.get())); }
-    catch(e){ sigs[key] = 'error'; }
+    try{
+      const value = reg.get();
+      snap[key] = {
+        sig: gsHashText(gsStableStringify(value)),
+        count: dataChangeValueCount(value)
+      };
+    }
+    catch(e){ snap[key] = {sig:'error', count:0}; }
+  });
+  return snap;
+}
+
+function dataChangeAppDataSignatures(snapshot=dataChangeAppDataSnapshot()){
+  const sigs = {};
+  Object.entries(snapshot).forEach(([key, info]) => {
+    sigs[key] = info.sig;
   });
   return sigs;
 }
 
 function resetDataChangeAppDataBaseline(){
-  dataChangeAppDataSigs = dataChangeAppDataSignatures();
+  const snap = dataChangeAppDataSnapshot();
+  dataChangeAppDataSigs = dataChangeAppDataSignatures(snap);
+  dataChangeAppDataMeta = snap;
 }
 
 function recordAppDataChanges(){
-  const next = dataChangeAppDataSignatures();
+  const nextSnap = dataChangeAppDataSnapshot();
+  const next = dataChangeAppDataSignatures(nextSnap);
   if(!dataChangeAppDataSigs){
     dataChangeAppDataSigs = next;
+    dataChangeAppDataMeta = nextSnap;
     return;
   }
   Object.keys(next).forEach(key => {
     if(next[key] === dataChangeAppDataSigs[key]) return;
+    const prevCount = dataChangeAppDataMeta?.[key]?.count;
+    const nextCount = nextSnap[key]?.count;
+    const action = prevCount !== undefined && nextCount !== undefined
+      ? (nextCount < prevCount ? '삭제' : (nextCount === prevCount ? '수정' : '저장'))
+      : '저장';
     recordDataChange({
       menu: DATA_CHANGE_MENU_BY_APP_KEY[key] || APP_DATA_LABELS[key] || '보조데이터',
-      action:'저장',
+      action,
       target: APP_DATA_LABELS[key] || key,
-      summary: `${APP_DATA_LABELS[key] || key} 변경사항 저장`
+      summary: `${APP_DATA_LABELS[key] || key} ${action === '수정' ? '수정사항' : (action === '삭제' ? '삭제사항' : '변경사항')} 저장`
     }, {sync:false});
   });
   dataChangeAppDataSigs = next;
+  dataChangeAppDataMeta = nextSnap;
 }
 
 function dataChangeMenuOptions(){
@@ -4174,9 +4209,9 @@ async function supabaseSaveTransactionRows(rows, deletedIds){
   }
 }
 
-function saveTransactionRows(rows, deletedIds, deletedRows){
+function saveTransactionRows(rows, deletedIds, deletedRows, options={}){
   markLocalCoreChanged();
-  recordTransactionChange(rows, deletedIds, deletedRows);
+  recordTransactionChange(rows, deletedIds, deletedRows, options);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveTransactionRows(rows, deletedIds).catch(err=>{
@@ -4253,8 +4288,8 @@ async function supabaseSavePriceRows(rows, deletedIds, forceFull=false){
   }
 }
 
-function savePriceRows(rows, deletedIds, forceFull=false, deletedRows){
-  recordPriceChange(rows, deletedIds, deletedRows);
+function savePriceRows(rows, deletedIds, forceFull=false, deletedRows, options={}){
+  recordPriceChange(rows, deletedIds, deletedRows, options);
   safeLocalStorageSet('dbmt_prices', JSON.stringify(prices), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSavePriceRows(rows, deletedIds, forceFull).catch(err=>{
@@ -5713,7 +5748,7 @@ function updateTxnPrice(id, newPriceStr){
   txn.amount = Math.round(newPrice * txn.weight);
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   invalidateStockMap();
-  saveTransactionRows(txn);
+  saveTransactionRows(txn, null, null, {action:'수정'});
   // 금액 셀만 즉시 업데이트 (전체 re-render 없이)
   const domId = String(id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
   const amtEl = document.getElementById(`txn-amt-${domId}`);
@@ -5916,7 +5951,7 @@ function addTransaction(){
   _stockMapCache=null;
   const wasEditTxn = !!_editTxnId;
   const savedProduct = product;
-  saveTransactionRows(savedTxn);
+  saveTransactionRows(savedTxn, null, null, {action: wasEditTxn ? '수정' : '저장'});
   clearTransactionForm({resetType:true});
   renderTransactions(); updateProductList(); updateOutProductList();
   renderStock();
@@ -9158,6 +9193,7 @@ function savePrice(){
   const price   = parseInt(document.getElementById('pr-price').value)||0;
   const editIdx = parseInt(document.getElementById('pr-edit-idx').value);
   let savedPrice = null;
+  let priceChangeAction = '저장';
 
   if(!rawProduct){ alert('품목명을 선택해주세요.'); return; }
   if(!product){
@@ -9169,6 +9205,7 @@ function savePrice(){
   if(editIdx >= 0){
     prices[editIdx] = ensurePriceId({...prices[editIdx], product, origin, trader, price});
     savedPrice = prices[editIdx];
+    priceChangeAction = '수정';
     toast(`수정 완료: ${product} (${origin}${trader?' · '+trader:''}) → ${price.toLocaleString()}원`);
   } else {
     const dup = prices.findIndex(p=>samePriceText(p.product, product) && sameOriginText(p.origin, origin) && samePriceText(p.trader, trader));
@@ -9179,6 +9216,7 @@ ${product} / ${origin}${trader?' / '+trader:''} → ${prices[dup].price.toLocale
 단가를 ${price.toLocaleString()}원으로 덮어씌울까요?`)) return;
       prices[dup].price = price;
       savedPrice = ensurePriceId(prices[dup]);
+      priceChangeAction = '수정';
       toast(`단가 갱신: ${product} (${origin}) → ${price.toLocaleString()}원`);
     } else {
       const newPrice = ensurePriceId({product, origin, trader, price});
@@ -9187,7 +9225,7 @@ ${product} / ${origin}${trader?' / '+trader:''} → ${prices[dup].price.toLocale
       toast(`추가 완료: ${product} (${origin}${trader?' · '+trader:''}) ${price.toLocaleString()}원`);
     }
   }
-  savePriceRows(savedPrice);
+  savePriceRows(savedPrice, null, false, null, {action: priceChangeAction});
   cancelEditPrice();
   renderPrices();
 }
