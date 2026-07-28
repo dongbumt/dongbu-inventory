@@ -1509,7 +1509,7 @@
       🏢 거래처 정보 관리
     </div>
     <div style="font-size:12px;color:#666;margin-bottom:14px;">
-      거래명세서 "공급 받는 자" 란에 자동으로 표시되는 거래처 정보를 관리합니다.
+      거래명세서와 서류 요청에 사용할 거래처 기본정보 및 연락처를 관리합니다.
     </div>
     <!-- 입력 폼 -->
     <div class="form-row" style="align-items:flex-end;" id="trader-form-row">
@@ -1550,6 +1550,14 @@
         <label>담당자 연락처</label>
         <input id="tr-manager-phone" type="tel" placeholder="예) 010-1234-5678">
       </div>
+      <div class="form-group">
+        <label>이메일</label>
+        <input id="tr-email" type="email" inputmode="email" autocomplete="off" placeholder="예) documents@example.com">
+      </div>
+      <div class="form-group">
+        <label>팩스번호</label>
+        <input id="tr-fax" type="tel" inputmode="tel" autocomplete="off" placeholder="예) 02-1234-5678">
+      </div>
       <div class="form-group" style="grid-column:span 2;">
         <label>주소</label>
         <input id="tr-addr" placeholder="예) 서울특별시 서초구 마방로 68, 14층">
@@ -1584,13 +1592,15 @@
             <th>대표</th>
             <th>담당자</th>
             <th>담당자 연락처</th>
+            <th>이메일</th>
+            <th>팩스번호</th>
             <th>주소</th>
             <th>업태</th>
             <th style="text-align:center;">관리</th>
           </tr>
         </thead>
         <tbody id="traders-tbody">
-          <tr><td colspan="11" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
+          <tr><td colspan="13" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -11230,15 +11240,19 @@ function saveTraderInfo(){
   const ceo          = document.getElementById('tr-ceo').value.trim();
   const manager      = document.getElementById('tr-manager').value.trim();
   const managerPhone = document.getElementById('tr-manager-phone').value.trim();
+  const emailEl      = document.getElementById('tr-email');
+  const email        = emailEl.value.trim();
+  const fax          = document.getElementById('tr-fax').value.trim();
   const addr         = document.getElementById('tr-addr').value.trim();
   const biz          = document.getElementById('tr-biz').value.trim();
   if(!name){ toast('거래처명을 입력하세요.'); return; }
+  if(email && !emailEl.checkValidity()){ toast('이메일 주소 형식을 확인해주세요.'); emailEl.focus(); return; }
   const previousInfo = traderInfoMap[_traderEditKey || name] || {};
   // 이름 변경 시 기존 키 삭제
   if(_traderEditKey && _traderEditKey !== name) delete traderInfoMap[_traderEditKey];
   traderInfoMap[name] = {
     ...previousInfo,
-    tradeType, category, fullname, regno, ceo, manager, managerPhone, addr, biz
+    tradeType, category, fullname, regno, ceo, manager, managerPhone, email, fax, addr, biz
   };
   saveTraderInfoStore();
   clearTraderForm();
@@ -11258,6 +11272,8 @@ function editTrader(name){
   document.getElementById('tr-ceo').value      = info.ceo||'';
   document.getElementById('tr-manager').value  = info.manager||'';
   document.getElementById('tr-manager-phone').value = info.managerPhone||'';
+  document.getElementById('tr-email').value    = info.email||'';
+  document.getElementById('tr-fax').value      = info.fax||'';
   document.getElementById('tr-addr').value     = info.addr||'';
   document.getElementById('tr-biz').value      = info.biz||'';
   document.getElementById('tr-save-btn').textContent = '✏️ 수정 저장';
@@ -11279,7 +11295,7 @@ function cancelTraderEdit(){
 }
 
 function clearTraderForm(){
-  ['tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-addr','tr-biz'].forEach(id=>{
+  ['tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-email','tr-fax','tr-addr','tr-biz'].forEach(id=>{
     document.getElementById(id).value = '';
   });
   document.getElementById('tr-save-btn').textContent = '➕ 추가';
@@ -11292,7 +11308,7 @@ function renderTraders(){
   if(!tbody) return;
   const keys = Object.keys(traderInfoMap);
   if(!keys.length){
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = keys.map(name=>{
@@ -11308,6 +11324,8 @@ function renderTraders(){
       <td>${htmlEscape(info.ceo||'-')}</td>
       <td>${htmlEscape(info.manager||'-')}</td>
       <td style="white-space:nowrap;">${htmlEscape(info.managerPhone||'-')}</td>
+      <td style="white-space:nowrap;">${htmlEscape(info.email||'-')}</td>
+      <td style="white-space:nowrap;">${htmlEscape(info.fax||'-')}</td>
       <td style="font-size:11px;">${htmlEscape(info.addr||'-')}</td>
       <td>${htmlEscape(info.biz||'-')}</td>
       <td style="text-align:center;white-space:nowrap;">
