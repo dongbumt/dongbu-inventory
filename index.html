@@ -11620,7 +11620,10 @@ async function loadDocumentRequestCapabilities(){
     docRequestCapabilities = {email:false, fax:false, faxProvider:'바로빌', faxMode:'테스트'};
     if(configEl){
       configEl.style.display = '';
-      configEl.textContent = `발송 서버 연결 필요: ${String(err?.message || err)}`;
+      const rawMessage = String(err?.message || err);
+      configEl.textContent = /failed to fetch|404|not found/i.test(rawMessage)
+        ? '메일·바로빌 발송 서버를 설정하는 중입니다.'
+        : `발송 서버 연결을 확인해주세요: ${rawMessage}`;
     }
   }
   updateDocumentRequestButtons();
@@ -11852,7 +11855,10 @@ async function loadDocumentRequestLogs(force=false){
     documentRequestLogsLoaded = true;
     renderDocumentRequestLogs();
   }catch(err){
-    renderDocumentRequestLogs(`요청 이력 설정 필요: ${String(err?.message || err)}`);
+    const rawMessage = String(err?.message || err);
+    renderDocumentRequestLogs(/function|schema cache|404|not found/i.test(rawMessage)
+      ? '요청 이력 서버를 설정하는 중입니다.'
+      : `요청 이력을 불러오지 못했습니다: ${rawMessage}`);
   }
 }
 
