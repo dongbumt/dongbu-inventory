@@ -1460,6 +1460,19 @@
         <input id="tr-name" placeholder="예) 동원홈푸드">
       </div>
       <div class="form-group">
+        <label>거래구분</label>
+        <select id="tr-trade-type">
+          <option value="">-- 선택 --</option>
+          <option value="매입">매입</option>
+          <option value="매출">매출</option>
+          <option value="매입/매출">매입/매출</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>분류</label>
+        <input id="tr-category" placeholder="예) 원료 공급사, 급식, 식당">
+      </div>
+      <div class="form-group">
         <label>정식 상호</label>
         <input id="tr-fullname" placeholder="예) (주)동원홈푸드">
       </div>
@@ -1471,7 +1484,15 @@
         <label>대표자명</label>
         <input id="tr-ceo" placeholder="예) 홍길동">
       </div>
-      <div class="form-group" style="flex:2;">
+      <div class="form-group">
+        <label>담당자</label>
+        <input id="tr-manager" placeholder="예) 김담당">
+      </div>
+      <div class="form-group">
+        <label>담당자 연락처</label>
+        <input id="tr-manager-phone" type="tel" placeholder="예) 010-1234-5678">
+      </div>
+      <div class="form-group" style="grid-column:span 2;">
         <label>주소</label>
         <input id="tr-addr" placeholder="예) 서울특별시 서초구 마방로 68, 14층">
       </div>
@@ -1498,16 +1519,20 @@
         <thead>
           <tr>
             <th>거래처명</th>
+            <th>거래구분</th>
+            <th>분류</th>
             <th>정식 상호</th>
             <th>사업자번호</th>
             <th>대표</th>
+            <th>담당자</th>
+            <th>담당자 연락처</th>
             <th>주소</th>
             <th>업태</th>
             <th style="text-align:center;">관리</th>
           </tr>
         </thead>
         <tbody id="traders-tbody">
-          <tr><td colspan="7" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
+          <tr><td colspan="11" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -10670,16 +10695,24 @@ function getTraderInfo(name){
 let _traderEditKey = null; // 수정 중인 거래처명
 
 function saveTraderInfo(){
-  const name     = document.getElementById('tr-name').value.trim();
-  const fullname = document.getElementById('tr-fullname').value.trim();
-  const regno    = document.getElementById('tr-regno').value.trim();
-  const ceo      = document.getElementById('tr-ceo').value.trim();
-  const addr     = document.getElementById('tr-addr').value.trim();
-  const biz      = document.getElementById('tr-biz').value.trim();
+  const name         = document.getElementById('tr-name').value.trim();
+  const tradeType    = document.getElementById('tr-trade-type').value;
+  const category     = document.getElementById('tr-category').value.trim();
+  const fullname     = document.getElementById('tr-fullname').value.trim();
+  const regno        = document.getElementById('tr-regno').value.trim();
+  const ceo          = document.getElementById('tr-ceo').value.trim();
+  const manager      = document.getElementById('tr-manager').value.trim();
+  const managerPhone = document.getElementById('tr-manager-phone').value.trim();
+  const addr         = document.getElementById('tr-addr').value.trim();
+  const biz          = document.getElementById('tr-biz').value.trim();
   if(!name){ toast('거래처명을 입력하세요.'); return; }
+  const previousInfo = traderInfoMap[_traderEditKey || name] || {};
   // 이름 변경 시 기존 키 삭제
   if(_traderEditKey && _traderEditKey !== name) delete traderInfoMap[_traderEditKey];
-  traderInfoMap[name] = { fullname, regno, ceo, addr, biz };
+  traderInfoMap[name] = {
+    ...previousInfo,
+    tradeType, category, fullname, regno, ceo, manager, managerPhone, addr, biz
+  };
   saveTraderInfoStore();
   clearTraderForm();
   renderTraders();
@@ -10691,9 +10724,13 @@ function editTrader(name){
   const info = traderInfoMap[name] || {};
   _traderEditKey = name;
   document.getElementById('tr-name').value     = name;
+  document.getElementById('tr-trade-type').value = info.tradeType||'';
+  document.getElementById('tr-category').value = info.category||'';
   document.getElementById('tr-fullname').value = info.fullname||'';
   document.getElementById('tr-regno').value    = info.regno||'';
   document.getElementById('tr-ceo').value      = info.ceo||'';
+  document.getElementById('tr-manager').value  = info.manager||'';
+  document.getElementById('tr-manager-phone').value = info.managerPhone||'';
   document.getElementById('tr-addr').value     = info.addr||'';
   document.getElementById('tr-biz').value      = info.biz||'';
   document.getElementById('tr-save-btn').textContent = '✏️ 수정 저장';
@@ -10715,7 +10752,7 @@ function cancelTraderEdit(){
 }
 
 function clearTraderForm(){
-  ['tr-name','tr-fullname','tr-regno','tr-ceo','tr-addr','tr-biz'].forEach(id=>{
+  ['tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-addr','tr-biz'].forEach(id=>{
     document.getElementById(id).value = '';
   });
   document.getElementById('tr-save-btn').textContent = '➕ 추가';
@@ -10728,7 +10765,7 @@ function renderTraders(){
   if(!tbody) return;
   const keys = Object.keys(traderInfoMap);
   if(!keys.length){
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = keys.map(name=>{
@@ -10737,9 +10774,13 @@ function renderTraders(){
     const nameArg = jsArg(name);
     return `<tr>
       <td><strong>${nameText}</strong></td>
+      <td style="white-space:nowrap;">${htmlEscape(info.tradeType||'미지정')}</td>
+      <td>${htmlEscape(info.category||'-')}</td>
       <td>${htmlEscape(info.fullname||'-')}</td>
       <td style="font-family:monospace;font-size:11px;">${htmlEscape(info.regno||'-')}</td>
       <td>${htmlEscape(info.ceo||'-')}</td>
+      <td>${htmlEscape(info.manager||'-')}</td>
+      <td style="white-space:nowrap;">${htmlEscape(info.managerPhone||'-')}</td>
       <td style="font-size:11px;">${htmlEscape(info.addr||'-')}</td>
       <td>${htmlEscape(info.biz||'-')}</td>
       <td style="text-align:center;white-space:nowrap;">
