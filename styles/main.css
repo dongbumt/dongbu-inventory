@@ -127,6 +127,7 @@
   .btn-secondary:hover{background:#f0f0f0;}
   .btn-sm{padding:5px 11px;font-size:12px;border-radius:6px;}
   .btn-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none;}
 
   /* ── 테이블 ── */
   .tbl-wrap{overflow:auto;max-height:calc(100vh - 180px);border-radius:8px;border:1px solid var(--border);}
@@ -164,6 +165,23 @@
   /* ── 섹션 헤더 ── */
   .section-header{display:flex;justify-content:space-between;
     align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+
+  /* ── 필요서류 요청 ── */
+  .doc-request-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  #doc-request-selected-count{font-size:11px;font-weight:700;color:#59636e;min-width:52px;}
+  #p-doccheck input[type="checkbox"]{width:16px;height:16px;accent-color:var(--blue);cursor:pointer;}
+  #p-doccheck input[type="checkbox"]:disabled{cursor:not-allowed;}
+  .doc-request-preview{max-height:48vh;overflow:auto;border:1px solid var(--border);background:#fafbfc;}
+  .doc-request-group{padding:12px 14px;border-bottom:1px solid var(--border);}
+  .doc-request-group:last-child{border-bottom:none;}
+  .doc-request-group-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px;}
+  .doc-request-group-title{font-size:13px;font-weight:800;color:#243547;}
+  .doc-request-group-recipient{font-size:11px;color:#66727e;overflow-wrap:anywhere;text-align:right;}
+  .doc-request-group ul{margin:0;padding-left:18px;font-size:11px;line-height:1.7;color:#4b5563;}
+  .doc-request-history-head{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px;font-size:12px;}
+  .doc-request-history-wrap{max-height:230px;}
+  .doc-request-status-ok{color:#1e8449;font-weight:700;}
+  .doc-request-status-fail{color:#c0392b;font-weight:700;}
 
   /* ── 거래명세서 ── */
   .invoice-preview{background:#fff;border-radius:10px;
@@ -299,4 +317,8 @@
     .nav-tabs{width:100%;min-width:0;height:auto;top:0;}
     .main{padding:12px;}
     .fs-layout{height:320px;}
+    .doc-request-actions{width:100%;}
+    .doc-request-actions .btn{flex:1;justify-content:center;}
+    .doc-request-group-head{display:block;}
+    .doc-request-group-recipient{text-align:left;margin-top:3px;}
   }

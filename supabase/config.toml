@@ -1,0 +1,4 @@
+project_id = "hdwjwtmbsxfjrlvicgnn"
+
+[functions.send-document-request]
+verify_jwt = false

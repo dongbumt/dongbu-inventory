@@ -34,6 +34,7 @@ Editor query for each file:
 12. `schema-rpc-06a-upsert-production.sql`
 13. `schema-rpc-06b-upsert-prices.sql`
 14. `schema-rpc-07-submaterial-usage.sql`
+15. `schema-rpc-08-document-requests.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -57,11 +58,40 @@ This creates:
 - `dbmt_get_submaterial_usages(password)`
 - `dbmt_upsert_submaterial_usages(password, rows)`
 - `dbmt_delete_submaterial_usage(password, id)`
+- `dbmt_get_document_request_logs(password, limit)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.
 
-## 3. Project values
+## 3. Document request delivery
+
+The `send-document-request` Edge Function sends document requests through Daum
+SMTP or Barobill Fax and writes the result to `document_request_logs`.
+
+Set these Edge Function secrets:
+
+```text
+DAUM_SMTP_USER
+DAUM_SMTP_APP_PASSWORD
+DAUM_SMTP_FROM
+DOCUMENT_REQUEST_PHONE
+```
+
+Barobill Fax additionally needs:
+
+```text
+BAROBILL_ENV
+BAROBILL_CERT_KEY
+BAROBILL_CORP_NUM
+BAROBILL_SENDER_ID
+BAROBILL_MEMBER_PASSWORD
+BAROBILL_FROM_NUMBER
+```
+
+Use `BAROBILL_ENV=test` until test fax delivery is verified. Change it to
+`production` only after the Barobill production account and balance are ready.
+
+## 4. Project values
 
 Current project URL:
 

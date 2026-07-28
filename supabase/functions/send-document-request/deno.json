@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "basic-ftp": "npm:basic-ftp@5",
+    "nodemailer": "npm:nodemailer@7"
+  }
+}

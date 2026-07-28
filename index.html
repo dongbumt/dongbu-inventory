@@ -42,6 +42,20 @@
   </div>
 </div>
 
+<!-- ── 필요서류 요청 발송 모달 ── -->
+<div id="doc-request-modal" class="edit-modal-bg hidden">
+  <div class="edit-modal" style="max-width:820px;">
+    <h3 id="doc-request-modal-title">필요서류 요청</h3>
+    <div id="doc-request-modal-summary" class="alert alert-info"></div>
+    <div id="doc-request-modal-body" class="doc-request-preview"></div>
+    <div id="doc-request-modal-status" style="display:none;margin-top:12px;font-size:12px;line-height:1.7;"></div>
+    <div class="em-btns">
+      <button class="btn btn-secondary" id="doc-request-cancel-btn" onclick="closeDocumentRequestModal()">취소</button>
+      <button class="btn btn-primary" id="doc-request-send-btn" onclick="sendDocumentRequests()">요청 발송</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── 퇴직정산 모달 ── -->
 <div id="resign-modal" class="edit-modal-bg hidden">
   <div class="edit-modal" style="max-width:640px;">
@@ -1455,6 +1469,7 @@
         국내산 → <strong style="color:#2980b9;">도축검사증명서</strong> &nbsp;|&nbsp;
         수입산 → <strong style="color:#8e44ad;">수입신고필증</strong>
       </div>
+      <div id="doc-request-config" class="alert alert-warn" style="display:none;"></div>
 
       <!-- 통계 -->
       <div class="stat-grid" id="doc-stats"></div>
@@ -1475,6 +1490,13 @@
           <input id="doc-search" placeholder="품목/이력번호 검색..." oninput="renderDocCheck()"
             style="width:180px;font-size:12px;">
         </div>
+        <div class="doc-request-actions">
+          <span id="doc-request-selected-count">선택 0건</span>
+          <button class="btn btn-primary btn-sm" id="doc-request-email-btn"
+            onclick="openDocumentRequestModal('email')" disabled>메일 요청</button>
+          <button class="btn btn-secondary btn-sm" id="doc-request-fax-btn"
+            onclick="openDocumentRequestModal('fax')" disabled>바로빌 팩스</button>
+        </div>
       </div>
 
       <!-- 테이블 -->
@@ -1482,16 +1504,37 @@
         <table>
           <thead>
             <tr>
+              <th style="width:38px;text-align:center;">
+                <input type="checkbox" id="doc-select-all" aria-label="현재 목록 전체 선택"
+                  onchange="toggleVisibleDocumentRequests(this.checked)">
+              </th>
               <th>입고일</th>
               <th>품목명</th>
               <th>원산지</th>
               <th>이력번호</th>
+              <th>거래처</th>
               <th>필수서류</th>
               <th style="text-align:center;">수령</th>
             </tr>
           </thead>
           <tbody id="doc-tbody">
-            <tr><td colspan="6" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
+            <tr><td colspan="8" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="doc-request-history-head">
+        <strong>최근 요청 이력</strong>
+        <button class="btn btn-secondary btn-sm" onclick="loadDocumentRequestLogs(true)">새로고침</button>
+      </div>
+      <div class="tbl-wrap doc-request-history-wrap">
+        <table>
+          <thead><tr>
+            <th>요청일시</th><th>구분</th><th>거래처</th><th>수신처</th>
+            <th style="text-align:right;">서류</th><th>상태</th>
+          </tr></thead>
+          <tbody id="doc-request-log-tbody">
+            <tr><td colspan="6" style="text-align:center;padding:16px;color:#888;">요청 이력을 불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -11374,6 +11417,14 @@ let docChecks = JSON.parse(localStorage.getItem('dbmt_doc_checks')||'{}');
 let docChecksRevision = 0;
 let docChecksRefreshPromise = null;
 let docChecksLastRefreshAt = 0;
+let docCheckRowsCache = [];
+let docRequestVisibleRows = [];
+let docRequestSelectedKeys = new Set();
+let docRequestPendingGroups = [];
+let docRequestPendingChannel = '';
+let docRequestCapabilities = {email:false, fax:false, faxProvider:'바로빌', faxMode:'테스트'};
+let documentRequestLogs = [];
+let documentRequestLogsLoaded = false;
 
 // ─── 단가표 정렬 상태 ───────────────────────────────────────
 let priceSortKey = 'product';
@@ -11436,6 +11487,8 @@ async function refreshDocChecksFromSupabase(force=false){
 
 function openDocCheckPage(){
   renderDocCheck();
+  loadDocumentRequestCapabilities();
+  loadDocumentRequestLogs();
   refreshDocChecksFromSupabase(true)
     .then(changed => {
       if(changed && document.getElementById('p-doccheck')?.classList.contains('active')){
@@ -11489,6 +11542,320 @@ function toggleDocCheckKeys(keys){
 function toggleDocCheck(key){
   toggleDocCheckKeys([key]);
 }
+
+async function sbFunctionRequest(functionName, payload){
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
+    method:'POST',
+    headers:{
+      apikey:SUPABASE_PUBLISHABLE_KEY,
+      Authorization:`Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      'Content-Type':'application/json'
+    },
+    body:JSON.stringify(payload || {})
+  });
+  const text = await res.text();
+  let data = null;
+  try{ data = text ? JSON.parse(text) : null; }
+  catch(e){ data = {error:text}; }
+  if(!res.ok) throw new Error(data?.error || data?.message || `서버 기능 호출 실패 (${res.status})`);
+  return data;
+}
+
+function updateDocumentRequestButtons(){
+  const count = docRequestSelectedKeys.size;
+  const countEl = document.getElementById('doc-request-selected-count');
+  if(countEl) countEl.textContent = `선택 ${count}건`;
+  const emailBtn = document.getElementById('doc-request-email-btn');
+  const faxBtn = document.getElementById('doc-request-fax-btn');
+  if(emailBtn) emailBtn.disabled = !docRequestCapabilities.email || count < 1;
+  if(faxBtn){
+    faxBtn.disabled = !docRequestCapabilities.fax || count < 1;
+    faxBtn.textContent = docRequestCapabilities.fax
+      ? `바로빌 팩스${docRequestCapabilities.faxMode === '테스트' ? ' (테스트)' : ''}`
+      : '바로빌 팩스 준비중';
+  }
+  const selectAll = document.getElementById('doc-select-all');
+  if(selectAll){
+    const visibleKeys = docRequestVisibleRows.map(row=>row._requestKey);
+    const selectedVisible = visibleKeys.filter(key=>docRequestSelectedKeys.has(key)).length;
+    selectAll.checked = visibleKeys.length > 0 && selectedVisible === visibleKeys.length;
+    selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleKeys.length;
+    selectAll.disabled = visibleKeys.length < 1;
+  }
+}
+
+async function loadDocumentRequestCapabilities(){
+  const configEl = document.getElementById('doc-request-config');
+  const password = getSupabasePassword();
+  if(!password){
+    docRequestCapabilities = {email:false, fax:false, faxProvider:'바로빌', faxMode:'테스트'};
+    if(configEl){
+      configEl.style.display = '';
+      configEl.textContent = '발송 기능을 확인하려면 Supabase 연결 비밀번호가 필요합니다.';
+    }
+    updateDocumentRequestButtons();
+    return;
+  }
+  try{
+    const data = await sbFunctionRequest('send-document-request', {
+      action:'capabilities',
+      appPassword:password
+    });
+    docRequestCapabilities = {
+      email:!!data?.email,
+      fax:!!data?.fax,
+      faxProvider:data?.faxProvider || '바로빌',
+      faxMode:data?.faxMode || '테스트'
+    };
+    if(configEl){
+      const messages = [];
+      if(!docRequestCapabilities.email) messages.push('다음메일 서버 설정 필요');
+      if(!docRequestCapabilities.fax) messages.push('바로빌 계정·인증키 설정 필요');
+      configEl.style.display = messages.length ? '' : 'none';
+      configEl.textContent = messages.length
+        ? `발송 준비: ${messages.join(' / ')}`
+        : '';
+    }
+  }catch(err){
+    docRequestCapabilities = {email:false, fax:false, faxProvider:'바로빌', faxMode:'테스트'};
+    if(configEl){
+      configEl.style.display = '';
+      configEl.textContent = `발송 서버 연결 필요: ${String(err?.message || err)}`;
+    }
+  }
+  updateDocumentRequestButtons();
+}
+
+function toggleDocumentRequestSelection(key, checked){
+  if(checked) docRequestSelectedKeys.add(String(key));
+  else docRequestSelectedKeys.delete(String(key));
+  updateDocumentRequestButtons();
+}
+
+function toggleVisibleDocumentRequests(checked){
+  docRequestVisibleRows.forEach(row=>{
+    if(checked) docRequestSelectedKeys.add(row._requestKey);
+    else docRequestSelectedKeys.delete(row._requestKey);
+  });
+  renderDocCheck();
+}
+
+function closeDocumentRequestModal(){
+  const modal = document.getElementById('doc-request-modal');
+  if(modal) modal.classList.add('hidden');
+  docRequestPendingGroups = [];
+  docRequestPendingChannel = '';
+}
+
+function openDocumentRequestModal(channel){
+  if(channel !== 'email' && channel !== 'fax') return;
+  if(!docRequestCapabilities[channel]){
+    toast(channel === 'email' ? '다음메일 서버 설정이 필요합니다.' : '바로빌 연동정보가 필요합니다.');
+    return;
+  }
+  const selectedRows = docCheckRowsCache.filter(row=>
+    docRequestSelectedKeys.has(row._requestKey) && !isDocChecked(row)
+  );
+  if(!selectedRows.length){
+    toast('요청할 미수령 서류를 선택해주세요.');
+    return;
+  }
+
+  const grouped = new Map();
+  const missing = [];
+  selectedRows.forEach(row=>{
+    const trader = String(row.trader || '').trim();
+    const info = trader ? getTraderInfo(trader) : {};
+    const recipient = channel === 'email'
+      ? String(info.email || '').trim()
+      : String(info.fax || '').trim();
+    if(!trader || !recipient){
+      missing.push(`${row.product || '-'} / ${row.lot || '-'} (${trader || '거래처 미입력'})`);
+      return;
+    }
+    const groupKey = `${trader}||${recipient}`;
+    if(!grouped.has(groupKey)){
+      grouped.set(groupKey, {
+        trader,
+        recipient,
+        recipientName:String(info.manager || '').trim(),
+        rows:[]
+      });
+    }
+    grouped.get(groupKey).rows.push(row);
+  });
+  if(missing.length){
+    const field = channel === 'email' ? '이메일' : '팩스번호';
+    alert(`다음 항목은 거래처 또는 ${field}가 등록되지 않아 발송할 수 없습니다.\n\n${missing.slice(0,12).join('\n')}${missing.length>12?`\n외 ${missing.length-12}건`:''}`);
+    return;
+  }
+
+  docRequestPendingGroups = [...grouped.values()];
+  docRequestPendingChannel = channel;
+  const modal = document.getElementById('doc-request-modal');
+  const title = document.getElementById('doc-request-modal-title');
+  const summary = document.getElementById('doc-request-modal-summary');
+  const body = document.getElementById('doc-request-modal-body');
+  const status = document.getElementById('doc-request-modal-status');
+  const sendBtn = document.getElementById('doc-request-send-btn');
+  const cancelBtn = document.getElementById('doc-request-cancel-btn');
+  if(title) title.textContent = channel === 'email' ? '필요서류 메일 요청' : '필요서류 바로빌 팩스 요청';
+  if(summary) summary.textContent = `${docRequestPendingGroups.length}개 거래처 · 총 ${selectedRows.length}건을 발송합니다. 수신처와 요청 내용을 확인해주세요.`;
+  if(body){
+    body.innerHTML = docRequestPendingGroups.map(group=>`
+      <div class="doc-request-group">
+        <div class="doc-request-group-head">
+          <div class="doc-request-group-title">${htmlEscape(group.trader)}</div>
+          <div class="doc-request-group-recipient">${htmlEscape(group.recipient)}</div>
+        </div>
+        <ul>${group.rows.map(row=>`
+          <li>${htmlEscape(row.date||'-')} · ${htmlEscape(row.product||'-')} ·
+          ${htmlEscape(row.lot||'-')} · <strong>${htmlEscape(getRequiredDoc(row.origin))}</strong></li>
+        `).join('')}</ul>
+      </div>
+    `).join('');
+  }
+  if(status){ status.style.display='none'; status.innerHTML=''; }
+  if(sendBtn){
+    sendBtn.style.display='';
+    sendBtn.disabled=false;
+    sendBtn.textContent = channel === 'email' ? '메일 발송' : '팩스 접수';
+  }
+  if(cancelBtn) cancelBtn.textContent='취소';
+  if(modal) modal.classList.remove('hidden');
+}
+
+async function sendDocumentRequests(){
+  if(!docRequestPendingGroups.length || !docRequestPendingChannel) return;
+  const password = getSupabasePassword();
+  if(!password){
+    gsShowSetup();
+    return;
+  }
+  const sendBtn = document.getElementById('doc-request-send-btn');
+  const cancelBtn = document.getElementById('doc-request-cancel-btn');
+  const statusEl = document.getElementById('doc-request-modal-status');
+  if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent='발송 중...'; }
+  if(cancelBtn) cancelBtn.disabled=true;
+  if(statusEl){ statusEl.style.display=''; statusEl.innerHTML=''; }
+
+  const failedGroups = [];
+  let successCount = 0;
+  for(let i=0; i<docRequestPendingGroups.length; i++){
+    const group = docRequestPendingGroups[i];
+    const lineId = `doc-request-result-${i}`;
+    if(statusEl){
+      statusEl.insertAdjacentHTML('beforeend',
+        `<div id="${lineId}">${htmlEscape(group.trader)}: 발송 중...</div>`);
+    }
+    try{
+      const result = await sbFunctionRequest('send-document-request', {
+        action:'send',
+        appPassword:password,
+        channel:docRequestPendingChannel,
+        trader:group.trader,
+        recipient:group.recipient,
+        recipientName:group.recipientName,
+        documents:group.rows.map(row=>({
+          date:row.date || '',
+          product:row.product || '',
+          origin:row.origin || '',
+          lot:row.lot || '',
+          requiredDoc:getRequiredDoc(row.origin)
+        }))
+      });
+      group.rows.forEach(row=>docRequestSelectedKeys.delete(row._requestKey));
+      successCount += group.rows.length;
+      recordDataChange({
+        menu:'서류체크',
+        action:docRequestPendingChannel === 'email' ? '메일 요청' : '팩스 요청',
+        target:group.trader,
+        summary:`${group.rows.length}건 필요서류 요청 / ${group.recipient}`,
+        refId:String(result?.messageId || '')
+      });
+      const line = document.getElementById(lineId);
+      if(line){
+        line.className='doc-request-status-ok';
+        line.textContent=`${group.trader}: ${result?.status || '발송완료'} (${group.rows.length}건)`;
+      }
+    }catch(err){
+      failedGroups.push(group);
+      const line = document.getElementById(lineId);
+      if(line){
+        line.className='doc-request-status-fail';
+        line.textContent=`${group.trader}: 실패 - ${String(err?.message || err)}`;
+      }
+    }
+  }
+
+  docRequestPendingGroups = failedGroups;
+  renderDocCheck();
+  await loadDocumentRequestLogs(true);
+  if(cancelBtn){ cancelBtn.disabled=false; cancelBtn.textContent='닫기'; }
+  if(!failedGroups.length){
+    if(sendBtn) sendBtn.style.display='none';
+    toast(`${successCount}건의 필요서류 요청을 발송했습니다.`);
+  }else if(sendBtn){
+    sendBtn.disabled=false;
+    sendBtn.textContent='실패 건 재시도';
+  }
+}
+
+function formatDocumentRequestDate(value){
+  if(!value) return '-';
+  const date = new Date(value);
+  if(Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('ko-KR', {
+    timeZone:'Asia/Seoul', year:'2-digit', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hour12:false
+  });
+}
+
+function renderDocumentRequestLogs(errorMessage=''){
+  const tbody = document.getElementById('doc-request-log-tbody');
+  if(!tbody) return;
+  if(errorMessage){
+    tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:16px;color:#c0392b;">${htmlEscape(errorMessage)}</td></tr>`;
+    return;
+  }
+  if(!documentRequestLogs.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:16px;color:#888;">발송 이력이 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=documentRequestLogs.slice(0,100).map(log=>{
+    const ok = log.status === 'sent' || log.status === 'accepted';
+    const statusText = log.provider_status || (ok ? '완료' : '실패');
+    return `<tr title="${htmlEscape(log.error_message||'')}">
+      <td style="white-space:nowrap;">${htmlEscape(formatDocumentRequestDate(log.created_at))}</td>
+      <td>${log.channel==='fax'?'팩스':'메일'}</td>
+      <td><strong>${htmlEscape(log.trader||'-')}</strong></td>
+      <td style="max-width:240px;overflow-wrap:anywhere;">${htmlEscape(log.recipient||'-')}</td>
+      <td style="text-align:right;">${Number(log.document_count||0)}건</td>
+      <td class="${ok?'doc-request-status-ok':'doc-request-status-fail'}">${htmlEscape(statusText)}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadDocumentRequestLogs(force=false){
+  if(documentRequestLogsLoaded && !force){
+    renderDocumentRequestLogs();
+    return;
+  }
+  const password = getSupabasePassword();
+  if(!password){
+    renderDocumentRequestLogs('Supabase 연결 후 요청 이력을 확인할 수 있습니다.');
+    return;
+  }
+  try{
+    const rows = await sbRpc('dbmt_get_document_request_logs', {p_password:password, p_limit:100});
+    documentRequestLogs = Array.isArray(rows) ? rows : [];
+    documentRequestLogsLoaded = true;
+    renderDocumentRequestLogs();
+  }catch(err){
+    renderDocumentRequestLogs(`요청 이력 설정 필요: ${String(err?.message || err)}`);
+  }
+}
+
 function renderDocCheck(){
   const filterEl = document.getElementById('doc-filter');
   const filter = filterEl ? filterEl.value : '미수령';
@@ -11508,7 +11875,12 @@ function renderDocCheck(){
     if(lotKey && seenLot.has(lotKey)) return;
     if(lotKey) seenLot.add(lotKey);
     const keys = getDocKeys(t.product, t.origin, t.lot);
-    rows.push({...t, _key: keys[0], _keys: keys});
+    rows.push({...t, _key: keys[0], _keys: keys, _requestKey:keys[0]});
+  });
+  docCheckRowsCache = rows;
+  const selectableKeys = new Set(rows.filter(row=>!isDocChecked(row)).map(row=>row._requestKey));
+  [...docRequestSelectedKeys].forEach(key=>{
+    if(!selectableKeys.has(key)) docRequestSelectedKeys.delete(key);
   });
 
   let originRows = rows;
@@ -11534,15 +11906,18 @@ function renderDocCheck(){
   if(filter==='미수령') filtered = originRows.filter(r=>!isDocChecked(r));
   else if(filter==='수령완료') filtered = originRows.filter(r=>isDocChecked(r));
   if(q) filtered = filtered.filter(r=>(r.product+r.origin+r.lot+r.date).toLowerCase().includes(q));
+  docRequestVisibleRows = filtered.filter(row=>!isDocChecked(row));
 
   const tbody = document.getElementById('doc-tbody');
   if(!tbody) return;
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
+    updateDocumentRequestButtons();
     return;
   }
   tbody.innerHTML = filtered.map(r=>{
     const checked = isDocChecked(r);
+    const requestSelected = docRequestSelectedKeys.has(r._requestKey);
     const doc = getRequiredDoc(r.origin);
     const imported = isImported(r.origin);
     const docColor = imported ? '#8e44ad' : '#2980b9';
@@ -11551,14 +11926,21 @@ function renderDocCheck(){
       ? 'background:var(--green);color:#fff;border-color:var(--green);'
       : 'background:#fff;color:#ccc;border-color:#ccc;';
     const keysArg = htmlEscape(JSON.stringify(r._keys || [r._key]));
+    const requestKeyArg = jsArg(r._requestKey);
     return `<tr style="${rowBg}">
-      <td style="font-size:11px;color:#888">${r.date||'-'}</td>
-      <td><strong>${r.product}</strong></td>
-      <td>${r.origin||'-'}</td>
-      <td style="font-family:monospace;font-size:11px">${r.lot||'-'}</td>
+      <td style="text-align:center;">
+        <input type="checkbox" aria-label="필요서류 요청 선택"
+          ${requestSelected?'checked':''} ${checked?'disabled':''}
+          onchange="toggleDocumentRequestSelection(${requestKeyArg},this.checked)">
+      </td>
+      <td style="font-size:11px;color:#888">${htmlEscape(r.date||'-')}</td>
+      <td><strong>${htmlEscape(r.product||'-')}</strong></td>
+      <td>${htmlEscape(r.origin||'-')}</td>
+      <td style="font-family:monospace;font-size:11px">${htmlEscape(r.lot||'-')}</td>
+      <td>${htmlEscape(r.trader||'-')}</td>
       <td><span style="font-size:11px;font-weight:700;color:${docColor};
         background:${imported?'#f3e8ff':'#e8f4fd'};padding:2px 8px;border-radius:10px;">
-        ${doc}</span></td>
+        ${htmlEscape(doc)}</span></td>
       <td style="text-align:center;">
         <button onclick="toggleDocCheckKeys(${keysArg})"
           style="width:32px;height:32px;border-radius:50%;border:2px solid;
@@ -11568,6 +11950,7 @@ function renderDocCheck(){
       </td>
     </tr>`;
   }).join('');
+  updateDocumentRequestButtons();
 }
 
 // ═══════════════════════════════════════════════════════
