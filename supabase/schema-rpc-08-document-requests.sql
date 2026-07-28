@@ -55,5 +55,7 @@ end;
 $dbmt$;
 
 revoke all on table public.document_request_logs from anon, authenticated;
+grant insert, select on table public.document_request_logs to service_role;
+grant usage, select on sequence public.document_request_logs_id_seq to service_role;
 grant execute on function public.dbmt_get_document_request_logs(text, integer)
   to anon, authenticated;
