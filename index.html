@@ -1576,14 +1576,28 @@
     </div>
   </div>
   <div class="card">
-    <div class="card-title">
-      <div class="ct-bar" style="background:#16a085;"></div>
-      등록된 거래처 목록
+    <div class="section-header" style="margin-bottom:10px;">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:#16a085;"></div>
+        등록된 거래처 목록
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label for="tr-list-trade-filter" style="font-size:12px;font-weight:700;color:#555;">거래구분</label>
+        <select id="tr-list-trade-filter" onchange="renderTraders()" style="width:125px;font-size:12px;">
+          <option value="">전체</option>
+          <option value="매입">매입</option>
+          <option value="매출">매출</option>
+          <option value="매입/매출">매입/매출</option>
+          <option value="미지정">미지정</option>
+        </select>
+        <span id="tr-list-count" style="font-size:12px;color:#777;"></span>
+      </div>
     </div>
     <div class="tbl-wrap">
       <table id="traders-table">
         <thead>
           <tr>
+            <th style="width:52px;text-align:center;">순번</th>
             <th>거래처명</th>
             <th>거래구분</th>
             <th>분류</th>
@@ -1600,7 +1614,7 @@
           </tr>
         </thead>
         <tbody id="traders-tbody">
-          <tr><td colspan="13" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
+          <tr><td colspan="14" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -11306,16 +11320,35 @@ function renderTraders(){
   updateTraderList();
   const tbody = document.getElementById('traders-tbody');
   if(!tbody) return;
-  const keys = Object.keys(traderInfoMap);
-  if(!keys.length){
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
+  const allKeys = Object.keys(traderInfoMap);
+  const tradeFilter = document.getElementById('tr-list-trade-filter')?.value || '';
+  const rows = allKeys
+    .map((name,index)=>({name, registrationNo:index + 1, info:traderInfoMap[name] || {}}))
+    .filter(row => {
+      if(!tradeFilter) return true;
+      const tradeType = row.info.tradeType || '미지정';
+      return tradeType === tradeFilter;
+    });
+  const countEl = document.getElementById('tr-list-count');
+  if(countEl){
+    countEl.textContent = tradeFilter
+      ? `표시 ${rows.length}건 / 전체 ${allKeys.length}건`
+      : `전체 ${allKeys.length}건`;
+  }
+  if(!allKeys.length){
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
     return;
   }
-  tbody.innerHTML = keys.map(name=>{
-    const info = traderInfoMap[name] || {};
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#888">선택한 거래구분에 해당하는 거래처가 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(row=>{
+    const {name, registrationNo, info} = row;
     const nameText = htmlEscape(name);
     const nameArg = jsArg(name);
     return `<tr>
+      <td style="text-align:center;font-weight:700;color:#555;">${registrationNo}</td>
       <td><strong>${nameText}</strong></td>
       <td style="white-space:nowrap;">${htmlEscape(info.tradeType||'미지정')}</td>
       <td>${htmlEscape(info.category||'-')}</td>
