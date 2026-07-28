@@ -117,6 +117,36 @@
   </div>
 </div>
 
+<!-- ── 생산작업 부자재 사용 등록 모달 ── -->
+<div id="sm-usage-modal" class="edit-modal-bg hidden">
+  <div class="edit-modal" style="max-width:940px;">
+    <h3 style="margin-bottom:8px;">부자재 사용 등록</h3>
+    <div id="sm-usage-prod-summary" style="font-size:12px;color:#4b5563;line-height:1.6;margin-bottom:12px;"></div>
+    <div id="sm-usage-editor-status" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>
+    <div class="tbl-wrap" style="max-height:430px;">
+      <table style="min-width:790px;">
+        <thead><tr>
+          <th style="min-width:180px;">부자재 품목</th>
+          <th style="min-width:230px;">입고 LOT</th>
+          <th style="width:90px;text-align:right;">사용 가능</th>
+          <th style="width:95px;text-align:right;">사용수량</th>
+          <th style="width:70px;">단위</th>
+          <th style="min-width:140px;">비고</th>
+          <th style="width:42px;"></th>
+        </tr></thead>
+        <tbody id="sm-usage-edit-body"></tbody>
+      </table>
+    </div>
+    <div class="em-btns" style="justify-content:space-between;">
+      <button class="btn btn-secondary" onclick="addSubMaterialUsageDraftRow()">+ 사용항목</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary" onclick="closeSubMaterialUsageModal()">닫기</button>
+        <button class="btn btn-primary" onclick="saveSubMaterialUsageModal()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── 서버 데이터 로딩 오버레이 ── -->
 <div id="gs-overlay" class="hidden">
   <div class="gs-spinner"></div>
@@ -197,7 +227,7 @@
   <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">
     📊 재고현황
   </div>
-  <div class="nav-tab" onclick="showPage('p-submaterials',this);renderSubMaterials();" id="nav-submaterials" style="color:#7f8c8d;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-submaterials',this);" id="nav-submaterials" style="color:#7f8c8d;font-weight:700;">
     📦 부자재 관리
   </div>
   <div class="nav-tab" onclick="showPage('p-prices',this)" id="nav-prices">
@@ -1045,6 +1075,32 @@
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:#7f8c8d;"></div>
+        부자재 사용이력 <span id="sm-usage-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+        <input type="date" id="sm-usage-from" aria-label="부자재 사용 시작일" style="width:140px;font-size:12px;" onchange="renderSubMaterialUsageHistory()">
+        <span style="font-size:12px;color:#888;">~</span>
+        <input type="date" id="sm-usage-to" aria-label="부자재 사용 종료일" style="width:140px;font-size:12px;" onchange="renderSubMaterialUsageHistory()">
+        <input id="sm-usage-search" placeholder="생산품 / 부자재 / LOT 검색..." style="width:230px;" oninput="renderSubMaterialUsageHistory()">
+        <button class="btn btn-secondary btn-sm" onclick="clearSubMaterialUsageFilters()">전체</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportSubMaterialUsageCSV()">CSV</button>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="max-height:360px;">
+      <table>
+        <thead><tr>
+          <th>생산일</th><th>작업번호</th><th>생산품</th><th>부자재</th><th>규격</th>
+          <th>입고 LOT</th><th style="text-align:right;">사용수량</th><th>단위</th><th>비고</th><th style="text-align:center;">관리</th>
+        </tr></thead>
+        <tbody id="sm-usage-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
         <div class="ct-bar" style="background:#27ae60;"></div>
         부자재 재고현황 <span id="sm-stock-count" style="font-size:12px;font-weight:400;color:#888;"></span>
       </div>
@@ -1058,8 +1114,10 @@
         <thead><tr>
           <th>고유번호</th><th>품목명</th><th>규격</th>
           <th style="text-align:right;">총 입고</th>
+          <th style="text-align:right;">총 사용</th>
           <th style="text-align:right;">최근 실사</th>
           <th style="text-align:right;">실사 후 입고</th>
+          <th style="text-align:right;">실사 후 사용</th>
           <th style="text-align:right;">관리 재고</th>
           <th>단위</th><th>최근 실사일</th><th>담당자</th><th>상태</th><th>비고</th><th style="text-align:center;">관리</th>
         </tr></thead>
@@ -4291,6 +4349,88 @@ function saveProductionRows(entry, transactionRows, deletedProdId, deletedProdEn
   save();
 }
 
+async function supabaseLoadSubMaterialUsages(password=requireSupabasePassword()){
+  const rows = await sbRpc('dbmt_get_submaterial_usages', {p_password: password});
+  subMaterialUsageRpcInstalled = true;
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function supabaseSaveSubMaterialUsageRows(rows, deletedIds){
+  const password = requireSupabasePassword();
+  const upsertRows = normalizeRowsForUpsert(rows, 'smuse');
+  const deleteIds = asArray(deletedIds).map(id=>String(id)).filter(Boolean);
+  try{
+    if(upsertRows.length){
+      await sbRpc('dbmt_upsert_submaterial_usages', {p_password: password, p_rows: upsertRows});
+    }
+    for(const id of deleteIds){
+      await sbRpc('dbmt_delete_submaterial_usage', {p_password: password, p_id: id});
+    }
+    subMaterialUsageRpcInstalled = true;
+    gsShowSync('Supabase 부자재 사용이력 저장 완료');
+  } catch(err){
+    subMaterialUsageRpcInstalled = false;
+    throw err;
+  }
+}
+
+function saveSubMaterialUsageRows(rows, deletedIds, options={}){
+  const upserts = asArray(rows);
+  const deletes = asArray(deletedIds).map(id=>String(id)).filter(Boolean);
+  safeLocalStorageSet('dbmt_submaterial_usages', JSON.stringify(subMaterialUsages), true);
+  if(options.log !== false){
+    if(upserts.length){
+      const sample = upserts[0];
+      const action = options.action || '저장';
+      recordDataChange({
+        menu:'부자재 관리',
+        action:upserts.length > 1 ? `일괄 ${action}` : action,
+        target:sample.productionSummary || sample.itemName || '',
+        summary:`부자재 사용 ${upserts.length}건 ${action}: ${sample.itemName || ''} ${sample.lot || ''}`,
+        refId:sample.productionId || sample.id || ''
+      });
+    }
+    if(deletes.length){
+      recordDataChange({
+        menu:'부자재 관리',
+        action:deletes.length > 1 ? '일괄 삭제' : '삭제',
+        target:options.target || '',
+        summary:`부자재 사용 ${deletes.length}건 삭제`,
+        refId:deletes[0] || ''
+      });
+    }
+  }
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    supabaseSaveSubMaterialUsageRows(upserts, deletes).catch(err=>{
+      console.error('Supabase submaterial usage save failed:', err);
+      const detail = String(err?.message || err || '').slice(0, 180);
+      gsShowSync(`부자재 사용이력 서버 저장 실패${detail ? ': ' + detail : ''}`, true);
+    });
+  }
+}
+
+async function refreshSubMaterialUsagesFromSupabase(force=false){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1' || !getSupabasePassword()) return false;
+  if(!force && Date.now() - subMaterialUsageLastRefreshAt < 5000) return false;
+  if(subMaterialUsageRefreshPromise) return subMaterialUsageRefreshPromise;
+  subMaterialUsageRefreshPromise = (async()=>{
+    try{
+      const rows = await supabaseLoadSubMaterialUsages();
+      subMaterialUsages = rows;
+      safeLocalStorageSet('dbmt_submaterial_usages', JSON.stringify(subMaterialUsages), true);
+      subMaterialUsageLastRefreshAt = Date.now();
+      return true;
+    } catch(err){
+      subMaterialUsageRpcInstalled = false;
+      console.warn('부자재 사용이력 불러오기 실패:', err);
+      return false;
+    } finally {
+      subMaterialUsageRefreshPromise = null;
+    }
+  })();
+  return subMaterialUsageRefreshPromise;
+}
+
 function ensurePriceId(row){
   if(row && !row.id) row.id = `price_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   return row;
@@ -4523,7 +4663,10 @@ async function showPage(id, btn){
   if(id==='p-prod-loss') renderProductionLoss();
   if(id==='p-workorders'){ initWorkOrderForm(); renderWorkOrders(); }
   if(id==='p-stock') renderStock();
-  if(id==='p-submaterials') renderSubMaterials();
+  if(id==='p-submaterials'){
+    renderSubMaterials();
+    refreshSubMaterialUsagesFromSupabase().then(changed=>{ if(changed) renderSubMaterials(); });
+  }
   if(id==='p-invoice') initInvoiceDates();
   if(id==='p-shiplog') initShipDates();
   if(id==='p-prices'){ cancelEditPrice(); renderPrices(); }
@@ -7511,11 +7654,13 @@ function saveProdEntry(){
   });
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   saveProductionRows(entry, productionTxns, deletedProdId, deletedProdEntry);
+  if(editingProdId) syncSubMaterialUsageProductionMetadata(entry);
   renderProduction();
   renderStock();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
   toast('생산일보 저장 완료! 재고에 반영됐습니다.');
   clearProdForm();
+  setTimeout(()=>openSubMaterialUsageModal(entry.id, true), 0);
 }
 
 function clearProdForm(){
@@ -7532,12 +7677,24 @@ function clearProdForm(){
 }
 
 function deleteProdEntry(id){
-  if(!confirm('삭제하시겠습니까?\n관련 재고(사용/생산입고)도 함께 취소됩니다.'))return;
+  const linkedSubMaterialUsages = getProductionSubMaterialUsages(id);
+  const usageNotice = linkedSubMaterialUsages.length
+    ? `\n연결된 부자재 사용 ${linkedSubMaterialUsages.length}건도 취소되어 재고가 복원됩니다.`
+    : '';
+  if(!confirm(`삭제하시겠습니까?\n관련 재고(사용/생산입고)도 함께 취소됩니다.${usageNotice}`))return;
   const deletedProdEntry = userProdEntries.find(e=>String(e.id)===String(id)) || null;
   userProdEntries=userProdEntries.filter(e=>String(e.id)!==String(id));
   userTransactions=userTransactions.filter(t=>String(t._prodId)!==String(id));
+  if(linkedSubMaterialUsages.length){
+    const deletedUsageIds = linkedSubMaterialUsages.map(u=>u.id);
+    subMaterialUsages = subMaterialUsages.filter(u=>String(u.productionId||'')!==String(id));
+    saveSubMaterialUsageRows([], deletedUsageIds, {
+      target:subMaterialProductionSummary(deletedProdEntry)
+    });
+  }
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   saveProductionRows(null, [], id, deletedProdEntry); renderProduction(); renderStock(); renderTransactions();
+  if(document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
   toast('생산일보 삭제 완료. 재고가 복원됐습니다.');
 }
@@ -7720,6 +7877,11 @@ function renderProduction(){
   }
   
   let html='';
+  const subMaterialUsageCountByProduction = new Map();
+  subMaterialUsages.forEach(row => {
+    const key = String(row.productionId || '');
+    subMaterialUsageCountByProduction.set(key, (subMaterialUsageCountByProduction.get(key) || 0) + 1);
+  });
   entries.forEach(e=>{
     const inputs=e.inputs||[];
     const outputs=e.outputs||[];
@@ -7783,7 +7945,7 @@ function renderProduction(){
       <td></td>
       <td style="white-space:nowrap;text-align:center;">
         ${e._isUser
-          ? `<button class="btn btn-sm" style="background:#e67e22;color:#fff;margin-right:1px;font-size:10px;padding:1px 4px;line-height:1.2;" onclick="openEditProdEntry(${jsArg(e.id)})">수정</button><button class="btn btn-sm btn-danger" style="font-size:10px;padding:1px 4px;line-height:1.2;" onclick="deleteProdEntry(${jsArg(e.id)})">삭제</button>`
+          ? `<div style="margin-bottom:3px;"><button class="btn btn-sm" style="background:#7f8c8d;color:#fff;font-size:10px;padding:1px 5px;line-height:1.2;" onclick="openSubMaterialUsageModal(${jsArg(e.id)})">부자재${subMaterialUsageCountByProduction.get(String(e.id||'')) ? ` ${subMaterialUsageCountByProduction.get(String(e.id||''))}` : ''}</button></div><button class="btn btn-sm" style="background:#e67e22;color:#fff;margin-right:1px;font-size:10px;padding:1px 4px;line-height:1.2;" onclick="openEditProdEntry(${jsArg(e.id)})">수정</button><button class="btn btn-sm btn-danger" style="font-size:10px;padding:1px 4px;line-height:1.2;" onclick="deleteProdEntry(${jsArg(e.id)})">삭제</button>`
           : '<span style="font-size:10px;color:#aaa">원본</span>'}
       </td>
     </tr>`;
@@ -8255,6 +8417,13 @@ function saveStockAdjust(){
 let subMaterialItems = JSON.parse(localStorage.getItem('dbmt_submaterial_items') || '[]');
 let subMaterialLots  = JSON.parse(localStorage.getItem('dbmt_submaterial_lots') || '[]');
 let subMaterialCounts = JSON.parse(localStorage.getItem('dbmt_submaterial_counts') || '[]');
+let subMaterialUsages = JSON.parse(localStorage.getItem('dbmt_submaterial_usages') || '[]');
+let subMaterialUsageRpcInstalled = null;
+let subMaterialUsageRefreshPromise = null;
+let subMaterialUsageLastRefreshAt = 0;
+let subMaterialUsageDraftRows = [];
+let subMaterialUsageDraftSeq = 0;
+let activeSubMaterialUsageProductionId = '';
 
 function subMaterialId(){
   return 'sm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
@@ -8507,6 +8676,11 @@ function resetSubMaterialInbound(){
 }
 
 function deleteSubMaterialLot(id){
+  const linkedUsages = subMaterialUsages.filter(u => String(u.lotId || '') === String(id));
+  if(linkedUsages.length){
+    toast(`생산에 사용된 LOT입니다. 사용이력 ${linkedUsages.length}건을 먼저 확인해주세요.`);
+    return;
+  }
   if(!confirm('선택한 부자재 Lot을 삭제할까요?')) return;
   subMaterialLots = subMaterialLots.filter(l => l.id !== id);
   saveSubMaterials();
@@ -8552,6 +8726,343 @@ function deleteSubMaterialCount(id){
   renderSubMaterials();
 }
 
+function subMaterialUsageProductionEntry(productionId){
+  return [...userProdEntries, ...EXCEL_PROD].find(e => String(e.id || '') === String(productionId || '')) || null;
+}
+
+function subMaterialProductionSummary(entry){
+  if(!entry) return '';
+  const outputs = asArray(entry.outputs).filter(o => o?.product);
+  if(!outputs.length) return '생산품 미입력';
+  return outputs.map(o => {
+    const qty = parseAppNumber(o.qty);
+    return `${o.product}${o.packunit ? ` (${o.packunit})` : ''}${qty ? ` ${qty.toLocaleString('ko-KR',{maximumFractionDigits:2})}KG` : ''}`;
+  }).join(', ');
+}
+
+function subMaterialUsageWorkDate(entry){
+  return String(entry?.date || '').replace(/\//g, '-');
+}
+
+function getProductionSubMaterialUsages(productionId){
+  return subMaterialUsages.filter(u => String(u.productionId || '') === String(productionId || ''));
+}
+
+function subMaterialUsageMatchesItem(usage, item){
+  return String(usage.itemId || '') === String(item.id || '') ||
+    (!!item.code && String(usage.itemCode || '') === String(item.code)) ||
+    (
+      String(usage.itemName || '') === String(item.name || '') &&
+      String(usage.itemSpec || '') === String(item.spec || '')
+    );
+}
+
+function getSubMaterialLotUsedQty(lotId, excludeProductionId=''){
+  return subMaterialUsages
+    .filter(u =>
+      String(u.lotId || '') === String(lotId || '') &&
+      (!excludeProductionId || String(u.productionId || '') !== String(excludeProductionId))
+    )
+    .reduce((sum,u)=>sum + parseAppNumber(u.qty), 0);
+}
+
+function getSubMaterialLotAvailable(lotId, excludeProductionId=''){
+  const lot = subMaterialLots.find(l => String(l.id || '') === String(lotId || ''));
+  if(!lot) return 0;
+  return parseAppNumber(lot.qty) - getSubMaterialLotUsedQty(lotId, excludeProductionId);
+}
+
+function subMaterialUsageDraftId(){
+  subMaterialUsageDraftSeq += 1;
+  return `smud_${subMaterialUsageDraftSeq}`;
+}
+
+function createSubMaterialUsageDraft(row={}){
+  return {
+    draftId:subMaterialUsageDraftId(),
+    id:row.id || '',
+    itemId:row.itemId || '',
+    lotId:row.lotId || '',
+    qty:row.qty ?? '',
+    note:row.note || ''
+  };
+}
+
+function updateSubMaterialUsageDraft(draftId, field, value){
+  const row = subMaterialUsageDraftRows.find(r => r.draftId === draftId);
+  if(row) row[field] = value;
+}
+
+function addSubMaterialUsageDraftRow(){
+  subMaterialUsageDraftRows.push(createSubMaterialUsageDraft());
+  renderSubMaterialUsageDraftRows();
+}
+
+function removeSubMaterialUsageDraftRow(draftId){
+  subMaterialUsageDraftRows = subMaterialUsageDraftRows.filter(r => r.draftId !== draftId);
+  if(!subMaterialUsageDraftRows.length) subMaterialUsageDraftRows.push(createSubMaterialUsageDraft());
+  renderSubMaterialUsageDraftRows();
+}
+
+function onSubMaterialUsageItemChange(draftId, itemId){
+  const row = subMaterialUsageDraftRows.find(r => r.draftId === draftId);
+  if(!row) return;
+  row.itemId = itemId;
+  row.lotId = '';
+  renderSubMaterialUsageDraftRows();
+}
+
+function onSubMaterialUsageLotChange(draftId, lotId){
+  const row = subMaterialUsageDraftRows.find(r => r.draftId === draftId);
+  if(!row) return;
+  row.lotId = lotId;
+  renderSubMaterialUsageDraftRows();
+}
+
+function subMaterialUsageDraftAvailable(row){
+  if(!row?.lotId) return 0;
+  const otherDraftQty = subMaterialUsageDraftRows
+    .filter(r => r.draftId !== row.draftId && String(r.lotId || '') === String(row.lotId))
+    .reduce((sum,r)=>sum + parseAppNumber(r.qty), 0);
+  return getSubMaterialLotAvailable(row.lotId, activeSubMaterialUsageProductionId) - otherDraftQty;
+}
+
+function renderSubMaterialUsageDraftRows(){
+  const body = document.getElementById('sm-usage-edit-body');
+  if(!body) return;
+  const items = subMaterialItems.slice().sort((a,b)=>
+    String(a.name||'').localeCompare(String(b.name||''),'ko') ||
+    String(a.spec||'').localeCompare(String(b.spec||''),'ko')
+  );
+  body.innerHTML = subMaterialUsageDraftRows.map(row => {
+    const selectedItem = subMaterialItems.find(i => String(i.id) === String(row.itemId));
+    const lots = subMaterialLots
+      .filter(l =>
+        (!row.itemId || String(l.itemId || '') === String(row.itemId)) &&
+        (
+          String(l.id || '') === String(row.lotId || '') ||
+          getSubMaterialLotAvailable(l.id, activeSubMaterialUsageProductionId) > 0
+        )
+      )
+      .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || String(b.lot||'').localeCompare(String(a.lot||'')));
+    const available = subMaterialUsageDraftAvailable(row);
+    const itemOptions = '<option value="">-- 품목 선택 --</option>' + items.map(item =>
+      `<option value="${htmlEscape(item.id)}"${String(item.id)===String(row.itemId)?' selected':''}>${htmlEscape(item.code || '')} · ${htmlEscape(item.name || '')}${item.spec ? ' / ' + htmlEscape(item.spec) : ''}</option>`
+    ).join('');
+    const lotOptions = '<option value="">-- LOT 선택 --</option>' + lots.map(lot => {
+      const baseAvailable = getSubMaterialLotAvailable(lot.id, activeSubMaterialUsageProductionId);
+      return `<option value="${htmlEscape(lot.id)}"${String(lot.id)===String(row.lotId)?' selected':''}>${htmlEscape(lot.lot || '')} · ${htmlEscape(lot.date || '')} · 가용 ${baseAvailable.toLocaleString('ko-KR',{maximumFractionDigits:2})}${htmlEscape(lot.unit || selectedItem?.unit || '')}</option>`;
+    }).join('');
+    return `<tr>
+      <td><select style="width:100%;" onchange="onSubMaterialUsageItemChange(${jsArg(row.draftId)},this.value)">${itemOptions}</select></td>
+      <td><select style="width:100%;" onchange="onSubMaterialUsageLotChange(${jsArg(row.draftId)},this.value)"${row.itemId?'':' disabled'}>${lotOptions}</select></td>
+      <td style="text-align:right;font-weight:700;color:${available < 0 ? '#c0392b' : '#34495e'};">${row.lotId ? available.toLocaleString('ko-KR',{maximumFractionDigits:2}) : '-'}</td>
+      <td><input type="number" min="0" step="0.01" value="${htmlEscape(row.qty)}" style="width:100%;text-align:right;" oninput="updateSubMaterialUsageDraft(${jsArg(row.draftId)},'qty',this.value)"></td>
+      <td>${htmlEscape(selectedItem?.unit || subMaterialLots.find(l=>String(l.id)===String(row.lotId))?.unit || '-')}</td>
+      <td><input value="${htmlEscape(row.note)}" style="width:100%;" placeholder="선택 입력" oninput="updateSubMaterialUsageDraft(${jsArg(row.draftId)},'note',this.value)"></td>
+      <td style="text-align:center;"><button type="button" class="btn btn-danger btn-sm" title="사용항목 삭제" onclick="removeSubMaterialUsageDraftRow(${jsArg(row.draftId)})">×</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function openSubMaterialUsageModal(productionId, skipRefresh=false){
+  const entry = subMaterialUsageProductionEntry(productionId);
+  if(!entry){
+    toast('연결된 생산 작업을 찾을 수 없습니다.');
+    return;
+  }
+  if(!skipRefresh) await refreshSubMaterialUsagesFromSupabase(true);
+  activeSubMaterialUsageProductionId = String(productionId || '');
+  const existing = getProductionSubMaterialUsages(activeSubMaterialUsageProductionId);
+  subMaterialUsageDraftRows = existing.length
+    ? existing.map(createSubMaterialUsageDraft)
+    : [createSubMaterialUsageDraft(), createSubMaterialUsageDraft()];
+  const summaryEl = document.getElementById('sm-usage-prod-summary');
+  if(summaryEl){
+    summaryEl.innerHTML = `<strong>${htmlEscape(subMaterialUsageWorkDate(entry))} · 작업 ${htmlEscape(entry.job_no || '')}</strong><br>${htmlEscape(subMaterialProductionSummary(entry))}`;
+  }
+  const statusEl = document.getElementById('sm-usage-editor-status');
+  if(statusEl){
+    statusEl.style.display = 'none';
+    statusEl.textContent = '';
+  }
+  renderSubMaterialUsageDraftRows();
+  document.getElementById('sm-usage-modal')?.classList.remove('hidden');
+}
+
+function closeSubMaterialUsageModal(){
+  document.getElementById('sm-usage-modal')?.classList.add('hidden');
+  activeSubMaterialUsageProductionId = '';
+  subMaterialUsageDraftRows = [];
+}
+
+function saveSubMaterialUsageModal(){
+  const productionId = activeSubMaterialUsageProductionId;
+  const entry = subMaterialUsageProductionEntry(productionId);
+  if(!entry){ toast('연결된 생산 작업을 찾을 수 없습니다.'); return; }
+  const statusEl = document.getElementById('sm-usage-editor-status');
+  const drafts = subMaterialUsageDraftRows.filter(r =>
+    r.itemId || r.lotId || String(r.qty ?? '').trim() || String(r.note || '').trim()
+  );
+  const fail = message => {
+    if(statusEl){
+      statusEl.textContent = message;
+      statusEl.style.display = 'block';
+    }
+    return false;
+  };
+  for(const row of drafts){
+    const item = subMaterialItems.find(i => String(i.id) === String(row.itemId));
+    const lot = subMaterialLots.find(l => String(l.id) === String(row.lotId));
+    const qty = parseAppNumber(row.qty);
+    if(!item) return fail('모든 사용항목의 부자재 품목을 선택해주세요.');
+    if(!lot || String(lot.itemId || '') !== String(item.id || '')) return fail('선택한 품목에 맞는 입고 LOT를 선택해주세요.');
+    if(qty <= 0) return fail('사용수량은 0보다 크게 입력해주세요.');
+  }
+  const qtyByLot = new Map();
+  drafts.forEach(row => qtyByLot.set(row.lotId, (qtyByLot.get(row.lotId) || 0) + parseAppNumber(row.qty)));
+  for(const [lotId, qty] of qtyByLot){
+    const available = getSubMaterialLotAvailable(lotId, productionId);
+    if(qty > available + 0.000001){
+      const lot = subMaterialLots.find(l => String(l.id) === String(lotId));
+      return fail(`${lot?.lot || '선택 LOT'}의 사용수량이 가용재고 ${available.toLocaleString('ko-KR',{maximumFractionDigits:2})}${lot?.unit || ''}를 초과합니다.`);
+    }
+  }
+
+  const existing = getProductionSubMaterialUsages(productionId);
+  const now = new Date().toISOString();
+  const rows = drafts.map(row => {
+    const item = subMaterialItems.find(i => String(i.id) === String(row.itemId));
+    const lot = subMaterialLots.find(l => String(l.id) === String(row.lotId));
+    const old = existing.find(u => String(u.id) === String(row.id));
+    return {
+      id:old?.id || makeAppId('smuse'),
+      productionId,
+      workDate:subMaterialUsageWorkDate(entry),
+      jobNo:String(entry.job_no || ''),
+      productionSummary:subMaterialProductionSummary(entry),
+      itemId:item.id,
+      itemCode:item.code || '',
+      itemName:item.name || '',
+      itemSpec:item.spec || '',
+      lotId:lot.id,
+      lot:lot.lot || '',
+      qty:parseAppNumber(row.qty),
+      unit:lot.unit || item.unit || '',
+      note:String(row.note || '').trim(),
+      createdAt:old?.createdAt || now,
+      updatedAt:now
+    };
+  });
+  const keepIds = new Set(rows.map(r=>String(r.id)));
+  const deletedIds = existing.filter(u=>!keepIds.has(String(u.id))).map(u=>u.id);
+  subMaterialUsages = subMaterialUsages
+    .filter(u => String(u.productionId || '') !== String(productionId))
+    .concat(rows);
+  saveSubMaterialUsageRows(rows, deletedIds, {
+    action:existing.length ? '수정' : '저장',
+    target:subMaterialProductionSummary(entry)
+  });
+  closeSubMaterialUsageModal();
+  renderProduction();
+  if(document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
+  toast(rows.length ? `부자재 사용 ${rows.length}건을 저장했습니다.` : '부자재 사용 기록을 비웠습니다.');
+}
+
+function syncSubMaterialUsageProductionMetadata(entry){
+  const rows = getProductionSubMaterialUsages(entry?.id);
+  if(!rows.length) return;
+  const now = new Date().toISOString();
+  rows.forEach(row => {
+    row.workDate = subMaterialUsageWorkDate(entry);
+    row.jobNo = String(entry.job_no || '');
+    row.productionSummary = subMaterialProductionSummary(entry);
+    row.updatedAt = now;
+  });
+  saveSubMaterialUsageRows(rows, [], {action:'수정', log:false});
+}
+
+function deleteSubMaterialUsage(id){
+  const row = subMaterialUsages.find(u => String(u.id) === String(id));
+  if(!row || !confirm(`${row.itemName || '부자재'} ${row.lot || ''} 사용 기록을 삭제할까요?\n삭제하면 해당 수량만큼 재고가 복원됩니다.`)) return;
+  subMaterialUsages = subMaterialUsages.filter(u => String(u.id) !== String(id));
+  saveSubMaterialUsageRows([], [id], {target:row.productionSummary || row.itemName || ''});
+  renderSubMaterials();
+  renderProduction();
+  toast('부자재 사용 기록을 삭제했습니다.');
+}
+
+function clearSubMaterialUsageFilters(){
+  const fromEl = document.getElementById('sm-usage-from');
+  const toEl = document.getElementById('sm-usage-to');
+  const searchEl = document.getElementById('sm-usage-search');
+  if(fromEl) fromEl.value = '';
+  if(toEl) toEl.value = '';
+  if(searchEl) searchEl.value = '';
+  renderSubMaterialUsageHistory();
+}
+
+function getFilteredSubMaterialUsages(){
+  const from = document.getElementById('sm-usage-from')?.value || '';
+  const to = document.getElementById('sm-usage-to')?.value || '';
+  const query = (document.getElementById('sm-usage-search')?.value || '').toLowerCase().trim();
+  return subMaterialUsages
+    .filter(row => {
+      const date = String(row.workDate || '');
+      if(from && date < from) return false;
+      if(to && date > to) return false;
+      if(!query) return true;
+      return [row.productionSummary,row.jobNo,row.itemCode,row.itemName,row.itemSpec,row.lot,row.note]
+        .some(v=>String(v || '').toLowerCase().includes(query));
+    })
+    .sort((a,b)=>
+      String(b.workDate||'').localeCompare(String(a.workDate||'')) ||
+      String(b.jobNo||'').localeCompare(String(a.jobNo||''), undefined, {numeric:true}) ||
+      String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))
+    );
+}
+
+function renderSubMaterialUsageHistory(){
+  const rows = getFilteredSubMaterialUsages();
+  const countEl = document.getElementById('sm-usage-count');
+  if(countEl) countEl.textContent = `(${rows.length}건)`;
+  const body = document.getElementById('sm-usage-body');
+  if(!body) return;
+  body.innerHTML = rows.length ? rows.map(row=>`<tr>
+    <td style="white-space:nowrap;">${htmlEscape(row.workDate || '-')}</td>
+    <td>${htmlEscape(row.jobNo || '-')}</td>
+    <td>${htmlEscape(row.productionSummary || '-')}</td>
+    <td><strong>${htmlEscape(row.itemName || '')}</strong></td>
+    <td>${htmlEscape(row.itemSpec || '-')}</td>
+    <td style="font-family:Consolas,'Courier New',monospace;font-size:11px;">${htmlEscape(row.lot || '-')}</td>
+    <td style="text-align:right;font-weight:700;">${parseAppNumber(row.qty).toLocaleString('ko-KR',{maximumFractionDigits:2})}</td>
+    <td>${htmlEscape(row.unit || '-')}</td>
+    <td>${htmlEscape(row.note || '-')}</td>
+    <td style="text-align:center;white-space:nowrap;">
+      <button type="button" class="btn btn-sm" style="background:#7f8c8d;color:#fff;margin-right:3px;" onclick="openSubMaterialUsageModal(${jsArg(row.productionId)})">수정</button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="deleteSubMaterialUsage(${jsArg(row.id)})">삭제</button>
+    </td>
+  </tr>`).join('')
+    : '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">조건에 맞는 부자재 사용이력이 없습니다.</td></tr>';
+}
+
+function exportSubMaterialUsageCSV(){
+  const rows = getFilteredSubMaterialUsages();
+  const header = ['생산일','작업번호','생산품','부자재 고유번호','부자재','규격','입고 LOT','사용수량','단위','비고'];
+  downloadCSV([header, ...rows.map(r=>[
+    r.workDate,r.jobNo,r.productionSummary,r.itemCode,r.itemName,r.itemSpec,r.lot,r.qty,r.unit,r.note
+  ])], '부자재_사용이력.csv');
+}
+
+function subMaterialRecordIsAfterCount(record, latest){
+  if(!latest) return false;
+  const recordDate = String(record.workDate || record.date || '');
+  const countDate = String(latest.date || '');
+  if(recordDate !== countDate) return recordDate > countDate;
+  if(!record.createdAt || !latest.createdAt) return true;
+  return String(record.createdAt) > String(latest.createdAt);
+}
+
 function getSubMaterialStockRows(){
   return subMaterialItems
     .slice()
@@ -8570,23 +9081,25 @@ function getSubMaterialStockRows(){
           String(b.date||'').localeCompare(String(a.date||'')) ||
           String(b.createdAt||'').localeCompare(String(a.createdAt||'')) ||
           String(b.id||'').localeCompare(String(a.id||''))
-        );
+      );
       const latest = counts[0] || null;
       const totalIn = lots.reduce((sum,l)=>sum + parseAppNumber(l.qty), 0);
+      const usages = subMaterialUsages.filter(u => subMaterialUsageMatchesItem(u, item));
+      const totalUsed = usages.reduce((sum,u)=>sum + parseAppNumber(u.qty), 0);
       const inAfterCount = latest
-        ? lots.filter(l => {
-            const lotDate = String(l.date || '');
-            const countDate = String(latest.date || '');
-            return lotDate > countDate ||
-              (lotDate === countDate && l.createdAt && latest.createdAt && String(l.createdAt) > String(latest.createdAt));
-          }).reduce((sum,l)=>sum + parseAppNumber(l.qty), 0)
+        ? lots.filter(l => subMaterialRecordIsAfterCount(l, latest))
+          .reduce((sum,l)=>sum + parseAppNumber(l.qty), 0)
+        : 0;
+      const usedAfterCount = latest
+        ? usages.filter(u => subMaterialRecordIsAfterCount(u, latest))
+          .reduce((sum,u)=>sum + parseAppNumber(u.qty), 0)
         : 0;
       const latestQty = latest ? parseAppNumber(latest.qty) : null;
-      const managedQty = latest ? latestQty + inAfterCount : totalIn;
+      const managedQty = latest ? latestQty + inAfterCount - usedAfterCount : totalIn - totalUsed;
       return {
-        item, totalIn, latest, latestQty, inAfterCount, managedQty,
+        item, totalIn, totalUsed, latest, latestQty, inAfterCount, usedAfterCount, managedQty,
         unit: latest?.unit || item.unit || lots.find(l=>l.unit)?.unit || '',
-        status: latest ? (inAfterCount > 0 ? '실사 후 입고' : '실사완료') : '실사필요'
+        status: latest ? (inAfterCount > 0 || usedAfterCount > 0 ? '실사 후 변동' : '실사완료') : '실사필요'
       };
     });
 }
@@ -8633,14 +9146,16 @@ function renderSubMaterials(){
   const stockBody = document.getElementById('sm-stock-body');
   if(stockBody){
     stockBody.innerHTML = stockRows.length ? stockRows.map(r=>{
-      const statusColor = r.status === '실사필요' ? '#e74c3c' : (r.status === '실사 후 입고' ? '#d35400' : '#27ae60');
+      const statusColor = r.status === '실사필요' ? '#e74c3c' : (r.status === '실사 후 변동' ? '#d35400' : '#27ae60');
       return `<tr>
         <td style="font-family:Consolas,'Courier New',monospace;font-weight:700;color:#2c3e50;">${htmlEscape(r.item.code || '')}</td>
         <td><strong>${htmlEscape(r.item.name || '')}</strong></td>
         <td>${htmlEscape(r.item.spec || '-')}</td>
         <td style="text-align:right;">${r.totalIn.toLocaleString('ko-KR')}</td>
+        <td style="text-align:right;">${r.totalUsed.toLocaleString('ko-KR')}</td>
         <td style="text-align:right;">${r.latest ? r.latestQty.toLocaleString('ko-KR') : '-'}</td>
         <td style="text-align:right;">${r.latest ? r.inAfterCount.toLocaleString('ko-KR') : '-'}</td>
+        <td style="text-align:right;">${r.latest ? r.usedAfterCount.toLocaleString('ko-KR') : '-'}</td>
         <td style="text-align:right;font-weight:800;color:#2c3e50;">${r.managedQty.toLocaleString('ko-KR')}</td>
         <td>${htmlEscape(r.unit || '-')}</td>
         <td style="white-space:nowrap;">${r.latest ? htmlEscape(r.latest.date || '') : '-'}</td>
@@ -8650,7 +9165,7 @@ function renderSubMaterials(){
         <td style="text-align:center;white-space:nowrap;">${r.latest ? `<button class="btn btn-sm btn-danger" onclick="deleteSubMaterialCount('${r.latest.id}')">실사삭제</button>` : '-'}</td>
       </tr>`;
     }).join('')
-    : '<tr><td colspan="13" style="text-align:center;color:#888;padding:20px;">표시할 부자재 재고현황이 없습니다.</td></tr>';
+    : '<tr><td colspan="15" style="text-align:center;color:#888;padding:20px;">표시할 부자재 재고현황이 없습니다.</td></tr>';
   }
 
   const q = (document.getElementById('sm-search')?.value || '').toLowerCase().trim();
@@ -8680,13 +9195,15 @@ function renderSubMaterials(){
     </tr>`).join('')
     : '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">등록된 부자재 Lot이 없습니다.</td></tr>';
   }
+  renderSubMaterialUsageHistory();
 }
 
 function exportSubMaterialsCSV(){
-  const stockHeader = ['구분','고유번호','품목명','규격','총입고','최근실사','실사후입고','관리재고','단위','최근실사일','담당자','상태','비고'];
+  const stockHeader = ['구분','고유번호','품목명','규격','총입고','총사용','최근실사','실사후입고','실사후사용','관리재고','단위','최근실사일','담당자','상태','비고'];
   const stockRows = getSubMaterialStockRows().map(r=>[
-    '재고현황', r.item.code, r.item.name, r.item.spec, r.totalIn,
-    r.latest ? r.latestQty : '', r.latest ? r.inAfterCount : '', r.managedQty,
+    '재고현황', r.item.code, r.item.name, r.item.spec, r.totalIn, r.totalUsed,
+    r.latest ? r.latestQty : '', r.latest ? r.inAfterCount : '',
+    r.latest ? r.usedAfterCount : '', r.managedQty,
     r.unit, r.latest?.date || '', r.latest?.manager || '', r.status, r.latest?.note || ''
   ]);
   const blank = [''];
@@ -10363,7 +10880,7 @@ function doImport(){
 // ── 전체 데이터 백업 / 복원 ──────────────────────────────
 function backupAllData(){
   const KEYS = [
-    'dbmt_user_transactions','dbmt_user_prod','dbmt_prices',
+    'dbmt_user_transactions','dbmt_user_prod','dbmt_prices','dbmt_submaterial_usages',
     'dbmt_schedule_events',
     'dbmt_employees','dbmt_leaves','dbmt_weekend_work','dbmt_leave_deductions',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
@@ -10615,6 +11132,10 @@ function applySupabasePayload(data){
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
   safeLocalStorageSet('dbmt_prices', JSON.stringify(prices), true);
+  if(Array.isArray(data.subMaterialUsages)){
+    subMaterialUsages = data.subMaterialUsages;
+    safeLocalStorageSet('dbmt_submaterial_usages', JSON.stringify(subMaterialUsages), true);
+  }
 
   const app = data.appData || {};
   Object.entries(APP_DATA_REGISTRY).forEach(([k, r]) => {
@@ -10632,6 +11153,12 @@ async function supabaseInit(){
   const startRevision = localCoreRevision;
   gsShowSync('Supabase에서 데이터 불러오는 중...');
   const data = await sbRpc('dbmt_get_all', {p_password: password});
+  try{
+    data.subMaterialUsages = await supabaseLoadSubMaterialUsages(password);
+  } catch(err){
+    subMaterialUsageRpcInstalled = false;
+    console.warn('부자재 사용이력 RPC가 아직 설치되지 않았습니다:', err);
+  }
   if(localCoreRevision !== startRevision){
     invalidateStockMap();
     try{

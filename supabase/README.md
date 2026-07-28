@@ -33,9 +33,10 @@ Editor query for each file:
 11. `schema-rpc-05b-delete-helpers.sql`
 12. `schema-rpc-06a-upsert-production.sql`
 13. `schema-rpc-06b-upsert-prices.sql`
+14. `schema-rpc-07-submaterial-usage.sql`
 
-`schema-rpc.sql` contains the same setup in one file, but the split files are
-easier to run safely in the Supabase dashboard.
+`schema-rpc.sql` contains the original combined setup. Use the split files above
+for the current setup and for safer execution in the Supabase dashboard.
 
 This creates:
 
@@ -53,6 +54,9 @@ This creates:
 - `dbmt_delete_price(password, id)`
 - `dbmt_upsert_production(password, rows)`
 - `dbmt_upsert_prices(password, rows)`
+- `dbmt_get_submaterial_usages(password)`
+- `dbmt_upsert_submaterial_usages(password, rows)`
+- `dbmt_delete_submaterial_usage(password, id)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.
