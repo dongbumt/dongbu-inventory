@@ -625,7 +625,10 @@
           <option value="재고조정">재고조정</option>
           <option value="재고이동">재고이동</option>
         </select>
-        <input type="date" id="t-search-date" style="width:145px;font-size:12px;" onchange="renderTransactions()">
+        <span style="font-size:12px;color:#666;white-space:nowrap;">기간</span>
+        <input type="date" id="t-search-from" aria-label="거래 시작일" title="거래 시작일" style="width:135px;font-size:12px;" onchange="renderTransactions()">
+        <span style="font-size:12px;color:#888;">~</span>
+        <input type="date" id="t-search-to" aria-label="거래 종료일" title="거래 종료일" style="width:135px;font-size:12px;" onchange="renderTransactions()">
         <input placeholder="품목명 검색..." id="t-search-product" style="width:150px;" oninput="renderTransactions()">
         <input placeholder="이력번호 검색..." id="t-search-lot" style="width:150px;" oninput="renderTransactions()">
         <button class="btn btn-primary btn-sm" onclick="printFilteredTransactions()">인쇄</button>
@@ -6710,22 +6713,25 @@ function initBulkOutbound(){
 }
 
 function getFilteredTransactions(sortDirection='desc'){
-  const dateQ=(document.getElementById('t-search-date')?.value||'').trim();
+  const dateFrom=(document.getElementById('t-search-from')?.value||'').trim();
+  const dateTo=(document.getElementById('t-search-to')?.value||'').trim();
   const productQ=(document.getElementById('t-search-product')?.value||'').toLowerCase().trim();
   const lotQ=(document.getElementById('t-search-lot')?.value||'').toLowerCase().trim();
   const ft=document.getElementById('t-filter-type')?.value || '';
-  const rows=transactions.filter(t=>
-    (!ft||t.type===ft)&&
-    (!dateQ||String(t.date||'')===dateQ)&&
-    (!productQ||String(t.product||'').toLowerCase().includes(productQ))&&
-    (!lotQ||String(t.lot||'').toLowerCase().includes(lotQ))
-  ).sort((a,b)=>{
+  const rows=transactions.filter(t=>{
+    const txnDate=String(t.date||'');
+    return (!ft||t.type===ft)&&
+      (!dateFrom||txnDate>=dateFrom)&&
+      (!dateTo||txnDate<=dateTo)&&
+      (!productQ||String(t.product||'').toLowerCase().includes(productQ))&&
+      (!lotQ||String(t.lot||'').toLowerCase().includes(lotQ));
+  }).sort((a,b)=>{
     const cmp = String(a.date||'').localeCompare(String(b.date||''));
     if(cmp) return sortDirection === 'asc' ? cmp : -cmp;
     const idCmp = String(a.id||'').localeCompare(String(b.id||''), 'ko', {numeric:true});
     return sortDirection === 'asc' ? idCmp : -idCmp;
   });
-  return {rows, dateQ, productQ, lotQ, ft};
+  return {rows, dateFrom, dateTo, productQ, lotQ, ft};
 }
 
 function renderTransactions(){
@@ -9593,14 +9599,14 @@ function openA4ListPrint(title, filterText, count, tableHtml){
 }
 
 function printFilteredTransactions(){
-  const {rows, dateQ, productQ, lotQ, ft}=getFilteredTransactions('desc');
+  const {rows, dateFrom, dateTo, productQ, lotQ, ft}=getFilteredTransactions('desc');
   if(!rows.length){
     toast('현재 검색 조건에 맞는 거래내역이 없습니다.');
     return;
   }
   const filters=[];
   if(ft) filters.push(`구분: ${ft}`);
-  if(dateQ) filters.push(`날짜: ${dateQ}`);
+  if(dateFrom || dateTo) filters.push(`기간: ${dateFrom || '~'} ~ ${dateTo || '~'}`);
   if(productQ) filters.push(`품목명: ${document.getElementById('t-search-product')?.value || ''}`);
   if(lotQ) filters.push(`이력번호: ${document.getElementById('t-search-lot')?.value || ''}`);
   const body=rows.map(t=>{
