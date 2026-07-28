@@ -628,6 +628,7 @@
         <input type="date" id="t-search-date" style="width:145px;font-size:12px;" onchange="renderTransactions()">
         <input placeholder="품목명 검색..." id="t-search-product" style="width:150px;" oninput="renderTransactions()">
         <input placeholder="이력번호 검색..." id="t-search-lot" style="width:150px;" oninput="renderTransactions()">
+        <button class="btn btn-primary btn-sm" onclick="printFilteredTransactions()">인쇄</button>
         <button class="btn btn-secondary btn-sm" onclick="exportTransactionsCSV()">CSV 저장</button>
       </div>
     </div>
@@ -746,6 +747,7 @@
           <button class="btn btn-secondary btn-sm" style="margin-bottom:1px;" onclick="setProdFilterToday()">오늘</button>
           <button class="btn btn-secondary btn-sm" style="margin-bottom:1px;" onclick="setProdFilterThisMonth()">이번달</button>
         </div>
+        <button class="btn btn-primary btn-sm" style="margin-bottom:1px;" onclick="printFilteredProduction()">인쇄</button>
         <button class="btn btn-secondary btn-sm" style="margin-bottom:1px;" onclick="exportProductionCSV()">📥 CSV</button>
       </div>
     </div>
@@ -6707,17 +6709,27 @@ function initBulkOutbound(){
   if(tbody && !tbody.children.length) addBulkOutboundRows(5);
 }
 
-function renderTransactions(){
+function getFilteredTransactions(sortDirection='desc'){
   const dateQ=(document.getElementById('t-search-date')?.value||'').trim();
   const productQ=(document.getElementById('t-search-product')?.value||'').toLowerCase().trim();
   const lotQ=(document.getElementById('t-search-lot')?.value||'').toLowerCase().trim();
-  const ft=document.getElementById('t-filter-type').value;
-  let rows=transactions.filter(t=>
+  const ft=document.getElementById('t-filter-type')?.value || '';
+  const rows=transactions.filter(t=>
     (!ft||t.type===ft)&&
     (!dateQ||String(t.date||'')===dateQ)&&
     (!productQ||String(t.product||'').toLowerCase().includes(productQ))&&
     (!lotQ||String(t.lot||'').toLowerCase().includes(lotQ))
-  ).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||b.id-a.id);
+  ).sort((a,b)=>{
+    const cmp = String(a.date||'').localeCompare(String(b.date||''));
+    if(cmp) return sortDirection === 'asc' ? cmp : -cmp;
+    const idCmp = String(a.id||'').localeCompare(String(b.id||''), 'ko', {numeric:true});
+    return sortDirection === 'asc' ? idCmp : -idCmp;
+  });
+  return {rows, dateQ, productQ, lotQ, ft};
+}
+
+function renderTransactions(){
+  const {rows} = getFilteredTransactions('desc');
   document.getElementById('t-count').textContent=`(${rows.length}건)`;
   const b=document.getElementById('t-body');
   b.innerHTML=rows.map(t=>{
@@ -9535,6 +9547,164 @@ function exportTransactionsCSV(){
   const rows=transactions.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,t.price||'',t.amount||'',t.note||'']);
   downloadCSV([header,...rows],'원료수불부_거래내역.csv');
 }
+
+function openA4ListPrint(title, filterText, count, tableHtml){
+  const w=window.open('','_blank');
+  if(!w){
+    alert('팝업이 차단되어 인쇄창을 열 수 없습니다. 팝업 허용 후 다시 시도해주세요.');
+    return;
+  }
+  const printedAt = `${localDateString()} ${new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${htmlEscape(title)}</title>
+    <style>
+      @page{size:A4 landscape;margin:8mm;}
+      *{box-sizing:border-box;}
+      html,body{margin:0;padding:0;}
+      body{background:#e5e7eb;color:#111;font-family:"Malgun Gothic","Apple SD Gothic Neo",Arial,sans-serif;}
+      .print-sheet{width:281mm;min-height:194mm;margin:8mm auto;background:#fff;padding:0;box-shadow:0 1mm 5mm rgba(0,0,0,.18);}
+      .print-header{display:flex;justify-content:space-between;align-items:flex-end;gap:8mm;border-bottom:.5mm solid #333;padding-bottom:3mm;margin-bottom:3mm;}
+      h1{font-size:17pt;line-height:1.2;margin:0 0 1.5mm;font-weight:800;letter-spacing:0;}
+      .filter{font-size:8.5pt;line-height:1.45;color:#333;}
+      .print-meta{font-size:7.5pt;line-height:1.5;text-align:right;color:#555;white-space:nowrap;}
+      table{width:100%;border-collapse:collapse;table-layout:fixed;}
+      thead{display:table-header-group;}
+      tfoot{display:table-footer-group;}
+      th,td{border:.25mm solid #777;padding:1.35mm 1.1mm;vertical-align:top;font-size:7.2pt;line-height:1.35;overflow-wrap:anywhere;}
+      th{background:#ececec;text-align:center;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      td.numeric{text-align:right;white-space:nowrap;}
+      td.center{text-align:center;}
+      td.mono{font-family:Consolas,"Courier New",monospace;font-size:6.8pt;}
+      .job-group{break-inside:avoid;page-break-inside:avoid;}
+      .subtotal td{background:#f3f3f3;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      @media print{
+        body{background:#fff;}
+        .print-sheet{width:auto;min-height:0;margin:0;box-shadow:none;}
+        tr,.job-group{break-inside:avoid;page-break-inside:avoid;}
+      }
+    </style></head><body><main class="print-sheet">
+      <header class="print-header">
+        <div><h1>${htmlEscape(title)}</h1><div class="filter">${htmlEscape(filterText || '전체')}</div></div>
+        <div class="print-meta">검색 결과 ${Number(count||0).toLocaleString('ko-KR')}건<br>출력일시 ${htmlEscape(printedAt)}</div>
+      </header>
+      ${tableHtml}
+    </main></body></html>`);
+  w.document.close();
+  setTimeout(()=>{w.focus();w.print();},350);
+}
+
+function printFilteredTransactions(){
+  const {rows, dateQ, productQ, lotQ, ft}=getFilteredTransactions('desc');
+  if(!rows.length){
+    toast('현재 검색 조건에 맞는 거래내역이 없습니다.');
+    return;
+  }
+  const filters=[];
+  if(ft) filters.push(`구분: ${ft}`);
+  if(dateQ) filters.push(`날짜: ${dateQ}`);
+  if(productQ) filters.push(`품목명: ${document.getElementById('t-search-product')?.value || ''}`);
+  if(lotQ) filters.push(`이력번호: ${document.getElementById('t-search-lot')?.value || ''}`);
+  const body=rows.map(t=>{
+    const location=t.type==='재고이동'
+      ? `${normalizeStockLocation(t.fromLocation || t.stockLocation)} → ${normalizeStockLocation(t.toLocation || '')}`
+      : getTxnStockLocation(t);
+    const originInfo=[t.origin,t.storage,location].map(v=>String(v||'').trim()).filter(Boolean).join(' / ');
+    const productInfo=[t.product,t.packunit ? `(${t.packunit})` : ''].filter(Boolean).join(' ');
+    return `<tr>
+      <td class="center">${htmlEscape(t.date || '')}</td>
+      <td class="center">${htmlEscape(t.type || '')}</td>
+      <td>${htmlEscape(t.trader || '-')}</td>
+      <td>${htmlEscape(productInfo || '-')}</td>
+      <td>${htmlEscape(originInfo || '-')}</td>
+      <td class="mono">${htmlEscape(t.lot || '-')}</td>
+      <td class="numeric">${parseAppNumber(t.weight).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="numeric">${parseAppNumber(t.price) ? parseAppNumber(t.price).toLocaleString('ko-KR',{maximumFractionDigits:2}) : '-'}</td>
+      <td class="numeric">${parseAppNumber(t.amount) ? Math.round(parseAppNumber(t.amount)).toLocaleString('ko-KR') : '-'}</td>
+      <td>${htmlEscape(t.note || '-')}</td>
+    </tr>`;
+  }).join('');
+  const table=`<table>
+    <colgroup>
+      <col style="width:8%"><col style="width:6%"><col style="width:11%"><col style="width:14%"><col style="width:12%">
+      <col style="width:13%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:11%">
+    </colgroup>
+    <thead><tr>
+      <th>날짜</th><th>구분</th><th>거래처</th><th>품목명</th><th>원산지 / 보관 / 지점</th>
+      <th>이력번호</th><th>중량(KG)</th><th>단가</th><th>금액</th><th>비고</th>
+    </tr></thead><tbody>${body}</tbody>
+  </table>`;
+  openA4ListPrint('거래내역 목록', filters.length ? filters.join(' · ') : '전체 거래내역', rows.length, table);
+}
+
+function printFilteredProduction(){
+  const {entries, filterFrom, filterTo, productQ, lotQ}=getFilteredProductionEntries('desc');
+  if(!entries.length){
+    toast('현재 검색 조건에 맞는 생산일보가 없습니다.');
+    return;
+  }
+  const filters=[];
+  if(filterFrom || filterTo) filters.push(`기간: ${filterFrom || '~'} ~ ${filterTo || '~'}`);
+  if(productQ) filters.push(`품목명: ${document.getElementById('prod-filter-product')?.value || ''}`);
+  if(lotQ) filters.push(`이력번호: ${document.getElementById('prod-filter-lot')?.value || ''}`);
+  const groups=entries.map(e=>{
+    const inputs=e.inputs || [];
+    const outputs=e.outputs || [];
+    const maxRows=Math.max(inputs.length,outputs.length,1);
+    const entryNote=getProdEntryNote(e);
+    const totalInQty=inputs.reduce((sum,row)=>sum+parseAppNumber(row.qty),0);
+    const totalInAmt=inputs.reduce((sum,row)=>sum+parseAppNumber(row.amount),0);
+    const totalOutQty=outputs.reduce((sum,row)=>sum+parseAppNumber(row.qty),0);
+    const totalOutAmt=outputs.reduce((sum,row)=>sum+parseAppNumber(row.amount),0);
+    const lossKg=totalInQty-totalOutQty;
+    const lossRate=totalInQty>0 ? lossKg/totalInQty*100 : 0;
+    let rows='';
+    for(let i=0;i<maxRows;i++){
+      const inp=inputs[i];
+      const out=outputs[i];
+      rows+=`<tr>
+        ${i===0 ? `<td rowspan="${maxRows}" class="center">${htmlEscape(normProdDate(e.date))}<br><strong>작업 ${htmlEscape(e.job_no || '')}</strong></td>
+        <td rowspan="${maxRows}"><strong>${htmlEscape(getProdJobType(e))}</strong>${entryNote ? `<br>${htmlEscape(entryNote)}` : ''}</td>` : ''}
+        <td>${inp ? htmlEscape([inp.product,inp.packunit ? `(${inp.packunit})` : ''].filter(Boolean).join(' ')) : ''}</td>
+        <td>${inp ? htmlEscape(inp.origin || '') : ''}</td>
+        <td class="numeric">${inp ? parseAppNumber(inp.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}</td>
+        <td class="numeric">${inp && parseAppNumber(inp.price) ? parseAppNumber(inp.price).toLocaleString('ko-KR',{maximumFractionDigits:2}) : ''}</td>
+        <td class="numeric">${inp && parseAppNumber(inp.amount) ? Math.round(parseAppNumber(inp.amount)).toLocaleString('ko-KR') : ''}</td>
+        <td class="mono">${inp ? htmlEscape(inp.lot || '-') : ''}</td>
+        <td>${out ? htmlEscape([out.product,out.packunit ? `(${out.packunit})` : ''].filter(Boolean).join(' ')) : ''}</td>
+        <td>${out ? htmlEscape(out.origin || '') : ''}</td>
+        <td class="numeric">${out ? parseAppNumber(out.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}</td>
+        <td class="numeric">${out && parseAppNumber(out.price) ? Math.ceil(parseAppNumber(out.price)).toLocaleString('ko-KR') : ''}</td>
+        <td class="numeric">${out && parseAppNumber(out.amount) ? Math.ceil(parseAppNumber(out.amount)).toLocaleString('ko-KR') : ''}</td>
+        <td class="mono">${out ? htmlEscape(out.lot || '-') : ''}</td>
+      </tr>`;
+    }
+    rows+=`<tr class="subtotal">
+      <td colspan="2">합계</td>
+      <td colspan="2" class="numeric">투입합계</td>
+      <td class="numeric">${totalInQty.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td></td>
+      <td class="numeric">${Math.round(totalInAmt).toLocaleString('ko-KR')}</td>
+      <td></td>
+      <td colspan="2">로스 ${lossKg.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})}KG (${lossRate.toFixed(1)}%)</td>
+      <td class="numeric">${totalOutQty.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td></td>
+      <td class="numeric">${Math.round(totalOutAmt).toLocaleString('ko-KR')}</td>
+      <td></td>
+    </tr>`;
+    return `<tbody class="job-group">${rows}</tbody>`;
+  }).join('');
+  const table=`<table>
+    <colgroup>
+      <col style="width:7%"><col style="width:7%"><col style="width:11%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:9%">
+      <col style="width:11%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:7%">
+    </colgroup>
+    <thead>
+      <tr><th rowspan="2">작업일 / 번호</th><th rowspan="2">유형 / 비고</th><th colspan="6">투입 품목</th><th colspan="6">생산 품목</th></tr>
+      <tr><th>품목명</th><th>원산지</th><th>중량</th><th>단가</th><th>금액</th><th>이력번호</th><th>품목명</th><th>원산지</th><th>중량</th><th>단가</th><th>금액</th><th>이력번호</th></tr>
+    </thead>${groups}
+  </table>`;
+  openA4ListPrint('생산일보 목록', filters.length ? filters.join(' · ') : '전체 생산일보', entries.length, table);
+}
+
 function exportProductionCSV(){
   const { entries: filtered, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('asc');
 
