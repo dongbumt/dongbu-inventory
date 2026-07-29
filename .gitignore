@@ -16,3 +16,6 @@ desktop.ini
 *.bak
 *.tmp
 *~
+
+# Supabase CLI local cache
+supabase/.temp/
