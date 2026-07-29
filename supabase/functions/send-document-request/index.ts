@@ -96,7 +96,18 @@ function requestSubject(trader: string, documents: DocumentRow[]) {
   return `[동부엠티] 입고 필요서류 요청 - ${trader} (${documents.length}건)`;
 }
 
-function documentTableRows(documents: DocumentRow[]) {
+function documentEmailTableRows(documents: DocumentRow[]) {
+  return documents.map((row, index) => `
+    <tr>
+      <td style="border:1px solid #777;padding:9px 7px;text-align:center;vertical-align:middle;">${index + 1}</td>
+      <td style="border:1px solid #777;padding:9px 7px;text-align:left;vertical-align:middle;">${escapeHtml(row.product || "-")}</td>
+      <td style="border:1px solid #777;padding:9px 7px;text-align:center;vertical-align:middle;">${escapeHtml(row.origin || "-")}</td>
+      <td style="border:1px solid #777;padding:9px 7px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;word-break:break-all;white-space:normal;">${escapeHtml(row.lot || "-")}</td>
+      <td style="border:1px solid #777;padding:9px 7px;text-align:center;vertical-align:middle;"><strong>${escapeHtml(row.requiredDoc || "-")}</strong></td>
+    </tr>`).join("");
+}
+
+function documentFaxTableRows(documents: DocumentRow[]) {
   return documents.map((row, index) => `
     <tr>
       <td>${index + 1}</td>
@@ -107,7 +118,34 @@ function documentTableRows(documents: DocumentRow[]) {
     </tr>`).join("");
 }
 
-function requestHtml(trader: string, documents: DocumentRow[]) {
+function requestEmailHtml(trader: string, documents: DocumentRow[]) {
+  return `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#fff;font-family:Arial,'Malgun Gothic',sans-serif;color:#222;line-height:1.55;">
+<div style="max-width:820px;margin:0 auto;padding:28px 24px;">
+<div style="font-size:22px;font-weight:700;border-bottom:2px solid #444;padding-bottom:12px;margin-bottom:20px;">입고 필요서류 요청서</div>
+<div style="font-size:14px;line-height:1.9;margin-bottom:18px;">
+  <div><strong style="display:inline-block;min-width:72px;">수신 :</strong> ${escapeHtml(trader)} 귀중</div>
+  <div><strong style="display:inline-block;min-width:72px;">발신 :</strong> ${escapeHtml(REQUEST_SENDER_NAME)}</div>
+  <div><strong style="display:inline-block;min-width:72px;">요청일 :</strong> ${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</div>
+</div>
+<p style="font-size:14px;margin:0 0 18px;">안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.</p>
+<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;margin:0 0 24px;">
+<thead><tr>
+  <th style="width:6%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">No.</th>
+  <th style="width:27%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">품목명</th>
+  <th style="width:13%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">원산지</th>
+  <th style="width:36%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">이력번호</th>
+  <th style="width:18%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">필요서류</th>
+</tr></thead>
+<tbody>${documentEmailTableRows(documents)}</tbody></table>
+<div style="border-top:1px solid #aaa;padding-top:14px;font-size:13px;line-height:1.7;">
+  <strong style="font-size:14px;">${escapeHtml(REQUEST_SENDER_NAME)}</strong><br>
+  <span>회신 방법 : 이메일(${REQUEST_REPLY_EMAIL}) or 팩스(${REQUEST_REPLY_FAX})</span>
+</div></div></body></html>`;
+}
+
+function requestFaxHtml(trader: string, documents: DocumentRow[]) {
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <style>
@@ -125,9 +163,9 @@ td:first-child,th:first-child{text-align:center;width:36px}.lot{overflow-wrap:an
   <div><strong>발신</strong>${escapeHtml(REQUEST_SENDER_NAME)}</div>
   <div><strong>요청일</strong>${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</div>
 </div>
-<p>안녕하세요. 아래 입고 건에 대한 필요서류를 회신하여 주시기 바랍니다.</p>
+<p>안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.</p>
 <table><thead><tr><th>No.</th><th>품목명</th><th>원산지</th><th class="lot">이력번호</th><th>필요서류</th></tr></thead>
-<tbody>${documentTableRows(documents)}</tbody></table>
+<tbody>${documentFaxTableRows(documents)}</tbody></table>
 <div class="footer">
   <strong>${escapeHtml(REQUEST_SENDER_NAME)}</strong><br>
   회신 방법 : 이메일(${REQUEST_REPLY_EMAIL}) or 팩스(${REQUEST_REPLY_FAX})
@@ -142,7 +180,7 @@ function requestText(trader: string, documents: DocumentRow[]) {
     `${trader} 담당자님께`,
     "",
     `안녕하세요. ${REQUEST_SENDER_NAME}입니다.`,
-    "아래 입고 건에 대한 필요서류를 회신하여 주시기 바랍니다.",
+    "아래 입고 건에 대한 필요서류를 회신 부탁드립니다.",
     "",
     ...lines,
     "",
@@ -172,7 +210,7 @@ async function sendEmail(trader: string, recipient: string, documents: DocumentR
     replyTo: from,
     subject,
     text: requestText(trader, documents),
-    html: requestHtml(trader, documents),
+    html: requestEmailHtml(trader, documents),
   });
   return { subject, messageId: clean(result.messageId, 500), providerStatus: "발송완료" };
 }
@@ -256,7 +294,7 @@ async function sendFax(trader: string, recipient: string, recipientName: string,
     throw new Error("바로빌 연동정보가 아직 설정되지 않았습니다.");
   }
   const fileName = `dbmt_doc_request_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.html`;
-  await uploadBarobillFile(fileName, requestHtml(trader, documents));
+  await uploadBarobillFile(fileName, requestFaxHtml(trader, documents));
   const sendKey = await barobillSoap("SendFaxFromFTP", {
     CERTKEY: config.certKey,
     CorpNum: config.corpNum,
