@@ -23,6 +23,10 @@ interface DeliveryRequest {
   documents?: DocumentRow[];
 }
 
+const REQUEST_SENDER_NAME = "주식회사 동부엠티 & (주)동부축산유통";
+const REQUEST_REPLY_EMAIL = "dongbumt1812@hanmail.net";
+const REQUEST_REPLY_FAX = "032-232-1812";
+
 const ALLOWED_ORIGINS = new Set([
   "https://dongbumt.github.io",
   "http://localhost",
@@ -83,7 +87,7 @@ function normalizeDocuments(rows: unknown): DocumentRow[] {
     date: clean(row?.date, 20),
     product: clean(row?.product, 100),
     origin: clean(row?.origin, 100),
-    lot: clean(row?.lot, 100),
+    lot: clean(row?.lot, 500),
     requiredDoc: clean(row?.requiredDoc, 100),
   })).filter((row) => row.product || row.lot);
 }
@@ -96,17 +100,14 @@ function documentTableRows(documents: DocumentRow[]) {
   return documents.map((row, index) => `
     <tr>
       <td>${index + 1}</td>
-      <td>${escapeHtml(row.date || "-")}</td>
       <td>${escapeHtml(row.product || "-")}</td>
       <td>${escapeHtml(row.origin || "-")}</td>
-      <td>${escapeHtml(row.lot || "-")}</td>
+      <td class="lot">${escapeHtml(row.lot || "-")}</td>
       <td><strong>${escapeHtml(row.requiredDoc || "-")}</strong></td>
     </tr>`).join("");
 }
 
 function requestHtml(trader: string, documents: DocumentRow[]) {
-  const phone = env("DOCUMENT_REQUEST_PHONE");
-  const replyEmail = env("DAUM_SMTP_FROM");
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <style>
@@ -115,39 +116,38 @@ body{font-family:Arial,"Malgun Gothic",sans-serif;color:#222;line-height:1.55;ma
 .meta{margin:18px 0;font-size:14px}.meta strong{display:inline-block;min-width:90px}
 table{width:100%;border-collapse:collapse;font-size:12px;margin:16px 0}
 th,td{border:1px solid #777;padding:7px 6px;text-align:left}th{background:#eee}
-td:first-child,th:first-child{text-align:center;width:36px}.footer{margin-top:24px;border-top:1px solid #aaa;padding-top:14px;font-size:13px}
+td:first-child,th:first-child{text-align:center;width:36px}.lot{overflow-wrap:anywhere;word-break:break-all;white-space:normal}
+.footer{margin-top:24px;border-top:1px solid #aaa;padding-top:14px;font-size:13px}
 </style></head><body><div class="page">
 <div class="title">입고 필요서류 요청서</div>
 <div class="meta">
   <div><strong>수신</strong>${escapeHtml(trader)} 귀중</div>
-  <div><strong>발신</strong>주식회사 동부엠티</div>
+  <div><strong>발신</strong>${escapeHtml(REQUEST_SENDER_NAME)}</div>
   <div><strong>요청일</strong>${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</div>
 </div>
 <p>안녕하세요. 아래 입고 건에 대한 필요서류를 회신하여 주시기 바랍니다.</p>
-<table><thead><tr><th>No.</th><th>입고일</th><th>품목명</th><th>원산지</th><th>이력번호</th><th>필요서류</th></tr></thead>
+<table><thead><tr><th>No.</th><th>품목명</th><th>원산지</th><th class="lot">이력번호</th><th>필요서류</th></tr></thead>
 <tbody>${documentTableRows(documents)}</tbody></table>
 <div class="footer">
-  <strong>주식회사 동부엠티</strong><br>
-  ${phone ? `연락처: ${escapeHtml(phone)}<br>` : ""}
-  ${replyEmail ? `회신 이메일: ${escapeHtml(replyEmail)}` : ""}
+  <strong>${escapeHtml(REQUEST_SENDER_NAME)}</strong><br>
+  회신 방법 : 이메일(${REQUEST_REPLY_EMAIL}) or 팩스(${REQUEST_REPLY_FAX})
 </div></div></body></html>`;
 }
 
 function requestText(trader: string, documents: DocumentRow[]) {
   const lines = documents.map((row, index) =>
-    `${index + 1}. ${row.date || "-"} / ${row.product || "-"} / ${row.origin || "-"} / ${row.lot || "-"} / ${row.requiredDoc || "-"}`
+    `${index + 1}. 품목명: ${row.product || "-"} / 원산지: ${row.origin || "-"} / 이력번호: ${row.lot || "-"} / 필요서류: ${row.requiredDoc || "-"}`
   );
   return [
     `${trader} 담당자님께`,
     "",
-    "안녕하세요. 주식회사 동부엠티입니다.",
+    `안녕하세요. ${REQUEST_SENDER_NAME}입니다.`,
     "아래 입고 건에 대한 필요서류를 회신하여 주시기 바랍니다.",
     "",
     ...lines,
     "",
-    `회신 이메일: ${env("DAUM_SMTP_FROM")}`,
-    env("DOCUMENT_REQUEST_PHONE") ? `연락처: ${env("DOCUMENT_REQUEST_PHONE")}` : "",
-  ].filter(Boolean).join("\n");
+    `회신 방법 : 이메일(${REQUEST_REPLY_EMAIL}) or 팩스(${REQUEST_REPLY_FAX})`,
+  ].join("\n");
 }
 
 async function sendEmail(trader: string, recipient: string, documents: DocumentRow[]) {
@@ -167,7 +167,7 @@ async function sendEmail(trader: string, recipient: string, documents: DocumentR
   });
   const subject = requestSubject(trader, documents);
   const result = await transporter.sendMail({
-    from: `"주식회사 동부엠티" <${from}>`,
+    from: `"${REQUEST_SENDER_NAME}" <${from}>`,
     to: recipient,
     replyTo: from,
     subject,

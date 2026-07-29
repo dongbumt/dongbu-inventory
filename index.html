@@ -11712,8 +11712,8 @@ function openDocumentRequestModal(channel){
           <div class="doc-request-group-recipient">${htmlEscape(group.recipient)}</div>
         </div>
         <ul>${group.rows.map(row=>`
-          <li>${htmlEscape(row.date||'-')} · ${htmlEscape(row.product||'-')} ·
-          ${htmlEscape(row.lot||'-')} · <strong>${htmlEscape(getRequiredDoc(row.origin))}</strong></li>
+          <li>${htmlEscape(row.product||'-')} · ${htmlEscape(row.origin||'-')} ·
+          이력번호 ${htmlEscape(row.lot||'-')} · <strong>${htmlEscape(getRequiredDoc(row.origin))}</strong></li>
         `).join('')}</ul>
       </div>
     `).join('');
