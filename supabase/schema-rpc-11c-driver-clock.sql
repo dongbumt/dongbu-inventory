@@ -7,7 +7,7 @@ drop function if exists public.dbmt_driver_clock(
 create or replace function public.dbmt_driver_clock(
   p_token text, p_action text, p_latitude double precision,
   p_longitude double precision, p_accuracy_m double precision,
-  p_break_minutes integer default 0, p_region text default '기타'
+  p_break_minutes integer default 60, p_region text default '기타'
 )
 returns jsonb
 language plpgsql
@@ -18,7 +18,7 @@ declare
   v_account_id uuid := public.dbmt_driver_session_account(p_token);
   v_att public.driver_attendance%rowtype;
   v_elapsed integer;
-  v_break integer := greatest(0, coalesce(p_break_minutes, 0));
+  v_break integer := greatest(60, coalesce(p_break_minutes, 60));
   v_bonus integer := 0;
   v_region text := case when p_region = '인천' then '인천' else '기타' end;
   v_location_text text;

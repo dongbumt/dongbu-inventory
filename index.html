@@ -1981,7 +1981,7 @@
       <div class="form-group"><label>퇴근시각</label><input id="da-attendance-end" type="datetime-local"></div>
       <div class="form-group" style="max-width:120px;"><label>퇴근지역</label><select id="da-attendance-end-region"><option value="인천">인천</option><option value="기타">기타</option></select></div>
       <div class="form-group"><label>퇴근장소 메모</label><input id="da-attendance-end-place" placeholder="선택 입력"></div>
-      <div class="form-group" style="max-width:110px;"><label>휴게시간(분)</label><input id="da-attendance-break" type="number" min="0" max="600" step="10" value="0"></div>
+      <div class="form-group" style="max-width:110px;"><label>휴게시간(분)</label><input id="da-attendance-break" type="number" min="0" max="600" step="10" value="60"></div>
     </div>
     <div class="form-row" style="align-items:flex-end;margin-bottom:0;">
       <div class="form-group"><label>비고</label><input id="da-attendance-note" placeholder="선택 입력"></div>
@@ -4966,7 +4966,7 @@ function resetDriverAttendanceForm(){
     'da-attendance-start':driverDateTimeInputValue(new Date()), 'da-attendance-end':'',
     'da-attendance-start-region':'인천', 'da-attendance-end-region':'인천',
     'da-attendance-start-place':'', 'da-attendance-end-place':'',
-    'da-attendance-break':'0', 'da-attendance-note':'', 'da-attendance-reason':''
+    'da-attendance-break':'60', 'da-attendance-note':'', 'da-attendance-reason':''
   };
   Object.entries(values).forEach(([id,value])=>{ const el=document.getElementById(id); if(el) el.value=value; });
 }

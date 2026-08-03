@@ -181,7 +181,7 @@
     }
     async function submitClock(){
       const action=driverState?.current?'end':'start',label=action==='start'?'출근':'퇴근';if(!confirm(`현재 시간과 GPS 위치로 ${label}을 등록할까요?`))return;const button=document.getElementById('clock-btn');button.disabled=true;button.innerHTML='<span class="spinner"></span>GPS 확인 중';setMessage('clock-message','현재 위치와 서버시각을 확인하고 있습니다.');
-      try{currentPosition=await getGps();const result=await rpc('dbmt_driver_clock',{p_token:driverToken,p_action:action,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_break_minutes:0,p_region:document.getElementById('current-region').value});setMessage('clock-message',result.message,'ok');await loadState();}
+      try{currentPosition=await getGps();const result=await rpc('dbmt_driver_clock',{p_token:driverToken,p_action:action,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_break_minutes:action==='end'?60:0,p_region:document.getElementById('current-region').value});setMessage('clock-message',result.message,'ok');await loadState();}
       catch(err){setMessage('clock-message',err.message,'error');}
       finally{button.disabled=false;if(driverState)button.textContent=driverState.current?'퇴근 등록':'출근 등록';}
     }

@@ -87,5 +87,6 @@ Supabase SQL Editor에서 다음 파일을 번호순으로 한 번씩 실행합�
 11. `supabase/schema-rpc-11e-driver-admin-data.sql`
 12. `supabase/schema-rpc-11f-driver-admin-write.sql`
 13. `supabase/schema-rpc-12-driver-region-bonus.sql`
+14. `supabase/schema-rpc-13-driver-default-break.sql`
 
 ERP의 `배송기사근태` 메뉴에서 기사 계정을 설정합니다. 근무장소 사전등록은 필요하지 않으며 모바일 버튼을 누른 서버시각과 GPS 좌표가 기록됩니다. 관리자 화면에서는 누락 기록 수기입력과 기존 기록 수정·삭제를 할 수 있습니다. 기사 비밀번호는 해시로만 저장되며 모바일 로그인에는 만료되는 별도 세션 토큰을 사용합니다.
