@@ -15,7 +15,7 @@
     :root{--ink:#22302d;--muted:#6c7774;--line:#d9dfdd;--bg:#f2f4f3;--panel:#fff;--brand:#0f766e;--brand-dark:#17342f;--danger:#c0392b;--warn:#b45309;--ok:#16724d}
     *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;background:var(--bg);color:var(--ink);letter-spacing:0}
     body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-    button,input{font:inherit;letter-spacing:0}button{cursor:pointer}
+    button,input,select{font:inherit;letter-spacing:0}button{cursor:pointer}
     .shell{width:min(100%,520px);min-height:100vh;margin:0 auto;background:var(--bg)}
     .topbar{height:62px;padding:0 16px;background:var(--brand-dark);color:#fff;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
     .brand{display:flex;align-items:center;gap:10px;min-width:0}.brand-mark{width:34px;height:34px;border-radius:7px;background:#fff;color:var(--brand-dark);display:grid;place-items:center;font-size:13px;font-weight:900}.brand-title{font-size:15px;font-weight:900}.brand-sub{font-size:10px;color:#c9d7d3;margin-top:2px}
@@ -23,16 +23,17 @@
     main{padding:14px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(20,35,31,.05)}
     .login{margin-top:12vh}.login h1{font-size:21px;margin:0 0 7px}.login p{font-size:12px;color:var(--muted);margin:0 0 20px;line-height:1.55}
     label{display:block;font-size:11px;font-weight:800;color:#56615e;margin:0 0 6px}.field{margin-bottom:12px}
-    input{width:100%;height:46px;border:1px solid var(--line);border-radius:7px;padding:0 12px;background:#fff;color:var(--ink);font-size:15px}input:focus{outline:2px solid rgba(15,118,110,.18);border-color:var(--brand)}
+    input,select{width:100%;height:46px;border:1px solid var(--line);border-radius:7px;padding:0 12px;background:#fff;color:var(--ink);font-size:15px}input:focus,select:focus{outline:2px solid rgba(15,118,110,.18);border-color:var(--brand)}
     .btn{width:100%;min-height:46px;border:0;border-radius:7px;padding:11px 14px;font-weight:900}.btn-primary{background:var(--brand);color:#fff}.btn-secondary{background:#fff;border:1px solid var(--line);color:#46514e}.btn:disabled{opacity:.55;cursor:not-allowed}
     .message{min-height:18px;margin-top:10px;font-size:12px;line-height:1.45;color:var(--muted)}.message.error{color:var(--danger)}.message.ok{color:var(--ok)}
     .driver-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.driver-name{font-size:20px;font-weight:900}.date{font-size:12px;color:var(--muted);margin-top:4px}.state-badge{padding:5px 9px;border-radius:99px;background:#e8f5f1;color:var(--ok);font-size:11px;font-weight:900;white-space:nowrap}.state-badge.working{background:#fff3dc;color:var(--warn)}
     .location{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px}.location-mark{width:38px;height:38px;border-radius:50%;background:#edf1f0;display:grid;place-items:center;color:var(--brand);font-weight:900}.location-name{font-size:13px;font-weight:900}.location-detail{font-size:11px;color:var(--muted);margin-top:3px}.mini-btn{border:1px solid var(--line);background:#fff;color:#46514e;border-radius:6px;padding:7px 9px;font-size:11px;font-weight:800;white-space:nowrap}
     .clock-panel{padding:18px 16px}.clock-time{text-align:center;font-size:34px;font-weight:900;font-variant-numeric:tabular-nums}.clock-place{text-align:center;font-size:12px;color:var(--muted);margin-top:5px;min-height:18px}.clock-btn{width:100%;height:74px;margin-top:16px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-size:21px;font-weight:900}.clock-btn.end{background:#9f3f34}.clock-btn:disabled{opacity:.55}
-    .break-row{display:none;grid-template-columns:1fr 112px;align-items:end;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.break-row.show{display:grid}.break-row input{height:40px;text-align:right}.break-note{font-size:11px;color:var(--muted);line-height:1.45}
+    .region-row{display:grid;grid-template-columns:1fr 132px;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.region-row label{margin:0}.region-row select{height:40px;font-size:13px}
+    .quick-actions{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.quick-actions.show{display:grid}.quick-actions .btn{min-height:48px}.btn-lunch{background:#fff4df;color:#9a5a00;border:1px solid #efd19e}.btn-lunch.active{background:#9a5a00;color:#fff;border-color:#9a5a00}
     .metrics{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;margin-bottom:12px}.metric{padding:13px 8px;text-align:center;border-right:1px solid var(--line)}.metric:last-child{border-right:0}.metric small{display:block;font-size:10px;color:var(--muted);margin-bottom:5px}.metric strong{display:block;font-size:16px}
     .section-title{font-size:13px;font-weight:900;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}.week-range{font-size:10px;color:var(--muted);font-weight:500}
-    .history{width:100%;border-collapse:collapse;font-size:11px}.history th{padding:8px 4px;color:var(--muted);font-weight:800;text-align:left;border-bottom:1px solid var(--line)}.history td{padding:10px 4px;border-bottom:1px solid #edf0ef;vertical-align:top}.history th:nth-child(n+3),.history td:nth-child(n+3){text-align:right}.history tr:last-child td{border-bottom:0}.empty{text-align:center!important;color:var(--muted);padding:20px!important}
+    .history{width:100%;border-collapse:collapse;font-size:11px}.history th{padding:8px 4px;color:var(--muted);font-weight:800;text-align:left;border-bottom:1px solid var(--line)}.history td{padding:10px 4px;border-bottom:1px solid #edf0ef;vertical-align:top}.history th:nth-child(n+3),.history td:nth-child(n+3){text-align:right}.history tr:last-child td{border-bottom:0}.empty{text-align:center!important;color:var(--muted);padding:20px!important}.event-list{display:grid;gap:0}.event-row{display:grid;grid-template-columns:58px 1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0ef;font-size:11px}.event-row:last-child{border-bottom:0}.event-type{font-weight:900}.event-coord{color:var(--muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.event-time{font-variant-numeric:tabular-nums;font-weight:800}
     .footer{text-align:center;color:#909a97;font-size:10px;padding:4px 0 20px}.hidden{display:none!important}.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}@keyframes spin{to{transform:rotate(360deg)}}
     @media(max-width:360px){main{padding:10px}.panel{padding:13px}.clock-time{font-size:30px}.metric strong{font-size:14px}.history{font-size:10px}}
   </style>
@@ -65,18 +66,22 @@
 
         <div class="panel location">
           <div class="location-mark">GPS</div>
-          <div><div id="location-name" class="location-name">위치 확인 전</div><div id="location-detail" class="location-detail">정확도와 근무장소를 확인합니다.</div></div>
+          <div><div id="location-name" class="location-name">위치 확인 전</div><div id="location-detail" class="location-detail">현재 GPS 좌표와 정확도를 확인합니다.</div></div>
           <button class="mini-btn" type="button" onclick="checkCurrentLocation()">위치 확인</button>
         </div>
 
         <div class="panel clock-panel">
           <div id="clock-time" class="clock-time">00:00:00</div>
           <div id="clock-place" class="clock-place"></div>
-          <div id="break-row" class="break-row">
-            <div><label for="break-minutes">실제 휴게시간</label><div class="break-note">퇴근 전 실제 휴게시간을 확인해주세요.</div></div>
-            <div><input id="break-minutes" type="number" min="0" max="600" step="10" value="0" inputmode="numeric"><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:3px;">분</div></div>
+          <div class="region-row">
+            <label for="current-region">현재 지역</label>
+            <select id="current-region"><option value="인천">인천</option><option value="기타">인천 외 지역</option></select>
           </div>
           <button id="clock-btn" class="clock-btn" type="button" onclick="submitClock()">출근 등록</button>
+          <div id="quick-actions" class="quick-actions">
+            <button class="btn btn-secondary" type="button" onclick="submitDriverEvent('location_share')">위치 공유</button>
+            <button id="lunch-btn" class="btn btn-lunch" type="button" onclick="submitDriverEvent(driverState?.activeBreak?'lunch_end':'lunch_start')">점심 시작</button>
+          </div>
           <div id="clock-message" class="message"></div>
         </div>
 
@@ -89,6 +94,10 @@
         <div class="panel">
           <div class="section-title"><span>이번 주 기록</span><span id="week-range" class="week-range"></span></div>
           <table class="history"><thead><tr><th>근무일</th><th>출퇴근</th><th>실제</th><th>가산</th><th>인정</th></tr></thead><tbody id="history-body"></tbody></table>
+        </div>
+        <div class="panel">
+          <div class="section-title"><span>오늘 위치·점심 기록</span></div>
+          <div id="event-list" class="event-list"></div>
         </div>
       </section>
       <div class="footer">DBMT ERP · 배송기사근태</div>
@@ -123,15 +132,12 @@
     function kstTime(value){
       if(!value)return '-';return new Date(value).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
     }
-    function distanceMeters(lat1,lon1,lat2,lon2){
-      const r=6371000,toRad=n=>n*Math.PI/180,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1);
-      const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-      return r*2*Math.asin(Math.sqrt(Math.min(1,a)));
+    function coordinateText(latitude,longitude){
+      if(!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude)))return '위치 정보 없음';
+      return `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`;
     }
-    function nearestLocation(position){
-      const locations=driverState?.locations||[];let nearest=null;
-      locations.forEach(location=>{const distance=distanceMeters(position.coords.latitude,position.coords.longitude,Number(location.latitude),Number(location.longitude));if(!nearest||distance<nearest.distance)nearest={...location,distance};});
-      return nearest;
+    function eventTypeLabel(type){
+      return type==='location_share'?'위치 공유':type==='lunch_start'?'점심 시작':'점심 종료';
     }
     function getGps(){
       return new Promise((resolve,reject)=>{
@@ -159,31 +165,37 @@
       catch(err){localStorage.removeItem(TOKEN_KEY);driverToken='';document.getElementById('login-view').classList.remove('hidden');setMessage('login-message',err.message,'error');}
     }
     function renderState(){
-      const current=driverState?.current,entries=driverState?.weekEntries||[];
+      const current=driverState?.current,entries=driverState?.weekEntries||[],events=driverState?.todayEvents||[];
       document.getElementById('driver-name').textContent=driverState?.account?.employeeName||'-';
       document.getElementById('today-label').textContent=new Date().toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'short'});
-      const stateEl=document.getElementById('work-state'),clockBtn=document.getElementById('clock-btn'),breakRow=document.getElementById('break-row');
-      stateEl.textContent=current?'근무 중':'퇴근 상태';stateEl.classList.toggle('working',!!current);clockBtn.textContent=current?'퇴근 등록':'출근 등록';clockBtn.classList.toggle('end',!!current);breakRow.classList.toggle('show',!!current);
-      document.getElementById('clock-place').textContent=current?`${kstTime(current.start_at)} · ${current.start_location_name||'근무장소'} 출근`:'';
-      if(current){const elapsed=Math.max(0,Math.floor((Date.now()-new Date(current.start_at).getTime())/60000));const input=document.getElementById('break-minutes');if(!input.dataset.touched){input.value=elapsed>=480?60:elapsed>=240?30:0;}}
+      const stateEl=document.getElementById('work-state'),clockBtn=document.getElementById('clock-btn'),quickActions=document.getElementById('quick-actions'),lunchBtn=document.getElementById('lunch-btn');
+      stateEl.textContent=current?(driverState.activeBreak?'점심시간':'근무 중'):'퇴근 상태';stateEl.classList.toggle('working',!!current);clockBtn.textContent=current?'퇴근 등록':'출근 등록';clockBtn.classList.toggle('end',!!current);quickActions.classList.toggle('show',!!current);
+      lunchBtn.textContent=driverState.activeBreak?'점심 종료':'점심 시작';lunchBtn.classList.toggle('active',!!driverState.activeBreak);
+      document.getElementById('clock-place').textContent=current?`${kstTime(current.start_at)} · ${current.start_region||'기타'} 출근`:'';
       const total=entries.reduce((s,e)=>s+(Number(e.recognized_minutes)||0),0),bonus=entries.reduce((s,e)=>s+(Number(e.bonus_minutes)||0),0),remaining=Math.max(0,3120-total);
       document.getElementById('week-total').textContent=minutesLabel(total);document.getElementById('week-bonus').textContent=minutesLabel(bonus);document.getElementById('week-remaining').textContent=minutesLabel(remaining);document.getElementById('week-remaining').style.color=total>=3120?'var(--danger)':total>=2880?'var(--warn)':'';
       const weekStart=new Date(`${driverState.weekStart}T12:00:00`),weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+6);document.getElementById('week-range').textContent=`${driverState.weekStart} ~ ${weekEnd.toISOString().slice(0,10)}`;
       const body=document.getElementById('history-body');body.innerHTML=entries.length?entries.map(e=>`<tr><td>${e.work_date||'-'}</td><td>${kstTime(e.start_at)}<br>${kstTime(e.end_at)}</td><td>${e.actual_minutes==null?'-':minutesLabel(e.actual_minutes)}</td><td>${minutesLabel(e.bonus_minutes)}</td><td><strong>${e.recognized_minutes==null?'근무 중':minutesLabel(e.recognized_minutes)}</strong></td></tr>`).join(''):'<tr><td colspan="5" class="empty">이번 주 기록이 없습니다.</td></tr>';
+      const eventList=document.getElementById('event-list');eventList.innerHTML=events.length?events.map(e=>`<div class="event-row"><div class="event-type">${eventTypeLabel(e.event_type)}</div><div class="event-coord">${coordinateText(e.latitude,e.longitude)}</div><div class="event-time">${kstTime(e.event_at)}</div></div>`).join(''):'<div class="empty">오늘 기록이 없습니다.</div>';
     }
     async function checkCurrentLocation(){
       setMessage('clock-message','GPS 위치를 확인하는 중입니다.');
-      try{currentPosition=await getGps();const nearest=nearestLocation(currentPosition);document.getElementById('location-name').textContent=nearest&&nearest.distance<=Number(nearest.radiusM)?nearest.name:'등록 장소 밖';document.getElementById('location-detail').textContent=nearest?`가장 가까운 장소 ${Math.round(nearest.distance)}m · GPS 정확도 ${Math.round(currentPosition.coords.accuracy)}m`:`GPS 정확도 ${Math.round(currentPosition.coords.accuracy)}m`;setMessage('clock-message','위치 확인이 완료되었습니다.','ok');}
+      try{currentPosition=await getGps();document.getElementById('location-name').textContent=coordinateText(currentPosition.coords.latitude,currentPosition.coords.longitude);document.getElementById('location-detail').textContent=`GPS 정확도 약 ${Math.round(currentPosition.coords.accuracy)}m`;setMessage('clock-message','위치 확인이 완료되었습니다.','ok');}
       catch(err){setMessage('clock-message',err.message,'error');}
     }
     async function submitClock(){
-      const action=driverState?.current?'end':'start',button=document.getElementById('clock-btn');button.disabled=true;button.innerHTML='<span class="spinner"></span>GPS 확인 중';setMessage('clock-message','현재 위치와 서버시각을 확인하고 있습니다.');
-      try{currentPosition=await getGps();const result=await rpc('dbmt_driver_clock',{p_token:driverToken,p_action:action,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_break_minutes:action==='end'?Number(document.getElementById('break-minutes').value)||0:0});setMessage('clock-message',`${result.message} (${result.locationName})`,'ok');document.getElementById('break-minutes').dataset.touched='';await loadState();}
+      const action=driverState?.current?'end':'start',label=action==='start'?'출근':'퇴근';if(!confirm(`현재 시간과 GPS 위치로 ${label}을 등록할까요?`))return;const button=document.getElementById('clock-btn');button.disabled=true;button.innerHTML='<span class="spinner"></span>GPS 확인 중';setMessage('clock-message','현재 위치와 서버시각을 확인하고 있습니다.');
+      try{currentPosition=await getGps();const result=await rpc('dbmt_driver_clock',{p_token:driverToken,p_action:action,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_break_minutes:0,p_region:document.getElementById('current-region').value});setMessage('clock-message',result.message,'ok');await loadState();}
       catch(err){setMessage('clock-message',err.message,'error');}
       finally{button.disabled=false;if(driverState)button.textContent=driverState.current?'퇴근 등록':'출근 등록';}
     }
+    async function submitDriverEvent(eventType){
+      const label=eventTypeLabel(eventType);if(eventType!=='location_share'&&!confirm(`현재 시간과 GPS 위치로 ${label}을 기록할까요?`))return;const buttons=[...document.querySelectorAll('#quick-actions button')];buttons.forEach(button=>button.disabled=true);setMessage('clock-message',`${label} 위치를 확인하고 있습니다.`);
+      try{currentPosition=await getGps();const result=await rpc('dbmt_driver_event',{p_token:driverToken,p_event_type:eventType,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_note:null});setMessage('clock-message',result.message,'ok');await loadState();}
+      catch(err){setMessage('clock-message',err.message,'error');}
+      finally{buttons.forEach(button=>button.disabled=false);}
+    }
     function tick(){document.getElementById('clock-time').textContent=new Date().toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour12:false});}
-    document.getElementById('break-minutes').addEventListener('input',e=>e.target.dataset.touched='1');
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;const button=document.getElementById('install-btn');if(!driverToken)button.classList.remove('hidden');});
     document.getElementById('install-btn').addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;document.getElementById('install-btn').classList.add('hidden');});
     if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('driver-sw.js').catch(()=>{}));

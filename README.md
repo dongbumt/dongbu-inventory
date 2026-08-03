@@ -80,5 +80,11 @@ Supabase SQL Editor에서 다음 파일을 번호순으로 한 번씩 실행합�
 4. `supabase/schema-rpc-09d-driver-login.sql`
 5. `supabase/schema-rpc-09e-driver-state.sql`
 6. `supabase/schema-rpc-09f-driver-clock.sql`
+7. `supabase/schema-rpc-11a-driver-flexible-tables.sql`
+8. `supabase/schema-rpc-11b-driver-state.sql`
+9. `supabase/schema-rpc-11c-driver-clock.sql`
+10. `supabase/schema-rpc-11d-driver-events.sql`
+11. `supabase/schema-rpc-11e-driver-admin-data.sql`
+12. `supabase/schema-rpc-11f-driver-admin-write.sql`
 
-ERP의 `배송기사근태` 메뉴에서 기사 계정과 GPS 근무장소를 설정합니다. 기사 비밀번호는 해시로만 저장되며 모바일 로그인에는 만료되는 별도 세션 토큰을 사용합니다.
+ERP의 `배송기사근태` 메뉴에서 기사 계정을 설정합니다. 근무장소 사전등록은 필요하지 않으며 모바일 버튼을 누른 서버시각과 GPS 좌표가 기록됩니다. 관리자 화면에서는 누락 기록 수기입력과 기존 기록 수정·삭제를 할 수 있습니다. 기사 비밀번호는 해시로만 저장되며 모바일 로그인에는 만료되는 별도 세션 토큰을 사용합니다.

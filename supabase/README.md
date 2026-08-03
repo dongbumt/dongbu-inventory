@@ -35,13 +35,19 @@ Editor query for each file:
 13. `schema-rpc-06b-upsert-prices.sql`
 14. `schema-rpc-07-submaterial-usage.sql`
 15. `schema-rpc-08-document-requests.sql`
-16. `schema-rpc-09a-driver-attendance-tables.sql`
+16. `schema-rpc-09a-driver-tables.sql`
 17. `schema-rpc-09b-driver-admin.sql`
 18. `schema-rpc-09c-driver-locations.sql`
 19. `schema-rpc-09d-driver-login.sql`
-20. `schema-rpc-09e-driver-status.sql`
+20. `schema-rpc-09e-driver-state.sql`
 21. `schema-rpc-09f-driver-clock.sql`
 22. `schema-rpc-10-app-data-save-guard.sql`
+23. `schema-rpc-11a-driver-flexible-tables.sql`
+24. `schema-rpc-11b-driver-state.sql`
+25. `schema-rpc-11c-driver-clock.sql`
+26. `schema-rpc-11d-driver-events.sql`
+27. `schema-rpc-11e-driver-admin-data.sql`
+28. `schema-rpc-11f-driver-admin-write.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
