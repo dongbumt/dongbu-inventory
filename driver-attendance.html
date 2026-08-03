@@ -30,7 +30,7 @@
     .location{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px}.location-mark{width:38px;height:38px;border-radius:50%;background:#edf1f0;display:grid;place-items:center;color:var(--brand);font-weight:900}.location-name{font-size:13px;font-weight:900}.location-detail{font-size:11px;color:var(--muted);margin-top:3px}.mini-btn{border:1px solid var(--line);background:#fff;color:#46514e;border-radius:6px;padding:7px 9px;font-size:11px;font-weight:800;white-space:nowrap}
     .clock-panel{padding:18px 16px}.clock-time{text-align:center;font-size:34px;font-weight:900;font-variant-numeric:tabular-nums}.clock-place{text-align:center;font-size:12px;color:var(--muted);margin-top:5px;min-height:18px}.clock-btn{width:100%;height:74px;margin-top:16px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-size:21px;font-weight:900}.clock-btn.end{background:#9f3f34}.clock-btn:disabled{opacity:.55}
     .region-row{display:grid;grid-template-columns:1fr 132px;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.region-row label{margin:0}.region-row select{height:40px;font-size:13px}
-    .quick-actions{display:none;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.quick-actions.show{display:grid}.quick-actions .btn{min-height:48px}.btn-lunch{background:#fff4df;color:#9a5a00;border:1px solid #efd19e}.btn-lunch.active{background:#9a5a00;color:#fff;border-color:#9a5a00}
+    .quick-actions{display:none;margin-top:10px}.quick-actions.show{display:block}.quick-actions .btn{min-height:48px}
     .metrics{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;margin-bottom:12px}.metric{padding:13px 8px;text-align:center;border-right:1px solid var(--line)}.metric:last-child{border-right:0}.metric small{display:block;font-size:10px;color:var(--muted);margin-bottom:5px}.metric strong{display:block;font-size:16px}
     .section-title{font-size:13px;font-weight:900;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}.week-range{font-size:10px;color:var(--muted);font-weight:500}
     .history{width:100%;border-collapse:collapse;font-size:11px}.history th{padding:8px 4px;color:var(--muted);font-weight:800;text-align:left;border-bottom:1px solid var(--line)}.history td{padding:10px 4px;border-bottom:1px solid #edf0ef;vertical-align:top}.history th:nth-child(n+3),.history td:nth-child(n+3){text-align:right}.history tr:last-child td{border-bottom:0}.empty{text-align:center!important;color:var(--muted);padding:20px!important}.event-list{display:grid;gap:0}.event-row{display:grid;grid-template-columns:58px 1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0ef;font-size:11px}.event-row:last-child{border-bottom:0}.event-type{font-weight:900}.event-coord{color:var(--muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.event-time{font-variant-numeric:tabular-nums;font-weight:800}
@@ -80,7 +80,6 @@
           <button id="clock-btn" class="clock-btn" type="button" onclick="submitClock()">출근 등록</button>
           <div id="quick-actions" class="quick-actions">
             <button class="btn btn-secondary" type="button" onclick="submitDriverEvent('location_share')">위치 공유</button>
-            <button id="lunch-btn" class="btn btn-lunch" type="button" onclick="submitDriverEvent(driverState?.activeBreak?'lunch_end':'lunch_start')">점심 시작</button>
           </div>
           <div id="clock-message" class="message"></div>
         </div>
@@ -96,7 +95,7 @@
           <table class="history"><thead><tr><th>근무일</th><th>출퇴근</th><th>실제</th><th>가산</th><th>인정</th></tr></thead><tbody id="history-body"></tbody></table>
         </div>
         <div class="panel">
-          <div class="section-title"><span>오늘 위치·점심 기록</span></div>
+          <div class="section-title"><span>오늘 위치공유 기록</span></div>
           <div id="event-list" class="event-list"></div>
         </div>
       </section>
@@ -136,9 +135,7 @@
       if(!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude)))return '위치 정보 없음';
       return `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`;
     }
-    function eventTypeLabel(type){
-      return type==='location_share'?'위치 공유':type==='lunch_start'?'점심 시작':'점심 종료';
-    }
+    function eventTypeLabel(){return '위치 공유';}
     function getGps(){
       return new Promise((resolve,reject)=>{
         if(!navigator.geolocation){reject(new Error('이 휴대전화에서는 GPS를 사용할 수 없습니다.'));return;}
@@ -165,12 +162,11 @@
       catch(err){localStorage.removeItem(TOKEN_KEY);driverToken='';document.getElementById('login-view').classList.remove('hidden');setMessage('login-message',err.message,'error');}
     }
     function renderState(){
-      const current=driverState?.current,entries=driverState?.weekEntries||[],events=driverState?.todayEvents||[];
+      const current=driverState?.current,entries=driverState?.weekEntries||[],events=(driverState?.todayEvents||[]).filter(event=>event.event_type==='location_share');
       document.getElementById('driver-name').textContent=driverState?.account?.employeeName||'-';
       document.getElementById('today-label').textContent=new Date().toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'long',day:'numeric',weekday:'short'});
-      const stateEl=document.getElementById('work-state'),clockBtn=document.getElementById('clock-btn'),quickActions=document.getElementById('quick-actions'),lunchBtn=document.getElementById('lunch-btn');
-      stateEl.textContent=current?(driverState.activeBreak?'점심시간':'근무 중'):'퇴근 상태';stateEl.classList.toggle('working',!!current);clockBtn.textContent=current?'퇴근 등록':'출근 등록';clockBtn.classList.toggle('end',!!current);quickActions.classList.toggle('show',!!current);
-      lunchBtn.textContent=driverState.activeBreak?'점심 종료':'점심 시작';lunchBtn.classList.toggle('active',!!driverState.activeBreak);
+      const stateEl=document.getElementById('work-state'),clockBtn=document.getElementById('clock-btn'),quickActions=document.getElementById('quick-actions');
+      stateEl.textContent=current?'근무 중':'퇴근 상태';stateEl.classList.toggle('working',!!current);clockBtn.textContent=current?'퇴근 등록':'출근 등록';clockBtn.classList.toggle('end',!!current);quickActions.classList.toggle('show',!!current);
       document.getElementById('clock-place').textContent=current?`${kstTime(current.start_at)} · ${current.start_region||'기타'} 출근`:'';
       const total=entries.reduce((s,e)=>s+(Number(e.recognized_minutes)||0),0),bonus=entries.reduce((s,e)=>s+(Number(e.bonus_minutes)||0),0),remaining=Math.max(0,3120-total);
       document.getElementById('week-total').textContent=minutesLabel(total);document.getElementById('week-bonus').textContent=minutesLabel(bonus);document.getElementById('week-remaining').textContent=minutesLabel(remaining);document.getElementById('week-remaining').style.color=total>=3120?'var(--danger)':total>=2880?'var(--warn)':'';
@@ -190,7 +186,7 @@
       finally{button.disabled=false;if(driverState)button.textContent=driverState.current?'퇴근 등록':'출근 등록';}
     }
     async function submitDriverEvent(eventType){
-      const label=eventTypeLabel(eventType);if(eventType!=='location_share'&&!confirm(`현재 시간과 GPS 위치로 ${label}을 기록할까요?`))return;const buttons=[...document.querySelectorAll('#quick-actions button')];buttons.forEach(button=>button.disabled=true);setMessage('clock-message',`${label} 위치를 확인하고 있습니다.`);
+      const label=eventTypeLabel(eventType);const buttons=[...document.querySelectorAll('#quick-actions button')];buttons.forEach(button=>button.disabled=true);setMessage('clock-message',`${label} 위치를 확인하고 있습니다.`);
       try{currentPosition=await getGps();const result=await rpc('dbmt_driver_event',{p_token:driverToken,p_event_type:eventType,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_note:null});setMessage('clock-message',result.message,'ok');await loadState();}
       catch(err){setMessage('clock-message',err.message,'error');}
       finally{buttons.forEach(button=>button.disabled=false);}

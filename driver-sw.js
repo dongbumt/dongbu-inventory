@@ -1,4 +1,4 @@
-const CACHE_NAME='dbmt-driver-attendance-v2';
+const CACHE_NAME='dbmt-driver-attendance-v3';
 const APP_FILES=['./driver-attendance.html','./driver-manifest.webmanifest','./driver-icon-192.png','./driver-icon-512.png'];
 
 self.addEventListener('install',event=>{

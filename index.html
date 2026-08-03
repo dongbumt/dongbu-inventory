@@ -2000,7 +2000,7 @@
     </div>
   </div>
   <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>위치공유·점심 기록</div>
+    <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>위치공유 기록</div>
     <div class="tbl-wrap" style="max-height:320px;">
       <table><thead><tr><th>일자</th><th>기사명</th><th>시각</th><th>구분</th><th>GPS 위치</th><th style="text-align:right;">정확도</th></tr></thead><tbody id="da-event-body"></tbody></table>
     </div>
@@ -4776,9 +4776,7 @@ function driverAttendanceLocationHtml(row, prefix){
   return `${htmlEscape(label)}${driverMapLinkHtml(row[`${prefix}_latitude`], row[`${prefix}_longitude`])}`;
 }
 
-function driverEventLabel(type){
-  return type === 'location_share' ? '위치공유' : type === 'lunch_start' ? '점심 시작' : '점심 종료';
-}
+function driverEventLabel(){ return '위치공유'; }
 
 function setDriverAdminStatus(message, isError=false){
   const el = document.getElementById('da-status');
@@ -5128,11 +5126,12 @@ function renderDriverAttendance(){
 
 function renderDriverEvents(){
   const body=document.getElementById('da-event-body'); if(!body) return;
-  if(!driverAdminData.events.length){
-    body.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#888;">선택한 주간의 위치공유·점심 기록이 없습니다.</td></tr>';
+  const locationEvents=driverAdminData.events.filter(event=>event.event_type==='location_share');
+  if(!locationEvents.length){
+    body.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#888;">선택한 주간의 위치공유 기록이 없습니다.</td></tr>';
     return;
   }
-  body.innerHTML=driverAdminData.events.map(event=>`<tr>
+  body.innerHTML=locationEvents.map(event=>`<tr>
     <td>${htmlEscape(event.work_date||'-')}</td><td><strong>${htmlEscape(event.employee_name||'-')}</strong></td>
     <td>${driverDateTimeLabel(event.event_at)}</td><td>${driverEventLabel(event.event_type)}</td>
     <td><span style="font-family:var(--font-mono);font-size:11px;">${Number(event.latitude).toFixed(6)}, ${Number(event.longitude).toFixed(6)}</span>${driverMapLinkHtml(event.latitude,event.longitude)}</td>
