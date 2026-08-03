@@ -283,6 +283,9 @@
   <div class="nav-tab" onclick="showPage('p-leaves',this)" id="nav-leaves" style="color:#27ae60;font-weight:700;">
     📅 근태관리
   </div>
+  <div class="nav-tab" onclick="showPage('p-driver-attendance',this)" id="nav-driver-attendance" style="color:#0f766e;font-weight:700;">
+    🚚 배송기사근태
+  </div>
   <div class="nav-tab" onclick="showPage('p-expense',this);renderExpenses();" id="nav-expense" style="color:#1a7ab5;font-weight:700;">
     💳 지출관리
   </div>
@@ -1908,6 +1911,97 @@
     </div>
   </div>
 
+</div>
+
+<!-- ══════════════════════════════════════════
+     배송기사 근태관리
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-driver-attendance">
+  <div class="card">
+    <div class="section-header" style="margin-bottom:10px;">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#0f766e;"></div>배송기사 근태관리</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="copyDriverMobileUrl()">접속주소 복사</button>
+        <button class="btn btn-primary btn-sm" onclick="openDriverMobile()">모바일 화면 열기</button>
+        <button class="btn btn-secondary btn-sm" onclick="lockHrMenu()">🔒 잠금</button>
+      </div>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:12px;">
+      기사별 계정으로 모바일 화면에 로그인하면 GPS 근무장소에서 출근·퇴근을 기록합니다.
+      출근과 퇴근 장소가 모두 인천이면 인정근로시간에 60분이 별도로 가산됩니다.
+    </div>
+    <div class="form-row" style="align-items:flex-end;margin-bottom:0;">
+      <div class="form-group" style="grid-column:span 3;min-width:260px;">
+        <label>배송기사 모바일 접속주소</label>
+        <input id="da-mobile-url" readonly style="background:#f8f9fa;font-family:var(--font-mono);font-size:11px;">
+      </div>
+      <div class="form-group" style="max-width:170px;">
+        <label>조회 주간 시작일</label>
+        <input id="da-week-start" type="date" onchange="loadDriverAdminData()">
+      </div>
+      <div class="form-group" style="flex:0;">
+        <label>&nbsp;</label>
+        <button class="btn btn-secondary" onclick="setDriverWeekThis()">이번 주</button>
+      </div>
+    </div>
+    <div id="da-status" style="font-size:12px;color:#667085;margin-top:9px;"></div>
+  </div>
+
+  <div class="stat-grid" id="da-stat-grid">
+    <div class="stat"><div class="stat-label">등록 기사</div><div class="stat-val" id="da-stat-drivers">0명</div></div>
+    <div class="stat"><div class="stat-label">주간 인정근로</div><div class="stat-val" id="da-stat-hours">0시간</div></div>
+    <div class="stat"><div class="stat-label">인천 가산</div><div class="stat-val" id="da-stat-bonus">0시간</div></div>
+    <div class="stat"><div class="stat-label">근무 중</div><div class="stat-val" id="da-stat-working">0명</div></div>
+    <div class="stat"><div class="stat-label">52시간 주의</div><div class="stat-val" id="da-stat-warning">0명</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>기사별 접속 계정 설정</div>
+    <input type="hidden" id="da-account-edit-employee-id">
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>배송기사</label><select id="da-account-employee"><option value="">-- 직원 선택 --</option></select></div>
+      <div class="form-group"><label>접속 아이디</label><input id="da-account-login" autocomplete="off" placeholder="영문·숫자 4~30자"></div>
+      <div class="form-group"><label>비밀번호</label><input id="da-account-password" type="password" autocomplete="new-password" placeholder="신규 8자 이상 / 수정 시 비워두면 유지"></div>
+      <div class="form-group" style="max-width:120px;"><label>사용 상태</label><select id="da-account-active"><option value="1">사용</option><option value="0">중지</option></select></div>
+      <div class="form-group" style="flex:0;"><label>&nbsp;</label><div style="display:flex;gap:5px;"><button class="btn btn-primary" onclick="saveDriverAccount()">저장</button><button class="btn btn-secondary" onclick="resetDriverAccountForm()">초기화</button></div></div>
+    </div>
+    <div class="tbl-wrap" style="max-height:250px;">
+      <table><thead><tr><th>기사명</th><th>직책</th><th>접속 아이디</th><th style="text-align:right;">이번 주 인정</th><th style="text-align:right;">52시간 잔여</th><th style="text-align:center;">상태</th><th style="text-align:center;">관리</th></tr></thead><tbody id="da-account-body"></tbody></table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#7f8c8d;"></div>GPS 근무장소 설정</div>
+    <input type="hidden" id="da-location-id">
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>장소명</label><input id="da-location-name" placeholder="예: 동부엠티 가공장"></div>
+      <div class="form-group"><label>주소</label><input id="da-location-address" placeholder="표시용 주소"></div>
+      <div class="form-group" style="max-width:110px;"><label>지역</label><select id="da-location-region"><option value="인천">인천</option><option value="기타">기타</option></select></div>
+      <div class="form-group"><label>위도</label><input id="da-location-lat" type="number" step="0.000001" placeholder="37.000000"></div>
+      <div class="form-group"><label>경도</label><input id="da-location-lng" type="number" step="0.000001" placeholder="126.000000"></div>
+      <div class="form-group" style="max-width:105px;"><label>허용반경(m)</label><input id="da-location-radius" type="number" min="50" max="2000" value="200"></div>
+      <div class="form-group" style="max-width:105px;"><label>사용 상태</label><select id="da-location-active"><option value="1">사용</option><option value="0">중지</option></select></div>
+    </div>
+    <div class="btn-row" style="margin:0 0 12px;">
+      <button class="btn btn-secondary btn-sm" onclick="captureDriverAdminLocation()">현재 위치 가져오기</button>
+      <button class="btn btn-primary btn-sm" onclick="saveDriverLocation()">근무장소 저장</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetDriverLocationForm()">초기화</button>
+      <span id="da-location-capture-status" style="font-size:11px;color:#667085;"></span>
+    </div>
+    <div class="tbl-wrap" style="max-height:250px;">
+      <table><thead><tr><th>장소명</th><th>주소</th><th>지역</th><th>GPS 좌표</th><th style="text-align:right;">반경</th><th style="text-align:center;">상태</th><th style="text-align:center;">관리</th></tr></thead><tbody id="da-location-body"></tbody></table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#0f766e;"></div>주간 출퇴근 기록</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadDriverAdminData()">새로고침</button>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>근무일</th><th>기사명</th><th>출근시각</th><th>출근장소</th><th>퇴근시각</th><th>퇴근장소</th><th style="text-align:right;">휴게</th><th style="text-align:right;">실제근로</th><th style="text-align:right;">인천가산</th><th style="text-align:right;">인정근로</th><th style="text-align:center;">상태</th></tr></thead><tbody id="da-attendance-body"></tbody></table>
+    </div>
+  </div>
 </div>
 
 
@@ -4613,8 +4707,320 @@ function save(){
   gsShowSync('⚠ Supabase 연결 전이라 로컬에만 저장되었습니다', true);
 }
 
+let driverAdminData = {accounts:[], locations:[], attendance:[]};
+let driverAdminLoading = false;
+
+function driverMobileUrl(){
+  return new URL('driver-attendance.html', window.location.href).href;
+}
+
+function driverMondayValue(date=new Date()){
+  const d = new Date(date);
+  d.setHours(12,0,0,0);
+  const offset = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - offset);
+  return localDateString(d);
+}
+
+function driverMinutesLabel(minutes){
+  const value = Math.max(0, Number(minutes) || 0);
+  const hours = Math.floor(value / 60);
+  const mins = Math.round(value % 60);
+  return hours ? `${hours}시간${mins ? ` ${mins}분` : ''}` : `${mins}분`;
+}
+
+function driverDateTimeLabel(value){
+  if(!value) return '-';
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString('ko-KR', {
+    timeZone:'Asia/Seoul', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hour12:false
+  }).replace(/\. /g, '.').replace(/\.$/, '');
+}
+
+function setDriverAdminStatus(message, isError=false){
+  const el = document.getElementById('da-status');
+  if(!el) return;
+  el.textContent = message || '';
+  el.style.color = isError ? '#c0392b' : '#667085';
+}
+
+function initDriverAdmin(){
+  const url = document.getElementById('da-mobile-url');
+  if(url) url.value = driverMobileUrl();
+  const week = document.getElementById('da-week-start');
+  if(week && !week.value) week.value = driverMondayValue();
+  resetDriverAccountForm();
+  loadDriverAdminData();
+}
+
+function setDriverWeekThis(){
+  const el = document.getElementById('da-week-start');
+  if(el) el.value = driverMondayValue();
+  loadDriverAdminData();
+}
+
+async function copyDriverMobileUrl(){
+  const url = driverMobileUrl();
+  try { await navigator.clipboard.writeText(url); }
+  catch(e){
+    const input = document.getElementById('da-mobile-url');
+    if(input){ input.focus(); input.select(); document.execCommand('copy'); }
+  }
+  toast('배송기사 모바일 접속주소를 복사했습니다.');
+}
+
+function openDriverMobile(){
+  window.open(driverMobileUrl(), '_blank', 'noopener');
+}
+
+async function loadDriverAdminData(){
+  if(driverAdminLoading) return;
+  driverAdminLoading = true;
+  setDriverAdminStatus('배송기사 근태 데이터를 불러오는 중입니다...');
+  try{
+    const password = requireSupabasePassword();
+    const week = document.getElementById('da-week-start')?.value || driverMondayValue();
+    const data = await sbRpc('dbmt_driver_admin_data', {
+      p_password:password, p_week_start:week
+    });
+    driverAdminData = {
+      accounts:Array.isArray(data?.accounts) ? data.accounts : [],
+      locations:Array.isArray(data?.locations) ? data.locations : [],
+      attendance:Array.isArray(data?.attendance) ? data.attendance : []
+    };
+    renderDriverAdmin();
+    setDriverAdminStatus(`${week}부터 7일간의 기록입니다.`);
+  }catch(err){
+    console.error('Driver admin load failed:', err);
+    setDriverAdminStatus('배송기사 근태 서버 설정을 확인해주세요. 상세: ' + (err?.message || err), true);
+  }finally{
+    driverAdminLoading = false;
+  }
+}
+
+function renderDriverAdmin(){
+  renderDriverAccountOptions();
+  renderDriverAccounts();
+  renderDriverLocations();
+  renderDriverAttendance();
+  renderDriverStats();
+}
+
+function driverAccountMinutes(accountId){
+  return driverAdminData.attendance
+    .filter(row=>row.account_id === accountId)
+    .reduce((sum,row)=>sum + (Number(row.recognized_minutes) || 0), 0);
+}
+
+function renderDriverAccountOptions(){
+  const select = document.getElementById('da-account-employee');
+  if(!select) return;
+  const current = select.value;
+  const active = employees.filter(e=>!e.resignDate).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
+  select.innerHTML = '<option value="">-- 직원 선택 --</option>' + active.map(e=>
+    `<option value="${htmlEscape(e.id)}">${htmlEscape(e.name)}${e.position ? ` / ${htmlEscape(e.position)}` : ''}</option>`
+  ).join('');
+  if(active.some(e=>String(e.id)===String(current))) select.value = current;
+}
+
+function renderDriverAccounts(){
+  const body = document.getElementById('da-account-body');
+  if(!body) return;
+  if(!driverAdminData.accounts.length){
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:18px;color:#888;">등록된 배송기사 계정이 없습니다.</td></tr>';
+    return;
+  }
+  body.innerHTML = driverAdminData.accounts.map(account=>{
+    const employee = employees.find(e=>String(e.id)===String(account.employee_id));
+    const minutes = driverAccountMinutes(account.id);
+    const remaining = Math.max(0, 52 * 60 - minutes);
+    const hourColor = minutes >= 52*60 ? '#c0392b' : minutes >= 48*60 ? '#d35400' : '#1e8449';
+    return `<tr>
+      <td><strong>${htmlEscape(account.employee_name)}</strong></td>
+      <td>${htmlEscape(employee?.position || '-')}</td>
+      <td><span style="font-family:var(--font-mono);">${htmlEscape(account.login_id)}</span></td>
+      <td style="text-align:right;color:${hourColor};font-weight:700;">${driverMinutesLabel(minutes)}</td>
+      <td style="text-align:right;">${driverMinutesLabel(remaining)}</td>
+      <td style="text-align:center;"><span class="badge ${account.active ? 'badge-in' : 'badge-adjust'}">${account.active ? '사용' : '중지'}</span></td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button class="btn btn-secondary btn-sm" onclick="editDriverAccount(${jsArg(account.employee_id)})">수정</button>
+        <button class="btn btn-sm" style="background:${account.active ? '#7f8c8d' : '#27ae60'};color:#fff;" onclick="setDriverAccountActive(${jsArg(account.employee_id)},${account.active ? 'false' : 'true'})">${account.active ? '중지' : '사용'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function resetDriverAccountForm(){
+  const edit = document.getElementById('da-account-edit-employee-id'); if(edit) edit.value='';
+  const employee = document.getElementById('da-account-employee'); if(employee) employee.value='';
+  const login = document.getElementById('da-account-login'); if(login) login.value='';
+  const password = document.getElementById('da-account-password'); if(password) password.value='';
+  const active = document.getElementById('da-account-active'); if(active) active.value='1';
+}
+
+function editDriverAccount(employeeId){
+  const account = driverAdminData.accounts.find(a=>String(a.employee_id)===String(employeeId));
+  if(!account) return;
+  document.getElementById('da-account-edit-employee-id').value = account.employee_id;
+  document.getElementById('da-account-employee').value = account.employee_id;
+  document.getElementById('da-account-login').value = account.login_id || '';
+  document.getElementById('da-account-password').value = '';
+  document.getElementById('da-account-active').value = account.active ? '1' : '0';
+  document.getElementById('da-account-login').focus();
+}
+
+async function saveDriverAccount(){
+  const employeeId = document.getElementById('da-account-employee')?.value || '';
+  const employee = employees.find(e=>String(e.id)===String(employeeId));
+  const loginId = document.getElementById('da-account-login')?.value.trim() || '';
+  const loginPassword = document.getElementById('da-account-password')?.value || '';
+  const active = document.getElementById('da-account-active')?.value === '1';
+  const existing = driverAdminData.accounts.find(a=>String(a.employee_id)===String(employeeId));
+  if(!employee){ toast('배송기사를 선택해주세요.'); return; }
+  if(!/^[A-Za-z0-9._-]{4,30}$/.test(loginId)){ toast('아이디는 영문·숫자와 . _ - 조합으로 4~30자입니다.'); return; }
+  if(!existing && loginPassword.length < 8){ toast('신규 비밀번호는 8자 이상 입력해주세요.'); return; }
+  try{
+    setDriverAdminStatus('기사 계정을 저장하는 중입니다...');
+    await sbRpc('dbmt_driver_admin_save_account', {
+      p_password:requireSupabasePassword(), p_employee_id:String(employee.id),
+      p_employee_name:employee.name, p_login_id:loginId,
+      p_login_password:loginPassword || null, p_active:active
+    });
+    recordDataChange({menu:'배송기사근태', action:existing?'수정':'저장', target:employee.name,
+      summary:`배송기사 접속 계정 ${existing?'수정':'등록'}: ${loginId}`});
+    resetDriverAccountForm();
+    await loadDriverAdminData();
+    toast('배송기사 계정을 저장했습니다.');
+  }catch(err){ setDriverAdminStatus('계정 저장 실패: ' + (err?.message || err), true); }
+}
+
+async function setDriverAccountActive(employeeId, active){
+  const account = driverAdminData.accounts.find(a=>String(a.employee_id)===String(employeeId));
+  if(!account) return;
+  try{
+    await sbRpc('dbmt_driver_admin_save_account', {
+      p_password:requireSupabasePassword(), p_employee_id:account.employee_id,
+      p_employee_name:account.employee_name, p_login_id:account.login_id,
+      p_login_password:null, p_active:active
+    });
+    await loadDriverAdminData();
+    toast(active ? '기사 계정을 사용 상태로 변경했습니다.' : '기사 계정을 중지했습니다.');
+  }catch(err){ setDriverAdminStatus('계정 상태 변경 실패: ' + (err?.message || err), true); }
+}
+
+function resetDriverLocationForm(){
+  ['da-location-id','da-location-name','da-location-address','da-location-lat','da-location-lng'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('da-location-region').value='인천';
+  document.getElementById('da-location-radius').value='200';
+  document.getElementById('da-location-active').value='1';
+  document.getElementById('da-location-capture-status').textContent='';
+}
+
+function editDriverLocation(id){
+  const location = driverAdminData.locations.find(x=>x.id===id); if(!location) return;
+  document.getElementById('da-location-id').value=location.id;
+  document.getElementById('da-location-name').value=location.name || '';
+  document.getElementById('da-location-address').value=location.address || '';
+  document.getElementById('da-location-region').value=location.region === '인천' ? '인천' : '기타';
+  document.getElementById('da-location-lat').value=location.latitude;
+  document.getElementById('da-location-lng').value=location.longitude;
+  document.getElementById('da-location-radius').value=location.radius_m || 200;
+  document.getElementById('da-location-active').value=location.active ? '1' : '0';
+  document.getElementById('da-location-name').focus();
+}
+
+function captureDriverAdminLocation(){
+  const status = document.getElementById('da-location-capture-status');
+  if(!navigator.geolocation){ status.textContent='이 브라우저에서는 GPS를 사용할 수 없습니다.'; return; }
+  status.textContent='현재 GPS 위치를 확인하는 중입니다...';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById('da-location-lat').value=pos.coords.latitude.toFixed(6);
+    document.getElementById('da-location-lng').value=pos.coords.longitude.toFixed(6);
+    status.textContent=`현재 위치를 입력했습니다. 정확도 약 ${Math.round(pos.coords.accuracy)}m`;
+  }, err=>{ status.textContent='GPS 확인 실패: ' + err.message; }, {
+    enableHighAccuracy:true, timeout:15000, maximumAge:0
+  });
+}
+
+async function saveDriverLocation(){
+  const id = document.getElementById('da-location-id')?.value || null;
+  const name = document.getElementById('da-location-name')?.value.trim() || '';
+  const latitude = Number(document.getElementById('da-location-lat')?.value);
+  const longitude = Number(document.getElementById('da-location-lng')?.value);
+  const radius = Number(document.getElementById('da-location-radius')?.value) || 200;
+  if(!name){ toast('근무장소 이름을 입력해주세요.'); return; }
+  if(!Number.isFinite(latitude) || !Number.isFinite(longitude)){ toast('GPS 위도와 경도를 입력해주세요.'); return; }
+  try{
+    setDriverAdminStatus('GPS 근무장소를 저장하는 중입니다...');
+    await sbRpc('dbmt_driver_admin_save_location', {
+      p_password:requireSupabasePassword(), p_id:id, p_name:name,
+      p_address:document.getElementById('da-location-address')?.value.trim() || '',
+      p_region:document.getElementById('da-location-region')?.value || '기타',
+      p_latitude:latitude, p_longitude:longitude, p_radius_m:radius,
+      p_active:document.getElementById('da-location-active')?.value === '1'
+    });
+    recordDataChange({menu:'배송기사근태', action:id?'수정':'저장', target:name,
+      summary:`GPS 근무장소 ${id?'수정':'등록'}: ${name}`});
+    resetDriverLocationForm();
+    await loadDriverAdminData();
+    toast('GPS 근무장소를 저장했습니다.');
+  }catch(err){ setDriverAdminStatus('근무장소 저장 실패: ' + (err?.message || err), true); }
+}
+
+function renderDriverLocations(){
+  const body = document.getElementById('da-location-body'); if(!body) return;
+  if(!driverAdminData.locations.length){
+    body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:18px;color:#888;">등록된 GPS 근무장소가 없습니다.</td></tr>';
+    return;
+  }
+  body.innerHTML=driverAdminData.locations.map(location=>`<tr>
+    <td><strong>${htmlEscape(location.name)}</strong></td><td>${htmlEscape(location.address || '-')}</td>
+    <td>${htmlEscape(location.region)}</td>
+    <td style="font-family:var(--font-mono);font-size:11px;">${Number(location.latitude).toFixed(6)}, ${Number(location.longitude).toFixed(6)}</td>
+    <td style="text-align:right;">${Number(location.radius_m).toLocaleString()}m</td>
+    <td style="text-align:center;"><span class="badge ${location.active?'badge-in':'badge-adjust'}">${location.active?'사용':'중지'}</span></td>
+    <td style="text-align:center;"><button class="btn btn-secondary btn-sm" onclick="editDriverLocation(${jsArg(location.id)})">수정</button></td>
+  </tr>`).join('');
+}
+
+function renderDriverAttendance(){
+  const body=document.getElementById('da-attendance-body'); if(!body) return;
+  if(!driverAdminData.attendance.length){
+    body.innerHTML='<tr><td colspan="11" style="text-align:center;padding:20px;color:#888;">선택한 주간의 출퇴근 기록이 없습니다.</td></tr>';
+    return;
+  }
+  body.innerHTML=driverAdminData.attendance.map(row=>`<tr>
+    <td>${htmlEscape(row.work_date || '-')}</td><td><strong>${htmlEscape(row.employee_name)}</strong></td>
+    <td>${driverDateTimeLabel(row.start_at)}</td><td>${htmlEscape(row.start_location_name || '-')}</td>
+    <td>${driverDateTimeLabel(row.end_at)}</td><td>${htmlEscape(row.end_location_name || '-')}</td>
+    <td style="text-align:right;">${driverMinutesLabel(row.break_minutes)}</td>
+    <td style="text-align:right;">${row.actual_minutes == null ? '-' : driverMinutesLabel(row.actual_minutes)}</td>
+    <td style="text-align:right;color:${Number(row.bonus_minutes)>0?'#0f766e':'#888'};font-weight:${Number(row.bonus_minutes)>0?'700':'400'};">${driverMinutesLabel(row.bonus_minutes)}</td>
+    <td style="text-align:right;font-weight:800;">${row.recognized_minutes == null ? '-' : driverMinutesLabel(row.recognized_minutes)}</td>
+    <td style="text-align:center;"><span class="badge ${row.end_at?'badge-in':'badge-use'}">${row.end_at?'완료':'근무 중'}</span></td>
+  </tr>`).join('');
+}
+
+function renderDriverStats(){
+  const activeAccounts=driverAdminData.accounts.filter(a=>a.active);
+  const total=driverAdminData.attendance.reduce((s,r)=>s+(Number(r.recognized_minutes)||0),0);
+  const bonus=driverAdminData.attendance.reduce((s,r)=>s+(Number(r.bonus_minutes)||0),0);
+  const working=new Set(driverAdminData.attendance.filter(r=>!r.end_at).map(r=>r.account_id)).size;
+  const warning=activeAccounts.filter(a=>driverAccountMinutes(a.id)>=48*60).length;
+  document.getElementById('da-stat-drivers').textContent=`${activeAccounts.length}명`;
+  document.getElementById('da-stat-hours').textContent=driverMinutesLabel(total);
+  document.getElementById('da-stat-bonus').textContent=driverMinutesLabel(bonus);
+  document.getElementById('da-stat-working').textContent=`${working}명`;
+  const warningEl=document.getElementById('da-stat-warning');
+  warningEl.textContent=`${warning}명`; warningEl.style.color=warning?'#c0392b':'';
+}
+
 const HR_LOCK_PASSWORD_HASH = '1dfe4293ae0aa26b19bdcd3555adf5aebe076fb3d85f83a5d691fe548d75daaa';
-const HR_LOCK_PAGES = new Set(['p-employees', 'p-leaves']);
+const HR_LOCK_PAGES = new Set(['p-employees', 'p-leaves', 'p-driver-attendance']);
 const HR_LOCK_SESSION_KEYS = ['dbmt_hr_menu_unlocked', 'dbmt_hr_menu_unlocked_v2'];
 try { HR_LOCK_SESSION_KEYS.forEach(key => sessionStorage.removeItem(key)); } catch(e) {}
 
@@ -4653,7 +5059,7 @@ function ensureHrLockModal(){
   modal.innerHTML = `
     <div style="width:min(420px,100%);background:#fff;border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.25);padding:22px;">
       <div style="font-size:18px;font-weight:900;color:#2c3e50;margin-bottom:8px;">🔒 인사/근태 메뉴 잠금</div>
-      <div style="font-size:12px;color:#666;line-height:1.55;margin-bottom:14px;">직원정보와 근태관리 메뉴는 암호 확인 후 열립니다.</div>
+      <div style="font-size:12px;color:#666;line-height:1.55;margin-bottom:14px;">직원정보, 근태관리, 배송기사근태 메뉴는 암호 확인 후 열립니다.</div>
       <input id="hr-lock-password" type="password" placeholder="암호 입력" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" spellcheck="false"
         style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;margin-bottom:8px;">
       <div id="hr-lock-error" style="display:none;color:#e74c3c;font-size:12px;margin-bottom:10px;">암호가 맞지 않습니다.</div>
@@ -4742,6 +5148,7 @@ async function showPage(id, btn){
   if(id==='p-samsung') initSamsung();
   if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
   if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); renderLeaveDeductions(); }
+  if(id==='p-driver-attendance') initDriverAdmin();
   if(id==='p-change-log') renderDataChangeLog();
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
   if(id==='p-costcompare') renderCostCompare();

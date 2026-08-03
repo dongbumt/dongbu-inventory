@@ -63,3 +63,22 @@ Copy-Item .clasp.json.example .clasp.json
 ```
 
 배포 ID는 `clasp deployments` 또는 Apps Script의 **배포 관리** 화면에서 확인합니다.
+
+## 배송기사 모바일 근태
+
+배송기사는 아래 전용 화면에서 기사별 아이디와 비밀번호로 로그인한 뒤 GPS 출퇴근을 기록합니다.
+
+```text
+https://dongbumt.github.io/dongbu-inventory/driver-attendance.html
+```
+
+Supabase SQL Editor에서 다음 파일을 번호순으로 한 번씩 실행합니다.
+
+1. `supabase/schema-rpc-09a-driver-tables.sql`
+2. `supabase/schema-rpc-09b-driver-admin.sql`
+3. `supabase/schema-rpc-09c-driver-locations.sql`
+4. `supabase/schema-rpc-09d-driver-login.sql`
+5. `supabase/schema-rpc-09e-driver-state.sql`
+6. `supabase/schema-rpc-09f-driver-clock.sql`
+
+ERP의 `배송기사근태` 메뉴에서 기사 계정과 GPS 근무장소를 설정합니다. 기사 비밀번호는 해시로만 저장되며 모바일 로그인에는 만료되는 별도 세션 토큰을 사용합니다.
