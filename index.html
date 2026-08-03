@@ -4267,13 +4267,15 @@ function resetDataChangeAppDataBaseline(){
 function recordAppDataChanges(){
   const nextSnap = dataChangeAppDataSnapshot();
   const next = dataChangeAppDataSignatures(nextSnap);
+  const changedKeys = [];
   if(!dataChangeAppDataSigs){
     dataChangeAppDataSigs = next;
     dataChangeAppDataMeta = nextSnap;
-    return;
+    return changedKeys;
   }
   Object.keys(next).forEach(key => {
     if(next[key] === dataChangeAppDataSigs[key]) return;
+    changedKeys.push(key);
     const prevCount = dataChangeAppDataMeta?.[key]?.count;
     const nextCount = nextSnap[key]?.count;
     const action = prevCount !== undefined && nextCount !== undefined
@@ -4288,6 +4290,7 @@ function recordAppDataChanges(){
   });
   dataChangeAppDataSigs = next;
   dataChangeAppDataMeta = nextSnap;
+  return changedKeys;
 }
 
 function dataChangeMenuOptions(){
@@ -4354,11 +4357,12 @@ function resetDataChangeLogFilters(){
   renderDataChangeLog();
 }
 
-// ── 앱 전체 보조데이터 저장 (Supabase 기준) ──
+// ── 변경된 보조데이터만 저장 (오래 열린 화면의 전체 덮어쓰기 방지) ──
 function gsSaveAppData(){
-  recordAppDataChanges();
+  const changedKeys = recordAppDataChanges();
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
-    supabaseSaveAppData().catch(err => {
+    if(!changedKeys.length) return;
+    supabaseSaveAppDataKeys(changedKeys).catch(err => {
       console.error('Supabase appData 저장 오류:', err);
       gsShowSync('⚠ Supabase 보조데이터 저장 실패 — 로컬 데이터는 보존됨', true);
     });
@@ -4633,9 +4637,10 @@ function savePriceRows(rows, deletedIds, forceFull=false, deletedRows, options={
   save();
 }
 
-async function supabaseSaveAppData(){
-  const password = requireSupabasePassword();
-  await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: sbCollectAppData({exclude:['docChecks']})});
+async function supabaseSaveAppData(keys=[]){
+  const changedKeys = asArray(keys).filter(Boolean);
+  if(!changedKeys.length) return;
+  await supabaseSaveAppDataKeys(changedKeys);
 }
 
 async function supabaseSaveAppDataKeys(keys){
