@@ -48,6 +48,7 @@ Editor query for each file:
 26. `schema-rpc-11d-driver-events.sql`
 27. `schema-rpc-11e-driver-admin-data.sql`
 28. `schema-rpc-11f-driver-admin-write.sql`
+29. `schema-rpc-12-driver-region-bonus.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.

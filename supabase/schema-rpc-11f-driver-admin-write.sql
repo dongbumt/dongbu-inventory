@@ -37,7 +37,8 @@ begin
     v_elapsed := greatest(0, floor(extract(epoch from (p_end_at - p_start_at)) / 60)::integer);
     if v_break > v_elapsed then raise exception '휴게시간이 전체 근무시간보다 길 수 없습니다.'; end if;
     v_actual := v_elapsed - v_break;
-    if p_start_region = '인천' and p_end_region = '인천' then v_bonus := 60; end if;
+    v_bonus := case when p_start_region = '인천' then 60 else 0 end
+      + case when p_end_region = '인천' then 60 else 0 end;
     v_recognized := v_actual + v_bonus;
     v_status := 'completed';
   end if;

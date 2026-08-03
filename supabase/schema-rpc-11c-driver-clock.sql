@@ -73,7 +73,8 @@ begin
 
   v_elapsed := greatest(0, floor(extract(epoch from (now() - v_att.start_at)) / 60)::integer);
   if v_break > v_elapsed then raise exception '휴게시간이 전체 근무시간보다 길 수 없습니다.'; end if;
-  if v_att.start_region = '인천' and v_region = '인천' then v_bonus := 60; end if;
+  v_bonus := case when v_att.start_region = '인천' then 60 else 0 end
+    + case when v_region = '인천' then 60 else 0 end;
 
   update public.driver_attendance set end_at = now(), end_latitude = p_latitude,
     end_longitude = p_longitude, end_accuracy_m = p_accuracy_m,
