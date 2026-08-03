@@ -4764,6 +4764,8 @@ function driverDateTimeIso(value){
 }
 
 function driverMapLinkHtml(latitude, longitude){
+  if(latitude === null || latitude === undefined || latitude === '' ||
+     longitude === null || longitude === undefined || longitude === '') return '';
   if(!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) return '';
   const coords = `${Number(latitude).toFixed(6)},${Number(longitude).toFixed(6)}`;
   return `<a href="https://www.google.com/maps?q=${encodeURIComponent(coords)}" target="_blank" rel="noopener" style="font-size:11px;margin-left:5px;white-space:nowrap;">지도</a>`;
