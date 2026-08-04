@@ -2002,7 +2002,7 @@
   <div class="card">
     <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>위치공유 기록</div>
     <div class="tbl-wrap" style="max-height:320px;">
-      <table><thead><tr><th>일자</th><th>기사명</th><th>시각</th><th>구분</th><th>GPS 위치</th><th style="text-align:right;">정확도</th></tr></thead><tbody id="da-event-body"></tbody></table>
+      <table><thead><tr><th>일자</th><th>기사명</th><th>시각</th><th>구분</th><th>간단 주소</th><th style="text-align:right;">정확도</th></tr></thead><tbody id="da-event-body"></tbody></table>
     </div>
   </div>
 </div>
@@ -4772,7 +4772,8 @@ function driverMapLinkHtml(latitude, longitude){
 }
 
 function driverAttendanceLocationHtml(row, prefix){
-  const label = row[`${prefix}_location_name`] || row[`${prefix}_location_text`] || row[`${prefix}_region`] || '-';
+  let label = row[`${prefix}_location_name`] || row[`${prefix}_location_text`] || row[`${prefix}_region`] || '-';
+  if(/^GPS\s+-?[0-9]/.test(label)) label=row[`${prefix}_region`]==='인천'?'인천시':'주소 정보 없음';
   return `${htmlEscape(label)}${driverMapLinkHtml(row[`${prefix}_latitude`], row[`${prefix}_longitude`])}`;
 }
 
@@ -5134,7 +5135,7 @@ function renderDriverEvents(){
   body.innerHTML=locationEvents.map(event=>`<tr>
     <td>${htmlEscape(event.work_date||'-')}</td><td><strong>${htmlEscape(event.employee_name||'-')}</strong></td>
     <td>${driverDateTimeLabel(event.event_at)}</td><td>${driverEventLabel(event.event_type)}</td>
-    <td><span style="font-family:var(--font-mono);font-size:11px;">${Number(event.latitude).toFixed(6)}, ${Number(event.longitude).toFixed(6)}</span>${driverMapLinkHtml(event.latitude,event.longitude)}</td>
+    <td>${htmlEscape(event.note||'주소 정보 없음')}${driverMapLinkHtml(event.latitude,event.longitude)}</td>
     <td style="text-align:right;">${Number.isFinite(Number(event.accuracy_m))?Math.round(Number(event.accuracy_m))+'m':'-'}</td>
   </tr>`).join('');
 }

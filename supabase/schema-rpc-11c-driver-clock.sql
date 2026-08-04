@@ -3,11 +3,15 @@
 drop function if exists public.dbmt_driver_clock(
   text, text, double precision, double precision, double precision, integer
 );
+drop function if exists public.dbmt_driver_clock(
+  text, text, double precision, double precision, double precision, integer, text
+);
 
 create or replace function public.dbmt_driver_clock(
   p_token text, p_action text, p_latitude double precision,
   p_longitude double precision, p_accuracy_m double precision,
-  p_break_minutes integer default 60, p_region text default '기타'
+  p_break_minutes integer default 60, p_region text default '기타',
+  p_location_text text default null
 )
 returns jsonb
 language plpgsql
@@ -28,8 +32,8 @@ begin
   if p_latitude not between -90 and 90 or p_longitude not between -180 and 180 then
     raise exception 'GPS 위치를 확인할 수 없습니다.';
   end if;
-  v_location_text := 'GPS ' || round(p_latitude::numeric, 6)::text || ', '
-    || round(p_longitude::numeric, 6)::text;
+  v_location_text := coalesce(nullif(left(btrim(coalesce(p_location_text, '')), 80), ''),
+    case when v_region = '인천' then '인천시' else '주소 확인 불가' end);
 
   if p_action = 'start' then
     select * into v_att from public.driver_attendance
@@ -90,6 +94,6 @@ end;
 $dbmt$;
 
 grant execute on function public.dbmt_driver_clock(
-  text, text, double precision, double precision, double precision, integer, text
+  text, text, double precision, double precision, double precision, integer, text, text
 ) to anon, authenticated;
 notify pgrst, 'reload schema';
