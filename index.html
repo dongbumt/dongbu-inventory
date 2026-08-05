@@ -2542,9 +2542,17 @@
 
   <!-- 지출 목록 카드 -->
   <div class="card">
-    <div class="card-title">
-      <div class="ct-bar" style="background:#1a7ab5;"></div>
-      📋 지출 목록 <span id="exp-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:#1a7ab5;"></div>
+        📋 지출 목록 <span id="exp-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <label for="exp-list-category" style="font-size:12px;font-weight:700;color:#555;white-space:nowrap;">카테고리</label>
+        <select id="exp-list-category" onchange="renderExpenses()" style="min-width:140px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+          <option value="">전체 카테고리</option>
+        </select>
+      </div>
     </div>
     <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
@@ -14843,17 +14851,26 @@ function renderExpenseMonthOverview(selectedMonth){
 
 function renderExpenses(){
   const monthVal = document.getElementById('exp-month')?.value || '';
-  const filtered = monthVal
+  const categoryFilterEl = document.getElementById('exp-list-category');
+  if(categoryFilterEl && categoryFilterEl.options.length===1){
+    categoryFilterEl.innerHTML = '<option value="">전체 카테고리</option>' +
+      EXP_CAT_LIST.map(category=>`<option value="${category}">${category}</option>`).join('');
+  }
+  const categoryVal = normalizeExpenseCategory(categoryFilterEl?.value || '');
+  const monthFiltered = monthVal
     ? expenseList.filter(e => (e.date||'').startsWith(monthVal))
     : [...expenseList];
+  const filtered = categoryVal
+    ? monthFiltered.filter(e=>normalizeExpenseCategory(e.category)===categoryVal)
+    : [...monthFiltered];
   filtered.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 
   renderExpenseMonthOverview(monthVal);
 
   // 결제수단별 합계
   const payTotals = {'우리카드':0,'비씨카드':0,'주유카드':0,'통장입금':0,'현금':0};
-  filtered.forEach(e=>{ if(payTotals[e.paytype]!==undefined) payTotals[e.paytype]+=e.amount; });
-  const grandTotal = filtered.reduce((s,e)=>s+e.amount,0);
+  monthFiltered.forEach(e=>{ if(payTotals[e.paytype]!==undefined) payTotals[e.paytype]+=e.amount; });
+  const monthGrandTotal = monthFiltered.reduce((s,e)=>s+e.amount,0);
   const summaryEl = document.getElementById('exp-summary-cards');
   if(summaryEl){
     const cards = [
@@ -14862,7 +14879,7 @@ function renderExpenses(){
       {label:'주유카드',val:payTotals['주유카드'],color:'#d35400'},
       {label:'통장입금',val:payTotals['통장입금'],color:'#27ae60'},
       {label:'현금',val:payTotals['현금'],color:'#e67e22'},
-      {label:'전체 합계',val:grandTotal,color:'#2c3e50'},
+      {label:'전체 합계',val:monthGrandTotal,color:'#2c3e50'},
     ];
     summaryEl.innerHTML = cards.map(c=>`
       <div style="background:#f8f9fa;border-radius:10px;padding:12px;text-align:center;border-left:4px solid ${c.color};">
@@ -14874,7 +14891,7 @@ function renderExpenses(){
   // 카테고리별 합계
   const catTotals = {};
   EXP_CAT_LIST.forEach(c=>{ catTotals[c]=0; });
-  filtered.forEach(e=>{
+  monthFiltered.forEach(e=>{
     const category = normalizeExpenseCategory(e.category);
     if(catTotals[category]!==undefined) catTotals[category]+=e.amount;
   });
@@ -14896,7 +14913,7 @@ function renderExpenses(){
   document.getElementById('exp-count').textContent = `(${filtered.length}건)`;
   const tbody = document.getElementById('exp-body');
   if(tbody){
-    tbody.innerHTML = filtered.map(e=>`<tr style="border-bottom:1px solid var(--border);">
+    tbody.innerHTML = filtered.length ? filtered.map(e=>`<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:7px 8px;text-align:center;">${e.date||''}</td>
       <td style="padding:7px 8px;text-align:center;">
         <span style="background:${EXP_PAY_COLORS[e.paytype]||'#999'};color:#fff;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${e.paytype||''}</span>
@@ -14913,8 +14930,9 @@ function renderExpenses(){
         <button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="editExpense(${e.id})">수정</button>
         <button class="btn btn-sm btn-danger" onclick="deleteExpense(${e.id})">삭제</button>
       </td>
-    </tr>`).join('');
-    document.getElementById('exp-total').textContent = grandTotal.toLocaleString() + ' 원';
+    </tr>`).join('') : `<tr><td colspan="9" style="padding:28px 10px;text-align:center;color:#888;">해당 조건의 지출 내역이 없습니다.</td></tr>`;
+    const listTotal = filtered.reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+    document.getElementById('exp-total').textContent = listTotal.toLocaleString() + ' 원';
   }
 }
 
