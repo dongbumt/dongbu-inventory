@@ -29,7 +29,6 @@
     .driver-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.driver-name{font-size:20px;font-weight:900}.date{font-size:12px;color:var(--muted);margin-top:4px}.state-badge{padding:5px 9px;border-radius:99px;background:#e8f5f1;color:var(--ok);font-size:11px;font-weight:900;white-space:nowrap}.state-badge.working{background:#fff3dc;color:var(--warn)}
     .location{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px}.location-mark{width:38px;height:38px;border-radius:50%;background:#edf1f0;display:grid;place-items:center;color:var(--brand);font-weight:900}.location-name{font-size:13px;font-weight:900}.location-detail{font-size:11px;color:var(--muted);margin-top:3px}.mini-btn{border:1px solid var(--line);background:#fff;color:#46514e;border-radius:6px;padding:7px 9px;font-size:11px;font-weight:800;white-space:nowrap}
     .clock-panel{padding:18px 16px}.clock-time{text-align:center;font-size:34px;font-weight:900;font-variant-numeric:tabular-nums}.clock-place{text-align:center;font-size:12px;color:var(--muted);margin-top:5px;min-height:18px}.clock-btn{width:100%;height:74px;margin-top:16px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-size:21px;font-weight:900}.clock-btn.end{background:#9f3f34}.clock-btn:disabled{opacity:.55}
-    .region-row{display:grid;grid-template-columns:1fr 132px;align-items:center;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.region-row label{margin:0}.region-row select{height:40px;font-size:13px}
     .quick-actions{display:none;margin-top:10px}.quick-actions.show{display:block}.quick-actions .btn{min-height:48px}
     .metrics{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;margin-bottom:12px}.metric{padding:13px 8px;text-align:center;border-right:1px solid var(--line)}.metric:last-child{border-right:0}.metric small{display:block;font-size:10px;color:var(--muted);margin-bottom:5px}.metric strong{display:block;font-size:16px}
     .section-title{font-size:13px;font-weight:900;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}.week-range{font-size:10px;color:var(--muted);font-weight:500}
@@ -73,10 +72,6 @@
         <div class="panel clock-panel">
           <div id="clock-time" class="clock-time">00:00:00</div>
           <div id="clock-place" class="clock-place"></div>
-          <div class="region-row">
-            <label for="current-region">현재 지역</label>
-            <select id="current-region"><option value="인천">인천</option><option value="기타">인천 외 지역</option></select>
-          </div>
           <button id="clock-btn" class="clock-btn" type="button" onclick="submitClock()">출근 등록</button>
           <div id="quick-actions" class="quick-actions">
             <button class="btn btn-secondary" type="button" onclick="submitDriverEvent('location_share')">위치 공유</button>
@@ -111,6 +106,7 @@
     let driverState=null;
     let currentPosition=null;
     let currentAddress='';
+    let currentRegion='기타';
     let installPrompt=null;
 
     async function rpc(name,body){
@@ -147,8 +143,13 @@
       const parts=[compactProvinceName(province),district].filter((value,index,list)=>value&&list.indexOf(value)===index);
       return parts.join(' ')||compactProvinceName(data?.city)||String(data?.locality||'').trim();
     }
+    function regionFromGeocode(data){
+      const administrative=Array.isArray(data?.localityInfo?.administrative)?data.localityInfo.administrative.map(item=>String(item?.name||'')):[];
+      const names=[String(data?.principalSubdivision||''),String(data?.city||''),...administrative];
+      return names.some(name=>name.includes('인천'))?'인천':'기타';
+    }
     function locationFallback(){
-      return document.getElementById('current-region')?.value==='인천'?'인천시':'주소 확인 불가';
+      return {address:'주소 확인 불가',region:'기타'};
     }
     async function reverseGeocodeSimple(position){
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),4500);
@@ -156,9 +157,16 @@
         const params=new URLSearchParams({latitude:String(position.coords.latitude),longitude:String(position.coords.longitude),localityLanguage:'ko'});
         const response=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?${params}`,{signal:controller.signal,cache:'no-store'});
         if(!response.ok)throw new Error('주소 변환 실패');
-        return simpleAddressFromGeocode(await response.json())||locationFallback();
+        const data=await response.json(),address=simpleAddressFromGeocode(data);
+        return address?{address,region:regionFromGeocode(data)}:locationFallback();
       }catch(err){return locationFallback();}
       finally{clearTimeout(timer);}
+    }
+    async function resolveCurrentLocation(){
+      currentPosition=await getGps();
+      const location=await reverseGeocodeSimple(currentPosition);
+      currentAddress=location.address;currentRegion=location.region;
+      return location;
     }
     function eventTypeLabel(){return '위치 공유';}
     function getGps(){
@@ -177,7 +185,7 @@
       finally{button.disabled=false;button.textContent='로그인';}
     }
     async function logoutDriver(){
-      const token=driverToken;driverToken='';localStorage.removeItem(TOKEN_KEY);driverState=null;currentPosition=null;currentAddress='';
+      const token=driverToken;driverToken='';localStorage.removeItem(TOKEN_KEY);driverState=null;currentPosition=null;currentAddress='';currentRegion='기타';
       document.getElementById('app-view').classList.add('hidden');document.getElementById('login-view').classList.remove('hidden');document.getElementById('logout-btn').classList.add('hidden');
       if(token)rpc('dbmt_driver_logout',{p_token:token}).catch(()=>{});
     }
@@ -201,18 +209,18 @@
     }
     async function checkCurrentLocation(){
       setMessage('clock-message','GPS 위치를 확인하는 중입니다.');
-      try{currentPosition=await getGps();currentAddress=await reverseGeocodeSimple(currentPosition);document.getElementById('location-name').textContent=currentAddress;document.getElementById('location-detail').textContent=`GPS 정확도 약 ${Math.round(currentPosition.coords.accuracy)}m`;setMessage('clock-message','위치 확인이 완료되었습니다.','ok');}
+      try{await resolveCurrentLocation();document.getElementById('location-name').textContent=currentAddress;document.getElementById('location-detail').textContent=`GPS 정확도 약 ${Math.round(currentPosition.coords.accuracy)}m`;setMessage('clock-message','위치 확인이 완료되었습니다.','ok');}
       catch(err){setMessage('clock-message',err.message,'error');}
     }
     async function submitClock(){
       const action=driverState?.current?'end':'start',label=action==='start'?'출근':'퇴근';if(!confirm(`현재 시간과 GPS 위치로 ${label}을 등록할까요?`))return;const button=document.getElementById('clock-btn');button.disabled=true;button.innerHTML='<span class="spinner"></span>GPS 확인 중';setMessage('clock-message','현재 위치와 서버시각을 확인하고 있습니다.');
-      try{currentPosition=await getGps();currentAddress=await reverseGeocodeSimple(currentPosition);const result=await rpc('dbmt_driver_clock',{p_token:driverToken,p_action:action,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_break_minutes:action==='end'?60:0,p_region:document.getElementById('current-region').value,p_location_text:currentAddress});setMessage('clock-message',`${result.message} (${currentAddress})`,'ok');await loadState();}
+      try{await resolveCurrentLocation();const result=await rpc('dbmt_driver_clock',{p_token:driverToken,p_action:action,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_break_minutes:action==='end'?60:0,p_region:currentRegion,p_location_text:currentAddress});setMessage('clock-message',`${result.message} (${currentAddress})`,'ok');await loadState();}
       catch(err){setMessage('clock-message',err.message,'error');}
       finally{button.disabled=false;if(driverState)button.textContent=driverState.current?'퇴근 등록':'출근 등록';}
     }
     async function submitDriverEvent(eventType){
       const label=eventTypeLabel(eventType);const buttons=[...document.querySelectorAll('#quick-actions button')];buttons.forEach(button=>button.disabled=true);setMessage('clock-message',`${label} 위치를 확인하고 있습니다.`);
-      try{currentPosition=await getGps();currentAddress=await reverseGeocodeSimple(currentPosition);const result=await rpc('dbmt_driver_event',{p_token:driverToken,p_event_type:eventType,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_note:currentAddress});setMessage('clock-message',`${result.message} (${currentAddress})`,'ok');await loadState();}
+      try{await resolveCurrentLocation();const result=await rpc('dbmt_driver_event',{p_token:driverToken,p_event_type:eventType,p_latitude:currentPosition.coords.latitude,p_longitude:currentPosition.coords.longitude,p_accuracy_m:currentPosition.coords.accuracy,p_note:currentAddress});setMessage('clock-message',`${result.message} (${currentAddress})`,'ok');await loadState();}
       catch(err){setMessage('clock-message',err.message,'error');}
       finally{buttons.forEach(button=>button.disabled=false);}
     }

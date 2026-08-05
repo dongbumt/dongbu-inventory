@@ -24,7 +24,8 @@ declare
   v_elapsed integer;
   v_break integer := greatest(60, coalesce(p_break_minutes, 60));
   v_bonus integer := 0;
-  v_region text := case when p_region = '인천' then '인천' else '기타' end;
+  v_region text := '기타';
+  v_location_input text;
   v_location_text text;
 begin
   if v_account_id is null then raise exception '로그인이 만료되었습니다.'; end if;
@@ -32,8 +33,9 @@ begin
   if p_latitude not between -90 and 90 or p_longitude not between -180 and 180 then
     raise exception 'GPS 위치를 확인할 수 없습니다.';
   end if;
-  v_location_text := coalesce(nullif(left(btrim(coalesce(p_location_text, '')), 80), ''),
-    case when v_region = '인천' then '인천시' else '주소 확인 불가' end);
+  v_location_input := nullif(left(btrim(coalesce(p_location_text, '')), 80), '');
+  v_region := case when v_location_input like '인천시 %' then '인천' else '기타' end;
+  v_location_text := coalesce(v_location_input, '주소 확인 불가');
 
   if p_action = 'start' then
     select * into v_att from public.driver_attendance
