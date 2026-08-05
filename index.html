@@ -1981,7 +1981,7 @@
       <div class="form-group"><label>퇴근시각</label><input id="da-attendance-end" type="datetime-local"></div>
       <div class="form-group" style="max-width:120px;"><label>퇴근지역</label><select id="da-attendance-end-region"><option value="인천">인천</option><option value="기타">기타</option></select></div>
       <div class="form-group"><label>퇴근장소 메모</label><input id="da-attendance-end-place" placeholder="선택 입력"></div>
-      <div class="form-group" style="max-width:110px;"><label>휴게시간(분)</label><input id="da-attendance-break" type="number" min="0" max="600" step="10" value="60"></div>
+      <div class="form-group" style="max-width:110px;"><label>휴게시간(분)</label><input id="da-attendance-break" type="number" min="60" max="600" step="10" value="60"></div>
     </div>
     <div class="form-row" style="align-items:flex-end;margin-bottom:0;">
       <div class="form-group"><label>비고</label><input id="da-attendance-note" placeholder="선택 입력"></div>
@@ -4982,7 +4982,7 @@ function editDriverAttendance(id){
   document.getElementById('da-attendance-end-region').value=row.end_region==='인천'?'인천':'기타';
   document.getElementById('da-attendance-start-place').value=row.start_location_name || row.start_location_text || '';
   document.getElementById('da-attendance-end-place').value=row.end_location_name || row.end_location_text || '';
-  document.getElementById('da-attendance-break').value=Number(row.break_minutes)||0;
+  document.getElementById('da-attendance-break').value=row.end_at?Math.max(60,Number(row.break_minutes)||0):(Number(row.break_minutes)||60);
   document.getElementById('da-attendance-note').value=row.note || '';
   document.getElementById('da-attendance-reason').value='';
   document.getElementById('da-attendance-account').scrollIntoView({behavior:'smooth',block:'center'});
@@ -5004,7 +5004,7 @@ async function saveDriverAttendanceAdmin(){
       p_start_at:startAt, p_end_at:endAt,
       p_start_region:document.getElementById('da-attendance-start-region')?.value || '기타',
       p_end_region:document.getElementById('da-attendance-end-region')?.value || '기타',
-      p_break_minutes:Number(document.getElementById('da-attendance-break')?.value)||0,
+      p_break_minutes:endAt?Math.max(60,Number(document.getElementById('da-attendance-break')?.value)||0):(Number(document.getElementById('da-attendance-break')?.value)||60),
       p_start_location_text:document.getElementById('da-attendance-start-place')?.value.trim() || '',
       p_end_location_text:document.getElementById('da-attendance-end-place')?.value.trim() || '',
       p_note:document.getElementById('da-attendance-note')?.value.trim() || '',
