@@ -1936,12 +1936,16 @@
         <input id="da-mobile-url" readonly style="background:#f8f9fa;font-family:var(--font-mono);font-size:11px;">
       </div>
       <div class="form-group" style="max-width:170px;">
-        <label>조회 주간 시작일</label>
+        <label>조회할 주</label>
         <input id="da-week-start" type="date" onchange="loadDriverAdminData()">
       </div>
       <div class="form-group" style="flex:0;">
         <label>&nbsp;</label>
-        <button class="btn btn-secondary" onclick="setDriverWeekThis()">이번 주</button>
+        <div style="display:flex;gap:5px;white-space:nowrap;">
+          <button class="btn btn-secondary" onclick="shiftDriverWeek(-1)">이전 주</button>
+          <button class="btn btn-secondary" onclick="setDriverWeekThis()">이번 주</button>
+          <button class="btn btn-secondary" onclick="shiftDriverWeek(1)">다음 주</button>
+        </div>
       </div>
     </div>
     <div id="da-status" style="font-size:12px;color:#667085;margin-top:9px;"></div>
@@ -1966,7 +1970,7 @@
       <div class="form-group" style="flex:0;"><label>&nbsp;</label><div style="display:flex;gap:5px;"><button class="btn btn-primary" onclick="saveDriverAccount()">저장</button><button class="btn btn-secondary" onclick="resetDriverAccountForm()">초기화</button></div></div>
     </div>
     <div class="tbl-wrap" style="max-height:250px;">
-      <table><thead><tr><th>기사명</th><th>직책</th><th>접속 아이디</th><th style="text-align:right;">이번 주 인정</th><th style="text-align:right;">52시간 잔여</th><th style="text-align:center;">상태</th><th style="text-align:center;">관리</th></tr></thead><tbody id="da-account-body"></tbody></table>
+      <table><thead><tr><th>기사명</th><th>직책</th><th>접속 아이디</th><th style="text-align:right;">선택 주 인정</th><th style="text-align:right;">52시간 잔여</th><th style="text-align:center;">상태</th><th style="text-align:center;">관리</th></tr></thead><tbody id="da-account-body"></tbody></table>
     </div>
   </div>
 
@@ -1992,7 +1996,7 @@
 
   <div class="card">
     <div class="section-header">
-      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#0f766e;"></div>주간 출퇴근 기록</div>
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#0f766e;"></div>주간 출퇴근 기록 <span id="da-attendance-week-label" style="font-size:12px;font-weight:500;color:#777;"></span></div>
       <button class="btn btn-secondary btn-sm" onclick="loadDriverAdminData()">새로고침</button>
     </div>
     <div class="tbl-wrap">
@@ -4725,6 +4729,7 @@ function save(){
 
 let driverAdminData = {accounts:[], attendance:[], events:[]};
 let driverAdminLoading = false;
+let driverAdminLoadToken = 0;
 
 function driverMobileUrl(){
   return new URL('driver-attendance.html', window.location.href).href;
@@ -4736,6 +4741,18 @@ function driverMondayValue(date=new Date()){
   const offset = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - offset);
   return localDateString(d);
+}
+
+function driverWeekDate(value){
+  const d = value ? new Date(`${value}T12:00:00`) : new Date();
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+function driverWeekRangeLabel(weekStart){
+  const start = driverWeekDate(weekStart);
+  const end = new Date(start); end.setDate(end.getDate()+6);
+  const format = date=>`${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}`;
+  return `${format(start)} ~ ${format(end)}`;
 }
 
 function driverMinutesLabel(minutes){
@@ -4810,6 +4827,14 @@ function setDriverWeekThis(){
   loadDriverAdminData();
 }
 
+function shiftDriverWeek(offset){
+  const el = document.getElementById('da-week-start');
+  const date = driverWeekDate(el?.value || driverMondayValue());
+  date.setDate(date.getDate() + (Number(offset)||0) * 7);
+  if(el) el.value = driverMondayValue(date);
+  loadDriverAdminData();
+}
+
 async function copyDriverMobileUrl(){
   const url = driverMobileUrl();
   try { await navigator.clipboard.writeText(url); }
@@ -4825,27 +4850,33 @@ function openDriverMobile(){
 }
 
 async function loadDriverAdminData(){
-  if(driverAdminLoading) return;
+  const loadToken = ++driverAdminLoadToken;
   driverAdminLoading = true;
   setDriverAdminStatus('배송기사 근태 데이터를 불러오는 중입니다...');
   try{
     const password = requireSupabasePassword();
-    const week = document.getElementById('da-week-start')?.value || driverMondayValue();
+    const weekEl = document.getElementById('da-week-start');
+    const week = driverMondayValue(driverWeekDate(weekEl?.value || driverMondayValue()));
+    if(weekEl) weekEl.value = week;
     const data = await sbRpc('dbmt_driver_admin_data', {
       p_password:password, p_week_start:week
     });
+    if(loadToken !== driverAdminLoadToken) return;
     driverAdminData = {
       accounts:Array.isArray(data?.accounts) ? data.accounts : [],
       attendance:Array.isArray(data?.attendance) ? data.attendance : [],
       events:Array.isArray(data?.events) ? data.events : []
     };
     renderDriverAdmin();
+    const weekLabel = document.getElementById('da-attendance-week-label');
+    if(weekLabel) weekLabel.textContent = driverWeekRangeLabel(week);
     setDriverAdminStatus(`${week}부터 7일간의 기록입니다.`);
   }catch(err){
+    if(loadToken !== driverAdminLoadToken) return;
     console.error('Driver admin load failed:', err);
     setDriverAdminStatus('배송기사 근태 서버 설정을 확인해주세요. 상세: ' + (err?.message || err), true);
   }finally{
-    driverAdminLoading = false;
+    if(loadToken === driverAdminLoadToken) driverAdminLoading = false;
   }
 }
 
