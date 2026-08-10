@@ -1628,6 +1628,8 @@
         등록된 거래처 목록
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label for="tr-list-name-search" style="font-size:12px;font-weight:700;color:#555;">거래처명</label>
+        <input id="tr-list-name-search" type="search" placeholder="거래처명 검색" oninput="renderTraders()" style="width:180px;font-size:12px;padding:6px 9px;">
         <label for="tr-list-trade-filter" style="font-size:12px;font-weight:700;color:#555;">거래구분</label>
         <select id="tr-list-trade-filter" onchange="renderTraders()" style="width:125px;font-size:12px;">
           <option value="">전체</option>
@@ -11946,16 +11948,18 @@ function renderTraders(){
   if(!tbody) return;
   const allKeys = Object.keys(traderInfoMap);
   const tradeFilter = document.getElementById('tr-list-trade-filter')?.value || '';
+  const nameSearch = (document.getElementById('tr-list-name-search')?.value || '').trim().toLocaleLowerCase('ko-KR');
   const rows = allKeys
     .map((name,index)=>({name, registrationNo:index + 1, info:traderInfoMap[name] || {}}))
     .filter(row => {
+      if(nameSearch && !row.name.toLocaleLowerCase('ko-KR').includes(nameSearch)) return false;
       if(!tradeFilter) return true;
       const tradeType = row.info.tradeType || '미지정';
       return tradeType === tradeFilter;
     });
   const countEl = document.getElementById('tr-list-count');
   if(countEl){
-    countEl.textContent = tradeFilter
+    countEl.textContent = tradeFilter || nameSearch
       ? `표시 ${rows.length}건 / 전체 ${allKeys.length}건`
       : `전체 ${allKeys.length}건`;
   }
@@ -11964,7 +11968,7 @@ function renderTraders(){
     return;
   }
   if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#888">선택한 거래구분에 해당하는 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#888">검색 조건에 해당하는 거래처가 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(row=>{
