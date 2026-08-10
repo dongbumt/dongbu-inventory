@@ -1533,11 +1533,11 @@
       <div class="tbl-wrap doc-request-history-wrap">
         <table>
           <thead><tr>
-            <th>요청일시</th><th>구분</th><th>거래처</th><th>수신처</th>
+            <th>요청일시</th><th>구분</th><th>거래처</th><th>이력번호</th><th>수신처</th>
             <th style="text-align:right;">서류</th><th>상태</th>
           </tr></thead>
           <tbody id="doc-request-log-tbody">
-            <tr><td colspan="6" style="text-align:center;padding:16px;color:#888;">요청 이력을 불러오는 중...</td></tr>
+            <tr><td colspan="7" style="text-align:center;padding:16px;color:#888;">요청 이력을 불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -12399,24 +12399,31 @@ function formatDocumentRequestDate(value){
   });
 }
 
+function documentRequestLogLots(log){
+  const documents = Array.isArray(log?.documents) ? log.documents : [];
+  return [...new Set(documents.map(row=>String(row?.lot||'').trim()).filter(Boolean))];
+}
+
 function renderDocumentRequestLogs(errorMessage=''){
   const tbody = document.getElementById('doc-request-log-tbody');
   if(!tbody) return;
   if(errorMessage){
-    tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:16px;color:#c0392b;">${htmlEscape(errorMessage)}</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:16px;color:#c0392b;">${htmlEscape(errorMessage)}</td></tr>`;
     return;
   }
   if(!documentRequestLogs.length){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:16px;color:#888;">발송 이력이 없습니다.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:16px;color:#888;">발송 이력이 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML=documentRequestLogs.slice(0,100).map(log=>{
     const ok = log.status === 'sent' || log.status === 'accepted';
     const statusText = log.provider_status || (ok ? '완료' : '실패');
+    const lots = documentRequestLogLots(log);
     return `<tr title="${htmlEscape(log.error_message||'')}">
       <td style="white-space:nowrap;">${htmlEscape(formatDocumentRequestDate(log.created_at))}</td>
       <td>${log.channel==='fax'?'팩스':'메일'}</td>
       <td><strong>${htmlEscape(log.trader||'-')}</strong></td>
+      <td style="font-family:var(--font-mono);font-size:11px;overflow-wrap:anywhere;">${lots.length?lots.map(lot=>`<div>${htmlEscape(lot)}</div>`).join(''):'-'}</td>
       <td style="max-width:240px;overflow-wrap:anywhere;">${htmlEscape(log.recipient||'-')}</td>
       <td style="text-align:right;">${Number(log.document_count||0)}건</td>
       <td class="${ok?'doc-request-status-ok':'doc-request-status-fail'}">${htmlEscape(statusText)}</td>
