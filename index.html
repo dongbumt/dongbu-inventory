@@ -12033,9 +12033,13 @@ function stockSort(key){
   renderStock();
 }
 
-function saveDocChecks(){
+function saveDocChecks(changeLog=null){
   docChecksRevision++;
   localStorage.setItem('dbmt_doc_checks', JSON.stringify(docChecks));
+  if(changeLog){
+    if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
+    recordDataChange(changeLog, {sync:false});
+  }
   gsSaveAppDataKeys(['docChecks'], '서류체크');
 }
 
@@ -12120,8 +12124,30 @@ function toggleDocCheckKeys(keys){
   const list = asArray(keys).filter(Boolean);
   if(!list.length) return;
   const next = !list.some(key=>!!docChecks[key]);
+  const row = docCheckRowsCache.find(item=>
+    asArray(item?._keys || getDocKeys(item?.product, item?.origin, item?.lot))
+      .some(key=>list.includes(key))
+  );
   list.forEach(key=>{ docChecks[key] = next; });
-  saveDocChecks();
+  const product = String(row?.product||'').trim();
+  const lot = String(row?.lot||'').trim();
+  const origin = String(row?.origin||'').trim();
+  const trader = String(row?.trader||'').trim();
+  const requiredDoc = row ? getRequiredDoc(origin) : '';
+  const detail = [
+    product ? `품목: ${product}` : '',
+    lot ? `이력번호: ${lot}` : '',
+    origin ? `원산지: ${origin}` : '',
+    requiredDoc ? `필요서류: ${requiredDoc}` : '',
+    trader ? `거래처: ${trader}` : ''
+  ].filter(Boolean).join(' / ');
+  saveDocChecks({
+    menu:'서류체크',
+    action:next ? '수령 완료' : '수령 취소',
+    target:[product, lot].filter(Boolean).join(' / ') || list[0],
+    summary:`${next ? '서류 수령 체크' : '서류 수령 체크 취소'}${detail ? ' / ' + detail : ''}`,
+    refId:lot || list[0]
+  });
   renderDocCheck();
 }
 function toggleDocCheck(key){
