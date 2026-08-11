@@ -286,6 +286,9 @@
   <div class="nav-tab" onclick="showPage('p-driver-attendance',this)" id="nav-driver-attendance" style="color:#0f766e;font-weight:700;">
     🚚 배송기사근태
   </div>
+  <div class="nav-tab" onclick="showPage('p-mobile-admin',this)" id="nav-mobile-admin" style="color:#374151;font-weight:700;">
+    📱 모바일 관리자
+  </div>
   <div class="nav-tab" onclick="showPage('p-expense',this);renderExpenses();" id="nav-expense" style="color:#1a7ab5;font-weight:700;">
     💳 지출관리
   </div>
@@ -2455,6 +2458,44 @@
           <td colspan="2"></td>
         </tr></tfoot>
       </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     모바일 관리자 계정
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-mobile-admin">
+  <div class="card">
+    <div class="section-header" style="margin-bottom:10px;">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#374151;"></div>모바일 관리자</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="copyMobileAdminUrl()">접속주소 복사</button>
+        <button class="btn btn-primary btn-sm" onclick="openMobileAdmin()">모바일 화면 열기</button>
+      </div>
+    </div>
+    <div class="form-row" style="align-items:flex-end;margin-bottom:0;">
+      <div class="form-group" style="grid-column:span 4;min-width:300px;">
+        <label>모바일 관리자 접속주소</label>
+        <input id="ma-mobile-url" readonly style="background:#f8f9fa;font-family:var(--font-mono);font-size:11px;">
+      </div>
+    </div>
+    <div id="ma-status" style="font-size:12px;color:#667085;margin-top:9px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#6b7280;"></div>관리자 계정 설정</div>
+    <input type="hidden" id="ma-account-id">
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label>관리자 이름</label><input id="ma-display-name" maxlength="30" placeholder="예: 대표자"></div>
+      <div class="form-group"><label>접속 아이디</label><input id="ma-login-id" maxlength="30" autocomplete="username" placeholder="영문·숫자 4~30자"></div>
+      <div class="form-group"><label>숫자 비밀번호</label><input id="ma-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" autocomplete="new-password" placeholder="신규 4자리 / 수정 시 비워두면 유지"></div>
+      <div class="form-group" style="max-width:120px;"><label>사용 상태</label><select id="ma-active"><option value="1">사용</option><option value="0">중지</option></select></div>
+      <div class="form-group" style="flex:0;"><label>&nbsp;</label><div style="display:flex;gap:5px;"><button class="btn btn-primary" onclick="saveMobileAdminAccount()">저장</button><button class="btn btn-secondary" onclick="resetMobileAdminAccountForm()">초기화</button></div></div>
+    </div>
+    <div class="tbl-wrap" style="max-height:320px;">
+      <table><thead><tr><th>관리자 이름</th><th>접속 아이디</th><th>최근 접속</th><th style="text-align:center;">상태</th><th style="text-align:center;">관리</th></tr></thead><tbody id="ma-account-body"></tbody></table>
     </div>
   </div>
 </div>
@@ -5195,6 +5236,112 @@ function renderDriverStats(){
   warningEl.textContent=`${warning}명`; warningEl.style.color=warning?'#c0392b':'';
 }
 
+let mobileAdminAccounts = [];
+let mobileAdminLoading = false;
+
+function mobileAdminUrl(){
+  return new URL('mobile-admin.html', window.location.href).href;
+}
+
+function setMobileAdminStatus(message='', isError=false){
+  const el=document.getElementById('ma-status');
+  if(!el) return;
+  el.textContent=message;
+  el.style.color=isError?'#c0392b':'#667085';
+}
+
+function resetMobileAdminAccountForm(){
+  const values={
+    'ma-account-id':'', 'ma-display-name':'', 'ma-login-id':'', 'ma-pin':'', 'ma-active':'1'
+  };
+  Object.entries(values).forEach(([id,value])=>{ const el=document.getElementById(id); if(el) el.value=value; });
+}
+
+function mobileAdminDateTime(value){
+  if(!value) return '-';
+  const date=new Date(value);
+  if(Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+
+function renderMobileAdminAccounts(){
+  const body=document.getElementById('ma-account-body');
+  if(!body) return;
+  if(!mobileAdminAccounts.length){
+    body.innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">등록된 모바일 관리자 계정이 없습니다.</td></tr>';
+    return;
+  }
+  body.innerHTML=mobileAdminAccounts.map(row=>`<tr>
+    <td><strong>${htmlEscape(row.display_name||'-')}</strong></td>
+    <td>${htmlEscape(row.login_id||'-')}</td>
+    <td>${mobileAdminDateTime(row.last_used_at)}</td>
+    <td style="text-align:center;"><span class="badge ${row.active?'badge-in':'badge-use'}">${row.active?'사용':'중지'}</span></td>
+    <td style="text-align:center;"><button class="btn btn-secondary btn-sm" onclick="editMobileAdminAccount(${jsArg(row.id)})">수정</button></td>
+  </tr>`).join('');
+}
+
+async function loadMobileAdminAccounts(){
+  if(mobileAdminLoading) return;
+  mobileAdminLoading=true;
+  setMobileAdminStatus('계정 목록을 불러오는 중입니다.');
+  try{
+    mobileAdminAccounts=await sbRpc('dbmt_mobile_admin_accounts',{p_password:requireSupabasePassword()}) || [];
+    renderMobileAdminAccounts();
+    setMobileAdminStatus(`${mobileAdminAccounts.length}개 계정`);
+  }catch(err){
+    setMobileAdminStatus('계정 조회 실패: '+(err?.message||err),true);
+  }finally{ mobileAdminLoading=false; }
+}
+
+function initMobileAdminSettings(){
+  const url=document.getElementById('ma-mobile-url');
+  if(url) url.value=mobileAdminUrl();
+  loadMobileAdminAccounts();
+}
+
+function editMobileAdminAccount(id){
+  const row=mobileAdminAccounts.find(item=>String(item.id)===String(id));
+  if(!row) return;
+  document.getElementById('ma-account-id').value=row.id||'';
+  document.getElementById('ma-display-name').value=row.display_name||'';
+  document.getElementById('ma-login-id').value=row.login_id||'';
+  document.getElementById('ma-pin').value='';
+  document.getElementById('ma-active').value=row.active?'1':'0';
+  document.getElementById('ma-display-name').focus();
+}
+
+async function saveMobileAdminAccount(){
+  const id=(document.getElementById('ma-account-id')?.value||'').trim();
+  const displayName=(document.getElementById('ma-display-name')?.value||'').trim();
+  const loginId=(document.getElementById('ma-login-id')?.value||'').trim();
+  const pin=document.getElementById('ma-pin')?.value||'';
+  const active=document.getElementById('ma-active')?.value==='1';
+  if(!displayName){ toast('관리자 이름을 입력해주세요.'); return; }
+  if(!/^[A-Za-z0-9._-]{4,30}$/.test(loginId)){ toast('접속 아이디는 영문·숫자 4~30자로 입력해주세요.'); return; }
+  if((!id || pin) && !/^\d{4}$/.test(pin)){ toast('숫자 비밀번호는 4자리로 입력해주세요.'); return; }
+  try{
+    await sbRpc('dbmt_mobile_admin_save_account',{
+      p_password:requireSupabasePassword(), p_id:id||null, p_display_name:displayName,
+      p_login_id:loginId, p_pin:pin||null, p_active:active
+    });
+    recordDataChange({menu:'모바일관리자',action:id?'수정':'저장',target:displayName,
+      summary:`모바일 관리자 계정 ${id?'수정':'등록'}: ${loginId}`});
+    resetMobileAdminAccountForm();
+    await loadMobileAdminAccounts();
+    toast('모바일 관리자 계정을 저장했습니다.');
+  }catch(err){ setMobileAdminStatus('계정 저장 실패: '+(err?.message||err),true); }
+}
+
+async function copyMobileAdminUrl(){
+  const url=mobileAdminUrl();
+  try{ await navigator.clipboard.writeText(url); toast('모바일 관리자 접속주소를 복사했습니다.'); }
+  catch(err){ window.prompt('접속주소를 복사하세요.',url); }
+}
+
+function openMobileAdmin(){
+  window.open(mobileAdminUrl(),'_blank','noopener');
+}
+
 const HR_LOCK_PASSWORD_HASH = '1dfe4293ae0aa26b19bdcd3555adf5aebe076fb3d85f83a5d691fe548d75daaa';
 const HR_LOCK_PAGES = new Set(['p-employees', 'p-leaves', 'p-driver-attendance']);
 const HR_LOCK_SESSION_KEYS = ['dbmt_hr_menu_unlocked', 'dbmt_hr_menu_unlocked_v2'];
@@ -5325,6 +5472,7 @@ async function showPage(id, btn){
   if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
   if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); renderLeaveDeductions(); }
   if(id==='p-driver-attendance') initDriverAdmin();
+  if(id==='p-mobile-admin') initMobileAdminSettings();
   if(id==='p-change-log') renderDataChangeLog();
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
   if(id==='p-costcompare') renderCostCompare();

@@ -53,6 +53,11 @@ Editor query for each file:
 31. `schema-rpc-14-driver-address-label.sql`
 32. `schema-rpc-15-driver-region-from-address.sql`
 33. `schema-rpc-16-driver-break-minimum.sql`
+34. `schema-rpc-17a-mobile-admin-tables.sql`
+35. `schema-rpc-17b-mobile-admin-login.sql`
+36. `schema-rpc-17c-mobile-admin-accounts.sql`
+37. `schema-rpc-17d-mobile-admin-data.sql`
+38. `schema-rpc-17e-mobile-admin-driver-week.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.

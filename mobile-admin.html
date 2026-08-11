@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>DBMT ERP 모바일 관리자</title>
+  <style>
+    :root{--ink:#17202a;--muted:#667085;--line:#d9dee5;--soft:#f4f6f8;--panel:#fff;--accent:#0f766e;--danger:#c0392b;--warn:#a15c00;--radius:7px}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#eef1f4;color:var(--ink);font-family:Arial,"Malgun Gothic",sans-serif;letter-spacing:0}
+    button,input,select{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+    .shell{width:min(760px,100%);min-height:100vh;margin:0 auto;background:#fff;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+    .login-wrap{min-height:100vh;display:grid;place-items:center;padding:18px;background:#eef1f4}
+    .login-box{width:min(390px,100%);background:#fff;border:1px solid var(--line);border-radius:8px;padding:22px;box-shadow:0 8px 28px rgba(16,24,40,.08)}
+    .brand{font-size:21px;font-weight:900;margin-bottom:4px}.sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+    label{display:block;font-size:12px;font-weight:800;margin:12px 0 6px}
+    input,select{width:100%;height:42px;border:1px solid #cfd6de;border-radius:6px;padding:0 11px;background:#fff;color:var(--ink)}
+    input:focus,select:focus{outline:2px solid rgba(15,118,110,.18);border-color:var(--accent)}
+    .primary{width:100%;height:44px;margin-top:16px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-weight:900}
+    .primary:disabled{opacity:.55}.message{min-height:18px;margin-top:10px;font-size:12px;color:var(--muted)}.message.error{color:var(--danger)}
+    .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;height:56px;padding:0 12px;background:#fff;border-bottom:1px solid var(--line)}
+    .top-title{min-width:0;flex:1}.top-title strong{display:block;font-size:16px}.top-title span{display:block;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .icon-btn{width:36px;height:36px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:20px;line-height:1}.logout{height:36px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:0 10px;font-size:12px;font-weight:800}
+    .sync-line{height:3px;background:#e7eaee}.sync-line.loading:after{content:"";display:block;height:100%;width:40%;background:var(--accent);animation:load 1s infinite ease-in-out}@keyframes load{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
+    .menu{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;padding:8px;background:#e3e7eb;border-bottom:1px solid var(--line)}
+    .menu button{min-width:0;height:48px;border:0;background:#fff;color:#45515e;font-size:11px;font-weight:800;line-height:1.2;padding:4px 2px}.menu button.active{background:#26313d;color:#fff}.menu .mark{display:block;font-size:15px;margin-bottom:3px}
+    .view{display:none}.view.active{display:block}.section-head{position:sticky;top:59px;z-index:10;display:flex;align-items:center;gap:8px;min-height:48px;padding:8px 12px;background:#fff;border-bottom:1px solid var(--line)}
+    .section-head h1{flex:1;margin:0;font-size:17px}.count{font-size:11px;color:var(--muted);white-space:nowrap}.controls{padding:10px 12px;background:var(--soft);border-bottom:1px solid var(--line)}
+    .control-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.control-row.one{grid-template-columns:1fr}.control-row.three{grid-template-columns:repeat(3,minmax(0,1fr))}.controls input,.controls select{height:38px;font-size:13px}.controls .wide{grid-column:1/-1}
+    .summary{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;background:#fff;border-bottom:1px solid var(--line);font-size:12px}.summary strong{font-size:15px}
+    .list{background:#fff}.row{padding:10px 12px;border-bottom:1px solid #e8ebef}.row-top{display:flex;align-items:flex-start;gap:8px}.row-title{min-width:0;flex:1;font-size:14px;font-weight:900;line-height:1.35}.row-value{font-size:14px;font-weight:900;white-space:nowrap}.meta{display:flex;gap:5px 12px;flex-wrap:wrap;margin-top:5px;color:var(--muted);font-size:11px;line-height:1.45}.tag{display:inline-flex;align-items:center;min-height:20px;padding:1px 6px;border:1px solid #ccd3da;border-radius:4px;background:#f7f8f9;font-size:10px;font-weight:800}.tag.in{color:#0b6b63;border-color:#9ed7d1;background:#edf9f7}.tag.out{color:#a33a2c;border-color:#edb6ae;background:#fff3f1}.empty{padding:48px 16px;text-align:center;color:#8a939d;font-size:13px}.more{padding:10px 12px;color:var(--muted);font-size:11px;text-align:center;background:#f8f9fa;border-bottom:1px solid var(--line)}
+    .week-nav{display:grid;grid-template-columns:42px 1fr 42px;gap:6px}.week-nav button{height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:18px}.week-nav input{height:38px;text-align:center}
+    .phone{color:#1769aa;text-decoration:none;font-weight:800}.warning{color:var(--warn)}
+    @media(max-width:390px){.menu button{font-size:10px}.section-head{top:59px}.control-row.three{grid-template-columns:1fr 1fr}.control-row.three .wide-small{grid-column:1/-1}.row{padding:9px 10px}}
+  </style>
+</head>
+<body>
+  <section id="login-view" class="login-wrap">
+    <form class="login-box" autocomplete="on" onsubmit="loginAdmin(event)">
+      <div class="brand">DBMT ERP</div>
+      <div class="sub">모바일 관리자</div>
+      <label for="login-id">관리자 아이디</label>
+      <input id="login-id" name="username" autocomplete="username" autocapitalize="none" required>
+      <label for="login-pin">숫자 비밀번호</label>
+      <input id="login-pin" name="password" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="current-password" required>
+      <button id="login-btn" class="primary" type="submit">로그인</button>
+      <div id="login-message" class="message" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <main id="app-view" class="shell hidden">
+    <header class="topbar">
+      <div class="top-title"><strong>DBMT ERP</strong><span id="account-label">-</span></div>
+      <button class="icon-btn" type="button" title="새로고침" aria-label="새로고침" onclick="refreshAll()">↻</button>
+      <button class="logout" type="button" onclick="logoutAdmin()">로그아웃</button>
+    </header>
+    <div id="sync-line" class="sync-line"></div>
+    <nav class="menu" aria-label="관리자 메뉴">
+      <button type="button" data-view="schedule" onclick="showView('schedule')"><span class="mark">▣</span>일정관리</button>
+      <button type="button" data-view="transactions" onclick="showView('transactions')"><span class="mark">↔</span>거래내역</button>
+      <button type="button" data-view="production" onclick="showView('production')"><span class="mark">▤</span>생산일보</button>
+      <button type="button" data-view="stock" onclick="showView('stock')"><span class="mark">▦</span>재고현황</button>
+      <button type="button" data-view="driver" onclick="showView('driver')"><span class="mark">◉</span>기사근태</button>
+      <button type="button" data-view="employees" onclick="showView('employees')"><span class="mark">●</span>직원정보</button>
+      <button type="button" data-view="expenses" onclick="showView('expenses')"><span class="mark">₩</span>지출관리</button>
+    </nav>
+
+    <section id="view-schedule" class="view">
+      <div class="section-head"><h1>일정관리</h1><span id="schedule-count" class="count"></span></div>
+      <div class="controls"><div class="control-row one"><input id="schedule-month" type="month" onchange="renderSchedule()"></div></div>
+      <div id="schedule-list" class="list"></div>
+    </section>
+
+    <section id="view-transactions" class="view">
+      <div class="section-head"><h1>거래내역</h1><span id="transaction-count" class="count"></span></div>
+      <div class="controls"><div class="control-row three">
+        <input id="tx-from" type="date" onchange="renderTransactions()"><input id="tx-to" type="date" onchange="renderTransactions()">
+        <select id="tx-type" class="wide-small" onchange="renderTransactions()"><option value="">전체 구분</option><option>입고</option><option>출고</option><option>생산입고</option><option>사용</option><option>재고이동</option><option>재고조정</option></select>
+        <input id="tx-search" class="wide" type="search" placeholder="품목·거래처·이력번호 검색" oninput="renderTransactions()">
+      </div></div>
+      <div id="transaction-summary" class="summary"></div><div id="transaction-list" class="list"></div>
+    </section>
+
+    <section id="view-production" class="view">
+      <div class="section-head"><h1>생산일보</h1><span id="production-count" class="count"></span></div>
+      <div class="controls"><div class="control-row">
+        <input id="prod-from" type="date" onchange="renderProduction()"><input id="prod-to" type="date" onchange="renderProduction()">
+        <input id="prod-search" class="wide" type="search" placeholder="생산품·원료·작업번호 검색" oninput="renderProduction()">
+      </div></div>
+      <div id="production-list" class="list"></div>
+    </section>
+
+    <section id="view-stock" class="view">
+      <div class="section-head"><h1>재고현황</h1><span id="stock-count" class="count"></span></div>
+      <div class="controls"><div class="control-row">
+        <select id="stock-location" onchange="renderStock()"><option value="">전체 지점</option></select>
+        <select id="stock-positive" onchange="renderStock()"><option value="1">재고 있는 품목</option><option value="0">0·마이너스 포함</option></select>
+        <input id="stock-search" class="wide" type="search" placeholder="품목·이력번호·원산지 검색" oninput="renderStock()">
+      </div></div>
+      <div id="stock-summary" class="summary"></div><div id="stock-list" class="list"></div>
+    </section>
+
+    <section id="view-driver" class="view">
+      <div class="section-head"><h1>배송기사근태</h1><span id="driver-count" class="count"></span></div>
+      <div class="controls"><div class="week-nav"><button type="button" title="이전 주" onclick="shiftDriverWeek(-1)">‹</button><input id="driver-week" type="date" onchange="loadDriverWeek()"><button type="button" title="다음 주" onclick="shiftDriverWeek(1)">›</button></div></div>
+      <div id="driver-summary" class="summary"></div><div id="driver-list" class="list"></div>
+    </section>
+
+    <section id="view-employees" class="view">
+      <div class="section-head"><h1>직원정보</h1><span id="employee-count" class="count"></span></div>
+      <div class="controls"><div class="control-row">
+        <select id="employee-state" onchange="renderEmployees()"><option value="active">재직자</option><option value="all">전체 직원</option><option value="retired">퇴직자</option></select>
+        <input id="employee-search" type="search" placeholder="이름·직책 검색" oninput="renderEmployees()">
+      </div></div>
+      <div id="employee-list" class="list"></div>
+    </section>
+
+    <section id="view-expenses" class="view">
+      <div class="section-head"><h1>지출관리</h1><span id="expense-count" class="count"></span></div>
+      <div class="controls"><div class="control-row">
+        <input id="expense-month" type="month" onchange="renderExpenses()"><select id="expense-category" onchange="renderExpenses()"><option value="">전체 카테고리</option></select>
+        <input id="expense-search" class="wide" type="search" placeholder="거래처·품목·메모 검색" oninput="renderExpenses()">
+      </div></div>
+      <div id="expense-summary" class="summary"></div><div id="expense-list" class="list"></div>
+    </section>
+  </main>
+
+  <script>
+    const SUPABASE_URL='https://hdwjwtmbsxfjrlvicgnn.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY='sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
+    const TOKEN_KEY='dbmt_mobile_admin_session_token';
+    const VIEW_KEY='dbmt_mobile_admin_view';
+    let adminToken=localStorage.getItem(TOKEN_KEY)||'';
+    let snapshot=null;
+    let driverData=null;
+    let stockRows=[];
+    let currentView=localStorage.getItem(VIEW_KEY)||'schedule';
+
+    async function rpc(name,body){
+      const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${SUPABASE_PUBLISHABLE_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+      const text=await response.text();let data=null;try{data=text?JSON.parse(text):null}catch(e){data=text}
+      if(!response.ok)throw new Error(data?.message||data?.error||text||'서버 요청에 실패했습니다.');
+      return data;
+    }
+    function text(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+    function number(value){return Number(String(value??'').replace(/,/g,''))||0}
+    function money(value){return Math.round(number(value)).toLocaleString('ko-KR')}
+    function qty(value){return number(value).toLocaleString('ko-KR',{maximumFractionDigits:2})}
+    function dateValue(value){return String(value||'').trim().replace(/\//g,'-').slice(0,10)}
+    function localDate(date=new Date()){const d=new Date(date),y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+    function monthStart(){return `${localDate().slice(0,7)}-01`}
+    function kstTime(value){if(!value)return '-';return new Date(value).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false})}
+    function minutes(value){const n=Math.max(0,number(value)),h=Math.floor(n/60),m=Math.round(n%60);return h?`${h}시간${m?` ${m}분`:''}`:`${m}분`}
+    function getAppData(key){const value=snapshot?.appData?.[key];return Array.isArray(value)?value:[]}
+    function setMessage(message,type=''){const el=document.getElementById('login-message');el.textContent=message||'';el.className=`message ${type}`}
+    function setLoading(loading){document.getElementById('sync-line')?.classList.toggle('loading',loading)}
+    function empty(label){return `<div class="empty">${text(label)}이(가) 없습니다.</div>`}
+    function limitedRows(rows,render,limit=200){const shown=rows.slice(0,limit);return shown.map(render).join('')+(rows.length>limit?`<div class="more">${rows.length-limit}건이 더 있습니다. 검색 조건을 좁혀주세요.</div>`:'')}
+
+    async function loginAdmin(event){
+      event.preventDefault();const button=document.getElementById('login-btn');button.disabled=true;button.textContent='로그인 중';setMessage('');
+      try{
+        const result=await rpc('dbmt_mobile_admin_login',{p_login_id:document.getElementById('login-id').value.trim(),p_pin:document.getElementById('login-pin').value});
+        if(!result?.ok)throw new Error(result?.message||'로그인에 실패했습니다.');
+        adminToken=result.token;localStorage.setItem(TOKEN_KEY,adminToken);document.getElementById('login-pin').value='';await loadSnapshot();
+      }catch(err){setMessage(err.message,'error')}
+      finally{button.disabled=false;button.textContent='로그인'}
+    }
+    async function logoutAdmin(){
+      const token=adminToken;adminToken='';snapshot=null;driverData=null;stockRows=[];localStorage.removeItem(TOKEN_KEY);
+      document.getElementById('app-view').classList.add('hidden');document.getElementById('login-view').classList.remove('hidden');
+      if(token)rpc('dbmt_mobile_admin_logout',{p_token:token}).catch(()=>{});
+    }
+    async function loadSnapshot(){
+      if(!adminToken)return;setLoading(true);
+      try{
+        snapshot=await rpc('dbmt_mobile_admin_snapshot',{p_token:adminToken});stockRows=buildStockRows(snapshot.transactions||[]);prepareFilters();
+        document.getElementById('account-label').textContent=`${snapshot.account?.displayName||'관리자'} · ${new Date(snapshot.serverTime).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}`;
+        document.getElementById('login-view').classList.add('hidden');document.getElementById('app-view').classList.remove('hidden');showView(currentView);await loadDriverWeek(true);
+      }catch(err){adminToken='';localStorage.removeItem(TOKEN_KEY);document.getElementById('app-view').classList.add('hidden');document.getElementById('login-view').classList.remove('hidden');setMessage(err.message,'error')}
+      finally{setLoading(false)}
+    }
+    async function refreshAll(){await loadSnapshot()}
+    function showView(name){
+      const valid=['schedule','transactions','production','stock','driver','employees','expenses'];if(!valid.includes(name))name='schedule';currentView=name;localStorage.setItem(VIEW_KEY,name);
+      document.querySelectorAll('.view').forEach(el=>el.classList.toggle('active',el.id===`view-${name}`));document.querySelectorAll('.menu button').forEach(el=>el.classList.toggle('active',el.dataset.view===name));
+      ({schedule:renderSchedule,transactions:renderTransactions,production:renderProduction,stock:renderStock,driver:renderDriver,employees:renderEmployees,expenses:renderExpenses}[name])();window.scrollTo({top:0,behavior:'instant'});
+    }
+    function prepareFilters(){
+      const now=localDate(),from=monthStart();['tx-from','prod-from'].forEach(id=>{if(!document.getElementById(id).value)document.getElementById(id).value=from});['tx-to','prod-to'].forEach(id=>{if(!document.getElementById(id).value)document.getElementById(id).value=now});
+      if(!document.getElementById('schedule-month').value)document.getElementById('schedule-month').value=now.slice(0,7);if(!document.getElementById('expense-month').value)document.getElementById('expense-month').value=now.slice(0,7);if(!document.getElementById('driver-week').value)document.getElementById('driver-week').value=monday(now);
+      const locations=[...new Set(stockRows.map(row=>row.stockLocation).filter(Boolean))].sort();document.getElementById('stock-location').innerHTML='<option value="">전체 지점</option>'+locations.map(v=>`<option>${text(v)}</option>`).join('');
+      const categories=[...new Set(getAppData('expenseList').map(row=>String(row.category||'').trim()).filter(Boolean))].sort();document.getElementById('expense-category').innerHTML='<option value="">전체 카테고리</option>'+categories.map(v=>`<option>${text(v)}</option>`).join('');
+    }
+
+    function renderSchedule(){
+      const month=document.getElementById('schedule-month').value||localDate().slice(0,7);const rows=getAppData('scheduleEvents').filter(row=>dateValue(row.date).startsWith(month)).sort((a,b)=>dateValue(a.date).localeCompare(dateValue(b.date)));
+      document.getElementById('schedule-count').textContent=`${rows.length}건`;document.getElementById('schedule-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.text||row.title||'-')}</div><div class="row-value">${text(dateValue(row.date).slice(5))}</div></div><div class="meta"><span>${text(dateValue(row.date))}</span></div></div>`):empty('선택한 달의 일정');
+    }
+    function transactionTag(type){const cls=['입고','생산입고'].includes(type)?'in':['출고','사용'].includes(type)?'out':'';return `<span class="tag ${cls}">${text(type||'-')}</span>`}
+    function renderTransactions(){
+      const from=document.getElementById('tx-from').value,to=document.getElementById('tx-to').value,typeValue=document.getElementById('tx-type').value,q=document.getElementById('tx-search').value.trim().toLowerCase();
+      const rows=(snapshot?.transactions||[]).filter(row=>{const d=dateValue(row.date),hay=[row.product,row.trader,row.lot,row.origin].join(' ').toLowerCase();return(!from||d>=from)&&(!to||d<=to)&&(!typeValue||row.type===typeValue)&&(!q||hay.includes(q))}).sort((a,b)=>dateValue(b.date).localeCompare(dateValue(a.date)));
+      const totalWeight=rows.reduce((sum,row)=>sum+number(row.weight),0),totalAmount=rows.reduce((sum,row)=>sum+number(row.amount),0);document.getElementById('transaction-count').textContent=`${rows.length}건`;document.getElementById('transaction-summary').innerHTML=`<span>중량 <strong>${qty(totalWeight)}kg</strong></span><span>금액 <strong>${money(totalAmount)}원</strong></span>`;
+      document.getElementById('transaction-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row"><div class="row-top"><div class="row-title">${transactionTag(row.type)} ${text(row.product||'-')}</div><div class="row-value">${qty(row.weight)}kg</div></div><div class="meta"><span>${text(dateValue(row.date))}</span><span>${text(row.trader||'-')}</span><span>${text(row.origin||'-')}</span><span>LOT ${text(row.lot||'-')}</span>${number(row.amount)?`<span>${money(row.amount)}원</span>`:''}</div></div>`):empty('거래내역');
+    }
+    function prodItems(row,key){return Array.isArray(row?.[key])?row[key]:[]}
+    function prodItemLabel(item){return `${item.product||item.name||'-'} ${qty(item.qty??item.weight)}kg`}
+    function renderProduction(){
+      const from=document.getElementById('prod-from').value,to=document.getElementById('prod-to').value,q=document.getElementById('prod-search').value.trim().toLowerCase();
+      const rows=(snapshot?.prod||[]).filter(row=>{const d=dateValue(row.date||row.workDate),hay=[row.job_no,row.note,...prodItems(row,'inputs').map(prodItemLabel),...prodItems(row,'outputs').map(prodItemLabel)].join(' ').toLowerCase();return(!from||d>=from)&&(!to||d<=to)&&(!q||hay.includes(q))}).sort((a,b)=>dateValue(b.date||b.workDate).localeCompare(dateValue(a.date||a.workDate)));
+      document.getElementById('production-count').textContent=`${rows.length}건`;document.getElementById('production-list').innerHTML=rows.length?limitedRows(rows,row=>{const outputs=prodItems(row,'outputs'),inputs=prodItems(row,'inputs'),outQty=outputs.reduce((s,v)=>s+number(v.qty??v.weight),0);return `<div class="row"><div class="row-top"><div class="row-title">${outputs.length?outputs.map(v=>text(prodItemLabel(v))).join(', '):text(row.product||'-')}</div><div class="row-value">${qty(outQty||row.output_weight)}kg</div></div><div class="meta"><span>${text(dateValue(row.date||row.workDate))}</span><span>작업 ${text(row.job_no||'-')}</span>${row.note?`<span>${text(row.note)}</span>`:''}</div>${inputs.length?`<div class="meta"><span>투입: ${inputs.map(v=>text(prodItemLabel(v))).join(', ')}</span></div>`:''}</div>`}):empty('생산일보');
+    }
+
+    function norm(value){return String(value||'').trim().toLowerCase().replace(/\s+/g,'')}
+    function productNorm(value){return norm(value).replace(/\s+\d+(?:\.\d+)?\s*kg$/i,'').replace(/\[[^\]]*\]$/,'').replace(/\(작업\)$/,'')}
+    function unitPrice(row){const direct=number(row.price);if(direct>0)return direct;const weight=number(row.weight),amount=number(row.amount);return weight>0&&amount>0?Math.round(amount/weight):0}
+    function stockDate(row){return dateValue(row.stockProddate||row.sourceProddate||row.proddate||(row.type==='생산입고'?row.date:''))}
+    function stockLocation(row,key='stockLocation'){return String(row?.[key]||row?.location||'').trim()||'가공장'}
+    function stockKey(product,lot,origin,price,packunit,proddate,place){return [norm(product),norm(packunit),norm(lot),norm(origin),Math.round(number(price)),dateValue(proddate),norm(place)].join('|')}
+    function sameStock(row,t,place,price=0,prodDate=''){return productNorm(row.product)===productNorm(t.product)&&norm(row.lot)===norm(t.lot)&&(!t.origin||norm(row.origin)===norm(t.origin))&&(!t.packunit||norm(row.packunit)===norm(t.packunit))&&(!place||norm(row.stockLocation)===norm(place))&&(!price||Math.round(row.price)===Math.round(price))&&(!prodDate||dateValue(row.proddate)===dateValue(prodDate))}
+    function buildStockRows(transactions){
+      const map=new Map(),ensure=(t,place,price=unitPrice(t),prodDate=stockDate(t))=>{const key=stockKey(t.product,t.lot,t.origin,price,t.packunit,prodDate,place);if(!map.has(key))map.set(key,{product:String(t.product||'').trim(),packunit:String(t.packunit||'').trim(),lot:String(t.lot||'').trim(),origin:String(t.origin||'').trim(),price:number(price),proddate:dateValue(prodDate),stockLocation:place,stock:0,totalIn:0,totalOut:0,totalUse:0});return map.get(key)};
+      [...transactions].map((row,index)=>({row,index})).filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동'].includes(x.row.type)).sort((a,b)=>dateValue(a.row.date).localeCompare(dateValue(b.row.date))||a.index-b.index).forEach(({row:t})=>{
+        if(!t.product)return;const weight=number(t.weight),place=stockLocation(t),price=number(t.stockUnitPrice||t.sourceStockPrice||t.stockPrice)||unitPrice(t),prodDate=stockDate(t);
+        if(t.type==='입고'||t.type==='생산입고'){const bucket=ensure(t,place,unitPrice(t),prodDate);bucket.stock+=weight;bucket.totalIn+=weight;return}
+        if(t.type==='재고조정'){ensure(t,place,unitPrice(t),prodDate).stock+=weight;return}
+        if(t.type==='재고이동'){
+          const from=stockLocation(t,'fromLocation'),to=String(t.toLocation||'').trim()||'가공장';let remain=weight;const candidates=[...map.values()].filter(row=>sameStock(row,t,from,price,prodDate)&&row.stock>0.01);candidates.forEach(row=>{const moved=Math.min(remain,row.stock);row.stock-=moved;remain-=moved});if(remain>0.01)ensure(t,from,price,prodDate).stock-=remain;ensure(t,to,price,prodDate).stock+=weight;return;
+        }
+        let remain=weight;let candidates=[...map.values()].filter(row=>sameStock(row,t,place,0,'')&&row.stock>0.01);if(prodDate){const exact=candidates.filter(row=>dateValue(row.proddate)===prodDate);if(exact.length)candidates=exact}if(price){const exact=candidates.filter(row=>Math.round(row.price)===Math.round(price));if(exact.length)candidates=[...exact,...candidates.filter(row=>!exact.includes(row))]}
+        candidates.forEach(row=>{const used=Math.min(remain,row.stock);row.stock-=used;if(t.type==='출고')row.totalOut+=used;else row.totalUse+=used;remain-=used});if(remain>0.01){const bucket=ensure(t,place,t.type==='사용'?unitPrice(t):price,prodDate);bucket.stock-=remain;if(t.type==='출고')bucket.totalOut+=remain;else bucket.totalUse+=remain}
+      });return [...map.values()];
+    }
+    function renderStock(){
+      const place=document.getElementById('stock-location').value,positive=document.getElementById('stock-positive').value==='1',q=document.getElementById('stock-search').value.trim().toLowerCase();const rows=stockRows.filter(row=>{const hay=[row.product,row.lot,row.origin,row.packunit,row.proddate].join(' ').toLowerCase();return(!place||row.stockLocation===place)&&(!positive||row.stock>0.005)&&(!q||hay.includes(q))}).sort((a,b)=>a.product.localeCompare(b.product,'ko')||b.stock-a.stock);
+      const total=rows.reduce((s,row)=>s+row.stock,0),value=rows.reduce((s,row)=>s+row.stock*row.price,0);document.getElementById('stock-count').textContent=`${rows.length}항목`;document.getElementById('stock-summary').innerHTML=`<span>총 재고 <strong>${qty(total)}kg</strong></span><span>재고금액 <strong>${money(value)}원</strong></span>`;
+      document.getElementById('stock-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.product||'-')}</div><div class="row-value ${row.stock<0?'warning':''}">${qty(row.stock)}kg</div></div><div class="meta"><span>${text(row.stockLocation)}</span><span>${text(row.origin||'-')}</span><span>LOT ${text(row.lot||'-')}</span>${row.proddate?`<span>생산 ${text(row.proddate)}</span>`:''}${row.price?`<span>${money(row.price)}원/kg</span>`:''}</div></div>`,300):empty('재고');
+    }
+
+    function monday(value){const d=new Date(`${dateValue(value)}T12:00:00`);d.setDate(d.getDate()-((d.getDay()+6)%7));return localDate(d)}
+    function shiftDriverWeek(days){const input=document.getElementById('driver-week'),d=new Date(`${input.value||localDate()}T12:00:00`);d.setDate(d.getDate()+days*7);input.value=monday(localDate(d));loadDriverWeek()}
+    async function loadDriverWeek(silent=false){
+      if(!adminToken)return;const week=monday(document.getElementById('driver-week').value||localDate());document.getElementById('driver-week').value=week;if(!silent)setLoading(true);
+      try{driverData=await rpc('dbmt_mobile_admin_driver_week',{p_token:adminToken,p_week_start:week});renderDriver()}catch(err){document.getElementById('driver-list').innerHTML=empty(err.message)}finally{if(!silent)setLoading(false)}
+    }
+    function renderDriver(){
+      const rows=driverData?.attendance||[];const total=rows.reduce((s,row)=>s+number(row.recognized_minutes),0),bonus=rows.reduce((s,row)=>s+number(row.bonus_minutes),0);document.getElementById('driver-count').textContent=`${rows.length}건`;document.getElementById('driver-summary').innerHTML=`<span>인정근로 <strong>${minutes(total)}</strong></span><span>인천가산 <strong>${minutes(bonus)}</strong></span>`;
+      document.getElementById('driver-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.employee_name||'-')}</div><div class="row-value">${row.recognized_minutes==null?'근무 중':minutes(row.recognized_minutes)}</div></div><div class="meta"><span>${text(row.work_date||'-')}</span><span>${kstTime(row.start_at)} → ${kstTime(row.end_at)}</span><span>휴게 ${minutes(row.break_minutes)}</span><span>가산 ${minutes(row.bonus_minutes)}</span></div><div class="meta"><span>${text(row.start_location_name||row.start_region||'-')} → ${text(row.end_location_name||row.end_region||'-')}</span></div></div>`):empty('선택한 주의 근태기록');
+    }
+    function renderEmployees(){
+      const state=document.getElementById('employee-state').value,q=document.getElementById('employee-search').value.trim().toLowerCase();const rows=getAppData('employees').filter(row=>{const retired=!!row.resignDate,hay=[row.name,row.position,row.phone].join(' ').toLowerCase();return(state==='all'||(state==='active'&&!retired)||(state==='retired'&&retired))&&(!q||hay.includes(q))}).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
+      document.getElementById('employee-count').textContent=`${rows.length}명`;document.getElementById('employee-list').innerHTML=rows.length?rows.map(row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.name||'-')} <span class="tag">${text(row.position||'직책 없음')}</span></div><div class="row-value">${row.resignDate?'퇴직':'재직'}</div></div><div class="meta"><span>입사 ${text(dateValue(row.hireDate)||'-')}</span>${row.resignDate?`<span>퇴사 ${text(dateValue(row.resignDate))}</span>`:''}${row.healthExpiry?`<span>보건증 ${text(dateValue(row.healthExpiry))}</span>`:''}</div><div class="meta">${row.phone?`<a class="phone" href="tel:${text(row.phone)}">${text(row.phone)}</a>`:''}<span>${text(row.addr||'')}</span>${number(row.monthlySalary)?`<span>월급 ${money(row.monthlySalary)}원</span>`:''}</div></div>`).join(''):empty('직원정보');
+    }
+    function renderExpenses(){
+      const month=document.getElementById('expense-month').value||localDate().slice(0,7),category=document.getElementById('expense-category').value,q=document.getElementById('expense-search').value.trim().toLowerCase();const rows=getAppData('expenseList').filter(row=>{const hay=[row.store,row.item,row.note,row.paytype].join(' ').toLowerCase();return dateValue(row.date).startsWith(month)&&(!category||row.category===category)&&(!q||hay.includes(q))}).sort((a,b)=>dateValue(b.date).localeCompare(dateValue(a.date)));
+      const total=rows.reduce((s,row)=>s+number(row.amount),0);document.getElementById('expense-count').textContent=`${rows.length}건`;document.getElementById('expense-summary').innerHTML=`<span>${text(month)}</span><span>합계 <strong>${money(total)}원</strong></span>`;
+      document.getElementById('expense-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.store||row.item||'-')}</div><div class="row-value">${money(row.amount)}원</div></div><div class="meta"><span>${text(dateValue(row.date))}</span><span class="tag">${text(row.category||'미분류')}</span><span>${text(row.paytype||'-')}</span>${row.item?`<span>${text(row.item)}</span>`:''}${row.note?`<span>${text(row.note)}</span>`:''}</div></div>`):empty('지출내역');
+    }
+
+    if(adminToken)loadSnapshot();
+  </script>
+</body>
+</html>
