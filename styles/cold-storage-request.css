@@ -206,15 +206,42 @@
 }
 
 .csr-status.accepted {
+  border-color: #9bb9d1;
+  background: #f0f6fa;
+  color: #315d7d;
+}
+
+.csr-status.completed {
   border-color: #9dcfbd;
   background: #edf8f3;
   color: #20735b;
+}
+
+.csr-status.partial {
+  border-color: #d8bd7b;
+  background: #fff9e9;
+  color: #856514;
+}
+
+.csr-status.canceled {
+  border-color: #c8ccd2;
+  background: #f4f5f6;
+  color: #626b78;
 }
 
 .csr-status.failed {
   border-color: #e6b0aa;
   background: #fff4f2;
   color: #b33a2b;
+}
+
+.csr-status-detail {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 9px;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .csr-empty-cell {

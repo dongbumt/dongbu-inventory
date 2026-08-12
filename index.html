@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
 <link rel="stylesheet" href="styles/main.css?v=20260812q3">
-<link rel="stylesheet" href="styles/cold-storage-request.css?v=20260812c">
+<link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813a">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('xlsx CDN 로드 실패 — Excel 내보내기 기능만 비활성화')"></script>
 </head>
 <body>
@@ -1128,6 +1128,7 @@
         <span>~</span>
         <input id="csr-history-to" type="date" onchange="renderColdStorageRequestHistory()" title="종료일">
         <input id="csr-history-search" type="search" placeholder="냉동창고·출고처·품목 검색" oninput="renderColdStorageRequestHistory()">
+        <button type="button" class="btn btn-secondary btn-sm" id="csr-status-refresh-button" onclick="refreshColdStorageFaxStatuses()">팩스 상태 새로고침</button>
         <span id="csr-history-count"></span>
       </div>
     </div>
@@ -17792,6 +17793,6 @@ function initSamsung(){
 
 </script>
 <script src="quotation.js?v=20260812q4"></script>
-<script src="cold-storage-request.js?v=20260812d"></script>
+<script src="cold-storage-request.js?v=20260813a"></script>
 </body>
 </html>

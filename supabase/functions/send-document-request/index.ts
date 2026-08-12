@@ -14,7 +14,7 @@ interface DocumentRow {
 }
 
 interface DeliveryRequest {
-  action?: "capabilities" | "send" | "cold_storage_fax";
+  action?: "capabilities" | "send" | "cold_storage_fax" | "cold_storage_fax_status";
   appPassword?: string;
   channel?: DeliveryChannel;
   trader?: string;
@@ -26,6 +26,7 @@ interface DeliveryRequest {
   warehouse?: string;
   itemCount?: number;
   imageDataUrl?: string;
+  messageId?: string;
 }
 
 const REQUEST_SENDER_NAME = "주식회사 동부엠티 & (주)동부축산유통";
@@ -84,6 +85,26 @@ function decodeXml(value: string) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, "&");
+}
+
+function xmlValue(xml: string, tag: string) {
+  const pattern = new RegExp(`<(?:\\w+:)?${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:\\w+:)?${tag}>`, "i");
+  const match = String(xml || "").match(pattern);
+  return clean(match ? decodeXml(match[1]) : "", 1000);
+}
+
+function faxStatusLabel(sendState: number) {
+  return ({
+    0: "파일 변환 대기",
+    1: "파일 변환 중",
+    2: "전송 중",
+    3: "전송 완료",
+    4: "예약 취소",
+    5: "파일 변환 실패",
+    6: "전송 실패",
+    7: "부분 성공",
+    8: "파일 용량 초과",
+  } as Record<number, string>)[sendState] || `상태 ${sendState}`;
 }
 
 function normalizeDocuments(rows: unknown): DocumentRow[] {
@@ -375,6 +396,37 @@ async function sendColdStorageFax(
   };
 }
 
+async function getColdStorageFaxStatus(messageId: string) {
+  const config = barobillConfig();
+  if (!config.certKey || !config.corpNum) throw new Error("바로빌 연동정보가 아직 설정되지 않았습니다.");
+  const detailXml = await barobillSoap("GetFaxMessageEx2", {
+    CERTKEY: config.certKey,
+    CorpNum: config.corpNum,
+    SendKey: messageId,
+  });
+  const sendStateValue = xmlValue(detailXml, "SendState");
+  if (sendStateValue === "") throw new Error("바로빌 팩스 상태를 확인할 수 없습니다.");
+  const sendState = Number(sendStateValue);
+  if (!Number.isInteger(sendState)) throw new Error("바로빌 팩스 상태를 확인할 수 없습니다.");
+  if (sendState < 0) {
+    const detail = await barobillErrorMessage(String(sendState));
+    throw new Error(`바로빌 오류 ${sendState}${detail ? `: ${detail}` : ""}`);
+  }
+  return {
+    messageId,
+    sendState,
+    status: faxStatusLabel(sendState),
+    terminal: [3, 4, 5, 6, 7, 8].includes(sendState),
+    success: sendState === 3,
+    partial: sendState === 7,
+    sendResult: xmlValue(detailXml, "SendResult"),
+    sendPageCount: Number(xmlValue(detailXml, "SendPageCount")) || 0,
+    successPageCount: Number(xmlValue(detailXml, "SuccessPageCount")) || 0,
+    sendDateTime: xmlValue(detailXml, "SendDT"),
+    endDateTime: xmlValue(detailXml, "EndDT"),
+  };
+}
+
 async function insertLog(
   // This project does not generate database types for Edge Functions.
   supabase: any,
@@ -422,6 +474,22 @@ Deno.serve(async (req) => {
     faxMode: env("BAROBILL_ENV").toLowerCase() === "production" ? "운영" : "테스트",
   };
   if (payload.action === "capabilities") return jsonResponse(req, capabilities);
+
+  if (payload.action === "cold_storage_fax_status") {
+    const messageId = clean(payload.messageId, 30);
+    if (!messageId || !/^[A-Za-z0-9_-]+$/.test(messageId)) {
+      return jsonResponse(req, { error: "팩스 접수번호를 확인해주세요." }, 400);
+    }
+    if (!capabilities.fax) {
+      return jsonResponse(req, { error: "바로빌 팩스 연동정보가 아직 설정되지 않았습니다." }, 503);
+    }
+    try {
+      return jsonResponse(req, { ok: true, ...(await getColdStorageFaxStatus(messageId)) });
+    } catch (error) {
+      const message = clean(error instanceof Error ? error.message : error, 1000);
+      return jsonResponse(req, { error: message || "팩스 상태 조회에 실패했습니다." }, 502);
+    }
+  }
 
   if (payload.action === "cold_storage_fax") {
     const warehouse = clean(payload.warehouse, 100);
