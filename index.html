@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css">
+<link rel="stylesheet" href="styles/main.css?v=20260812q2">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('xlsx CDN 로드 실패 — Excel 내보내기 기능만 비활성화')"></script>
 </head>
 <body>
@@ -264,6 +264,9 @@
   </div>
   <div class="nav-tab" onclick="showPage('p-costcompare',this);renderCostCompare();" id="nav-costcompare" style="color:#9b59b6;font-weight:700;">
     📊 생산원가비교
+  </div>
+  <div class="nav-tab" onclick="showPage('p-quotation',this)" id="nav-quotation" style="color:#4b5563;font-weight:700;">
+    📄 견적서 작성
   </div>
   <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">
     🧾 거래명세서
@@ -2219,6 +2222,84 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     견적서 작성
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-quotation">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#4b5563;"></div>견적서 작성</div>
+      <div class="quote-toolbar">
+        <button class="btn btn-secondary btn-sm" onclick="newQuotation()">새 견적</button>
+        <button class="btn btn-primary btn-sm" onclick="saveQuotation()">저장</button>
+      </div>
+    </div>
+    <div class="quote-meta-grid">
+      <div class="form-group"><label>작성일</label><input type="date" id="qt-date" onchange="quotationMetaChanged('date',this.value)"></div>
+      <div class="form-group"><label>고객사</label><input id="qt-customer" list="qt-customer-list" placeholder="거래처 검색 또는 직접 입력" oninput="quotationMetaChanged('customer',this.value)"><datalist id="qt-customer-list"></datalist></div>
+      <div class="form-group"><label>수신 표기</label><input id="qt-recipient" value="귀하" oninput="quotationMetaChanged('recipient',this.value)"></div>
+      <div class="form-group quote-meta-wide"><label>견적 제목</label><input id="qt-subject" placeholder="예) 호주산 설깃 가공품 견적" oninput="quotationMetaChanged('subject',this.value)"></div>
+      <div class="form-group"><label>단가 1 열제목</label><input id="qt-price-header-1" value="KG단가" oninput="quotationMetaChanged('priceHeader1',this.value)"></div>
+      <div class="form-group"><label>단가 2 열제목</label><input id="qt-price-header-2" value="BOX단가" oninput="quotationMetaChanged('priceHeader2',this.value)"></div>
+      <div class="form-group"><label>담당자</label><input id="qt-manager" value="김상영 과장" oninput="quotationMetaChanged('managerName',this.value)"></div>
+      <div class="form-group"><label>담당자 연락처</label><input id="qt-manager-phone" value="010-2414-5406" oninput="quotationMetaChanged('managerPhone',this.value)"></div>
+      <div class="form-group quote-meta-full"><label>외부용 비고</label><textarea id="qt-note" rows="2" oninput="quotationMetaChanged('note',this.value)">위 품목은 시세에 따라 단가가 변동됩니다.</textarea></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#6b7280;"></div>품목 및 내부 산출</div>
+      <button class="btn btn-secondary btn-sm" onclick="addQuotationRow()">+ 품목 추가</button>
+    </div>
+    <div class="tbl-wrap quote-editor-wrap">
+      <table class="quote-editor-table">
+        <thead>
+          <tr>
+            <th rowspan="2" class="quote-sticky-col">구분</th><th rowspan="2">품목</th><th rowspan="2">등급</th><th rowspan="2">원산지</th><th rowspan="2">단위</th>
+            <th rowspan="2" id="qt-editor-price-head-1">KG단가</th><th rowspan="2" id="qt-editor-price-head-2">BOX단가</th><th rowspan="2">비고</th>
+            <th colspan="10" class="quote-internal-head">내부 산출</th><th rowspan="2">삭제</th>
+          </tr>
+          <tr>
+            <th>월 사용량</th><th>타겟단가</th><th>원물시세</th><th>수율%</th><th>생산비</th><th>생산원가</th><th>판관비</th><th>판관비포함</th><th>판매가</th><th>권장가</th>
+          </tr>
+        </thead>
+        <tbody id="qt-row-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#374151;"></div>A4 이미지 미리보기</div>
+      <div class="quote-toolbar">
+        <div class="quote-segment" role="group" aria-label="견적서 미리보기 종류">
+          <button id="qt-preview-external" class="active" onclick="setQuotationPreviewType('external')">외부용</button>
+          <button id="qt-preview-internal" onclick="setQuotationPreviewType('internal')">내부용</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="downloadQuotationImage('external')">외부용 PNG</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadQuotationImage('internal')">내부용 PNG</button>
+        <button class="btn btn-secondary btn-sm" onclick="printQuotationImage('external')">외부용 인쇄</button>
+        <button class="btn btn-secondary btn-sm" onclick="printQuotationImage('internal')">내부용 인쇄</button>
+      </div>
+    </div>
+    <div class="quote-preview-shell"><canvas id="qt-preview-canvas" width="2480" height="3508"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#7f8c8d;"></div>저장된 견적</div>
+      <input id="qt-history-search" placeholder="고객사·제목 검색" oninput="renderQuotationHistory()" style="max-width:240px;">
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>작성일</th><th>고객사</th><th>제목</th><th style="text-align:right;">품목</th><th>최종 수정</th><th style="text-align:center;">관리</th></tr></thead>
+        <tbody id="qt-history-body"><tr><td colspan="6" style="text-align:center;padding:20px;color:#888;">저장된 견적이 없습니다.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      확장공장 시뮬레이터
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-factorysim">
@@ -3932,6 +4013,7 @@ function renderAll(){
   if(typeof renderSubMaterials === 'function' && document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
   if(typeof renderFactorySim === 'function' && document.getElementById('p-factorysim')?.classList.contains('active')) renderFactorySim();
   if(typeof renderCostCompare === 'function' && document.getElementById('p-costcompare')?.classList.contains('active')) renderCostCompare();
+  if(typeof initQuotationPage === 'function' && document.getElementById('p-quotation')?.classList.contains('active')) initQuotationPage();
   if(typeof renderDataChangeLog === 'function' && document.getElementById('p-change-log')?.classList.contains('active')) renderDataChangeLog();
   if(document.getElementById('p-leaves')?.classList.contains('active')){
     renderEmployees();
@@ -5476,6 +5558,7 @@ async function showPage(id, btn){
   if(id==='p-change-log') renderDataChangeLog();
   if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
   if(id==='p-costcompare') renderCostCompare();
+  if(id==='p-quotation') initQuotationPage();
   if(id==='p-factorysim') renderFactorySim();
   if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
 }
@@ -11682,7 +11765,7 @@ function backupAllData(){
     'dbmt_schedule_events',
     'dbmt_employees','dbmt_leaves','dbmt_weekend_work','dbmt_leave_deductions',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
-    'dbmt_expenses','dbmt_costcalc','dbmt_label_templates',
+    'dbmt_expenses','dbmt_costcalc','dbmt_quotations','dbmt_label_templates',
     'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_change_logs','dbmt_gs_url','dbmt_gs_skip'
   ];
   const backup = { _version: 2, _date: new Date().toISOString(), data: {} };
@@ -17527,5 +17610,6 @@ function initSamsung(){
 }
 
 </script>
+<script src="quotation.js?v=20260812q2"></script>
 </body>
 </html>
