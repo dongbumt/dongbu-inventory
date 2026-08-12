@@ -35,8 +35,9 @@
     .calendar-wrap{padding:8px 10px 0;background:#fff;border-bottom:1px solid var(--line)}.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.calendar-weekdays span{padding:5px 0 7px;text-align:center;color:var(--muted);font-size:10px;font-weight:800}.calendar-weekdays span:first-child{color:#b13c32}.calendar-weekdays span:last-child{color:#3467a5}
     .calendar-day{position:relative;min-width:0;height:48px;border:0;border-top:1px solid #edf0f2;background:#fff;color:var(--ink);padding:5px 3px;text-align:center}.calendar-day:not(:disabled):active{background:#eef4f3}.calendar-day:disabled{cursor:default}.calendar-day.sunday{color:#b13c32}.calendar-day.saturday{color:#3467a5}.calendar-day.today{box-shadow:inset 0 0 0 1px var(--accent)}.calendar-day.selected{background:#26313d;color:#fff;box-shadow:none}.calendar-day .day-number{display:block;font-size:12px;font-weight:900}.calendar-day .event-mark{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:4px;color:var(--accent);font-size:9px;font-weight:900}.calendar-day.selected .event-mark{color:#9ce2da}.calendar-day .event-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
     .agenda-head{display:flex;align-items:center;gap:8px;min-height:42px;padding:8px 12px;background:var(--soft);border-bottom:1px solid var(--line)}.agenda-head strong{flex:1;font-size:13px}.agenda-head span{font-size:11px;color:var(--muted)}
+    .agenda-add,.agenda-edit{display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:#fff;color:#394553;font-weight:900}.agenda-add{width:32px;height:30px;font-size:20px}.agenda-edit{flex:0 0 32px;width:32px;height:30px;font-size:15px}.schedule-editor{padding:10px 12px;background:#f8f9fa;border-bottom:1px solid var(--line)}.schedule-editor-grid{display:grid;grid-template-columns:118px minmax(0,1fr);gap:7px}.schedule-editor input{height:40px}.schedule-editor-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}.small-action{height:36px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:0 13px;font-size:12px;font-weight:900}.small-action.save{border-color:var(--accent);background:var(--accent);color:#fff}.small-action:disabled{opacity:.55}
     .phone{color:#1769aa;text-decoration:none;font-weight:800}.warning{color:var(--warn)}
-    @media(max-width:390px){.menu button{font-size:10px}.section-head{top:59px}.control-row.three{grid-template-columns:1fr 1fr}.control-row.three .wide-small{grid-column:1/-1}.row{padding:9px 10px}}
+    @media(max-width:390px){.menu button{font-size:10px}.section-head{top:59px}.control-row.three{grid-template-columns:1fr 1fr}.control-row.three .wide-small{grid-column:1/-1}.row{padding:9px 10px}.schedule-editor-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -74,7 +75,12 @@
       <div class="section-head"><h1>일정관리</h1><span id="schedule-count" class="count"></span></div>
       <div class="controls"><div class="calendar-toolbar"><button class="month-arrow" type="button" title="이전 달" onclick="shiftScheduleMonth(-1)">‹</button><input id="schedule-month" type="month" onchange="changeScheduleMonth()"><button class="month-arrow" type="button" title="다음 달" onclick="shiftScheduleMonth(1)">›</button><button class="today-btn" type="button" onclick="setScheduleToday()">오늘</button></div></div>
       <div class="calendar-wrap"><div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div><div id="schedule-grid" class="calendar-grid"></div></div>
-      <div class="agenda-head"><strong id="schedule-selected-label">-</strong><span id="schedule-selected-count"></span></div>
+      <div class="agenda-head"><strong id="schedule-selected-label">-</strong><span id="schedule-selected-count"></span><button class="agenda-add" type="button" title="일정 추가" aria-label="일정 추가" onclick="openScheduleEditor()">+</button></div>
+      <div id="schedule-editor" class="schedule-editor hidden">
+        <input id="schedule-edit-id" type="hidden">
+        <div class="schedule-editor-grid"><input id="schedule-edit-date" type="date"><input id="schedule-edit-text" maxlength="300" placeholder="일정 내용을 입력하세요"></div>
+        <div class="schedule-editor-actions"><button class="small-action" type="button" onclick="closeScheduleEditor()">취소</button><button id="schedule-save-btn" class="small-action save" type="button" onclick="saveMobileSchedule()">저장</button></div>
+      </div>
       <div id="schedule-list" class="list"></div>
     </section>
 
@@ -209,6 +215,21 @@
     function setScheduleToday(){document.getElementById('schedule-month').value=localDate().slice(0,7);selectedScheduleDate=localDate();renderSchedule()}
     function changeScheduleMonth(){const month=document.getElementById('schedule-month').value||localDate().slice(0,7);selectedScheduleDate=selectedScheduleDate.startsWith(month)?selectedScheduleDate:`${month}-01`;renderSchedule()}
     function selectScheduleDate(value){selectedScheduleDate=value;renderSchedule()}
+    function openScheduleEditor(id=''){
+      const row=id?getAppData('scheduleEvents').find(item=>String(item.id)===String(id)):null;
+      document.getElementById('schedule-edit-id').value=row?.id??'';document.getElementById('schedule-edit-date').value=dateValue(row?.date)||selectedScheduleDate;document.getElementById('schedule-edit-text').value=row?.text||row?.title||'';
+      document.getElementById('schedule-editor').classList.remove('hidden');setTimeout(()=>document.getElementById('schedule-edit-text').focus(),0);
+    }
+    function closeScheduleEditor(){document.getElementById('schedule-editor').classList.add('hidden');document.getElementById('schedule-edit-id').value='';document.getElementById('schedule-edit-text').value=''}
+    async function saveMobileSchedule(){
+      const id=document.getElementById('schedule-edit-id').value.trim(),date=document.getElementById('schedule-edit-date').value,content=document.getElementById('schedule-edit-text').value.trim(),button=document.getElementById('schedule-save-btn');
+      if(!date){alert('일정 날짜를 입력해주세요.');return}if(!content){alert('일정 내용을 입력해주세요.');return}
+      button.disabled=true;button.textContent='저장 중';setLoading(true);
+      try{
+        const result=await rpc('dbmt_mobile_admin_save_schedule',{p_token:adminToken,p_id:id||null,p_date:date,p_text:content});if(!result?.ok)throw new Error('일정을 저장하지 못했습니다.');
+        snapshot.appData.scheduleEvents=Array.isArray(result.events)?result.events:getAppData('scheduleEvents');selectedScheduleDate=date;document.getElementById('schedule-month').value=date.slice(0,7);closeScheduleEditor();renderSchedule();
+      }catch(err){alert(err.message)}finally{button.disabled=false;button.textContent='저장';setLoading(false)}
+    }
     function scheduleDayLabel(value){
       const date=new Date(`${value}T12:00:00`);if(Number.isNaN(date.getTime()))return value;
       return date.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
@@ -226,7 +247,7 @@
       }).join('');
       const selectedRows=grouped.get(selectedScheduleDate)||[];
       document.getElementById('schedule-count').textContent=`${monthRows.length}건`;document.getElementById('schedule-selected-label').textContent=scheduleDayLabel(selectedScheduleDate);document.getElementById('schedule-selected-count').textContent=`${selectedRows.length}건`;
-      document.getElementById('schedule-list').innerHTML=selectedRows.length?selectedRows.map(row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.text||row.title||'-')}</div></div></div>`).join(''):empty('선택한 날짜의 일정');
+      document.getElementById('schedule-list').innerHTML=selectedRows.length?selectedRows.map(row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.text||row.title||'-')}</div><button class="agenda-edit" type="button" title="일정 수정" aria-label="일정 수정" onclick="${text(`openScheduleEditor(${JSON.stringify(String(row.id))})`)}">✎</button></div></div>`).join(''):empty('선택한 날짜의 일정');
     }
     function transactionTag(type){const cls=['입고','생산입고'].includes(type)?'in':['출고','사용'].includes(type)?'out':'';return `<span class="tag ${cls}">${text(type||'-')}</span>`}
     function renderTransactions(){

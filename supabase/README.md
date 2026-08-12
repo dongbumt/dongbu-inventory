@@ -58,6 +58,7 @@ Editor query for each file:
 36. `schema-rpc-17c-mobile-admin-accounts.sql`
 37. `schema-rpc-17d-mobile-admin-data.sql`
 38. `schema-rpc-17e-mobile-admin-driver-week.sql`
+39. `schema-rpc-17f-mobile-admin-schedule-write.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
