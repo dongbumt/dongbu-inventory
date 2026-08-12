@@ -31,6 +31,10 @@
     .summary{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;background:#fff;border-bottom:1px solid var(--line);font-size:12px}.summary strong{font-size:15px}
     .list{background:#fff}.row{padding:10px 12px;border-bottom:1px solid #e8ebef}.row-top{display:flex;align-items:flex-start;gap:8px}.row-title{min-width:0;flex:1;font-size:14px;font-weight:900;line-height:1.35}.row-value{font-size:14px;font-weight:900;white-space:nowrap}.meta{display:flex;gap:5px 12px;flex-wrap:wrap;margin-top:5px;color:var(--muted);font-size:11px;line-height:1.45}.tag{display:inline-flex;align-items:center;min-height:20px;padding:1px 6px;border:1px solid #ccd3da;border-radius:4px;background:#f7f8f9;font-size:10px;font-weight:800}.tag.in{color:#0b6b63;border-color:#9ed7d1;background:#edf9f7}.tag.out{color:#a33a2c;border-color:#edb6ae;background:#fff3f1}.empty{padding:48px 16px;text-align:center;color:#8a939d;font-size:13px}.more{padding:10px 12px;color:var(--muted);font-size:11px;text-align:center;background:#f8f9fa;border-bottom:1px solid var(--line)}
     .week-nav{display:grid;grid-template-columns:42px 1fr 42px;gap:6px}.week-nav button{height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:18px}.week-nav input{height:38px;text-align:center}
+    .calendar-toolbar{display:grid;grid-template-columns:38px minmax(0,1fr) 38px 52px;gap:6px}.calendar-toolbar button{height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;font-weight:900}.calendar-toolbar .month-arrow{font-size:20px}.calendar-toolbar .today-btn{font-size:12px;color:var(--accent)}
+    .calendar-wrap{padding:8px 10px 0;background:#fff;border-bottom:1px solid var(--line)}.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.calendar-weekdays span{padding:5px 0 7px;text-align:center;color:var(--muted);font-size:10px;font-weight:800}.calendar-weekdays span:first-child{color:#b13c32}.calendar-weekdays span:last-child{color:#3467a5}
+    .calendar-day{position:relative;min-width:0;height:48px;border:0;border-top:1px solid #edf0f2;background:#fff;color:var(--ink);padding:5px 3px;text-align:center}.calendar-day:not(:disabled):active{background:#eef4f3}.calendar-day:disabled{cursor:default}.calendar-day.sunday{color:#b13c32}.calendar-day.saturday{color:#3467a5}.calendar-day.today{box-shadow:inset 0 0 0 1px var(--accent)}.calendar-day.selected{background:#26313d;color:#fff;box-shadow:none}.calendar-day .day-number{display:block;font-size:12px;font-weight:900}.calendar-day .event-mark{display:flex;align-items:center;justify-content:center;gap:3px;margin-top:4px;color:var(--accent);font-size:9px;font-weight:900}.calendar-day.selected .event-mark{color:#9ce2da}.calendar-day .event-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+    .agenda-head{display:flex;align-items:center;gap:8px;min-height:42px;padding:8px 12px;background:var(--soft);border-bottom:1px solid var(--line)}.agenda-head strong{flex:1;font-size:13px}.agenda-head span{font-size:11px;color:var(--muted)}
     .phone{color:#1769aa;text-decoration:none;font-weight:800}.warning{color:var(--warn)}
     @media(max-width:390px){.menu button{font-size:10px}.section-head{top:59px}.control-row.three{grid-template-columns:1fr 1fr}.control-row.three .wide-small{grid-column:1/-1}.row{padding:9px 10px}}
   </style>
@@ -68,7 +72,9 @@
 
     <section id="view-schedule" class="view">
       <div class="section-head"><h1>일정관리</h1><span id="schedule-count" class="count"></span></div>
-      <div class="controls"><div class="control-row one"><input id="schedule-month" type="month" onchange="renderSchedule()"></div></div>
+      <div class="controls"><div class="calendar-toolbar"><button class="month-arrow" type="button" title="이전 달" onclick="shiftScheduleMonth(-1)">‹</button><input id="schedule-month" type="month" onchange="changeScheduleMonth()"><button class="month-arrow" type="button" title="다음 달" onclick="shiftScheduleMonth(1)">›</button><button class="today-btn" type="button" onclick="setScheduleToday()">오늘</button></div></div>
+      <div class="calendar-wrap"><div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div><div id="schedule-grid" class="calendar-grid"></div></div>
+      <div class="agenda-head"><strong id="schedule-selected-label">-</strong><span id="schedule-selected-count"></span></div>
       <div id="schedule-list" class="list"></div>
     </section>
 
@@ -136,6 +142,7 @@
     let driverData=null;
     let stockRows=[];
     let currentView=localStorage.getItem(VIEW_KEY)||'schedule';
+    let selectedScheduleDate=localDate();
 
     async function rpc(name,body){
       const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${SUPABASE_PUBLISHABLE_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
@@ -194,9 +201,32 @@
       const categories=[...new Set(getAppData('expenseList').map(row=>String(row.category||'').trim()).filter(Boolean))].sort();document.getElementById('expense-category').innerHTML='<option value="">전체 카테고리</option>'+categories.map(v=>`<option>${text(v)}</option>`).join('');
     }
 
+    function scheduleDateKey(year,month,day){return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`}
+    function shiftScheduleMonth(offset){
+      const input=document.getElementById('schedule-month'),base=input.value||localDate().slice(0,7),[year,month]=base.split('-').map(Number),date=new Date(year,month-1+offset,1,12);
+      input.value=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;selectedScheduleDate=`${input.value}-01`;renderSchedule();
+    }
+    function setScheduleToday(){document.getElementById('schedule-month').value=localDate().slice(0,7);selectedScheduleDate=localDate();renderSchedule()}
+    function changeScheduleMonth(){const month=document.getElementById('schedule-month').value||localDate().slice(0,7);selectedScheduleDate=selectedScheduleDate.startsWith(month)?selectedScheduleDate:`${month}-01`;renderSchedule()}
+    function selectScheduleDate(value){selectedScheduleDate=value;renderSchedule()}
+    function scheduleDayLabel(value){
+      const date=new Date(`${value}T12:00:00`);if(Number.isNaN(date.getTime()))return value;
+      return date.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
+    }
     function renderSchedule(){
-      const month=document.getElementById('schedule-month').value||localDate().slice(0,7);const rows=getAppData('scheduleEvents').filter(row=>dateValue(row.date).startsWith(month)).sort((a,b)=>dateValue(a.date).localeCompare(dateValue(b.date)));
-      document.getElementById('schedule-count').textContent=`${rows.length}건`;document.getElementById('schedule-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.text||row.title||'-')}</div><div class="row-value">${text(dateValue(row.date).slice(5))}</div></div><div class="meta"><span>${text(dateValue(row.date))}</span></div></div>`):empty('선택한 달의 일정');
+      const input=document.getElementById('schedule-month'),month=input.value||localDate().slice(0,7);if(!input.value)input.value=month;
+      const monthRows=getAppData('scheduleEvents').filter(row=>dateValue(row.date).startsWith(month)).sort((a,b)=>dateValue(a.date).localeCompare(dateValue(b.date)));
+      const grouped=new Map();monthRows.forEach(row=>{const key=dateValue(row.date);if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(row)});
+      if(!selectedScheduleDate.startsWith(month))selectedScheduleDate=month===localDate().slice(0,7)?localDate():`${month}-01`;
+      const [year,monthNumber]=month.split('-').map(Number),firstDay=new Date(year,monthNumber-1,1,12).getDay(),dayCount=new Date(year,monthNumber,0,12).getDate();
+      document.getElementById('schedule-grid').innerHTML=Array.from({length:42},(_,index)=>{
+        const day=index-firstDay+1;if(day<1||day>dayCount)return '<button class="calendar-day" type="button" disabled></button>';
+        const key=scheduleDateKey(year,monthNumber,day),eventCount=(grouped.get(key)||[]).length,weekday=index%7,classes=['calendar-day',weekday===0?'sunday':'',weekday===6?'saturday':'',key===localDate()?'today':'',key===selectedScheduleDate?'selected':''].filter(Boolean).join(' ');
+        return `<button class="${classes}" type="button" onclick="selectScheduleDate('${key}')" aria-label="${day}일${eventCount?`, 일정 ${eventCount}건`:''}"><span class="day-number">${day}</span>${eventCount?`<span class="event-mark"><span class="event-dot"></span>${eventCount}</span>`:''}</button>`;
+      }).join('');
+      const selectedRows=grouped.get(selectedScheduleDate)||[];
+      document.getElementById('schedule-count').textContent=`${monthRows.length}건`;document.getElementById('schedule-selected-label').textContent=scheduleDayLabel(selectedScheduleDate);document.getElementById('schedule-selected-count').textContent=`${selectedRows.length}건`;
+      document.getElementById('schedule-list').innerHTML=selectedRows.length?selectedRows.map(row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.text||row.title||'-')}</div></div></div>`).join(''):empty('선택한 날짜의 일정');
     }
     function transactionTag(type){const cls=['입고','생산입고'].includes(type)?'in':['출고','사용'].includes(type)?'out':'';return `<span class="tag ${cls}">${text(type||'-')}</span>`}
     function renderTransactions(){
