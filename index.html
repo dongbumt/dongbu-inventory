@@ -1066,8 +1066,14 @@
           <input id="csr-fax" list="csr-fax-list" type="tel" inputmode="tel" placeholder="예) 031-000-0000" oninput="coldStorageRequestMetaChanged('fax',this.value)">
           <datalist id="csr-fax-list"></datalist>
         </div>
-        <div class="form-group"><label>담당자</label><input id="csr-manager" placeholder="예) 김상영 과장" oninput="coldStorageRequestMetaChanged('managerName',this.value)"></div>
-        <div class="form-group"><label>담당자 연락처</label><input id="csr-manager-phone" type="tel" placeholder="예) 010-2414-5406" oninput="coldStorageRequestMetaChanged('managerPhone',this.value)"></div>
+        <div class="form-group">
+          <label>담당자</label>
+          <select id="csr-manager" onchange="coldStorageManagerChanged(this.value)">
+            <option value="배은정 실장">배은정 실장</option>
+            <option value="김상영 본부장">김상영 본부장</option>
+          </select>
+        </div>
+        <div class="form-group"><label>담당자 연락처</label><input id="csr-manager-phone" type="tel" readonly></div>
         <div class="form-group csr-note-field"><label>요청사항</label><input id="csr-note" placeholder="필요한 추가 요청사항을 입력하세요" oninput="coldStorageRequestMetaChanged('note',this.value)"></div>
       </div>
 
@@ -17786,6 +17792,6 @@ function initSamsung(){
 
 </script>
 <script src="quotation.js?v=20260812q4"></script>
-<script src="cold-storage-request.js?v=20260812c"></script>
+<script src="cold-storage-request.js?v=20260812d"></script>
 </body>
 </html>

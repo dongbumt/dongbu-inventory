@@ -9,13 +9,17 @@ const COLD_STORAGE_REQUESTERS = {
   dongbumt:{
     name:'주식회사 동부엠티', representative:'이창성', registrationNo:'495-88-01108',
     address:'인천광역시 검단구 소담2로36, 2동 201호',
-    phone:'032-579-3920', fax:'032-232-1812', seal:'assets/company-seal.png'
+    phone:'032-766-1812', fax:'032-232-1812', seal:'assets/company-seal.png'
   },
   dongbu_distribution:{
     name:'(주)동부축산유통', representative:'이동대', registrationNo:'137-81-38748',
     address:'인천광역시 서해구 가좌로96번길 11',
-    phone:'032-579-3920', fax:'032-232-1812', seal:'assets/company-seal-trading.png'
+    phone:'032-579-3920', fax:'032-578-0108', seal:'assets/company-seal-trading.png'
   }
+};
+const COLD_STORAGE_MANAGERS = {
+  '배은정 실장':'010-7147-5409',
+  '김상영 본부장':'010-2414-5406'
 };
 
 let coldStorageRequests = [];
@@ -47,7 +51,7 @@ function coldStorageBlankItem(){
 function coldStorageBlankDraft(){
   return {
     id:'', requestDate:coldStorageToday(), requestType:'출고', requesterId:'dongbumt', warehouse:'', fax:'',
-    managerName:'김상영 과장', managerPhone:'010-2414-5406', note:'',
+    managerName:'배은정 실장', managerPhone:'010-7147-5409', note:'',
     items:[coldStorageBlankItem()], status:'draft', createdAt:'', updatedAt:'',
     sentAt:'', providerMessageId:'', providerStatus:'', errorMessage:''
   };
@@ -59,11 +63,14 @@ function normalizeColdStorageItem(item={}){
 
 function normalizeColdStorageRequest(record={}){
   const items = Array.isArray(record.items) && record.items.length ? record.items : [coldStorageBlankItem()];
+  const managerName = record.managerName === '김상영 과장' ? '김상영 본부장' : record.managerName;
   return {
     ...coldStorageBlankDraft(),
     ...record,
     requestType:record.requestType === '이체' ? '이체' : '출고',
     requesterId:COLD_STORAGE_REQUESTERS[record.requesterId] ? record.requesterId : 'dongbumt',
+    managerName:COLD_STORAGE_MANAGERS[managerName] ? managerName : '배은정 실장',
+    managerPhone:COLD_STORAGE_MANAGERS[managerName] || '010-7147-5409',
     items:items.slice(0,COLD_STORAGE_REQUEST_MAX_ITEMS).map(normalizeColdStorageItem)
   };
 }
@@ -171,6 +178,15 @@ function coldStorageSyncInputs(){
 function coldStorageRequesterChanged(value){
   if(!coldStorageDraft) coldStorageDraft = coldStorageBlankDraft();
   coldStorageDraft.requesterId = COLD_STORAGE_REQUESTERS[value] ? value : 'dongbumt';
+  scheduleColdStoragePreview(true);
+}
+
+function coldStorageManagerChanged(value){
+  if(!coldStorageDraft) coldStorageDraft = coldStorageBlankDraft();
+  coldStorageDraft.managerName = COLD_STORAGE_MANAGERS[value] ? value : '배은정 실장';
+  coldStorageDraft.managerPhone = COLD_STORAGE_MANAGERS[coldStorageDraft.managerName];
+  const phone = document.getElementById('csr-manager-phone');
+  if(phone) phone.value = coldStorageDraft.managerPhone;
   scheduleColdStoragePreview(true);
 }
 
@@ -586,9 +602,9 @@ async function renderColdStorageRequestCanvas(target,record=coldStorageDraft){
   csrDrawText(ctx,`사업자등록번호  ${requester.registrationNo}`,115,companyY+133,{size:21,maxWidth:620});
   csrDrawText(ctx,`주소  ${requester.address}`,115,companyY+174,{size:20,maxWidth:700});
   csrDrawText(ctx,`전화  ${requester.phone}    FAX  ${requester.fax}`,115,companyY+215,{size:20,maxWidth:700});
-  csrDrawText(ctx,`대표자  ${requester.representative}  (인)`,1040,companyY+136,{size:27,weight:600,align:'right',maxWidth:360});
+  csrDrawText(ctx,`대표자  ${requester.representative}  (인)`,1125,companyY+82,{size:27,weight:600,align:'right',maxWidth:330});
   const seal = await coldStorageSealImage(requester.seal);
-  if(seal){ ctx.save();ctx.globalAlpha=.9;ctx.drawImage(seal,920,companyY+62,170,170);ctx.restore(); }
+  if(seal){ ctx.save();ctx.globalAlpha=.9;ctx.drawImage(seal,980,companyY+103,145,145);ctx.restore(); }
 
   csrDrawText(ctx,`문서번호  ${normalized.id || '저장 전'}`,85,1695,{size:17,color:'#707782',maxWidth:500});
   csrDrawText(ctx,`${normalized.requestType} 요청 품목 ${items.length}건`,1155,1695,{size:17,color:'#707782',align:'right',maxWidth:400});
@@ -731,6 +747,7 @@ async function initColdStorageRequestPage(){
 window.initColdStorageRequestPage = initColdStorageRequestPage;
 window.coldStorageRequestMetaChanged = coldStorageRequestMetaChanged;
 window.coldStorageRequesterChanged = coldStorageRequesterChanged;
+window.coldStorageManagerChanged = coldStorageManagerChanged;
 window.coldStorageWarehouseChanged = coldStorageWarehouseChanged;
 window.setColdStorageRequestType = setColdStorageRequestType;
 window.coldStorageRequestItemChanged = coldStorageRequestItemChanged;
