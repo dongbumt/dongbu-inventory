@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260812q2">
+<link rel="stylesheet" href="styles/main.css?v=20260812q3">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('xlsx CDN 로드 실패 — Excel 내보내기 기능만 비활성화')"></script>
 </head>
 <body>
@@ -2276,6 +2276,7 @@
           <button id="qt-preview-external" class="active" onclick="setQuotationPreviewType('external')">외부용</button>
           <button id="qt-preview-internal" onclick="setQuotationPreviewType('internal')">내부용</button>
         </div>
+        <button class="btn btn-secondary btn-sm" onclick="copyQuotationImage()">클립보드 복사</button>
         <button class="btn btn-secondary btn-sm" onclick="downloadQuotationImage('external')">외부용 PNG</button>
         <button class="btn btn-secondary btn-sm" onclick="downloadQuotationImage('internal')">내부용 PNG</button>
         <button class="btn btn-secondary btn-sm" onclick="printQuotationImage('external')">외부용 인쇄</button>
@@ -17610,6 +17611,6 @@ function initSamsung(){
 }
 
 </script>
-<script src="quotation.js?v=20260812q2"></script>
+<script src="quotation.js?v=20260812q3"></script>
 </body>
 </html>

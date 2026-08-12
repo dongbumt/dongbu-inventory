@@ -626,6 +626,24 @@ async function downloadQuotationImage(type){
   toast(`${kind} 견적서 PNG를 저장했습니다.`);
 }
 
+async function copyQuotationImage(){
+  if(!quotationDraft || !quotationValidateOutput(quotationDraft)) return;
+  if(!navigator.clipboard?.write || typeof ClipboardItem === 'undefined'){
+    toast('이 브라우저에서는 이미지 클립보드 복사를 지원하지 않습니다.');
+    return;
+  }
+  try{
+    const canvas=await renderQuotationCanvas(quotationPreviewType,quotationDraft);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    if(!blob) throw new Error('PNG 변환 실패');
+    await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+    toast(`${quotationPreviewType==='internal'?'내부용':'외부용'} 견적서 이미지를 클립보드에 복사했습니다.`);
+  }catch(err){
+    console.error('견적서 클립보드 복사 실패:',err);
+    toast('클립보드 복사에 실패했습니다. 브라우저의 클립보드 권한을 확인해주세요.');
+  }
+}
+
 async function printQuotationImage(type){
   if(!quotationDraft || !quotationValidateOutput(quotationDraft)) return;
   const popup=window.open('','_blank');
@@ -651,6 +669,7 @@ window.deleteQuotation=deleteQuotation;
 window.renderQuotationHistory=renderQuotationHistory;
 window.initQuotationPage=initQuotationPage;
 window.setQuotationPreviewType=setQuotationPreviewType;
+window.copyQuotationImage=copyQuotationImage;
 window.downloadQuotationImage=downloadQuotationImage;
 window.printQuotationImage=printQuotationImage;
 
