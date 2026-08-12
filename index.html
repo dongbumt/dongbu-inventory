@@ -1576,6 +1576,7 @@
           <option value="매입">매입</option>
           <option value="매출">매출</option>
           <option value="매입/매출">매입/매출</option>
+          <option value="보관(냉동창고)">보관(냉동창고)</option>
         </select>
       </div>
       <div class="form-group">
@@ -1637,11 +1638,12 @@
         <label for="tr-list-name-search" style="font-size:12px;font-weight:700;color:#555;">거래처명</label>
         <input id="tr-list-name-search" type="search" placeholder="거래처명 검색" oninput="renderTraders()" style="width:180px;font-size:12px;padding:6px 9px;">
         <label for="tr-list-trade-filter" style="font-size:12px;font-weight:700;color:#555;">거래구분</label>
-        <select id="tr-list-trade-filter" onchange="renderTraders()" style="width:125px;font-size:12px;">
+        <select id="tr-list-trade-filter" onchange="renderTraders()" style="width:155px;font-size:12px;">
           <option value="">전체</option>
           <option value="매입">매입</option>
           <option value="매출">매출</option>
           <option value="매입/매출">매입/매출</option>
+          <option value="보관(냉동창고)">보관(냉동창고)</option>
           <option value="미지정">미지정</option>
         </select>
         <span id="tr-list-count" style="font-size:12px;color:#777;"></span>
