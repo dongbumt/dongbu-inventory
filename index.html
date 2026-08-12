@@ -1661,20 +1661,20 @@
       <table id="traders-table">
         <thead>
           <tr>
-            <th style="width:52px;text-align:center;">순번</th>
-            <th>거래처명</th>
-            <th>거래구분</th>
-            <th>분류</th>
-            <th>정식 상호</th>
-            <th>사업자번호</th>
-            <th>대표</th>
-            <th>담당자</th>
-            <th>담당자 연락처</th>
-            <th>일반전화</th>
-            <th>이메일</th>
-            <th>팩스번호</th>
-            <th>주소</th>
-            <th>업태</th>
+            <th id="tr-th-registrationNo" onclick="traderSort('registrationNo')" style="width:52px;text-align:center;cursor:pointer;user-select:none;" title="순번으로 정렬">순번 <span id="tr-sort-registrationNo">▲</span></th>
+            <th id="tr-th-name" onclick="traderSort('name')" style="cursor:pointer;user-select:none;" title="거래처명으로 정렬">거래처명 <span id="tr-sort-name">↕</span></th>
+            <th id="tr-th-tradeType" onclick="traderSort('tradeType')" style="cursor:pointer;user-select:none;" title="거래구분으로 정렬">거래구분 <span id="tr-sort-tradeType">↕</span></th>
+            <th id="tr-th-category" onclick="traderSort('category')" style="cursor:pointer;user-select:none;" title="분류로 정렬">분류 <span id="tr-sort-category">↕</span></th>
+            <th id="tr-th-fullname" onclick="traderSort('fullname')" style="cursor:pointer;user-select:none;" title="정식 상호로 정렬">정식 상호 <span id="tr-sort-fullname">↕</span></th>
+            <th id="tr-th-regno" onclick="traderSort('regno')" style="cursor:pointer;user-select:none;" title="사업자번호로 정렬">사업자번호 <span id="tr-sort-regno">↕</span></th>
+            <th id="tr-th-ceo" onclick="traderSort('ceo')" style="cursor:pointer;user-select:none;" title="대표자명으로 정렬">대표 <span id="tr-sort-ceo">↕</span></th>
+            <th id="tr-th-manager" onclick="traderSort('manager')" style="cursor:pointer;user-select:none;" title="담당자로 정렬">담당자 <span id="tr-sort-manager">↕</span></th>
+            <th id="tr-th-managerPhone" onclick="traderSort('managerPhone')" style="cursor:pointer;user-select:none;" title="담당자 연락처로 정렬">담당자 연락처 <span id="tr-sort-managerPhone">↕</span></th>
+            <th id="tr-th-phone" onclick="traderSort('phone')" style="cursor:pointer;user-select:none;" title="일반전화로 정렬">일반전화 <span id="tr-sort-phone">↕</span></th>
+            <th id="tr-th-email" onclick="traderSort('email')" style="cursor:pointer;user-select:none;" title="이메일로 정렬">이메일 <span id="tr-sort-email">↕</span></th>
+            <th id="tr-th-fax" onclick="traderSort('fax')" style="cursor:pointer;user-select:none;" title="팩스번호로 정렬">팩스번호 <span id="tr-sort-fax">↕</span></th>
+            <th id="tr-th-addr" onclick="traderSort('addr')" style="cursor:pointer;user-select:none;" title="주소로 정렬">주소 <span id="tr-sort-addr">↕</span></th>
+            <th id="tr-th-biz" onclick="traderSort('biz')" style="cursor:pointer;user-select:none;" title="업태로 정렬">업태 <span id="tr-sort-biz">↕</span></th>
             <th style="text-align:center;">관리</th>
           </tr>
         </thead>
@@ -12189,6 +12189,36 @@ function clearTraderForm(){
   document.getElementById('tr-cancel-btn').style.display = 'none';
 }
 
+const TRADER_SORT_KEYS = ['registrationNo','name','tradeType','category','fullname','regno','ceo','manager','managerPhone','phone','email','fax','addr','biz'];
+let traderSortKey = 'registrationNo';
+let traderSortDir = 'asc';
+
+function traderSort(key){
+  if(!TRADER_SORT_KEYS.includes(key)) return;
+  if(traderSortKey === key) traderSortDir = traderSortDir === 'asc' ? 'desc' : 'asc';
+  else {
+    traderSortKey = key;
+    traderSortDir = 'asc';
+  }
+  renderTraders();
+}
+
+function traderSortValue(row, key){
+  if(key === 'registrationNo') return row.registrationNo;
+  if(key === 'name') return row.name;
+  return row.info?.[key] ?? '';
+}
+
+function updateTraderSortHeaders(){
+  TRADER_SORT_KEYS.forEach(key => {
+    const active = key === traderSortKey;
+    const mark = document.getElementById(`tr-sort-${key}`);
+    const th = document.getElementById(`tr-th-${key}`);
+    if(mark) mark.textContent = active ? (traderSortDir === 'asc' ? '▲' : '▼') : '↕';
+    if(th) th.setAttribute('aria-sort', active ? (traderSortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+  });
+}
+
 function renderTraders(){
   updateTraderList();
   const tbody = document.getElementById('traders-tbody');
@@ -12203,7 +12233,21 @@ function renderTraders(){
       if(!tradeFilter) return true;
       const tradeType = row.info.tradeType || '미지정';
       return tradeType === tradeFilter;
+    })
+    .sort((a,b) => {
+      const av = traderSortValue(a, traderSortKey);
+      const bv = traderSortValue(b, traderSortKey);
+      const aBlank = av === '' || av === null || av === undefined;
+      const bBlank = bv === '' || bv === null || bv === undefined;
+      if(aBlank !== bBlank) return aBlank ? 1 : -1;
+      if(aBlank && bBlank) return a.registrationNo - b.registrationNo;
+      const dir = traderSortDir === 'asc' ? 1 : -1;
+      const compared = traderSortKey === 'registrationNo'
+        ? Number(av) - Number(bv)
+        : String(av).localeCompare(String(bv), 'ko', {numeric:true, sensitivity:'base'});
+      return dir * compared || a.registrationNo - b.registrationNo;
     });
+  updateTraderSortHeaders();
   const countEl = document.getElementById('tr-list-count');
   if(countEl){
     countEl.textContent = tradeFilter || nameSearch
