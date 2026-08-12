@@ -1604,12 +1604,20 @@
         <input id="tr-manager-phone" type="tel" placeholder="예) 010-1234-5678">
       </div>
       <div class="form-group">
+        <label>일반전화</label>
+        <input id="tr-phone" type="tel" inputmode="tel" autocomplete="off" placeholder="예) 02-1234-5678">
+      </div>
+      <div class="form-group">
         <label>이메일</label>
         <input id="tr-email" type="email" inputmode="email" autocomplete="off" placeholder="예) documents@example.com">
       </div>
       <div class="form-group">
         <label>팩스번호</label>
         <input id="tr-fax" type="tel" inputmode="tel" autocomplete="off" placeholder="예) 02-1234-5678">
+      </div>
+      <div class="form-group">
+        <label>팩스번호 2</label>
+        <input id="tr-fax-alt" type="tel" inputmode="tel" autocomplete="off" placeholder="추가 번호가 있을 때 입력">
       </div>
       <div class="form-group" style="grid-column:span 2;">
         <label>주소</label>
@@ -1662,6 +1670,7 @@
             <th>대표</th>
             <th>담당자</th>
             <th>담당자 연락처</th>
+            <th>일반전화</th>
             <th>이메일</th>
             <th>팩스번호</th>
             <th>주소</th>
@@ -1670,7 +1679,7 @@
           </tr>
         </thead>
         <tbody id="traders-tbody">
-          <tr><td colspan="14" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
+          <tr><td colspan="15" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -12114,9 +12123,11 @@ function saveTraderInfo(){
   const ceo          = document.getElementById('tr-ceo').value.trim();
   const manager      = document.getElementById('tr-manager').value.trim();
   const managerPhone = document.getElementById('tr-manager-phone').value.trim();
+  const phone        = document.getElementById('tr-phone').value.trim();
   const emailEl      = document.getElementById('tr-email');
   const email        = emailEl.value.trim();
   const fax          = document.getElementById('tr-fax').value.trim();
+  const faxAlt       = document.getElementById('tr-fax-alt').value.trim();
   const addr         = document.getElementById('tr-addr').value.trim();
   const biz          = document.getElementById('tr-biz').value.trim();
   if(!name){ toast('거래처명을 입력하세요.'); return; }
@@ -12126,7 +12137,7 @@ function saveTraderInfo(){
   if(_traderEditKey && _traderEditKey !== name) delete traderInfoMap[_traderEditKey];
   traderInfoMap[name] = {
     ...previousInfo,
-    tradeType, category, fullname, regno, ceo, manager, managerPhone, email, fax, addr, biz
+    tradeType, category, fullname, regno, ceo, manager, managerPhone, phone, email, fax, faxAlt, addr, biz
   };
   saveTraderInfoStore();
   clearTraderForm();
@@ -12146,8 +12157,10 @@ function editTrader(name){
   document.getElementById('tr-ceo').value      = info.ceo||'';
   document.getElementById('tr-manager').value  = info.manager||'';
   document.getElementById('tr-manager-phone').value = info.managerPhone||'';
+  document.getElementById('tr-phone').value    = info.phone||'';
   document.getElementById('tr-email').value    = info.email||'';
   document.getElementById('tr-fax').value      = info.fax||'';
+  document.getElementById('tr-fax-alt').value  = info.faxAlt||'';
   document.getElementById('tr-addr').value     = info.addr||'';
   document.getElementById('tr-biz').value      = info.biz||'';
   document.getElementById('tr-save-btn').textContent = '✏️ 수정 저장';
@@ -12169,7 +12182,7 @@ function cancelTraderEdit(){
 }
 
 function clearTraderForm(){
-  ['tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-email','tr-fax','tr-addr','tr-biz'].forEach(id=>{
+  ['tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-phone','tr-email','tr-fax','tr-fax-alt','tr-addr','tr-biz'].forEach(id=>{
     document.getElementById(id).value = '';
   });
   document.getElementById('tr-save-btn').textContent = '➕ 추가';
@@ -12198,11 +12211,11 @@ function renderTraders(){
       : `전체 ${allKeys.length}건`;
   }
   if(!allKeys.length){
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
     return;
   }
   if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:#888">검색 조건에 해당하는 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:20px;color:#888">검색 조건에 해당하는 거래처가 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(row=>{
@@ -12219,8 +12232,9 @@ function renderTraders(){
       <td>${htmlEscape(info.ceo||'-')}</td>
       <td>${htmlEscape(info.manager||'-')}</td>
       <td style="white-space:nowrap;">${htmlEscape(info.managerPhone||'-')}</td>
+      <td style="white-space:nowrap;">${htmlEscape(info.phone||'-')}</td>
       <td style="white-space:nowrap;">${htmlEscape(info.email||'-')}</td>
-      <td style="white-space:nowrap;">${htmlEscape(info.fax||'-')}</td>
+      <td style="white-space:nowrap;">${htmlEscape(info.fax||'-')}${info.faxAlt ? `<br><span style="color:#667085;">${htmlEscape(info.faxAlt)}</span>` : ''}</td>
       <td style="font-size:11px;">${htmlEscape(info.addr||'-')}</td>
       <td>${htmlEscape(info.biz||'-')}</td>
       <td style="text-align:center;white-space:nowrap;">
