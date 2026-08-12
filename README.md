@@ -109,3 +109,13 @@ https://dongbumt.github.io/dongbu-inventory/mobile-admin.html
 ```
 
 ERP의 `모바일 관리자` 메뉴에서 계정을 등록하거나 사용 중지할 수 있습니다. 로그인 세션은 해당 브라우저에 저장되어 자동로그인됩니다. 일정관리는 모바일에서 한 건씩 안전하게 등록·수정할 수 있으며, 거래내역·생산일보·재고현황·배송기사근태·직원정보·지출관리는 조회할 수 있습니다.
+
+## 냉동창고 요청 전용 화면
+
+냉동창고 요청은 아래 공용 URL에서 별도 로그인 없이 사용할 수 있습니다.
+
+```text
+https://dongbumt.github.io/dongbu-inventory/cold-storage-request.html
+```
+
+PC에서는 ERP 메뉴와 동일하게 A4 미리보기를 함께 표시하고, 모바일에서는 입력과 이력 확인에 집중할 수 있도록 미리보기를 숨깁니다. 공용 화면은 전체 ERP 데이터를 조회하지 않으며 냉동창고 요청 이력, 거래처명·냉동창고 팩스번호, 품목명만 서버 함수에서 제한적으로 제공합니다. `supabase/schema-rpc-18-cold-storage-public.sql`은 브라우저 사용자가 아닌 Supabase 서버 함수 역할에만 필요한 테이블 권한을 부여합니다.

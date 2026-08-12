@@ -2,6 +2,7 @@
 'use strict';
 
 const COLD_STORAGE_REQUEST_STORAGE_KEY = 'dbmt_cold_storage_requests';
+const COLD_STORAGE_PUBLIC_MODE = window.DBMT_COLD_STORAGE_STANDALONE === true;
 const COLD_STORAGE_REQUEST_MAX_ITEMS = 10;
 const COLD_STORAGE_CANVAS_WIDTH = 1240;
 const COLD_STORAGE_CANVAS_HEIGHT = 1754;
@@ -293,6 +294,23 @@ function validateColdStorageRequest(requireFax=false){
 }
 
 async function refreshColdStorageRequestsFromSupabase(){
+  if(COLD_STORAGE_PUBLIC_MODE){
+    if(coldStorageRefreshPromise) return coldStorageRefreshPromise;
+    coldStorageRefreshPromise = (async()=>{
+      const data = await sbFunctionRequest('send-document-request',{action:'cold_storage_public_load'});
+      const remote = data?.requests;
+      if(!Array.isArray(remote)) return false;
+      const before = JSON.stringify(coldStorageRequests);
+      coldStorageRequests = remote.map(normalizeColdStorageRequest);
+      window.traderInfoMap = data?.traderInfoMap && typeof data.traderInfoMap === 'object' ? data.traderInfoMap : {};
+      window.labelProducts = Array.isArray(data?.labelProducts) ? data.labelProducts : [];
+      safeLocalStorageSet(COLD_STORAGE_REQUEST_STORAGE_KEY,JSON.stringify(coldStorageRequests),true);
+      coldStoragePopulateOptions();
+      return before !== JSON.stringify(coldStorageRequests);
+    })();
+    try{ return await coldStorageRefreshPromise; }
+    finally{ coldStorageRefreshPromise = null; }
+  }
   if(localStorage.getItem('dbmt_supabase_enabled') !== '1' || typeof getSupabasePassword !== 'function' || !getSupabasePassword()) return false;
   if(coldStorageRefreshPromise) return coldStorageRefreshPromise;
   coldStorageRefreshPromise = (async()=>{
@@ -311,9 +329,17 @@ async function refreshColdStorageRequestsFromSupabase(){
   finally{ coldStorageRefreshPromise = null; }
 }
 
-function persistColdStorageRequests(action,record,summary=''){
+async function persistColdStorageRequests(action,record,summary=''){
   const requester = coldStorageRequester(record?.requesterId);
   safeLocalStorageSet(COLD_STORAGE_REQUEST_STORAGE_KEY,JSON.stringify(coldStorageRequests),true);
+  if(COLD_STORAGE_PUBLIC_MODE){
+    if(action === '삭제'){
+      await sbFunctionRequest('send-document-request',{action:'cold_storage_public_delete',recordId:record?.id || ''});
+    }else{
+      await sbFunctionRequest('send-document-request',{action:'cold_storage_public_save',record});
+    }
+    return;
+  }
   recordDataChange({
     menu:'냉동창고 요청', action, target:record?.warehouse || '냉동창고 요청',
     summary:summary || `${record?.requestDate || ''} / ${record?.requestType || ''} / ${requester.name} / ${record?.warehouse || '-'} / 품목 ${coldStorageOutputItems(record).length}건`,
@@ -347,7 +373,19 @@ async function saveColdStorageRequest(options={}){
   else coldStorageRequests.unshift(record);
   coldStorageEditingId = record.id;
   coldStorageDraft = normalizeColdStorageRequest(record);
-  persistColdStorageRequests(prior ? '수정' : '저장',record);
+  try{
+    await persistColdStorageRequests(prior ? '수정' : '저장',record);
+  }catch(err){
+    if(prior) coldStorageRequests = coldStorageRequests.map(row=>row.id === prior.id ? prior : row);
+    else coldStorageRequests = coldStorageRequests.filter(row=>row.id !== record.id);
+    coldStorageDraft = prior ? normalizeColdStorageRequest(prior) : coldStorageBlankDraft();
+    coldStorageEditingId = prior?.id || '';
+    coldStorageSyncInputs();
+    renderColdStorageRequestItems();
+    renderColdStorageRequestHistory();
+    toast(`냉동창고 요청 저장 실패: ${err?.message || err}`);
+    return null;
+  }
   coldStorageSyncInputs();
   renderColdStorageRequestItems();
   renderColdStorageRequestHistory();
@@ -390,11 +428,18 @@ function duplicateColdStorageRequest(id){
   scheduleColdStoragePreview(true);
 }
 
-function deleteColdStorageRequest(id){
+async function deleteColdStorageRequest(id){
   const record = coldStorageRequests.find(row=>row.id === id);
   if(!record || !confirm(`“${record.warehouse || '냉동창고'}” ${record.requestType} 요청 이력을 삭제할까요?`)) return;
   coldStorageRequests = coldStorageRequests.filter(row=>row.id !== id);
-  persistColdStorageRequests('삭제',record);
+  try{
+    await persistColdStorageRequests('삭제',record);
+  }catch(err){
+    coldStorageRequests.unshift(record);
+    renderColdStorageRequestHistory();
+    toast(`냉동창고 요청 삭제 실패: ${err?.message || err}`);
+    return;
+  }
   if(coldStorageEditingId === id){
     coldStorageEditingId = '';
     coldStorageDraft = coldStorageBlankDraft();
@@ -507,8 +552,15 @@ function updateColdStorageRecordFromFaxResult(record,result){
   });
 }
 
-function persistColdStorageFaxStatuses(){
+async function persistColdStorageFaxStatuses(records=[]){
   safeLocalStorageSet(COLD_STORAGE_REQUEST_STORAGE_KEY,JSON.stringify(coldStorageRequests),true);
+  if(COLD_STORAGE_PUBLIC_MODE){
+    const changedRecords = Array.isArray(records) && records.length ? records : coldStorageRequests;
+    await Promise.all(changedRecords.map(record=>sbFunctionRequest('send-document-request',{
+      action:'cold_storage_public_save',record
+    })));
+    return;
+  }
   if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
   gsSaveAppDataKeys(['coldStorageRequests'],'냉동창고 팩스 상태');
 }
@@ -525,14 +577,16 @@ function recordColdStorageFaxTransition(before,after){
 
 async function requestColdStorageFaxStatus(record,password){
   const result = await sbFunctionRequest('send-document-request',{
-    action:'cold_storage_fax_status',appPassword:password,messageId:record.providerMessageId
+    action:COLD_STORAGE_PUBLIC_MODE ? 'cold_storage_public_fax_status' : 'cold_storage_fax_status',
+    appPassword:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
+    messageId:record.providerMessageId
   });
   return updateColdStorageRecordFromFaxResult(record,result);
 }
 
 async function refreshColdStorageFaxStatus(id,options={}){
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
-  if(!password){ if(!options.quiet) toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return null; }
+  if(!COLD_STORAGE_PUBLIC_MODE && !password){ if(!options.quiet) toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return null; }
   const record = coldStorageRequests.find(row=>row.id === id);
   if(!record?.providerMessageId){ if(!options.quiet) toast('팩스 접수번호가 없는 요청입니다.'); return null; }
   try{
@@ -540,7 +594,7 @@ async function refreshColdStorageFaxStatus(id,options={}){
     recordColdStorageFaxTransition(record,updated);
     coldStorageRequests = coldStorageRequests.map(row=>row.id === id ? updated : row);
     if(coldStorageEditingId === id) coldStorageDraft = normalizeColdStorageRequest(updated);
-    persistColdStorageFaxStatuses();
+    await persistColdStorageFaxStatuses([updated]);
     renderColdStorageRequestHistory();
     if(!options.quiet) toast(`팩스 상태: ${updated.providerStatus}`);
     return updated;
@@ -552,7 +606,7 @@ async function refreshColdStorageFaxStatus(id,options={}){
 
 async function refreshColdStorageFaxStatuses(options={}){
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
-  if(!password){ if(!options.quiet) toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return; }
+  if(!COLD_STORAGE_PUBLIC_MODE && !password){ if(!options.quiet) toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return; }
   if(options.refreshRemote !== false){
     try{ await refreshColdStorageRequestsFromSupabase(); }catch(err){ console.warn('팩스 상태 확인 전 이력 갱신 실패:',err); }
   }
@@ -563,6 +617,7 @@ async function refreshColdStorageFaxStatuses(options={}){
   const button = document.getElementById('csr-status-refresh-button');
   if(button){ button.disabled=true;button.textContent='상태 확인 중...'; }
   let changed = 0;
+  const changedRecords = [];
   try{
     for(let start=0;start<records.length;start+=4){
       const batch = records.slice(start,start+4);
@@ -574,10 +629,11 @@ async function refreshColdStorageFaxStatuses(options={}){
         recordColdStorageFaxTransition(before,after);
         coldStorageRequests = coldStorageRequests.map(row=>row.id === after.id ? after : row);
         if(coldStorageEditingId === after.id) coldStorageDraft = normalizeColdStorageRequest(after);
+        changedRecords.push(after);
         changed += 1;
       });
     }
-    if(changed) persistColdStorageFaxStatuses();
+    if(changed) await persistColdStorageFaxStatuses(changedRecords);
     renderColdStorageRequestHistory();
     if(!options.quiet) toast(`팩스 상태 ${changed}건을 확인했습니다.`);
   }finally{
@@ -800,14 +856,17 @@ function updateColdStorageFaxButton(){
 async function loadColdStorageFaxCapabilities(){
   const message = document.getElementById('csr-fax-config');
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
-  if(!password){
+  if(!COLD_STORAGE_PUBLIC_MODE && !password){
     coldStorageFaxCapabilities = {fax:false,faxProvider:'바로빌',faxMode:'테스트'};
     if(message){ message.style.display='';message.textContent='팩스 발송에는 Supabase 연결 비밀번호가 필요합니다.'; }
     updateColdStorageFaxButton();
     return;
   }
   try{
-    const result = await sbFunctionRequest('send-document-request',{action:'capabilities',appPassword:password});
+    const result = await sbFunctionRequest('send-document-request',{
+      action:COLD_STORAGE_PUBLIC_MODE ? 'cold_storage_public_capabilities' : 'capabilities',
+      appPassword:COLD_STORAGE_PUBLIC_MODE ? undefined : password
+    });
     coldStorageFaxCapabilities = {fax:!!result?.fax,faxProvider:result?.faxProvider || '바로빌',faxMode:result?.faxMode || '테스트'};
     if(message){
       message.style.display = coldStorageFaxCapabilities.fax ? 'none' : '';
@@ -824,7 +883,7 @@ async function sendColdStorageRequestFax(){
   const validated = validateColdStorageRequest(true);
   if(!validated) return;
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
-  if(!password){ toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return; }
+  if(!COLD_STORAGE_PUBLIC_MODE && !password){ toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return; }
   if(!coldStorageFaxCapabilities.fax){
     await loadColdStorageFaxCapabilities();
     if(!coldStorageFaxCapabilities.fax){ toast('바로빌 팩스 연결 상태를 확인하세요.'); return; }
@@ -840,7 +899,8 @@ async function sendColdStorageRequestFax(){
     const canvas = await renderColdStorageRequestCanvas(null,saved);
     const imageDataUrl = canvas.toDataURL('image/jpeg',.9);
     const result = await sbFunctionRequest('send-document-request',{
-      action:'cold_storage_fax', appPassword:password,
+      action:COLD_STORAGE_PUBLIC_MODE ? 'cold_storage_public_fax' : 'cold_storage_fax',
+      appPassword:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
       requestId:saved.id, requestType:saved.requestType,
       warehouse:saved.warehouse, recipient:saved.fax,
       recipientName:saved.warehouse, itemCount:coldStorageOutputItems(saved).length,
@@ -853,7 +913,7 @@ async function sendColdStorageRequestFax(){
     });
     coldStorageRequests = coldStorageRequests.map(row=>row.id === updated.id ? updated : row);
     coldStorageDraft = normalizeColdStorageRequest(updated);
-    persistColdStorageRequests('팩스 전송',updated,`${updated.requestDate} / ${updated.warehouse} / ${updated.requestType} 요청 / ${updated.fax} / ${updated.providerStatus}`);
+    await persistColdStorageRequests('팩스 전송',updated,`${updated.requestDate} / ${updated.warehouse} / ${updated.requestType} 요청 / ${updated.fax} / ${updated.providerStatus}`);
     coldStorageSyncInputs();
     renderColdStorageRequestHistory();
     scheduleColdStoragePreview(true);
@@ -864,7 +924,9 @@ async function sendColdStorageRequestFax(){
     const failed = normalizeColdStorageRequest({...saved,status:'failed',updatedAt:now,errorMessage:String(err?.message || err)});
     coldStorageRequests = coldStorageRequests.map(row=>row.id === failed.id ? failed : row);
     coldStorageDraft = normalizeColdStorageRequest(failed);
-    persistColdStorageRequests('팩스 실패',failed,`${failed.requestDate} / ${failed.warehouse} / ${failed.requestType} 요청 / 실패: ${failed.errorMessage}`);
+    try{
+      await persistColdStorageRequests('팩스 실패',failed,`${failed.requestDate} / ${failed.warehouse} / ${failed.requestType} 요청 / 실패: ${failed.errorMessage}`);
+    }catch(saveErr){ console.error('팩스 실패 상태 저장 오류:',saveErr); }
     renderColdStorageRequestHistory();
     toast(`팩스 전송 실패: ${failed.errorMessage}`);
   }finally{

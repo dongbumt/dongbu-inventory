@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a252f">
+  <title>동부엠티 냉동창고 요청</title>
+  <link rel="stylesheet" href="styles/main.css?v=20260813a">
+  <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813b">
+  <link rel="stylesheet" href="styles/cold-storage-standalone.css?v=20260813a">
+</head>
+<body class="csr-standalone-body">
+  <header class="csr-public-header">
+    <div class="csr-public-brand">
+      <span class="csr-public-logo" aria-hidden="true">DB</span>
+      <div>
+        <div class="csr-public-eyebrow">DONGBUMT ERP</div>
+        <h1>냉동창고 요청</h1>
+      </div>
+    </div>
+    <span id="csr-public-connection" class="csr-public-connection">서버 연결 중</span>
+  </header>
+
+  <main class="csr-public-main">
+    <div class="tab-panel active" id="p-cold-storage-request">
+      <div class="csr-page-grid">
+        <section class="card csr-editor-card">
+          <div class="section-header csr-section-header">
+            <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#56606f;"></div>냉동창고 출고·이체 요청</div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="newColdStorageRequest()">새 요청</button>
+          </div>
+
+          <div class="csr-meta-grid">
+            <div class="form-group">
+              <label>요청 구분</label>
+              <div class="csr-segment" role="group" aria-label="요청 구분">
+                <button type="button" id="csr-type-out" onclick="setColdStorageRequestType('출고')">출고</button>
+                <button type="button" id="csr-type-transfer" onclick="setColdStorageRequestType('이체')">이체</button>
+              </div>
+            </div>
+            <div class="form-group"><label>요청일</label><input id="csr-date" type="date" onchange="coldStorageRequestMetaChanged('requestDate',this.value)"></div>
+            <div class="form-group csr-wide-field">
+              <label>요청자</label>
+              <select id="csr-requester" onchange="coldStorageRequesterChanged(this.value)">
+                <option value="dongbumt">주식회사 동부엠티</option>
+                <option value="dongbu_distribution">(주)동부축산유통</option>
+              </select>
+            </div>
+            <div class="form-group csr-wide-field">
+              <label>수신 냉동창고</label>
+              <input id="csr-warehouse" list="csr-warehouse-list" placeholder="냉동창고 선택 또는 입력" autocomplete="off" onchange="coldStorageWarehouseChanged(this.value)" oninput="coldStorageRequestMetaChanged('warehouse',this.value)">
+              <datalist id="csr-warehouse-list"></datalist>
+            </div>
+            <div class="form-group">
+              <label>수신 팩스번호</label>
+              <input id="csr-fax" list="csr-fax-list" type="tel" inputmode="tel" placeholder="예) 031-000-0000" oninput="coldStorageRequestMetaChanged('fax',this.value)">
+              <datalist id="csr-fax-list"></datalist>
+            </div>
+            <div class="form-group">
+              <label>담당자</label>
+              <select id="csr-manager" onchange="coldStorageManagerChanged(this.value)">
+                <option value="배은정 실장">배은정 실장</option>
+                <option value="김상영 본부장">김상영 본부장</option>
+              </select>
+            </div>
+            <div class="form-group"><label>담당자 연락처</label><input id="csr-manager-phone" type="tel" readonly></div>
+            <div class="form-group csr-note-field"><label>요청사항</label><input id="csr-note" placeholder="필요한 추가 요청사항을 입력하세요" oninput="coldStorageRequestMetaChanged('note',this.value)"></div>
+          </div>
+
+          <div class="csr-items-heading">
+            <strong>요청 품목</strong>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addColdStorageRequestItem()">+ 품목 추가</button>
+          </div>
+          <datalist id="csr-destination-list"></datalist>
+          <datalist id="csr-product-list"></datalist>
+          <datalist id="csr-unit-list"><option value="BOX"></option><option value="KG"></option><option value="EA"></option><option value="PALLET"></option></datalist>
+          <div class="tbl-wrap csr-items-wrap">
+            <table class="csr-items-table">
+              <thead><tr>
+                <th style="width:36px;">No.</th><th id="csr-destination-head">출고처</th><th>품명</th><th>규격</th>
+                <th style="width:82px;">단위</th><th style="width:96px;text-align:right;">수량</th><th>B/L·LOT</th><th style="width:42px;"></th>
+              </tr></thead>
+              <tbody id="csr-item-body"></tbody>
+            </table>
+          </div>
+          <div class="csr-editor-actions">
+            <span id="csr-save-state" class="csr-save-state"></span>
+            <button type="button" class="btn btn-secondary" onclick="printColdStorageRequest()">인쇄</button>
+            <button type="button" class="btn btn-secondary" onclick="downloadColdStorageRequestImage()">이미지 저장</button>
+            <button type="button" class="btn btn-primary" onclick="saveColdStorageRequest()">저장</button>
+            <button type="button" class="btn csr-fax-button" id="csr-fax-button" onclick="sendColdStorageRequestFax()">바로빌 팩스</button>
+          </div>
+          <div id="csr-fax-config" class="csr-config-message" style="display:none;"></div>
+        </section>
+
+        <section class="card csr-preview-card">
+          <div class="section-header csr-section-header">
+            <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#7b8491;"></div>A4 요청서 미리보기</div>
+            <span id="csr-preview-label" class="csr-preview-label">출고 요청서</span>
+          </div>
+          <div class="csr-preview-stage">
+            <canvas id="csr-preview-canvas" width="1240" height="1754" aria-label="냉동창고 요청서 미리보기"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <section class="card csr-history-card">
+        <div class="section-header csr-section-header">
+          <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#56606f;"></div>요청 및 팩스 이력</div>
+          <div class="csr-history-filters">
+            <input id="csr-history-from" type="date" onchange="renderColdStorageRequestHistory()" title="시작일">
+            <span>~</span>
+            <input id="csr-history-to" type="date" onchange="renderColdStorageRequestHistory()" title="종료일">
+            <input id="csr-history-search" type="search" placeholder="냉동창고·출고처·품목 검색" oninput="renderColdStorageRequestHistory()">
+            <button type="button" class="btn btn-secondary btn-sm" id="csr-status-refresh-button" onclick="refreshColdStorageFaxStatuses()">팩스 상태 새로고침</button>
+            <span id="csr-history-count"></span>
+          </div>
+        </div>
+        <div class="tbl-wrap csr-history-wrap">
+          <table class="csr-history-table">
+            <thead><tr>
+              <th>요청일</th><th>구분</th><th>요청자</th><th>냉동창고</th><th>요청내용</th>
+              <th style="text-align:right;">총수량</th><th>팩스번호</th><th>상태</th><th>관리</th>
+            </tr></thead>
+            <tbody id="csr-history-body"><tr><td colspan="9" class="csr-empty-cell">서버 데이터를 불러오는 중입니다.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div id="csr-public-toast" class="csr-public-toast" role="status" aria-live="polite"></div>
+
+  <script src="cold-storage-standalone.js?v=20260813a"></script>
+  <script src="cold-storage-request.js?v=20260813b"></script>
+</body>
+</html>

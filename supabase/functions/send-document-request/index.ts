@@ -14,7 +14,17 @@ interface DocumentRow {
 }
 
 interface DeliveryRequest {
-  action?: "capabilities" | "send" | "cold_storage_fax" | "cold_storage_fax_status";
+  action?:
+    | "capabilities"
+    | "send"
+    | "cold_storage_fax"
+    | "cold_storage_fax_status"
+    | "cold_storage_public_load"
+    | "cold_storage_public_save"
+    | "cold_storage_public_delete"
+    | "cold_storage_public_capabilities"
+    | "cold_storage_public_fax"
+    | "cold_storage_public_fax_status";
   appPassword?: string;
   channel?: DeliveryChannel;
   trader?: string;
@@ -27,6 +37,8 @@ interface DeliveryRequest {
   itemCount?: number;
   imageDataUrl?: string;
   messageId?: string;
+  record?: Record<string, unknown>;
+  recordId?: string;
 }
 
 const REQUEST_SENDER_NAME = "주식회사 동부엠티 & (주)동부축산유통";
@@ -52,6 +64,11 @@ function corsHeaders(req: Request) {
   };
 }
 
+function isAllowedPublicOrigin(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  return ALLOWED_ORIGINS.has(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
 function jsonResponse(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders(req) });
 }
@@ -62,6 +79,67 @@ function env(name: string) {
 
 function clean(value: unknown, maxLength = 200) {
   return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function safeNumber(value: unknown, minimum = 0, maximum = 1_000_000_000) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.min(maximum, Math.max(minimum, number));
+}
+
+function sanitizeColdStorageRecord(value: unknown) {
+  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const id = clean(source.id, 100);
+  const requestDate = clean(source.requestDate, 10);
+  const warehouse = clean(source.warehouse, 100);
+  const fax = clean(source.fax, 30);
+  if (!/^csr_[A-Za-z0-9_]+$/.test(id) || !/^\d{4}-\d{2}-\d{2}$/.test(requestDate) || !warehouse) {
+    throw new Error("냉동창고 요청 정보가 올바르지 않습니다.");
+  }
+  const rawItems = Array.isArray(source.items) ? source.items.slice(0, 10) : [];
+  const items = rawItems.map((item, index) => {
+    const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    return {
+      id: clean(row.id, 100) || `${id}_item_${index + 1}`,
+      destination: clean(row.destination, 100),
+      product: clean(row.product, 100),
+      spec: clean(row.spec, 100),
+      unit: clean(row.unit, 20) || "BOX",
+      quantity: safeNumber(row.quantity),
+      lot: clean(row.lot, 100),
+    };
+  }).filter((item) => item.destination && item.product && item.quantity > 0);
+  if (!items.length) throw new Error("요청 품목을 한 개 이상 입력해주세요.");
+  const statusValues = new Set(["draft", "saved", "accepted", "completed", "partial", "canceled", "failed"]);
+  const status = clean(source.status, 20);
+  return {
+    id,
+    requestDate,
+    requestType: source.requestType === "이체" ? "이체" : "출고",
+    requesterId: source.requesterId === "dongbu_distribution" ? "dongbu_distribution" : "dongbumt",
+    warehouse,
+    fax,
+    managerName: source.managerName === "김상영 본부장" ? "김상영 본부장" : "배은정 실장",
+    managerPhone: clean(source.managerPhone, 30),
+    note: clean(source.note, 500),
+    items,
+    status: statusValues.has(status) ? status : "saved",
+    createdAt: clean(source.createdAt, 40),
+    updatedAt: clean(source.updatedAt, 40),
+    sentAt: clean(source.sentAt, 40),
+    providerMessageId: clean(source.providerMessageId, 30),
+    providerStatus: clean(source.providerStatus, 100),
+    errorMessage: clean(source.errorMessage, 1000),
+    faxSendState: source.faxSendState === null || source.faxSendState === undefined
+      ? null
+      : Math.trunc(safeNumber(source.faxSendState, 0, 8)),
+    faxResult: clean(source.faxResult, 100),
+    faxSendPageCount: Math.trunc(safeNumber(source.faxSendPageCount, 0, 100)),
+    faxSuccessPageCount: Math.trunc(safeNumber(source.faxSuccessPageCount, 0, 100)),
+    faxSendDateTime: clean(source.faxSendDateTime, 30),
+    faxEndDateTime: clean(source.faxEndDateTime, 30),
+    faxStatusCheckedAt: clean(source.faxStatusCheckedAt, 40),
+  };
 }
 
 function escapeHtml(value: unknown) {
@@ -427,6 +505,51 @@ async function getColdStorageFaxStatus(messageId: string) {
   };
 }
 
+async function getPublicColdStorageData(supabase: any) {
+  const { data, error } = await supabase.from("app_data")
+    .select("key,payload")
+    .in("key", ["coldStorageRequests", "traderInfoMap", "labelProducts"]);
+  if (error) throw new Error(`냉동창고 요청 데이터를 불러오지 못했습니다: ${error.message}`);
+  const values = Object.fromEntries((data || []).map((row: any) => [row.key, row.payload]));
+  const traderInfo = values.traderInfoMap && typeof values.traderInfoMap === "object" ? values.traderInfoMap : {};
+  return {
+    requests: Array.isArray(values.coldStorageRequests) ? values.coldStorageRequests : [],
+    traderInfoMap: Object.fromEntries(Object.entries(traderInfo).map(([name, raw]) => {
+      const info = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+      const isWarehouse = clean(info.tradeType, 30) === "보관(냉동창고)";
+      return [clean(name, 100), isWarehouse
+        ? { tradeType: "보관(냉동창고)", fax: clean(info.fax, 30), faxAlt: clean(info.faxAlt, 30) }
+        : {}];
+    }).filter(([name]) => Boolean(name))),
+    labelProducts: Array.isArray(values.labelProducts)
+      ? values.labelProducts.map((row: any) => ({ name: clean(row?.name, 100) })).filter((row: any) => row.name)
+      : [],
+  };
+}
+
+async function savePublicColdStorageRecord(supabase: any, rawRecord: unknown) {
+  const record = sanitizeColdStorageRecord(rawRecord);
+  const { error } = await supabase.rpc("dbmt_cold_storage_public_write", {
+    p_action: "save",
+    p_record: record,
+    p_record_id: record.id,
+  });
+  if (error) throw new Error(`냉동창고 요청을 저장하지 못했습니다: ${error.message}`);
+  return record;
+}
+
+async function deletePublicColdStorageRecord(supabase: any, recordId: string) {
+  const id = clean(recordId, 100);
+  if (!/^csr_[A-Za-z0-9_]+$/.test(id)) throw new Error("삭제할 요청을 확인해주세요.");
+  const { data, error } = await supabase.rpc("dbmt_cold_storage_public_write", {
+    p_action: "delete",
+    p_record: null,
+    p_record_id: id,
+  });
+  if (error) throw new Error(`냉동창고 요청을 삭제하지 못했습니다: ${error.message}`);
+  return { id, deleted: Boolean(data?.deleted) };
+}
+
 async function insertLog(
   // This project does not generate database types for Edge Functions.
   supabase: any,
@@ -456,14 +579,6 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { error: "요청 형식이 올바르지 않습니다." }, 400);
   }
 
-  const appPassword = clean(payload.appPassword, 200);
-  const { data: passwordOk, error: passwordError } = await supabase.rpc("dbmt_check_password", {
-    p_password: appPassword,
-  });
-  if (passwordError || passwordOk !== true) {
-    return jsonResponse(req, { error: "ERP 연동 비밀번호가 올바르지 않습니다." }, 401);
-  }
-
   const capabilities = {
     email: Boolean(env("DAUM_SMTP_USER") && env("DAUM_SMTP_APP_PASSWORD") && env("DAUM_SMTP_FROM")),
     fax: Boolean(
@@ -473,6 +588,62 @@ Deno.serve(async (req) => {
     faxProvider: "바로빌",
     faxMode: env("BAROBILL_ENV").toLowerCase() === "production" ? "운영" : "테스트",
   };
+
+  const publicActionMap: Record<string, string> = {
+    cold_storage_public_capabilities: "capabilities",
+    cold_storage_public_fax: "cold_storage_fax",
+    cold_storage_public_fax_status: "cold_storage_fax_status",
+  };
+  const requestedAction = clean(payload.action, 60);
+  const isPublicColdStorageAction = requestedAction.startsWith("cold_storage_public_");
+  const allowedPublicActions = new Set([
+    "cold_storage_public_load",
+    "cold_storage_public_save",
+    "cold_storage_public_delete",
+    "cold_storage_public_capabilities",
+    "cold_storage_public_fax",
+    "cold_storage_public_fax_status",
+  ]);
+  if (isPublicColdStorageAction && !allowedPublicActions.has(requestedAction)) {
+    return jsonResponse(req, { error: "지원하지 않는 공용 요청입니다." }, 400);
+  }
+  if (isPublicColdStorageAction && !isAllowedPublicOrigin(req)) {
+    return jsonResponse(req, { error: "허용되지 않은 접속 경로입니다." }, 403);
+  }
+
+  if (requestedAction === "cold_storage_public_load") {
+    try {
+      return jsonResponse(req, { ok: true, ...(await getPublicColdStorageData(supabase)), capabilities });
+    } catch (error) {
+      return jsonResponse(req, { error: clean(error instanceof Error ? error.message : error, 1000) }, 502);
+    }
+  }
+  if (requestedAction === "cold_storage_public_save") {
+    try {
+      return jsonResponse(req, { ok: true, record: await savePublicColdStorageRecord(supabase, payload.record) });
+    } catch (error) {
+      return jsonResponse(req, { error: clean(error instanceof Error ? error.message : error, 1000) }, 400);
+    }
+  }
+  if (requestedAction === "cold_storage_public_delete") {
+    try {
+      return jsonResponse(req, { ok: true, ...(await deletePublicColdStorageRecord(supabase, clean(payload.recordId, 100))) });
+    } catch (error) {
+      return jsonResponse(req, { error: clean(error instanceof Error ? error.message : error, 1000) }, 400);
+    }
+  }
+
+  if (!isPublicColdStorageAction) {
+    const appPassword = clean(payload.appPassword, 200);
+    const { data: passwordOk, error: passwordError } = await supabase.rpc("dbmt_check_password", {
+      p_password: appPassword,
+    });
+    if (passwordError || passwordOk !== true) {
+      return jsonResponse(req, { error: "ERP 연동 비밀번호가 올바르지 않습니다." }, 401);
+    }
+  }
+
+  payload.action = (publicActionMap[requestedAction] || requestedAction) as DeliveryRequest["action"];
   if (payload.action === "capabilities") return jsonResponse(req, capabilities);
 
   if (payload.action === "cold_storage_fax_status") {
