@@ -5,13 +5,17 @@ const COLD_STORAGE_REQUEST_STORAGE_KEY = 'dbmt_cold_storage_requests';
 const COLD_STORAGE_REQUEST_MAX_ITEMS = 10;
 const COLD_STORAGE_CANVAS_WIDTH = 1240;
 const COLD_STORAGE_CANVAS_HEIGHT = 1754;
-const COLD_STORAGE_COMPANY = {
-  name:'주식회사 동부엠티',
-  ceo:'이창성',
-  registrationNo:'495-88-01108',
-  address:'인천광역시 검단구 소담2로36, 2동 201호',
-  phone:'032-579-3920',
-  fax:'032-232-1812'
+const COLD_STORAGE_REQUESTERS = {
+  dongbumt:{
+    name:'주식회사 동부엠티', representative:'이창성', registrationNo:'495-88-01108',
+    address:'인천광역시 검단구 소담2로36, 2동 201호',
+    phone:'032-579-3920', fax:'032-232-1812', seal:'assets/company-seal.png'
+  },
+  dongbu_distribution:{
+    name:'(주)동부축산유통', representative:'이동대', registrationNo:'137-81-38748',
+    address:'인천광역시 서해구 가좌로96번길 11',
+    phone:'032-579-3920', fax:'032-232-1812', seal:'assets/company-seal-trading.png'
+  }
 };
 
 let coldStorageRequests = [];
@@ -24,7 +28,7 @@ let coldStorageDraft = null;
 let coldStorageEditingId = '';
 let coldStoragePreviewTimer = null;
 let coldStoragePreviewSerial = 0;
-let coldStorageSealPromise = null;
+const coldStorageSealPromises = new Map();
 let coldStorageRefreshPromise = null;
 let coldStorageFaxCapabilities = {fax:false, faxProvider:'바로빌', faxMode:'테스트'};
 
@@ -42,7 +46,7 @@ function coldStorageBlankItem(){
 
 function coldStorageBlankDraft(){
   return {
-    id:'', requestDate:coldStorageToday(), requestType:'출고', warehouse:'', fax:'',
+    id:'', requestDate:coldStorageToday(), requestType:'출고', requesterId:'dongbumt', warehouse:'', fax:'',
     managerName:'김상영 과장', managerPhone:'010-2414-5406', note:'',
     items:[coldStorageBlankItem()], status:'draft', createdAt:'', updatedAt:'',
     sentAt:'', providerMessageId:'', providerStatus:'', errorMessage:''
@@ -59,8 +63,13 @@ function normalizeColdStorageRequest(record={}){
     ...coldStorageBlankDraft(),
     ...record,
     requestType:record.requestType === '이체' ? '이체' : '출고',
+    requesterId:COLD_STORAGE_REQUESTERS[record.requesterId] ? record.requesterId : 'dongbumt',
     items:items.slice(0,COLD_STORAGE_REQUEST_MAX_ITEMS).map(normalizeColdStorageItem)
   };
+}
+
+function coldStorageRequester(requesterId){
+  return COLD_STORAGE_REQUESTERS[requesterId] || COLD_STORAGE_REQUESTERS.dongbumt;
 }
 
 coldStorageRequests = coldStorageRequests.map(normalizeColdStorageRequest);
@@ -142,7 +151,7 @@ function syncColdStorageFaxOptions(){
 function coldStorageSyncInputs(){
   if(!coldStorageDraft) coldStorageDraft = coldStorageBlankDraft();
   const values = {
-    'csr-date':'requestDate','csr-warehouse':'warehouse','csr-fax':'fax',
+    'csr-date':'requestDate','csr-requester':'requesterId','csr-warehouse':'warehouse','csr-fax':'fax',
     'csr-manager':'managerName','csr-manager-phone':'managerPhone','csr-note':'note'
   };
   Object.entries(values).forEach(([id,key])=>{
@@ -157,6 +166,12 @@ function coldStorageSyncInputs(){
       ? `수정 중 · 최근 저장 ${coldStorageFormatDateTime(coldStorageDraft.updatedAt)}`
       : '새 요청 작성 중';
   }
+}
+
+function coldStorageRequesterChanged(value){
+  if(!coldStorageDraft) coldStorageDraft = coldStorageBlankDraft();
+  coldStorageDraft.requesterId = COLD_STORAGE_REQUESTERS[value] ? value : 'dongbumt';
+  scheduleColdStoragePreview(true);
 }
 
 function coldStorageRequestMetaChanged(field,value){
@@ -269,10 +284,11 @@ async function refreshColdStorageRequestsFromSupabase(){
 }
 
 function persistColdStorageRequests(action,record,summary=''){
+  const requester = coldStorageRequester(record?.requesterId);
   safeLocalStorageSet(COLD_STORAGE_REQUEST_STORAGE_KEY,JSON.stringify(coldStorageRequests),true);
   recordDataChange({
     menu:'냉동창고 요청', action, target:record?.warehouse || '냉동창고 요청',
-    summary:summary || `${record?.requestDate || ''} / ${record?.requestType || ''} / ${record?.warehouse || '-'} / 품목 ${coldStorageOutputItems(record).length}건`,
+    summary:summary || `${record?.requestDate || ''} / ${record?.requestType || ''} / ${requester.name} / ${record?.warehouse || '-'} / 품목 ${coldStorageOutputItems(record).length}건`,
     refId:record?.id || ''
   },{sync:false});
   if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
@@ -380,7 +396,8 @@ function renderColdStorageRequestHistory(){
       if(from && String(record.requestDate || '') < from) return false;
       if(to && String(record.requestDate || '') > to) return false;
       if(query){
-        const haystack = [record.warehouse,record.requestType,record.fax,...(record.items || []).flatMap(item=>[item.destination,item.product,item.spec,item.lot])]
+        const requester = coldStorageRequester(record.requesterId);
+        const haystack = [requester.name,requester.registrationNo,record.warehouse,record.requestType,record.fax,...(record.items || []).flatMap(item=>[item.destination,item.product,item.spec,item.lot])]
           .join(' ').toLocaleLowerCase('ko-KR');
         if(!haystack.includes(query)) return false;
       }
@@ -389,11 +406,12 @@ function renderColdStorageRequestHistory(){
   const count = document.getElementById('csr-history-count');
   if(count) count.textContent = `표시 ${rows.length}건 / 전체 ${coldStorageRequests.length}건`;
   if(!rows.length){
-    body.innerHTML = '<tr><td colspan="8" class="csr-empty-cell">조건에 맞는 요청 이력이 없습니다.</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="csr-empty-cell">조건에 맞는 요청 이력이 없습니다.</td></tr>';
     return;
   }
   body.innerHTML = rows.map(record=>{
     const items = coldStorageOutputItems(record);
+    const requester = coldStorageRequester(record.requesterId);
     const total = items.reduce((sum,item)=>sum+coldStorageNumber(item.quantity),0);
     const units = [...new Set(items.map(item=>String(item.unit || '').trim()).filter(Boolean))];
     const totalUnit = units.length === 1 ? units[0] : (units.length > 1 ? '혼합' : '');
@@ -403,6 +421,7 @@ function renderColdStorageRequestHistory(){
     return `<tr>
       <td style="white-space:nowrap;">${htmlEscape(record.requestDate || '-')}</td>
       <td><strong>${htmlEscape(record.requestType || '-')}</strong></td>
+      <td style="white-space:nowrap;">${htmlEscape(requester.name)}</td>
       <td><strong>${htmlEscape(record.warehouse || '-')}</strong></td>
       <td style="font-size:11px;line-height:1.5;">${preview}${extra}</td>
       <td style="text-align:right;white-space:nowrap;">${coldStorageFormatQuantity(total)} ${htmlEscape(totalUnit)}</td>
@@ -417,15 +436,17 @@ function renderColdStorageRequestHistory(){
   }).join('');
 }
 
-function coldStorageSealImage(){
-  if(coldStorageSealPromise) return coldStorageSealPromise;
-  coldStorageSealPromise = new Promise(resolve=>{
+function coldStorageSealImage(asset){
+  const source = String(asset || COLD_STORAGE_REQUESTERS.dongbumt.seal);
+  if(coldStorageSealPromises.has(source)) return coldStorageSealPromises.get(source);
+  const promise = new Promise(resolve=>{
     const image = new Image();
     image.onload = ()=>resolve(image);
     image.onerror = ()=>resolve(null);
-    image.src = 'assets/company-seal.png';
+    image.src = source;
   });
-  return coldStorageSealPromise;
+  coldStorageSealPromises.set(source,promise);
+  return promise;
 }
 
 function csrSetFont(ctx,size,weight=400){
@@ -511,6 +532,7 @@ async function renderColdStorageRequestCanvas(target,record=coldStorageDraft){
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
   const normalized = normalizeColdStorageRequest(record || coldStorageBlankDraft());
+  const requester = coldStorageRequester(normalized.requesterId);
   const items = coldStorageOutputItems(normalized).slice(0,COLD_STORAGE_REQUEST_MAX_ITEMS);
   const title = normalized.requestType === '이체' ? '이 체 요 청 서' : '출 고 요 청 서';
   csrDrawText(ctx,title,canvas.width/2,95,{size:62,weight:700,align:'center',maxWidth:920});
@@ -560,12 +582,12 @@ async function renderColdStorageRequestCanvas(target,record=coldStorageDraft){
   ctx.strokeStyle = '#444';ctx.lineWidth = 2;ctx.strokeRect(80,companyY,1080,265);
   ctx.fillStyle = '#efefef';ctx.fillRect(80,companyY,1080,46);
   csrDrawText(ctx,'요 청 자',105,companyY+23,{size:21,weight:700});
-  csrDrawText(ctx,COLD_STORAGE_COMPANY.name,115,companyY+88,{size:34,weight:700,maxWidth:570});
-  csrDrawText(ctx,`사업자등록번호  ${COLD_STORAGE_COMPANY.registrationNo}`,115,companyY+133,{size:21,maxWidth:620});
-  csrDrawText(ctx,`주소  ${COLD_STORAGE_COMPANY.address}`,115,companyY+174,{size:20,maxWidth:700});
-  csrDrawText(ctx,`전화  ${COLD_STORAGE_COMPANY.phone}    FAX  ${COLD_STORAGE_COMPANY.fax}`,115,companyY+215,{size:20,maxWidth:700});
-  csrDrawText(ctx,`대표이사  ${COLD_STORAGE_COMPANY.ceo}  (인)`,1040,companyY+136,{size:27,weight:600,align:'right',maxWidth:360});
-  const seal = await coldStorageSealImage();
+  csrDrawText(ctx,requester.name,115,companyY+88,{size:34,weight:700,maxWidth:570});
+  csrDrawText(ctx,`사업자등록번호  ${requester.registrationNo}`,115,companyY+133,{size:21,maxWidth:620});
+  csrDrawText(ctx,`주소  ${requester.address}`,115,companyY+174,{size:20,maxWidth:700});
+  csrDrawText(ctx,`전화  ${requester.phone}    FAX  ${requester.fax}`,115,companyY+215,{size:20,maxWidth:700});
+  csrDrawText(ctx,`대표자  ${requester.representative}  (인)`,1040,companyY+136,{size:27,weight:600,align:'right',maxWidth:360});
+  const seal = await coldStorageSealImage(requester.seal);
   if(seal){ ctx.save();ctx.globalAlpha=.9;ctx.drawImage(seal,920,companyY+62,170,170);ctx.restore(); }
 
   csrDrawText(ctx,`문서번호  ${normalized.id || '저장 전'}`,85,1695,{size:17,color:'#707782',maxWidth:500});
@@ -708,6 +730,7 @@ async function initColdStorageRequestPage(){
 
 window.initColdStorageRequestPage = initColdStorageRequestPage;
 window.coldStorageRequestMetaChanged = coldStorageRequestMetaChanged;
+window.coldStorageRequesterChanged = coldStorageRequesterChanged;
 window.coldStorageWarehouseChanged = coldStorageWarehouseChanged;
 window.setColdStorageRequestType = setColdStorageRequestType;
 window.coldStorageRequestItemChanged = coldStorageRequestItemChanged;

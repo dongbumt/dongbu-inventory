@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
 <link rel="stylesheet" href="styles/main.css?v=20260812q3">
-<link rel="stylesheet" href="styles/cold-storage-request.css?v=20260812b">
+<link rel="stylesheet" href="styles/cold-storage-request.css?v=20260812c">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('xlsx CDN 로드 실패 — Excel 내보내기 기능만 비활성화')"></script>
 </head>
 <body>
@@ -1050,6 +1050,13 @@
         </div>
         <div class="form-group"><label>요청일</label><input id="csr-date" type="date" onchange="coldStorageRequestMetaChanged('requestDate',this.value)"></div>
         <div class="form-group csr-wide-field">
+          <label>요청자</label>
+          <select id="csr-requester" onchange="coldStorageRequesterChanged(this.value)">
+            <option value="dongbumt">주식회사 동부엠티</option>
+            <option value="dongbu_distribution">(주)동부축산유통</option>
+          </select>
+        </div>
+        <div class="form-group csr-wide-field">
           <label>수신 냉동창고</label>
           <input id="csr-warehouse" list="csr-warehouse-list" placeholder="냉동창고 선택 또는 입력" autocomplete="off" onchange="coldStorageWarehouseChanged(this.value)" oninput="coldStorageRequestMetaChanged('warehouse',this.value)">
           <datalist id="csr-warehouse-list"></datalist>
@@ -1121,10 +1128,10 @@
     <div class="tbl-wrap">
       <table class="csr-history-table">
         <thead><tr>
-          <th>요청일</th><th>구분</th><th>냉동창고</th><th>요청내용</th>
+          <th>요청일</th><th>구분</th><th>요청자</th><th>냉동창고</th><th>요청내용</th>
           <th style="text-align:right;">총수량</th><th>팩스번호</th><th>상태</th><th>관리</th>
         </tr></thead>
-        <tbody id="csr-history-body"><tr><td colspan="8" class="csr-empty-cell">저장된 요청이 없습니다.</td></tr></tbody>
+        <tbody id="csr-history-body"><tr><td colspan="9" class="csr-empty-cell">저장된 요청이 없습니다.</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -17779,6 +17786,6 @@ function initSamsung(){
 
 </script>
 <script src="quotation.js?v=20260812q4"></script>
-<script src="cold-storage-request.js?v=20260812b"></script>
+<script src="cold-storage-request.js?v=20260812c"></script>
 </body>
 </html>
