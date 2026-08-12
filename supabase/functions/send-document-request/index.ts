@@ -14,13 +14,18 @@ interface DocumentRow {
 }
 
 interface DeliveryRequest {
-  action?: "capabilities" | "send";
+  action?: "capabilities" | "send" | "cold_storage_fax";
   appPassword?: string;
   channel?: DeliveryChannel;
   trader?: string;
   recipient?: string;
   recipientName?: string;
   documents?: DocumentRow[];
+  requestId?: string;
+  requestType?: string;
+  warehouse?: string;
+  itemCount?: number;
+  imageDataUrl?: string;
 }
 
 const REQUEST_SENDER_NAME = "주식회사 동부엠티 & (주)동부축산유통";
@@ -230,7 +235,7 @@ function barobillConfig() {
   };
 }
 
-async function uploadBarobillFile(fileName: string, content: string) {
+async function uploadBarobillBytes(fileName: string, bytes: Uint8Array) {
   const config = barobillConfig();
   const ftp = new FtpClient(30000);
   try {
@@ -242,11 +247,26 @@ async function uploadBarobillFile(fileName: string, content: string) {
       password: config.memberPassword,
       secure: false,
     });
-    const bytes = new TextEncoder().encode(content);
     await ftp.uploadFrom(Readable.from([bytes]), fileName);
   } finally {
     ftp.close();
   }
+}
+
+async function uploadBarobillFile(fileName: string, content: string) {
+  await uploadBarobillBytes(fileName, new TextEncoder().encode(content));
+}
+
+function decodeJpegDataUrl(value: unknown) {
+  const dataUrl = String(value ?? "");
+  const match = dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error("팩스 요청서 이미지 형식이 올바르지 않습니다.");
+  if (match[1].length > 8_000_000) throw new Error("팩스 요청서 이미지가 너무 큽니다.");
+  const binary = atob(match[1]);
+  if (!binary.length || binary.length > 6_000_000) throw new Error("팩스 요청서 이미지 크기를 확인해주세요.");
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
 }
 
 async function barobillSoap(operation: string, params: Record<string, string>) {
@@ -318,6 +338,43 @@ async function sendFax(trader: string, recipient: string, recipientName: string,
   };
 }
 
+async function sendColdStorageFax(
+  warehouse: string,
+  recipient: string,
+  requestType: string,
+  itemCount: number,
+  imageDataUrl: string,
+) {
+  const config = barobillConfig();
+  if (!config.certKey || !config.corpNum || !config.senderId || !config.memberPassword || !config.fromNumber) {
+    throw new Error("바로빌 연동정보가 아직 설정되지 않았습니다.");
+  }
+  const bytes = decodeJpegDataUrl(imageDataUrl);
+  const fileName = `dbmt_cold_storage_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.jpg`;
+  await uploadBarobillBytes(fileName, bytes);
+  const sendKey = await barobillSoap("SendFaxFromFTP", {
+    CERTKEY: config.certKey,
+    CorpNum: config.corpNum,
+    SenderID: config.senderId,
+    FileName: fileName,
+    FromNumber: config.fromNumber,
+    ToNumber: recipient,
+    ReceiveCorp: warehouse,
+    ReceiveName: "냉동창고 담당자",
+    SendDT: "",
+    RefKey: "",
+  });
+  if (/^-\d{5}$/.test(sendKey)) {
+    const detail = await barobillErrorMessage(sendKey);
+    throw new Error(`바로빌 오류 ${sendKey}${detail ? `: ${detail}` : ""}`);
+  }
+  return {
+    subject: `[동부엠티] 냉동창고 ${requestType} 요청 - ${warehouse} (${itemCount}건)`,
+    messageId: sendKey,
+    providerStatus: config.isTest ? "테스트 접수" : "전송 접수",
+  };
+}
+
 async function insertLog(
   // This project does not generate database types for Edge Functions.
   supabase: any,
@@ -365,6 +422,36 @@ Deno.serve(async (req) => {
     faxMode: env("BAROBILL_ENV").toLowerCase() === "production" ? "운영" : "테스트",
   };
   if (payload.action === "capabilities") return jsonResponse(req, capabilities);
+
+  if (payload.action === "cold_storage_fax") {
+    const warehouse = clean(payload.warehouse, 100);
+    const recipient = clean(payload.recipient, 30).replace(/\D/g, "");
+    const requestType = payload.requestType === "이체" ? "이체" : "출고";
+    const itemCount = Math.trunc(Number(payload.itemCount) || 0);
+    const requestId = clean(payload.requestId, 100);
+    const imageDataUrl = String(payload.imageDataUrl ?? "");
+    if (!warehouse || !/^\d{8,15}$/.test(recipient) || itemCount < 1 || itemCount > 10 || !imageDataUrl) {
+      return jsonResponse(req, { error: "냉동창고, 팩스번호, 요청 품목을 확인해주세요." }, 400);
+    }
+    if (!capabilities.fax) {
+      return jsonResponse(req, { error: "바로빌 팩스 연동정보가 아직 설정되지 않았습니다." }, 503);
+    }
+    try {
+      const result = await sendColdStorageFax(warehouse, recipient, requestType, itemCount, imageDataUrl);
+      console.info("Cold storage fax accepted", { requestId, warehouse, requestType, itemCount, messageId: result.messageId });
+      return jsonResponse(req, {
+        ok: true,
+        channel: "fax",
+        provider: "Barobill",
+        messageId: result.messageId,
+        status: result.providerStatus,
+      });
+    } catch (error) {
+      const message = clean(error instanceof Error ? error.message : error, 1000);
+      console.error("Cold storage fax failed", { requestId, warehouse, requestType, itemCount, message });
+      return jsonResponse(req, { error: message || "발송에 실패했습니다." }, 502);
+    }
+  }
 
   const channel = payload.channel === "fax" ? "fax" : "email";
   const trader = clean(payload.trader, 100);

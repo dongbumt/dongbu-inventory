@@ -1,0 +1,262 @@
+.csr-page-grid {
+  display: grid;
+  grid-template-columns: minmax(650px, 1.2fr) minmax(380px, .8fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.csr-section-header {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.csr-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 9px;
+  align-items: end;
+}
+
+.csr-wide-field {
+  grid-column: span 2;
+}
+
+.csr-note-field {
+  grid-column: span 2;
+}
+
+.csr-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f4f5f6;
+}
+
+.csr-segment button {
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: #596273;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.csr-segment button:last-child {
+  border-right: 0;
+}
+
+.csr-segment button.active {
+  background: #465160;
+  color: #fff;
+}
+
+.csr-items-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 14px 0 7px;
+  font-size: 13px;
+}
+
+.csr-items-wrap {
+  max-height: 330px;
+}
+
+.csr-items-table {
+  min-width: 830px;
+  table-layout: fixed;
+}
+
+.csr-items-table th,
+.csr-items-table td {
+  padding: 5px;
+}
+
+.csr-items-table input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 7px;
+  font-size: 12px;
+}
+
+.csr-items-table .csr-item-number {
+  text-align: center;
+  color: #667085;
+  font-weight: 700;
+}
+
+.csr-items-table .csr-quantity-input {
+  text-align: right;
+}
+
+.csr-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.csr-save-state {
+  margin-right: auto;
+  color: #667085;
+  font-size: 11px;
+}
+
+.csr-fax-button {
+  background: #4e5968;
+  color: #fff;
+}
+
+.csr-fax-button:hover {
+  background: #374151;
+}
+
+.csr-fax-button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.csr-config-message {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #f8f9fa;
+  color: #667085;
+  font-size: 11px;
+}
+
+.csr-preview-card {
+  position: sticky;
+  top: 12px;
+}
+
+.csr-preview-label {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.csr-preview-stage {
+  width: 100%;
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid #d7d9dd;
+  background: #e7e8ea;
+}
+
+#csr-preview-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 210 / 297;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+}
+
+.csr-history-card {
+  margin-top: 14px;
+}
+
+.csr-history-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.csr-history-filters input {
+  width: 135px;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+#csr-history-search {
+  width: 230px;
+}
+
+#csr-history-count {
+  color: #667085;
+  font-size: 11px;
+}
+
+.csr-history-table {
+  min-width: 880px;
+}
+
+.csr-status {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid #cfd4dc;
+  border-radius: 4px;
+  background: #f7f7f8;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.csr-status.accepted {
+  border-color: #9dcfbd;
+  background: #edf8f3;
+  color: #20735b;
+}
+
+.csr-status.failed {
+  border-color: #e6b0aa;
+  background: #fff4f2;
+  color: #b33a2b;
+}
+
+.csr-empty-cell {
+  padding: 22px !important;
+  text-align: center !important;
+  color: #8b93a1;
+}
+
+@media (max-width: 1180px) {
+  .csr-page-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .csr-preview-card {
+    position: static;
+  }
+
+  .csr-preview-stage {
+    max-height: none;
+  }
+
+  #csr-preview-canvas {
+    max-width: 620px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .csr-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .csr-wide-field,
+  .csr-note-field {
+    grid-column: span 2;
+  }
+
+  .csr-editor-actions .btn {
+    flex: 1 1 calc(50% - 7px);
+  }
+
+  .csr-save-state {
+    flex: 1 0 100%;
+  }
+}

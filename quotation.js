@@ -9,7 +9,7 @@ const QUOTATION_COMPANY = {
   name: '주식회사 동부엠티',
   ceo: '이창성',
   registrationNo: '495-88-01108',
-  address: '인천광역시 중구 축항대로 4, 3층',
+  address: '인천광역시 검단구 소담2로36, 2동 201호',
   phoneFax: '032-579-3920 / 032-232-1812',
 };
 
