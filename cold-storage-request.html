@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1a252f">
   <title>동부엠티 냉동창고 요청</title>
   <link rel="stylesheet" href="styles/main.css?v=20260813a">
-  <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813b">
+  <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
   <link rel="stylesheet" href="styles/cold-storage-standalone.css?v=20260813a">
 </head>
 <body class="csr-standalone-body">
@@ -48,8 +48,17 @@
             </div>
             <div class="form-group csr-wide-field">
               <label>수신 냉동창고</label>
-              <input id="csr-warehouse" list="csr-warehouse-list" placeholder="냉동창고 선택 또는 입력" autocomplete="off" onchange="coldStorageWarehouseChanged(this.value)" oninput="coldStorageRequestMetaChanged('warehouse',this.value)">
-              <datalist id="csr-warehouse-list"></datalist>
+              <div class="csr-warehouse-picker-shell">
+                <input id="csr-warehouse" placeholder="냉동창고 선택 또는 입력" autocomplete="off" role="combobox" aria-haspopup="listbox" aria-expanded="false" onpointerdown="coldStorageWarehousePointerdown(event)" onfocus="openColdStorageWarehousePicker()" onclick="openColdStorageWarehousePicker()" onchange="coldStorageWarehouseChanged(this.value)" oninput="coldStorageWarehouseQueryChanged(this.value)" onkeydown="coldStorageWarehouseKeydown(event)">
+                <button type="button" class="csr-warehouse-open-button" onclick="openColdStorageWarehousePicker()" title="냉동창고 목록 열기" aria-label="냉동창고 목록 열기">⌄</button>
+                <div id="csr-warehouse-backdrop" class="csr-warehouse-backdrop" onclick="closeColdStorageWarehousePicker()"></div>
+                <div id="csr-warehouse-picker" class="csr-warehouse-picker" role="dialog" aria-label="냉동창고 선택">
+                  <div class="csr-warehouse-picker-header"><strong>냉동창고 선택</strong><button type="button" onclick="closeColdStorageWarehousePicker()" title="닫기" aria-label="닫기">×</button></div>
+                  <input id="csr-warehouse-search" class="csr-warehouse-search" type="search" placeholder="냉동창고명 검색" autocomplete="off" oninput="coldStorageWarehouseSearchChanged(this.value)" onkeydown="coldStorageWarehouseKeydown(event)">
+                  <div id="csr-warehouse-options" class="csr-warehouse-options" role="listbox"></div>
+                  <button type="button" id="csr-warehouse-manual" class="csr-warehouse-manual" onclick="useManualColdStorageWarehouse()" hidden>직접 입력</button>
+                </div>
+              </div>
             </div>
             <div class="form-group">
               <label>수신 팩스번호</label>
@@ -129,6 +138,6 @@
   <div id="csr-public-toast" class="csr-public-toast" role="status" aria-live="polite"></div>
 
   <script src="cold-storage-standalone.js?v=20260813a"></script>
-  <script src="cold-storage-request.js?v=20260813c"></script>
+  <script src="cold-storage-request.js?v=20260813d"></script>
 </body>
 </html>

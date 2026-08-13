@@ -127,12 +127,116 @@ function coldStorageWarehouseEntries(){
     .sort((a,b)=>a[0].localeCompare(b[0],'ko',{numeric:true}));
 }
 
-function coldStoragePopulateOptions(){
-  const warehouseList = document.getElementById('csr-warehouse-list');
-  if(warehouseList){
-    warehouseList.innerHTML = coldStorageWarehouseEntries()
-      .map(([name])=>`<option value="${htmlEscape(name)}"></option>`).join('');
+function coldStorageWarehouseDisplayName(name,info={}){
+  const shortName = String(name || '').trim();
+  const fullname = String(info?.fullname || '').trim();
+  return fullname && fullname !== shortName ? `${shortName}(${fullname})` : shortName;
+}
+
+function coldStorageWarehousePickerIsMobile(){
+  return window.matchMedia?.('(max-width: 760px)').matches === true;
+}
+
+function renderColdStorageWarehousePicker(query=''){
+  const options = document.getElementById('csr-warehouse-options');
+  const manual = document.getElementById('csr-warehouse-manual');
+  if(!options) return;
+  const keyword = String(query || '').trim().toLocaleLowerCase('ko');
+  const rows = coldStorageWarehouseEntries().filter(([name,info])=>{
+    if(!keyword) return true;
+    return coldStorageWarehouseDisplayName(name,info).toLocaleLowerCase('ko').includes(keyword);
+  });
+  options.innerHTML = rows.length ? rows.map(([name,info])=>`
+    <button type="button" class="csr-warehouse-option" role="option" data-warehouse-name="${htmlEscape(name)}" onclick="selectColdStorageWarehouse(this.dataset.warehouseName)">
+      ${htmlEscape(coldStorageWarehouseDisplayName(name,info))}
+    </button>`).join('') : '<div class="csr-warehouse-empty">검색 결과가 없습니다.</div>';
+  if(manual){
+    manual.hidden = !keyword;
+    manual.textContent = keyword ? `“${String(query).trim()}” 직접 입력` : '직접 입력';
   }
+}
+
+function configureColdStorageWarehousePicker(){
+  const input = document.getElementById('csr-warehouse');
+  if(!input) return;
+  input.readOnly = false;
+  if(coldStorageWarehousePickerIsMobile()) input.setAttribute('inputmode','none');
+  else input.removeAttribute('inputmode');
+}
+
+function openColdStorageWarehousePicker(){
+  const panel = document.getElementById('csr-warehouse-picker');
+  const backdrop = document.getElementById('csr-warehouse-backdrop');
+  const input = document.getElementById('csr-warehouse');
+  if(!panel || !input) return;
+  configureColdStorageWarehousePicker();
+  panel.classList.add('open');
+  backdrop?.classList.add('open');
+  input.setAttribute('aria-expanded','true');
+  if(coldStorageWarehousePickerIsMobile()){
+    const search = document.getElementById('csr-warehouse-search');
+    if(search){
+      search.value = '';
+      renderColdStorageWarehousePicker('');
+      requestAnimationFrame(()=>search.focus());
+    }
+  }else{
+    renderColdStorageWarehousePicker(getTraderInfo(input.value)?.tradeType ? '' : input.value);
+  }
+}
+
+function closeColdStorageWarehousePicker(){
+  document.getElementById('csr-warehouse-picker')?.classList.remove('open');
+  document.getElementById('csr-warehouse-backdrop')?.classList.remove('open');
+  document.getElementById('csr-warehouse')?.setAttribute('aria-expanded','false');
+}
+
+function coldStorageWarehouseQueryChanged(value){
+  coldStorageRequestMetaChanged('warehouse',value);
+  if(!coldStorageWarehousePickerIsMobile()){
+    openColdStorageWarehousePicker();
+    renderColdStorageWarehousePicker(value);
+  }
+}
+
+function coldStorageWarehousePointerdown(event){
+  if(!coldStorageWarehousePickerIsMobile()) return;
+  event.preventDefault();
+  openColdStorageWarehousePicker();
+}
+
+function coldStorageWarehouseSearchChanged(value){
+  renderColdStorageWarehousePicker(value);
+}
+
+function selectColdStorageWarehouse(name){
+  const input = document.getElementById('csr-warehouse');
+  if(input) input.value = name;
+  coldStorageWarehouseChanged(name);
+  closeColdStorageWarehousePicker();
+}
+
+function useManualColdStorageWarehouse(){
+  const search = document.getElementById('csr-warehouse-search');
+  const input = document.getElementById('csr-warehouse');
+  const source = coldStorageWarehousePickerIsMobile() ? search?.value : input?.value;
+  const value = String(source || '').trim();
+  if(!value) return;
+  if(input) input.value = value;
+  coldStorageWarehouseChanged(value);
+  closeColdStorageWarehousePicker();
+}
+
+function coldStorageWarehouseKeydown(event){
+  if(event.key === 'Escape') closeColdStorageWarehousePicker();
+  if(event.key === 'ArrowDown'){
+    event.preventDefault();
+    document.querySelector('#csr-warehouse-options .csr-warehouse-option')?.focus();
+  }
+}
+
+function coldStoragePopulateOptions(){
+  renderColdStorageWarehousePicker();
 }
 
 function syncColdStorageFaxOptions(){
@@ -911,6 +1015,7 @@ async function sendColdStorageRequestFax(){
 async function initColdStorageRequestPage(){
   if(!coldStorageDraft) coldStorageDraft = coldStorageBlankDraft();
   coldStoragePopulateOptions();
+  configureColdStorageWarehousePicker();
   coldStorageSyncInputs();
   renderColdStorageRequestItems();
   renderColdStorageRequestHistory();
@@ -928,6 +1033,14 @@ window.coldStorageRequestMetaChanged = coldStorageRequestMetaChanged;
 window.coldStorageRequesterChanged = coldStorageRequesterChanged;
 window.coldStorageManagerChanged = coldStorageManagerChanged;
 window.coldStorageWarehouseChanged = coldStorageWarehouseChanged;
+window.openColdStorageWarehousePicker = openColdStorageWarehousePicker;
+window.closeColdStorageWarehousePicker = closeColdStorageWarehousePicker;
+window.coldStorageWarehouseQueryChanged = coldStorageWarehouseQueryChanged;
+window.coldStorageWarehousePointerdown = coldStorageWarehousePointerdown;
+window.coldStorageWarehouseSearchChanged = coldStorageWarehouseSearchChanged;
+window.selectColdStorageWarehouse = selectColdStorageWarehouse;
+window.useManualColdStorageWarehouse = useManualColdStorageWarehouse;
+window.coldStorageWarehouseKeydown = coldStorageWarehouseKeydown;
 window.setColdStorageRequestType = setColdStorageRequestType;
 window.coldStorageRequestItemChanged = coldStorageRequestItemChanged;
 window.addColdStorageRequestItem = addColdStorageRequestItem;
@@ -957,5 +1070,12 @@ if(Array.isArray(DATA_CHANGE_MENU_ORDER) && !DATA_CHANGE_MENU_ORDER.includes('�
   const position = DATA_CHANGE_MENU_ORDER.indexOf('재고현황');
   DATA_CHANGE_MENU_ORDER.splice(position >= 0 ? position+1 : DATA_CHANGE_MENU_ORDER.length,0,'냉동창고 요청');
 }
+
+document.addEventListener('pointerdown',event=>{
+  if(coldStorageWarehousePickerIsMobile()) return;
+  const shell = document.querySelector('.csr-warehouse-picker-shell');
+  if(shell && !shell.contains(event.target)) closeColdStorageWarehousePicker();
+});
+window.matchMedia?.('(max-width: 760px)').addEventListener?.('change',configureColdStorageWarehousePicker);
 
 })();

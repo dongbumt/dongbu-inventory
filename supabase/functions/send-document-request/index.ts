@@ -519,7 +519,12 @@ async function getPublicColdStorageData(supabase: any) {
       return clean(info.tradeType, 30) === "보관(냉동창고)";
     }).map(([name, raw]) => {
       const info = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-      return [clean(name, 100), { tradeType: "보관(냉동창고)", fax: clean(info.fax, 30), faxAlt: clean(info.faxAlt, 30) }];
+      return [clean(name, 100), {
+        tradeType: "보관(냉동창고)",
+        fullname: clean(info.fullname, 150),
+        fax: clean(info.fax, 30),
+        faxAlt: clean(info.faxAlt, 30),
+      }];
     }).filter(([name]) => Boolean(name))),
   };
 }
