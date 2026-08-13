@@ -550,6 +550,7 @@
       <option value="가치">
     </datalist>
     <datalist id="sales-trader-list"></datalist>
+    <datalist id="purchase-trader-list"></datalist>
   </div>
 
   <!-- 입고 일괄 입력 그리드 -->
@@ -580,7 +581,7 @@
         <div class="form-group" style="max-width:260px;">
           <label>거래처 일괄 채우기</label>
           <div style="display:flex;gap:4px;">
-            <input id="bulk-in-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
+            <input id="bulk-in-trader-common" list="purchase-trader-list" placeholder="거래처명" style="flex:1;">
             <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
           </div>
         </div>
@@ -6020,7 +6021,10 @@ function updateTransactionForm(){
   const t = document.getElementById('t-type').value;
   const isStockPick = (t==='출고' || t==='재고이동');
   const traderInput = document.getElementById('t-trader');
-  if(traderInput) traderInput.setAttribute('list', t === '출고' ? 'sales-trader-list' : 'trader-list');
+  const traderListId = t === '출고'
+    ? 'sales-trader-list'
+    : (t === '입고' ? 'purchase-trader-list' : 'trader-list');
+  if(traderInput) traderInput.setAttribute('list', traderListId);
   document.querySelector('.t-proddate').style.display = isStockPick ? 'flex' : 'none';
 
   const inpProd  = document.getElementById('t-product-input');
@@ -6984,6 +6988,14 @@ function updateTraderList(){
     });
     salesDl.innerHTML = salesNames.map(name => `<option value="${htmlEscape(name)}">`).join('');
   }
+  const purchaseDl = document.getElementById('purchase-trader-list');
+  if(purchaseDl){
+    const purchaseNames = names.filter(name => {
+      const tradeType = String(traderInfoMap?.[name]?.tradeType || '').trim();
+      return tradeType === '매입' || tradeType === '매입/매출';
+    });
+    purchaseDl.innerHTML = purchaseNames.map(name => `<option value="${htmlEscape(name)}">`).join('');
+  }
 }
 
 function updateTxnPrice(id, newPriceStr){
@@ -7361,7 +7373,7 @@ function addBulkInboundRow(){
     <td style="position:relative;"><input class="bulk-in-product" oninput="onBulkProductSearch(this,true)" onfocus="onBulkProductSearch(this,false)" onblur="hideBulkProductResults(this)" placeholder="품목 검색..." autocomplete="off" style="width:100%;font-size:12px;padding:5px 6px;"><input type="hidden" class="bulk-in-product-id"><div class="bulk-in-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div></td>
     <td class="bulk-in-origin" style="font-size:11px;color:#666;text-align:center;">-</td>
     <td class="bulk-in-storage" style="font-size:11px;color:#666;text-align:center;">-</td>
-    <td><input class="bulk-in-trader" list="trader-list" placeholder="거래처" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><input class="bulk-in-trader" list="purchase-trader-list" placeholder="거래처" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td><input class="bulk-in-lot" placeholder="LOT번호" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-price" type="number" step="1" placeholder="자동" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
