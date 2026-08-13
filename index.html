@@ -549,6 +549,7 @@
       <option value="아이푸드트레이딩"><option value="위더스아이앤씨"><option value="동부축산유통">
       <option value="가치">
     </datalist>
+    <datalist id="sales-trader-list"></datalist>
   </div>
 
   <!-- 입고 일괄 입력 그리드 -->
@@ -635,7 +636,7 @@
         <div class="form-group" style="max-width:260px;">
           <label>거래처 일괄 채우기</label>
           <div style="display:flex;gap:4px;">
-            <input id="bulk-out-trader-common" list="trader-list" placeholder="거래처명" style="flex:1;">
+            <input id="bulk-out-trader-common" list="sales-trader-list" placeholder="거래처명" style="flex:1;">
             <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
           </div>
         </div>
@@ -6018,6 +6019,8 @@ function onTxnLocationChange(){
 function updateTransactionForm(){
   const t = document.getElementById('t-type').value;
   const isStockPick = (t==='출고' || t==='재고이동');
+  const traderInput = document.getElementById('t-trader');
+  if(traderInput) traderInput.setAttribute('list', t === '출고' ? 'sales-trader-list' : 'trader-list');
   document.querySelector('.t-proddate').style.display = isStockPick ? 'flex' : 'none';
 
   const inpProd  = document.getElementById('t-product-input');
@@ -6969,11 +6972,18 @@ function updateOriginList(){
 
 function updateTraderList(){
   const dl = document.getElementById('trader-list');
-  if(!dl) return;
   const names = Object.keys(traderInfoMap || {})
     .filter(Boolean)
     .sort((a,b)=>a.localeCompare(b,'ko'));
-  dl.innerHTML = names.map(name => `<option value="${htmlEscape(name)}">`).join('');
+  if(dl) dl.innerHTML = names.map(name => `<option value="${htmlEscape(name)}">`).join('');
+  const salesDl = document.getElementById('sales-trader-list');
+  if(salesDl){
+    const salesNames = names.filter(name => {
+      const tradeType = String(traderInfoMap?.[name]?.tradeType || '').trim();
+      return tradeType === '매출' || tradeType === '매입/매출';
+    });
+    salesDl.innerHTML = salesNames.map(name => `<option value="${htmlEscape(name)}">`).join('');
+  }
 }
 
 function updateTxnPrice(id, newPriceStr){
@@ -7748,7 +7758,7 @@ function addBulkOutboundRow(){
     <td class="bulk-out-origin-cell" style="font-size:11px;color:#666;text-align:center;">-</td>
     <td class="bulk-out-lot-cell" style="font-size:11px;color:#666;text-align:center;font-family:monospace;">-</td>
     <td class="bulk-out-stock-cell" style="font-size:11px;color:#666;text-align:right;">-</td>
-    <td><input class="bulk-out-trader" list="trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><input class="bulk-out-trader" list="sales-trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td><select class="bulk-out-sw-vendor" onchange="refreshBulkOutboundSamsungProducts(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;">${samsungVendorOptionsHtml('', '-- 선택 안 함 --')}</select></td>
     <td><select class="bulk-out-sw-product" style="width:100%;font-size:12px;padding:5px 6px;"><option value="">-- 선택 안 함 --</option></select></td>
     <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
