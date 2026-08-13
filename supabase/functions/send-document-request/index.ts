@@ -103,10 +103,10 @@ function sanitizeColdStorageRecord(value: unknown) {
       id: clean(row.id, 100) || `${id}_item_${index + 1}`,
       destination: clean(row.destination, 100),
       product: clean(row.product, 100),
-      spec: clean(row.spec, 100),
       unit: clean(row.unit, 20) || "BOX",
       quantity: safeNumber(row.quantity),
       lot: clean(row.lot, 100),
+      note: clean(row.note || row.spec, 200),
     };
   }).filter((item) => item.destination && item.product && item.quantity > 0);
   if (!items.length) throw new Error("요청 품목을 한 개 이상 입력해주세요.");

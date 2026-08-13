@@ -209,10 +209,10 @@
   .csr-items-table td:nth-child(1)::before { content: 'No.'; }
   .csr-items-table td:nth-child(2)::before { content: '출고·이체처'; }
   .csr-items-table td:nth-child(3)::before { content: '품명'; }
-  .csr-items-table td:nth-child(4)::before { content: '규격'; }
-  .csr-items-table td:nth-child(5)::before { content: '단위'; }
-  .csr-items-table td:nth-child(6)::before { content: '수량'; }
-  .csr-items-table td:nth-child(7)::before { content: 'B/L·LOT'; }
+  .csr-items-table td:nth-child(4)::before { content: '단위'; }
+  .csr-items-table td:nth-child(5)::before { content: '수량'; }
+  .csr-items-table td:nth-child(6)::before { content: 'B/L·LOT'; }
+  .csr-items-table td:nth-child(7)::before { content: '비고'; }
   .csr-items-table td:nth-child(8)::before { content: '관리'; }
   .csr-history-table td:nth-child(1)::before { content: '요청일'; }
   .csr-history-table td:nth-child(2)::before { content: '구분'; }

@@ -46,7 +46,7 @@ function coldStorageToday(){
 }
 
 function coldStorageBlankItem(){
-  return {id:coldStorageId('csri'), destination:'', product:'', spec:'', unit:'BOX', quantity:'', lot:''};
+  return {id:coldStorageId('csri'), destination:'', product:'', unit:'BOX', quantity:'', lot:'', note:''};
 }
 
 function coldStorageBlankDraft(){
@@ -61,7 +61,12 @@ function coldStorageBlankDraft(){
 }
 
 function normalizeColdStorageItem(item={}){
-  return {...coldStorageBlankItem(), ...item, id:item.id || coldStorageId('csri')};
+  return {
+    ...coldStorageBlankItem(),
+    ...item,
+    id:item.id || coldStorageId('csri'),
+    note:String(item.note || item.spec || '')
+  };
 }
 
 function normalizeColdStorageRequest(record={}){
@@ -90,7 +95,7 @@ coldStorageRequests = coldStorageRequests.map(normalizeColdStorageRequest);
 
 function coldStorageOutputItems(record=coldStorageDraft){
   return (record?.items || []).filter(item =>
-    [item.destination,item.product,item.spec,item.unit,item.quantity,item.lot]
+    [item.destination,item.product,item.unit,item.quantity,item.lot,item.note]
       .some(value=>String(value ?? '').trim())
   );
 }
@@ -322,10 +327,10 @@ function renderColdStorageRequestItems(){
     <td class="csr-item-number">${index+1}</td>
     <td>${coldStorageItemInput(item,'destination','placeholder="출고·이체처" autocomplete="off"')}</td>
     <td>${coldStorageItemInput(item,'product','placeholder="품명" autocomplete="off"')}</td>
-    <td>${coldStorageItemInput(item,'spec','placeholder="규격"')}</td>
     <td>${coldStorageItemInput(item,'unit','list="csr-unit-list" placeholder="BOX"')}</td>
     <td>${coldStorageItemInput(item,'quantity','type="number" min="0" step="0.01" class="csr-quantity-input" placeholder="0"')}</td>
     <td>${coldStorageItemInput(item,'lot','placeholder="B/L 또는 LOT"')}</td>
+    <td>${coldStorageItemInput(item,'note','placeholder="비고" autocomplete="off"')}</td>
     <td style="text-align:center;"><button type="button" class="btn btn-danger btn-sm" onclick="removeColdStorageRequestItem('${item.id}')" title="품목 삭제">×</button></td>
   </tr>`).join('');
 }
@@ -561,7 +566,7 @@ function renderColdStorageRequestHistory(){
       if(to && String(record.requestDate || '') > to) return false;
       if(query){
         const requester = coldStorageRequester(record.requesterId);
-        const haystack = [requester.name,requester.registrationNo,record.warehouse,record.requestType,record.fax,...(record.items || []).flatMap(item=>[item.destination,item.product,item.spec,item.lot])]
+        const haystack = [requester.name,requester.registrationNo,record.warehouse,record.requestType,record.fax,...(record.items || []).flatMap(item=>[item.destination,item.product,item.lot,item.note,item.spec])]
           .join(' ').toLocaleLowerCase('ko-KR');
         if(!haystack.includes(query)) return false;
       }
@@ -838,8 +843,8 @@ async function renderColdStorageRequestCanvas(target,record=coldStorageDraft){
 
   const tableX = 80;
   const tableY = 310;
-  const widths = [60,200,300,170,100,110,140];
-  const headers = ['No.',normalized.requestType === '이체' ? '이체처' : '출고처','품명','규격','단위','수량','B/L·LOT'];
+  const widths = [60,190,270,90,110,150,210];
+  const headers = ['No.',normalized.requestType === '이체' ? '이체처' : '출고처','품명','단위','수량','B/L·LOT','비고'];
   let x = tableX;
   headers.forEach((header,index)=>{
     csrDrawCell(ctx,{x,y:tableY,w:widths[index],h:60,text:header,fill:'#ededed',weight:700,size:23});
@@ -849,10 +854,10 @@ async function renderColdStorageRequestCanvas(target,record=coldStorageDraft){
   const rowHeight = items.length > 8 ? 70 : 78;
   for(let rowIndex=0;rowIndex<visibleRows;rowIndex++){
     const item = items[rowIndex] || {};
-    const values = [rowIndex+1,item.destination||'',item.product||'',item.spec||'',item.unit||'',coldStorageFormatQuantity(item.quantity),item.lot||''];
+    const values = [rowIndex+1,item.destination||'',item.product||'',item.unit||'',coldStorageFormatQuantity(item.quantity),item.lot||'',item.note||item.spec||''];
     x = tableX;
     values.forEach((value,index)=>{
-      csrDrawCell(ctx,{x,y:tableY+60+rowIndex*rowHeight,w:widths[index],h:rowHeight,text:value,size:index===2?23:21,weight:index===2?600:400,align:index===5?'right':'center',maxLines:2,padding:9});
+      csrDrawCell(ctx,{x,y:tableY+60+rowIndex*rowHeight,w:widths[index],h:rowHeight,text:value,size:index===2?23:21,weight:index===2?600:400,align:index===4?'right':'center',maxLines:2,padding:9});
       x += widths[index];
     });
   }
