@@ -4308,6 +4308,19 @@ const DATA_CHANGE_MENU_ORDER = [
 let dataChangeAppDataSigs = null;
 let dataChangeAppDataMeta = null;
 let dataChangeLogSyncTimer = null;
+let dataChangePendingAppDetails = new Map();
+
+function dataChangeDateLabel(value){
+  const text = String(value || '').trim().replace(/\//g, '-');
+  const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(!match) return text;
+  return `${Number(match[1])}년 ${Number(match[2])}월 ${Number(match[3])}일`;
+}
+
+function queueAppDataChangeDetail(key, detail={}){
+  if(!key) return;
+  dataChangePendingAppDetails.set(key, {...detail});
+}
 
 function dataChangeId(){
   return `cl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -4550,6 +4563,7 @@ function recordAppDataChanges(){
   if(!dataChangeAppDataSigs){
     dataChangeAppDataSigs = next;
     dataChangeAppDataMeta = nextSnap;
+    dataChangePendingAppDetails.clear();
     return changedKeys;
   }
   Object.keys(next).forEach(key => {
@@ -4560,15 +4574,26 @@ function recordAppDataChanges(){
     const action = prevCount !== undefined && nextCount !== undefined
       ? (nextCount < prevCount ? '삭제' : (nextCount === prevCount ? '수정' : '저장'))
       : '저장';
-    recordDataChange({
-      menu: DATA_CHANGE_MENU_BY_APP_KEY[key] || APP_DATA_LABELS[key] || '보조데이터',
-      action,
-      target: APP_DATA_LABELS[key] || key,
-      summary: `${APP_DATA_LABELS[key] || key} ${action === '수정' ? '수정사항' : (action === '삭제' ? '삭제사항' : '변경사항')} 저장`
-    }, {sync:false});
+    const detail = dataChangePendingAppDetails.get(key);
+    if(detail?.log !== false){
+      const logAction = detail?.action || action;
+      const label = APP_DATA_LABELS[key] || key;
+      const fallbackSummary = `${label} ${logAction === '수정' ? '수정사항' : (logAction === '삭제' ? '삭제사항' : '변경사항')} 저장`;
+      const datedFallback = key.startsWith('subMaterial')
+        ? `${fallbackSummary} / ${dataChangeDateLabel(localDateString())}`
+        : fallbackSummary;
+      recordDataChange({
+        menu: detail?.menu || DATA_CHANGE_MENU_BY_APP_KEY[key] || label || '보조데이터',
+        action: logAction,
+        target: detail?.target || label,
+        summary: detail?.summary || datedFallback,
+        refId: detail?.refId || ''
+      }, {sync:false});
+    }
   });
   dataChangeAppDataSigs = next;
   dataChangeAppDataMeta = nextSnap;
+  dataChangePendingAppDetails.clear();
   return changedKeys;
 }
 
@@ -4821,25 +4846,29 @@ async function supabaseSaveSubMaterialUsageRows(rows, deletedIds){
 function saveSubMaterialUsageRows(rows, deletedIds, options={}){
   const upserts = asArray(rows);
   const deletes = asArray(deletedIds).map(id=>String(id)).filter(Boolean);
+  const deletedRows = asArray(options.deletedRows);
   safeLocalStorageSet('dbmt_submaterial_usages', JSON.stringify(subMaterialUsages), true);
   if(options.log !== false){
     if(upserts.length){
       const sample = upserts[0];
       const action = options.action || '저장';
+      const dateLabel = dataChangeDateLabel(sample.workDate);
       recordDataChange({
         menu:'부자재 관리',
         action:upserts.length > 1 ? `일괄 ${action}` : action,
-        target:sample.productionSummary || sample.itemName || '',
-        summary:`부자재 사용 ${upserts.length}건 ${action}: ${sample.itemName || ''} ${sample.lot || ''}`,
+        target:[dateLabel,sample.itemName].filter(Boolean).join(' / '),
+        summary:`부자재 사용 ${upserts.length}건 ${action}: ${[dateLabel,sample.itemName,sample.lot].filter(Boolean).join(' / ')}`,
         refId:sample.productionId || sample.id || ''
       });
     }
     if(deletes.length){
+      const sample = deletedRows[0] || {};
+      const dateLabel = dataChangeDateLabel(sample.workDate);
       recordDataChange({
         menu:'부자재 관리',
         action:deletes.length > 1 ? '일괄 삭제' : '삭제',
-        target:options.target || '',
-        summary:`부자재 사용 ${deletes.length}건 삭제`,
+        target:[dateLabel,sample.itemName || options.target].filter(Boolean).join(' / '),
+        summary:`부자재 사용 ${deletes.length}건 삭제${dateLabel || sample.itemName || sample.lot ? ': ' + [dateLabel,sample.itemName,sample.lot].filter(Boolean).join(' / ') : ''}`,
         refId:deletes[0] || ''
       });
     }
@@ -5741,7 +5770,15 @@ function addScheduleEvent(date){
   const text = textEl?.value.trim() || '';
   if(!eventDate){ toast('일정 날짜를 선택하세요.'); return; }
   if(!text){ toast('일정 내용을 입력하세요.'); return; }
-  scheduleEvents.push({ id:Date.now()+Math.random(), date:eventDate, text });
+  const event = { id:Date.now()+Math.random(), date:eventDate, text };
+  scheduleEvents.push(event);
+  const dateLabel = dataChangeDateLabel(eventDate);
+  queueAppDataChangeDetail('scheduleEvents', {
+    action:'저장',
+    target:dateLabel,
+    summary:`일정 저장: ${dateLabel} / ${text}`,
+    refId:event.id
+  });
   saveScheduleEvents();
   if(textEl) textEl.value = '';
   const monthEl = document.getElementById('sch-month');
@@ -5751,6 +5788,15 @@ function addScheduleEvent(date){
 
 function deleteScheduleEvent(id){
   const targetId = String(id ?? '');
+  const event = scheduleEvents.find(e => String(e.id ?? '') === targetId);
+  if(!event) return;
+  const dateLabel = dataChangeDateLabel(event.date);
+  queueAppDataChangeDetail('scheduleEvents', {
+    action:'삭제',
+    target:dateLabel,
+    summary:`일정 삭제: ${dateLabel}${event.text ? ' / ' + event.text : ''}`,
+    refId:targetId
+  });
   scheduleEvents = scheduleEvents.filter(e => String(e.id ?? '') !== targetId);
   saveScheduleEvents();
   renderScheduleCalendar();
@@ -8711,7 +8757,8 @@ function deleteProdEntry(id){
     const deletedUsageIds = linkedSubMaterialUsages.map(u=>u.id);
     subMaterialUsages = subMaterialUsages.filter(u=>String(u.productionId||'')!==String(id));
     saveSubMaterialUsageRows([], deletedUsageIds, {
-      target:subMaterialProductionSummary(deletedProdEntry)
+      target:subMaterialProductionSummary(deletedProdEntry),
+      deletedRows:linkedSubMaterialUsages
     });
   }
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
@@ -9528,6 +9575,9 @@ function addSubMaterialItem(){
   if(editId){
     const item = subMaterialItems.find(i => i.id === editId);
     if(!item){ cancelSubMaterialItemEdit(); return; }
+    const previousName = item.name || '';
+    const linkedLotsChanged = subMaterialLots.some(lot => lot.itemId === item.id);
+    const linkedCountsChanged = subMaterialCounts.some(count => count.itemId === item.id);
     item.name = name;
     item.spec = spec;
     item.unit = unit;
@@ -9549,6 +9599,15 @@ function addSubMaterialItem(){
         if(!count.unit && item.unit) count.unit = item.unit;
       }
     });
+    const dateLabel = dataChangeDateLabel(localDateString());
+    queueAppDataChangeDetail('subMaterialItems', {
+      action:'수정',
+      target:`${dateLabel} / ${name}`,
+      summary:`부자재 품목 수정: ${dateLabel} / ${previousName && previousName !== name ? previousName + ' → ' + name : name}`,
+      refId:item.id
+    });
+    if(linkedLotsChanged) queueAppDataChangeDetail('subMaterialLots', {log:false});
+    if(linkedCountsChanged) queueAppDataChangeDetail('subMaterialCounts', {log:false});
     saveSubMaterials();
     cancelSubMaterialItemEdit(false);
     renderSubMaterials();
@@ -9557,7 +9616,15 @@ function addSubMaterialItem(){
   }
 
   const code = nextSubMaterialCode();
-  subMaterialItems.push({ id:subMaterialId(), code, name, spec, unit, unitPrice, note });
+  const item = { id:subMaterialId(), code, name, spec, unit, unitPrice, note };
+  subMaterialItems.push(item);
+  const dateLabel = dataChangeDateLabel(localDateString());
+  queueAppDataChangeDetail('subMaterialItems', {
+    action:'저장',
+    target:`${dateLabel} / ${name}`,
+    summary:`부자재 품목 저장: ${dateLabel} / ${name}`,
+    refId:item.id
+  });
   saveSubMaterials();
   clearSubMaterialItemForm();
   renderSubMaterials();
@@ -9599,6 +9666,13 @@ function deleteSubMaterialItem(id){
   const item = subMaterialItems.find(i => i.id === id);
   if(!item) return;
   if(!confirm(`"${item.name}" 품목을 삭제할까요? 기존 Lot 내역은 유지됩니다.`)) return;
+  const dateLabel = dataChangeDateLabel(localDateString());
+  queueAppDataChangeDetail('subMaterialItems', {
+    action:'삭제',
+    target:`${dateLabel} / ${item.name || ''}`,
+    summary:`부자재 품목 삭제: ${dateLabel} / ${item.name || item.code || id}`,
+    refId:item.id || id
+  });
   subMaterialItems = subMaterialItems.filter(i => i.id !== id);
   if(document.getElementById('sm-item-edit-id')?.value === id) clearSubMaterialItemForm();
   saveSubMaterials();
@@ -9677,10 +9751,18 @@ function addSubMaterialInbound(){
   if(!item){ toast('부자재 품목을 선택하세요.'); return; }
   if(qty <= 0){ toast('입고수량을 입력하세요.'); return; }
   const lot = makeSubMaterialLot(date, item.id);
-  subMaterialLots.push({
+  const inbound = {
     id:subMaterialId(), date, lot,
     itemId:item.id, itemCode:item.code || '', itemName:item.name, itemSpec:item.spec || '',
     trader, qty, unit, certName, note, createdAt:new Date().toISOString()
+  };
+  subMaterialLots.push(inbound);
+  const dateLabel = dataChangeDateLabel(date);
+  queueAppDataChangeDetail('subMaterialLots', {
+    action:'저장',
+    target:`${dateLabel} / ${item.name}`,
+    summary:`부자재 입고 저장: ${dateLabel} / ${item.name}${lot ? ' / ' + lot : ''}`,
+    refId:inbound.id
   });
   saveSubMaterials();
   resetSubMaterialInbound();
@@ -9698,12 +9780,21 @@ function resetSubMaterialInbound(){
 }
 
 function deleteSubMaterialLot(id){
+  const lot = subMaterialLots.find(l => l.id === id);
+  if(!lot) return;
   const linkedUsages = subMaterialUsages.filter(u => String(u.lotId || '') === String(id));
   if(linkedUsages.length){
     toast(`생산에 사용된 LOT입니다. 사용이력 ${linkedUsages.length}건을 먼저 확인해주세요.`);
     return;
   }
   if(!confirm('선택한 부자재 Lot을 삭제할까요?')) return;
+  const dateLabel = dataChangeDateLabel(lot.date);
+  queueAppDataChangeDetail('subMaterialLots', {
+    action:'삭제',
+    target:`${dateLabel} / ${lot.itemName || ''}`,
+    summary:`부자재 입고 삭제: ${dateLabel} / ${lot.itemName || ''}${lot.lot ? ' / ' + lot.lot : ''}`,
+    refId:lot.id || id
+  });
   subMaterialLots = subMaterialLots.filter(l => l.id !== id);
   saveSubMaterials();
   renderSubMaterials();
@@ -9722,10 +9813,18 @@ function addSubMaterialCount(){
   if(!date){ toast('실사일자를 선택하세요.'); return; }
   if(!item){ toast('부자재 품목을 선택하세요.'); return; }
   if(rawQty === '' || qty < 0){ toast('실제 재고량을 입력하세요.'); return; }
-  subMaterialCounts.push({
+  const count = {
     id:subMaterialId(), date,
     itemId:item.id, itemCode:item.code || '', itemName:item.name, itemSpec:item.spec || '',
     qty, unit, manager, note, createdAt:new Date().toISOString()
+  };
+  subMaterialCounts.push(count);
+  const dateLabel = dataChangeDateLabel(date);
+  queueAppDataChangeDetail('subMaterialCounts', {
+    action:'저장',
+    target:`${dateLabel} / ${item.name}`,
+    summary:`부자재 실사 저장: ${dateLabel} / ${item.name}`,
+    refId:count.id
   });
   saveSubMaterials();
   resetSubMaterialCount();
@@ -9742,7 +9841,16 @@ function resetSubMaterialCount(){
 }
 
 function deleteSubMaterialCount(id){
+  const count = subMaterialCounts.find(c => c.id === id);
+  if(!count) return;
   if(!confirm('최근 실사 기록을 삭제할까요?')) return;
+  const dateLabel = dataChangeDateLabel(count.date);
+  queueAppDataChangeDetail('subMaterialCounts', {
+    action:'삭제',
+    target:`${dateLabel} / ${count.itemName || ''}`,
+    summary:`부자재 실사 삭제: ${dateLabel} / ${count.itemName || count.itemCode || id}`,
+    refId:count.id || id
+  });
   subMaterialCounts = subMaterialCounts.filter(c => c.id !== id);
   saveSubMaterials();
   renderSubMaterials();
@@ -9978,12 +10086,14 @@ function saveSubMaterialUsageModal(){
   });
   const keepIds = new Set(rows.map(r=>String(r.id)));
   const deletedIds = existing.filter(u=>!keepIds.has(String(u.id))).map(u=>u.id);
+  const deletedRows = existing.filter(u=>!keepIds.has(String(u.id)));
   subMaterialUsages = subMaterialUsages
     .filter(u => String(u.productionId || '') !== String(productionId))
     .concat(rows);
   saveSubMaterialUsageRows(rows, deletedIds, {
     action:existing.length ? '수정' : '저장',
-    target:subMaterialProductionSummary(entry)
+    target:subMaterialProductionSummary(entry),
+    deletedRows
   });
   closeSubMaterialUsageModal();
   renderProduction();
@@ -10008,7 +10118,7 @@ function deleteSubMaterialUsage(id){
   const row = subMaterialUsages.find(u => String(u.id) === String(id));
   if(!row || !confirm(`${row.itemName || '부자재'} ${row.lot || ''} 사용 기록을 삭제할까요?\n삭제하면 해당 수량만큼 재고가 복원됩니다.`)) return;
   subMaterialUsages = subMaterialUsages.filter(u => String(u.id) !== String(id));
-  saveSubMaterialUsageRows([], [id], {target:row.productionSummary || row.itemName || ''});
+  saveSubMaterialUsageRows([], [id], {target:row.productionSummary || row.itemName || '', deletedRows:[row]});
   renderSubMaterials();
   renderProduction();
   toast('부자재 사용 기록을 삭제했습니다.');
@@ -12261,17 +12371,25 @@ function saveTraderInfo(){
   const biz          = document.getElementById('tr-biz').value.trim();
   if(!name){ toast('거래처명을 입력하세요.'); return; }
   if(email && !emailEl.checkValidity()){ toast('이메일 주소 형식을 확인해주세요.'); emailEl.focus(); return; }
-  const previousInfo = traderInfoMap[_traderEditKey || name] || {};
+  const editingKey = _traderEditKey;
+  const isEditing = !!editingKey;
+  const previousInfo = traderInfoMap[editingKey || name] || {};
   // 이름 변경 시 기존 키 삭제
-  if(_traderEditKey && _traderEditKey !== name) delete traderInfoMap[_traderEditKey];
+  if(editingKey && editingKey !== name) delete traderInfoMap[editingKey];
   traderInfoMap[name] = {
     ...previousInfo,
     tradeType, category, fullname, regno, ceo, manager, managerPhone, phone, email, fax, faxAlt, addr, biz
   };
+  queueAppDataChangeDetail('traderInfoMap', {
+    action:isEditing ? '수정' : '저장',
+    target:name,
+    summary:`거래처 정보 ${isEditing ? '수정' : '저장'}: ${editingKey && editingKey !== name ? editingKey + ' → ' + name : name}`,
+    refId:name
+  });
   saveTraderInfoStore();
   clearTraderForm();
   renderTraders();
-  toast(_traderEditKey ? '거래처 정보가 수정됐습니다.' : '거래처가 추가됐습니다.');
+  toast(isEditing ? '거래처 정보가 수정됐습니다.' : '거래처가 추가됐습니다.');
   _traderEditKey = null;
 }
 
@@ -12299,6 +12417,12 @@ function editTrader(name){
 
 function deleteTrader(name){
   if(!confirm(`"${name}" 거래처 정보를 삭제할까요?`)) return;
+  queueAppDataChangeDetail('traderInfoMap', {
+    action:'삭제',
+    target:name,
+    summary:`거래처 정보 삭제: ${name}`,
+    refId:name
+  });
   delete traderInfoMap[name];
   saveTraderInfoStore();
   renderTraders();
@@ -13092,11 +13216,13 @@ const DEFAULT_MONTHLY_SALARY = 3500000; // 기본 월급 (3,500,000원)
 function saveEmployee(){
   const name  = document.getElementById('emp-name').value.trim();
   if(!name){ toast('이름을 입력하세요.'); return; }
+  const editingId = _empEditId;
+  const isEditing = !!editingId;
   const salaryVal = parseFloat(document.getElementById('emp-salary').value);
   // 기존 객체에서 resignDate, settlement 보존
-  const prev = _empEditId ? employees.find(e=>e.id===_empEditId) : null;
+  const prev = editingId ? employees.find(e=>e.id===editingId) : null;
   const obj = {
-    id:       _empEditId || hrId(),
+    id:       editingId || hrId(),
     name,
     position: document.getElementById('emp-pos').value.trim(),
     hireDate: document.getElementById('emp-hire').value,
@@ -13111,14 +13237,20 @@ function saveEmployee(){
     resignDate:  prev?.resignDate || '',
     settlement:  prev?.settlement || null,
   };
-  if(_empEditId){
-    const idx = employees.findIndex(e=>e.id===_empEditId);
+  if(editingId){
+    const idx = employees.findIndex(e=>e.id===editingId);
     if(idx>=0) employees[idx]=obj;
   } else {
     employees.push(obj);
   }
+  queueAppDataChangeDetail('employees', {
+    action:isEditing ? '수정' : '저장',
+    target:name,
+    summary:`직원정보 ${isEditing ? '수정' : '저장'}: ${prev?.name && prev.name !== name ? prev.name + ' → ' + name : name}`,
+    refId:obj.id
+  });
   saveHR(); cancelEmpEdit(); renderEmployees(); renderRetiredEmployees(); renderSalarySummary();
-  toast(_empEditId ? '직원 정보가 수정됐습니다.' : '직원이 등록됐습니다.');
+  toast(isEditing ? '직원 정보가 수정됐습니다.' : '직원이 등록됐습니다.');
   _empEditId = null;
 }
 function editEmployee(id){
@@ -13148,6 +13280,12 @@ function deleteEmployee(id){
     ? `퇴사자 "${e.name}" 의 모든 기록을 영구 삭제할까요?\n(정산내역, 연차 기록 모두 삭제됩니다)`
     : `"${e?e.name:id}" 직원을 삭제할까요?\n(해당 연차 기록도 함께 삭제됩니다)`;
   if(!confirm(msg)) return;
+  queueAppDataChangeDetail('employees', {
+    action:'삭제',
+    target:e?.name || String(id),
+    summary:`직원정보 삭제: ${e?.name || id}`,
+    refId:id
+  });
   employees  = employees.filter(x=>x.id!==id);
   leaveRecs  = leaveRecs.filter(x=>x.empId!==id);
   weekendWorkRecs = weekendWorkRecs.filter(x=>x.empId!==id);
@@ -13400,6 +13538,12 @@ function saveResignation(){
     savedAt: new Date().toISOString(),
   };
 
+  queueAppDataChangeDetail('employees', {
+    action:'수정',
+    target:e.name || String(e.id),
+    summary:`직원정보 수정: ${e.name || e.id} / 퇴사일 ${dataChangeDateLabel(resign)}`,
+    refId:e.id
+  });
   saveHR();
   renderEmployees();
   renderRetiredEmployees();
@@ -13419,6 +13563,12 @@ function reinstateEmployee(id){
   }
   e.resignDate = '';
   e.settlement = null;
+  queueAppDataChangeDetail('employees', {
+    action:'수정',
+    target:e.name || String(e.id),
+    summary:`직원정보 수정: ${e.name || e.id} / 복직 처리`,
+    refId:e.id
+  });
   saveHR();
   renderEmployees();
   renderRetiredEmployees();

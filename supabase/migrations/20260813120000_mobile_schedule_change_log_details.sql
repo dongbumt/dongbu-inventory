@@ -1,4 +1,4 @@
--- Add or edit one schedule event without replacing the complete event array.
+-- Record mobile schedule saves and edits in the ERP-visible change log.
 
 create or replace function public.dbmt_mobile_admin_save_schedule(
   p_token text, p_id text, p_date date, p_text text
