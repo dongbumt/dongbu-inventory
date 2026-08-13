@@ -133,31 +133,6 @@ function coldStoragePopulateOptions(){
     warehouseList.innerHTML = coldStorageWarehouseEntries()
       .map(([name])=>`<option value="${htmlEscape(name)}"></option>`).join('');
   }
-
-  const destinationList = document.getElementById('csr-destination-list');
-  if(destinationList && typeof traderInfoMap === 'object' && traderInfoMap){
-    destinationList.innerHTML = Object.keys(traderInfoMap).sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}))
-      .map(name=>`<option value="${htmlEscape(name)}"></option>`).join('');
-  }
-
-  const productNames = new Set();
-  if(Array.isArray(window.labelProducts)){
-    window.labelProducts.forEach(item=>{ if(item?.name) productNames.add(String(item.name).trim()); });
-  }else if(typeof labelProducts !== 'undefined' && Array.isArray(labelProducts)){
-    labelProducts.forEach(item=>{ if(item?.name) productNames.add(String(item.name).trim()); });
-  }
-  try{
-    if(typeof getStockMap === 'function'){
-      Object.values(getStockMap()).forEach(item=>{
-        if(Number(item?.stock || 0) > 0.01 && item?.product) productNames.add(String(item.product).trim());
-      });
-    }
-  }catch(e){ console.warn('냉동창고 요청 품목 후보 생성 실패:',e); }
-  const productList = document.getElementById('csr-product-list');
-  if(productList){
-    productList.innerHTML = [...productNames].filter(Boolean).sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}))
-      .map(name=>`<option value="${htmlEscape(name)}"></option>`).join('');
-  }
 }
 
 function syncColdStorageFaxOptions(){
@@ -241,8 +216,8 @@ function renderColdStorageRequestItems(){
   if(!body || !coldStorageDraft) return;
   body.innerHTML = coldStorageDraft.items.map((item,index)=>`<tr>
     <td class="csr-item-number">${index+1}</td>
-    <td>${coldStorageItemInput(item,'destination','list="csr-destination-list" placeholder="출고·이체처"')}</td>
-    <td>${coldStorageItemInput(item,'product','list="csr-product-list" placeholder="품명"')}</td>
+    <td>${coldStorageItemInput(item,'destination','placeholder="출고·이체처" autocomplete="off"')}</td>
+    <td>${coldStorageItemInput(item,'product','placeholder="품명" autocomplete="off"')}</td>
     <td>${coldStorageItemInput(item,'spec','placeholder="규격"')}</td>
     <td>${coldStorageItemInput(item,'unit','list="csr-unit-list" placeholder="BOX"')}</td>
     <td>${coldStorageItemInput(item,'quantity','type="number" min="0" step="0.01" class="csr-quantity-input" placeholder="0"')}</td>
@@ -303,7 +278,6 @@ async function refreshColdStorageRequestsFromSupabase(){
       const before = JSON.stringify(coldStorageRequests);
       coldStorageRequests = remote.map(normalizeColdStorageRequest);
       window.traderInfoMap = data?.traderInfoMap && typeof data.traderInfoMap === 'object' ? data.traderInfoMap : {};
-      window.labelProducts = Array.isArray(data?.labelProducts) ? data.labelProducts : [];
       safeLocalStorageSet(COLD_STORAGE_REQUEST_STORAGE_KEY,JSON.stringify(coldStorageRequests),true);
       coldStoragePopulateOptions();
       return before !== JSON.stringify(coldStorageRequests);

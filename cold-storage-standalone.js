@@ -5,7 +5,6 @@ window.DBMT_COLD_STORAGE_STANDALONE = true;
 const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
 var traderInfoMap = {};
-var labelProducts = [];
 var APP_DATA_REGISTRY = {};
 var APP_DATA_LABELS = {};
 var DATA_CHANGE_MENU_BY_APP_KEY = {};

@@ -508,22 +508,19 @@ async function getColdStorageFaxStatus(messageId: string) {
 async function getPublicColdStorageData(supabase: any) {
   const { data, error } = await supabase.from("app_data")
     .select("key,payload")
-    .in("key", ["coldStorageRequests", "traderInfoMap", "labelProducts"]);
+    .in("key", ["coldStorageRequests", "traderInfoMap"]);
   if (error) throw new Error(`냉동창고 요청 데이터를 불러오지 못했습니다: ${error.message}`);
   const values = Object.fromEntries((data || []).map((row: any) => [row.key, row.payload]));
   const traderInfo = values.traderInfoMap && typeof values.traderInfoMap === "object" ? values.traderInfoMap : {};
   return {
     requests: Array.isArray(values.coldStorageRequests) ? values.coldStorageRequests : [],
-    traderInfoMap: Object.fromEntries(Object.entries(traderInfo).map(([name, raw]) => {
+    traderInfoMap: Object.fromEntries(Object.entries(traderInfo).filter(([, raw]) => {
       const info = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-      const isWarehouse = clean(info.tradeType, 30) === "보관(냉동창고)";
-      return [clean(name, 100), isWarehouse
-        ? { tradeType: "보관(냉동창고)", fax: clean(info.fax, 30), faxAlt: clean(info.faxAlt, 30) }
-        : {}];
+      return clean(info.tradeType, 30) === "보관(냉동창고)";
+    }).map(([name, raw]) => {
+      const info = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+      return [clean(name, 100), { tradeType: "보관(냉동창고)", fax: clean(info.fax, 30), faxAlt: clean(info.faxAlt, 30) }];
     }).filter(([name]) => Boolean(name))),
-    labelProducts: Array.isArray(values.labelProducts)
-      ? values.labelProducts.map((row: any) => ({ name: clean(row?.name, 100) })).filter((row: any) => row.name)
-      : [],
   };
 }
 
