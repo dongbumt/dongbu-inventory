@@ -5096,28 +5096,32 @@ async function supabaseLoadSubMaterialUsages(password=requireSupabasePassword())
 }
 
 async function supabaseSaveSubMaterialUsageRows(rows, deletedIds){
-  const password = requireSupabasePassword();
   const upsertRows = normalizeRowsForUpsert(rows, 'smuse');
   const deleteIds = asArray(deletedIds).map(id=>String(id)).filter(Boolean);
+  if(!upsertRows.length && !deleteIds.length) return {ok:true, submaterialUsages:0, deleted:0};
+  if(upsertRows.length) personalServerWriteToken('production', 'update');
+  if(deleteIds.length) personalServerWriteToken('production', 'delete');
   try{
-    if(upsertRows.length){
-      await sbRpc('dbmt_upsert_submaterial_usages', {p_password: password, p_rows: upsertRows});
-    }
-    for(const id of deleteIds){
-      await sbRpc('dbmt_delete_submaterial_usage', {p_password: password, p_id: id});
-    }
+    const result = await sbRpc('dbmt_erp_save_submaterial_usages', {
+      p_token:DBMTAuth.getSessionToken(), p_rows:upsertRows, p_delete_ids:deleteIds
+    });
+    assertPersonalServerResult(result, '부자재 사용이력을 저장할 권한이 없습니다.');
     subMaterialUsageRpcInstalled = true;
     gsShowSync('Supabase 부자재 사용이력 저장 완료');
+    return result;
   } catch(err){
     subMaterialUsageRpcInstalled = false;
     throw err;
   }
 }
 
-function saveSubMaterialUsageRows(rows, deletedIds, options={}){
+async function saveSubMaterialUsageRows(rows, deletedIds, options={}){
   const upserts = asArray(rows);
   const deletes = asArray(deletedIds).map(id=>String(id)).filter(Boolean);
   const deletedRows = asArray(options.deletedRows);
+  if(!options.skipServer && localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    await supabaseSaveSubMaterialUsageRows(upserts, deletes);
+  }
   safeLocalStorageSet('dbmt_submaterial_usages', JSON.stringify(subMaterialUsages), true);
   if(options.log !== false){
     if(upserts.length){
@@ -5144,13 +5148,7 @@ function saveSubMaterialUsageRows(rows, deletedIds, options={}){
       });
     }
   }
-  if(!options.skipServer && localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
-    supabaseSaveSubMaterialUsageRows(upserts, deletes).catch(err=>{
-      console.error('Supabase submaterial usage save failed:', err);
-      const detail = String(err?.message || err || '').slice(0, 180);
-      gsShowSync(`부자재 사용이력 서버 저장 실패${detail ? ': ' + detail : ''}`, true);
-    });
-  }
+  return true;
 }
 
 async function refreshSubMaterialUsagesFromSupabase(force=false){
@@ -9140,7 +9138,7 @@ async function deleteProdEntry(id){
   }
   if(linkedSubMaterialUsages.length){
     const deletedUsageIds = linkedSubMaterialUsages.map(u=>u.id);
-    saveSubMaterialUsageRows([], deletedUsageIds, {
+    await saveSubMaterialUsageRows([], deletedUsageIds, {
       target:subMaterialProductionSummary(deletedProdEntry),
       deletedRows:linkedSubMaterialUsages,
       skipServer:true
@@ -10456,7 +10454,7 @@ function closeSubMaterialUsageModal(){
   subMaterialUsageDraftRows = [];
 }
 
-function saveSubMaterialUsageModal(){
+async function saveSubMaterialUsageModal(){
   if(!subMaterialUsagePersonalCan('update')){ toast('부자재 사용항목 수정 권한이 없습니다.'); return; }
   const productionId = activeSubMaterialUsageProductionId;
   const entry = subMaterialUsageProductionEntry(productionId);
@@ -10521,14 +10519,21 @@ function saveSubMaterialUsageModal(){
   if(deletedIds.length && !subMaterialUsagePersonalCan('delete')){
     return fail('기존 사용항목을 삭제할 권한이 없습니다. 삭제 항목을 다시 불러온 뒤 저장해주세요.');
   }
+  const previousUsages = subMaterialUsages;
   subMaterialUsages = subMaterialUsages
     .filter(u => String(u.productionId || '') !== String(productionId))
     .concat(rows);
-  saveSubMaterialUsageRows(rows, deletedIds, {
-    action:existing.length ? '수정' : '저장',
-    target:subMaterialProductionSummary(entry),
-    deletedRows
-  });
+  try{
+    await saveSubMaterialUsageRows(rows, deletedIds, {
+      action:existing.length ? '수정' : '저장',
+      target:subMaterialProductionSummary(entry),
+      deletedRows
+    });
+  }catch(err){
+    subMaterialUsages = previousUsages;
+    console.error('Supabase submaterial usage save failed:', err);
+    return fail(String(err?.message || err || '부자재 사용이력 저장에 실패했습니다.'));
+  }
   closeSubMaterialUsageModal();
   renderProduction();
   if(document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
@@ -10545,14 +10550,24 @@ function syncSubMaterialUsageProductionMetadata(entry){
     row.productionSummary = subMaterialProductionSummary(entry);
     row.updatedAt = now;
   });
-  saveSubMaterialUsageRows(rows, [], {action:'수정', log:false});
+  saveSubMaterialUsageRows(rows, [], {action:'수정', log:false}).catch(err=>{
+    console.error('Supabase submaterial usage metadata save failed:', err);
+    toast(String(err?.message || err || '부자재 사용이력의 생산정보 갱신에 실패했습니다.'));
+  });
 }
 
-function deleteSubMaterialUsage(id){
+async function deleteSubMaterialUsage(id){
   const row = subMaterialUsages.find(u => String(u.id) === String(id));
   if(!row || !confirm(`${row.itemName || '부자재'} ${row.lot || ''} 사용 기록을 삭제할까요?\n삭제하면 해당 수량만큼 재고가 복원됩니다.`)) return;
+  const previousUsages = subMaterialUsages;
   subMaterialUsages = subMaterialUsages.filter(u => String(u.id) !== String(id));
-  saveSubMaterialUsageRows([], [id], {target:row.productionSummary || row.itemName || '', deletedRows:[row]});
+  try{
+    await saveSubMaterialUsageRows([], [id], {target:row.productionSummary || row.itemName || '', deletedRows:[row]});
+  }catch(err){
+    subMaterialUsages = previousUsages;
+    toast(String(err?.message || err || '부자재 사용 기록 삭제에 실패했습니다.'));
+    return;
+  }
   renderSubMaterials();
   renderProduction();
   toast('부자재 사용 기록을 삭제했습니다.');
