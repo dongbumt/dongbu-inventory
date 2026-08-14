@@ -7,9 +7,27 @@
 <link rel="stylesheet" href="styles/main.css?v=20260812q3">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
+<link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('xlsx CDN 로드 실패 — Excel 내보내기 기능만 비활성화')"></script>
 </head>
 <body>
+
+<!-- M02 개인 사용자 로그인 -->
+<div id="m02-login-modal" class="edit-modal-bg hidden">
+  <div class="edit-modal m02-login-box">
+    <h3>ERP 사용자 로그인</h3>
+    <div class="m02-login-help">개인 계정으로 로그인하면 역할에 지정된 메뉴만 표시되고 변경이력에 사용자 이름이 함께 기록됩니다. 공용 연동 비밀번호와는 별개의 계정입니다.</div>
+    <div class="m02-login-fields">
+      <div class="form-group"><label>아이디</label><input id="m02-login-id" autocomplete="username" maxlength="30"></div>
+      <div class="form-group"><label>비밀번호</label><input id="m02-login-password" type="password" autocomplete="current-password" maxlength="64" onkeydown="if(event.key==='Enter') DBMTAuth.loginFromModal()"></div>
+    </div>
+    <div id="m02-login-error" class="m02-login-error"></div>
+    <div class="em-btns">
+      <button class="btn btn-secondary" onclick="DBMTAuth.closeLogin()">나중에</button>
+      <button class="btn btn-primary" id="m02-login-submit" onclick="DBMTAuth.loginFromModal()">로그인</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── 거래내역 수정 모달 ── -->
 <div id="edit-txn-modal" class="edit-modal-bg hidden">
@@ -209,6 +227,10 @@
     </div>
   </div>
   <div class="header-right">
+  <div class="m02-user-status" id="m02-user-status">
+    <button type="button" id="m02-user-button" onclick="DBMTAuth.openLogin()">사용자 로그인</button>
+    <span class="m02-auth-mode" id="m02-auth-mode-label">공용 운영</span>
+  </div>
   <div class="gs-status" id="gs-status-badge">
     <span class="gs-dot off" id="gs-dot"></span>
     <span id="gs-status-text">오프라인</span>
@@ -228,6 +250,9 @@
   </div>
   <div class="nav-tab" onclick="showPage('p-company-master',this);initCompanyMasterPage();" id="nav-company-master" style="color:#4b5563;font-weight:700;">
     🏢 법인·사업장·창고
+  </div>
+  <div class="nav-tab" onclick="showPage('p-access-control',this);DBMTAuth.initAdminPage();" id="nav-access-control" style="color:#4b5563;font-weight:700;">
+    🔐 사용자·권한
   </div>
   <div class="nav-tab" onclick="showPage('p-labelproducts',this);renderLabelProducts();" id="nav-labelproducts" style="color:#e67e22;font-weight:700;">
     📦 품목관리
@@ -3022,6 +3047,67 @@
 </div>
 
 
+<!-- ══════════════════════════════════════════
+     사용자·역할·메뉴 권한 (M02)
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-access-control">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#6b7280;"></div>사용자·역할·메뉴 권한</div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTAuth.refreshAdmin()">서버 새로고침</button>
+    </div>
+    <div class="m02-note">M02는 안전한 병행 운영 단계입니다. 개인 로그인을 하면 역할별 메뉴 제한과 사용자 변경이력이 적용되며, 로그인하지 않은 기존 직원은 당분간 공용 연동 방식으로 계속 사용할 수 있습니다.</div>
+    <div id="m02-admin-status" class="m02-status">권한 정보를 준비하는 중입니다.</div>
+    <div id="m02-bootstrap-note" class="m02-note m02-bootstrap">아직 개인 사용자가 없습니다. 아래 사용자 등록에서 첫 관리자를 만들면 바로 개인 로그인을 시험할 수 있습니다.</div>
+
+    <div class="m02-grid">
+      <div style="display:grid;gap:16px;">
+        <section class="m02-subcard">
+          <div class="m02-subcard-title"><span>사용자</span><button class="btn btn-secondary btn-sm" onclick="DBMTAuth.newUser()">+ 사용자</button></div>
+          <div id="m02-user-list" class="m02-list"></div>
+        </section>
+        <section class="m02-subcard">
+          <div class="m02-subcard-title"><span id="m02-user-form-title">사용자 등록</span></div>
+          <input type="hidden" id="m02-user-id"><input type="hidden" id="m02-user-revision">
+          <div class="m02-form">
+            <div class="form-group"><label>표시 이름 *</label><input id="m02-user-name" maxlength="100" placeholder="예: 홍길동"></div>
+            <div class="form-group"><label>로그인 아이디 *</label><input id="m02-user-login-id" maxlength="30" placeholder="영문·숫자 3~30자"></div>
+            <div class="form-group"><label>역할 *</label><select id="m02-user-role"></select></div>
+            <div class="form-group"><label>사용 상태</label><select id="m02-user-active"><option value="1">사용</option><option value="0">중지</option></select></div>
+            <div class="form-group span-2"><label>로그인 비밀번호 <span id="m02-user-password-hint">* 8~64자</span></label><input id="m02-user-password" type="password" maxlength="64" autocomplete="new-password" placeholder="수정하지 않으면 비워두세요"></div>
+          </div>
+          <div class="m02-actions"><button class="btn btn-secondary btn-sm" onclick="DBMTAuth.newUser()">초기화</button><button class="btn btn-primary btn-sm" onclick="DBMTAuth.saveUser()">사용자 저장</button></div>
+        </section>
+      </div>
+
+      <div style="display:grid;gap:16px;">
+        <section class="m02-subcard">
+          <div class="m02-subcard-title"><span>역할</span><button class="btn btn-secondary btn-sm" onclick="DBMTAuth.newRole()">+ 역할</button></div>
+          <div id="m02-role-list" class="m02-list" style="max-height:180px;"></div>
+        </section>
+        <section class="m02-subcard">
+          <div class="m02-subcard-title"><span id="m02-role-form-title">역할 등록</span></div>
+          <input type="hidden" id="m02-role-id"><input type="hidden" id="m02-role-revision">
+          <div class="m02-form">
+            <div class="form-group"><label>역할 코드 *</label><input id="m02-role-code" maxlength="40" placeholder="예: warehouse_staff"></div>
+            <div class="form-group"><label>역할명 *</label><input id="m02-role-name" maxlength="100" placeholder="예: 창고 담당"></div>
+            <div class="form-group span-2"><label>설명</label><input id="m02-role-description" maxlength="300"></div>
+            <div class="form-group"><label>사용 상태</label><select id="m02-role-active"><option value="1">사용</option><option value="0">중지</option></select></div>
+          </div>
+          <div class="m02-permission-wrap" style="margin-top:12px;">
+            <table class="m02-permission-table">
+              <thead><tr><th>메뉴</th><th>조회</th><th>등록</th><th>수정</th><th>삭제</th><th>마감</th><th>API전송</th><th>관리</th></tr></thead>
+              <tbody id="m02-permission-body"></tbody>
+            </table>
+          </div>
+          <div class="m02-actions"><button class="btn btn-secondary btn-sm" onclick="DBMTAuth.newRole()">초기화</button><button class="btn btn-primary btn-sm" onclick="DBMTAuth.saveRole()">역할 저장</button></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 
 <!-- ══════════════════════════════════════════
      📦 품목관리
@@ -4498,6 +4584,8 @@ function syncDataChangeLogsSoon(){
 }
 
 function recordDataChange(entry={}, opts={}){
+  const auditIdentity = (typeof DBMTAuth === 'object' && typeof DBMTAuth.auditIdentity === 'function')
+    ? DBMTAuth.auditIdentity() : {authMode:'legacy_app_password'};
   const log = {
     id: dataChangeId(),
     at: new Date().toISOString(),
@@ -4506,6 +4594,7 @@ function recordDataChange(entry={}, opts={}){
     target: entry.target || '',
     summary: entry.summary || '',
     refId: entry.refId || '',
+    ...auditIdentity,
   };
   dataChangeLogs.unshift(log);
   saveDataChangeLogsLocal();
@@ -5843,6 +5932,10 @@ function lockHrMenu(){
 
 // ─── 탭 전환 ───────────────────────────────────────────
 async function showPage(id, btn){
+  if(typeof DBMTAuth === 'object' && !DBMTAuth.canOpenPage(id)){
+    if(typeof toast === 'function') toast('이 메뉴를 조회할 권한이 없습니다.');
+    return false;
+  }
   const wasHrMenuActive = isHrMenuActive();
   if(isHrLockedPage(id) && !await requestHrMenuUnlock()) return false;
   if(wasHrMenuActive && !isHrLockedPage(id)) clearHrMenuUnlock();
@@ -5854,6 +5947,7 @@ async function showPage(id, btn){
   if(id==='p-incheck') initIncheck();
   if(id==='p-schedule') renderScheduleCalendar();
   if(id==='p-company-master' && typeof initCompanyMasterPage === 'function') initCompanyMasterPage();
+  if(id==='p-access-control' && typeof DBMTAuth === 'object') DBMTAuth.initAdminPage();
   if(id==='p-production'){renderProduction();initProdForm();updateOriginList();}
   if(id==='p-prod-loss') renderProductionLoss();
   if(id==='p-workorders'){ initWorkOrderForm(); renderWorkOrders(); }
@@ -12509,6 +12603,7 @@ async function supabaseInit(){
     return data;
   }
   gsShowSync('✅ Supabase 데이터 로드 완료');
+  if(typeof DBMTAuth === 'object') await DBMTAuth.initializeSession();
   return data;
 }
 
@@ -18201,5 +18296,6 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260813m01"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
+<script src="m02-auth.js?v=20260814m02"></script>
 </body>
 </html>

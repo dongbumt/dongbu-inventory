@@ -61,6 +61,7 @@ Editor query for each file:
 39. `schema-rpc-17f-mobile-admin-schedule-write.sql`
 40. `schema-rpc-18-cold-storage-public.sql`
 41. `schema-rpc-19-company-master.sql`
+42. `schema-rpc-20-erp-users-roles.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -90,6 +91,12 @@ This creates:
 - `dbmt_save_business_site(password, record, expected_revision)`
 - `dbmt_save_business_site_identifier(password, record, expected_revision)`
 - `dbmt_save_document_sender_profile(password, record, expected_revision)`
+- `dbmt_erp_login(login_id, login_password)`
+- `dbmt_erp_session(token)`
+- `dbmt_erp_logout(token)`
+- `dbmt_m02_get_admin(password)`
+- `dbmt_m02_save_role(password, ..., permissions, expected_revision)`
+- `dbmt_m02_save_user(password, ..., login_password, expected_revision)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.
@@ -129,11 +136,23 @@ through the ERP. Saves use the current `revision` value to reject stale browser
 writes, and records are deactivated instead of physically deleted. Edge
 Functions using the Supabase service role receive read-only table access.
 
+`schema-rpc-20-erp-users-roles.sql` implements M02 personal ERP users,
+roles, menu permissions, and 12-hour browser sessions. Passwords are stored as
+PostgreSQL `crypt()` hashes and session tokens are stored only as SHA-256
+hashes. Personal passwords accept 8-64 characters without composition rules.
+The initial rollout keeps `m02_auth_mode=optional`: legacy staff can continue
+using the existing ERP app password, while a first personal administrator can
+be created from the 사용자·권한 menu. Do not change this mode to enforced until
+all legacy write RPCs accept and verify a personal user session.
+
 If migrations are applied instead of the split schema files, apply
 `20260813125000_password_check_fail_closed.sql` before
 `20260813130000_company_master.sql`, then apply
 `20260813131000_cold_storage_company_snapshot.sql`. The verified DBMT production
 master is inserted separately by `20260814090000_m01_official_master_data.sql`.
+Apply `20260814130000_erp_users_roles.sql` for the M02 optional personal-login
+rollout. It creates the system administrator role but deliberately does not
+seed a user or a known password.
 
 ## 3. Document request delivery
 
