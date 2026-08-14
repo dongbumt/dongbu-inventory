@@ -139,7 +139,9 @@ Functions using the Supabase service role receive read-only table access.
 `schema-rpc-20-erp-users-roles.sql` implements M02 personal ERP users,
 roles, menu permissions, and 12-hour browser sessions. Passwords are stored as
 PostgreSQL `crypt()` hashes and session tokens are stored only as SHA-256
-hashes. Personal passwords accept 8-64 characters without composition rules.
+hashes. Personal ERP passwords are exactly four numeric digits. Login IDs may
+use English letters only (3-30 characters); digits and `._-` remain supported
+for compatibility with previously designed IDs.
 The initial rollout keeps `m02_auth_mode=optional`: legacy staff can continue
 using the existing ERP app password, while a first personal administrator can
 be created from the 사용자·권한 menu. Do not change this mode to enforced until
@@ -153,6 +155,9 @@ master is inserted separately by `20260814090000_m01_official_master_data.sql`.
 Apply `20260814130000_erp_users_roles.sql` for the M02 optional personal-login
 rollout. It creates the system administrator role but deliberately does not
 seed a user or a known password.
+Apply `20260814140000_erp_user_four_digit_pin.sql` after it to use a four-digit
+numeric personal PIN. The historical `130000` migration is intentionally not
+rewritten after deployment.
 
 ## 3. Document request delivery
 

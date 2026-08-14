@@ -19,7 +19,7 @@
     <div class="m02-login-help">개인 계정으로 로그인하면 역할에 지정된 메뉴만 표시되고 변경이력에 사용자 이름이 함께 기록됩니다. 공용 연동 비밀번호와는 별개의 계정입니다.</div>
     <div class="m02-login-fields">
       <div class="form-group"><label>아이디</label><input id="m02-login-id" autocomplete="username" maxlength="30"></div>
-      <div class="form-group"><label>비밀번호</label><input id="m02-login-password" type="password" autocomplete="current-password" maxlength="64" onkeydown="if(event.key==='Enter') DBMTAuth.loginFromModal()"></div>
+      <div class="form-group"><label>비밀번호 (숫자 4자리)</label><input id="m02-login-password" type="password" inputmode="numeric" pattern="[0-9]{4}" autocomplete="current-password" maxlength="4" onkeydown="if(event.key==='Enter') DBMTAuth.loginFromModal()"></div>
     </div>
     <div id="m02-login-error" class="m02-login-error"></div>
     <div class="em-btns">
@@ -3071,10 +3071,10 @@
           <input type="hidden" id="m02-user-id"><input type="hidden" id="m02-user-revision">
           <div class="m02-form">
             <div class="form-group"><label>표시 이름 *</label><input id="m02-user-name" maxlength="100" placeholder="예: 홍길동"></div>
-            <div class="form-group"><label>로그인 아이디 *</label><input id="m02-user-login-id" maxlength="30" placeholder="영문·숫자 3~30자"></div>
+            <div class="form-group"><label>로그인 아이디 *</label><input id="m02-user-login-id" maxlength="30" placeholder="영문만으로 가능 · 3~30자"></div>
             <div class="form-group"><label>역할 *</label><select id="m02-user-role"></select></div>
             <div class="form-group"><label>사용 상태</label><select id="m02-user-active"><option value="1">사용</option><option value="0">중지</option></select></div>
-            <div class="form-group span-2"><label>로그인 비밀번호 <span id="m02-user-password-hint">* 8~64자</span></label><input id="m02-user-password" type="password" maxlength="64" autocomplete="new-password" placeholder="수정하지 않으면 비워두세요"></div>
+            <div class="form-group span-2"><label>로그인 비밀번호 <span id="m02-user-password-hint">* 숫자 4자리</span></label><input id="m02-user-password" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="new-password" placeholder="수정하지 않으면 비워두세요"></div>
           </div>
           <div class="m02-actions"><button class="btn btn-secondary btn-sm" onclick="DBMTAuth.newUser()">초기화</button><button class="btn btn-primary btn-sm" onclick="DBMTAuth.saveUser()">사용자 저장</button></div>
         </section>
@@ -18296,6 +18296,6 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260813m01"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
-<script src="m02-auth.js?v=20260814m02"></script>
+<script src="m02-auth.js?v=20260814m02pin4"></script>
 </body>
 </html>

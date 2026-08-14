@@ -242,8 +242,7 @@ begin
   if v_user.locked_until is not null and v_user.locked_until > now() then
     return jsonb_build_object('ok', false, 'message', '로그인이 잠시 제한되었습니다. 15분 후 다시 시도하세요.');
   end if;
-  if length(coalesce(p_login_password, '')) < 8
-     or length(coalesce(p_login_password, '')) > 64
+  if coalesce(p_login_password, '') !~ '^[0-9]{4}$'
      or v_user.password_hash <> extensions.crypt(coalesce(p_login_password, ''), v_user.password_hash) then
     update public.erp_users
     set failed_attempts = failed_attempts + 1,
@@ -478,8 +477,8 @@ begin
 
   if v_id is null then
     if p_expected_revision is not null then raise exception 'new user must not include revision'; end if;
-    if length(coalesce(p_login_password, '')) < 8 or length(coalesce(p_login_password, '')) > 64 then
-      raise exception 'password must contain 8 to 64 characters';
+    if coalesce(p_login_password, '') !~ '^[0-9]{4}$' then
+      raise exception 'password must contain exactly 4 digits';
     end if;
     insert into public.erp_users(login_id, display_name, password_hash, role_id, active)
     values (lower(btrim(p_login_id)), btrim(p_display_name),
@@ -490,9 +489,8 @@ begin
     if v_old.id is null then raise exception 'user not found'; end if;
     select * into v_old_role from public.erp_roles where id = v_old.role_id;
     if p_expected_revision is null or p_expected_revision <> v_old.revision then raise exception 'stale user revision'; end if;
-    if coalesce(p_login_password, '') <> ''
-       and (length(p_login_password) < 8 or length(p_login_password) > 64) then
-      raise exception 'password must contain 8 to 64 characters';
+    if coalesce(p_login_password, '') <> '' and p_login_password !~ '^[0-9]{4}$' then
+      raise exception 'password must contain exactly 4 digits';
     end if;
     if v_old.active and v_old_role.system_role
        and (p_active is not true or not v_new_role.system_role)

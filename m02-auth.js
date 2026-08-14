@@ -169,8 +169,8 @@
     const password = document.getElementById('m02-login-password')?.value || '';
     const errorEl = document.getElementById('m02-login-error');
     const submit = document.getElementById('m02-login-submit');
-    if(!loginId || !password){
-      if(errorEl){errorEl.textContent='아이디와 비밀번호를 입력해주세요.';errorEl.classList.add('show');}
+    if(!loginId || !/^\d{4}$/.test(password)){
+      if(errorEl){errorEl.textContent='아이디와 숫자 4자리 비밀번호를 입력해주세요.';errorEl.classList.add('show');}
       return;
     }
     if(submit) submit.disabled = true;
@@ -296,7 +296,7 @@
       || (adminData?.roles || []).find(r=>r.active);
     setValue('m02-user-role',firstRole?.id || '');
     const title=document.getElementById('m02-user-form-title'); if(title) title.textContent='사용자 등록';
-    const hint=document.getElementById('m02-user-password-hint'); if(hint) hint.textContent='* 8~64자';
+    const hint=document.getElementById('m02-user-password-hint'); if(hint) hint.textContent='* 숫자 4자리';
     if(render) renderUserList();
   }
 
@@ -308,7 +308,7 @@
     setValue('m02-user-role',row.roleId); setValue('m02-user-active',row.active?'1':'0');
     setValue('m02-user-password','');
     const title=document.getElementById('m02-user-form-title'); if(title) title.textContent='사용자 수정';
-    const hint=document.getElementById('m02-user-password-hint'); if(hint) hint.textContent='(변경할 때만 입력, 8~64자)';
+    const hint=document.getElementById('m02-user-password-hint'); if(hint) hint.textContent='(변경할 때만 입력, 숫자 4자리)';
     renderUserList();
   }
 
@@ -397,9 +397,9 @@
       const loginId=value('m02-user-login-id').trim();
       const displayName=value('m02-user-name').trim();
       const loginPassword=value('m02-user-password');
-      if(!/^[A-Za-z0-9._-]{3,30}$/.test(loginId)) throw new Error('아이디는 영문·숫자·점·밑줄·하이픈 3~30자로 입력해주세요.');
+      if(!/^[A-Za-z0-9._-]{3,30}$/.test(loginId)) throw new Error('아이디는 영문만으로 3~30자 입력할 수 있습니다. 숫자·점·밑줄·하이픈도 선택적으로 사용할 수 있습니다.');
       if(!displayName) throw new Error('표시 이름을 입력해주세요.');
-      if((!id || loginPassword) && (loginPassword.length<8 || loginPassword.length>64)) throw new Error('비밀번호는 8~64자로 입력해주세요.');
+      if((!id || loginPassword) && !/^\d{4}$/.test(loginPassword)) throw new Error('비밀번호는 숫자 4자리로 입력해주세요.');
       const saved = await rpc('dbmt_m02_save_user', {
         p_password:adminPassword(), p_id:id, p_login_id:loginId,
         p_display_name:displayName, p_role_id:value('m02-user-role'),
