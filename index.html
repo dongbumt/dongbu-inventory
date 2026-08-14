@@ -15823,19 +15823,41 @@ function addExpense(){
   const note     = document.getElementById('exp-note').value.trim();
   if(!date || !item || !amount){ alert('날짜, 품목/내용, 금액은 필수입니다.'); return; }
 
-  if(_editExpId){
-    const e = expenseList.find(x=>x.id===_editExpId);
-    if(e){ e.date=date; e.paytype=paytype; e.storetype=storetype; e.store=store;
-           e.category=category; e.item=item; e.amount=amount; e.note=note; }
+  const editId = _editExpId;
+  const wasEditing = Boolean(editId);
+  if(wasEditing){
+    const e = expenseList.find(x=>x.id===editId);
+    if(!e){ alert('수정할 지출 내역을 찾지 못했습니다. 목록을 새로 확인해주세요.'); return; }
+    const previousDate = e.date || '';
+    e.date=date; e.paytype=paytype; e.storetype=storetype; e.store=store;
+    e.category=category; e.item=item; e.amount=amount; e.note=note;
+    const previousDateLabel = dataChangeDateLabel(previousDate);
+    const dateLabel = dataChangeDateLabel(date);
+    const dateChangeLabel = previousDate && previousDate !== date
+      ? `${previousDateLabel} → ${dateLabel}`
+      : dateLabel;
+    queueAppDataChangeDetail('expenseList', {
+      action:'수정',
+      target:`${dateChangeLabel} / ${item}`,
+      summary:`지출 수정: ${dateChangeLabel} / ${item} / ${amount.toLocaleString('ko-KR')}원`,
+      refId:String(e.id)
+    });
   } else {
-    expenseList.push({ id:Date.now(), date, paytype, storetype, store, category, item, amount, note });
+    const expense = { id:Date.now(), date, paytype, storetype, store, category, item, amount, note };
+    expenseList.push(expense);
+    const dateLabel = dataChangeDateLabel(date);
+    queueAppDataChangeDetail('expenseList', {
+      action:'저장',
+      target:`${dateLabel} / ${item}`,
+      summary:`지출 저장: ${dateLabel} / ${item} / ${amount.toLocaleString('ko-KR')}원`,
+      refId:String(expense.id)
+    });
   }
   saveExpenses();
   updateExpStoreList();
   clearExpenseForm();
   renderExpenses();
-  toast(_editExpId ? '지출 내역 수정 완료!' : '지출 내역 추가 완료!');
-  _editExpId = null;
+  toast(wasEditing ? '지출 내역 수정 완료!' : '지출 내역 추가 완료!');
 }
 
 function editExpense(id){
@@ -15858,6 +15880,15 @@ function editExpense(id){
 
 function deleteExpense(id){
   if(!confirm('삭제하시겠습니까?')) return;
+  const expense = expenseList.find(x=>x.id===id);
+  if(!expense){ alert('삭제할 지출 내역을 찾지 못했습니다. 목록을 새로 확인해주세요.'); return; }
+  const dateLabel = dataChangeDateLabel(expense.date);
+  queueAppDataChangeDetail('expenseList', {
+    action:'삭제',
+    target:`${dateLabel} / ${expense.item || ''}`,
+    summary:`지출 삭제: ${dateLabel} / ${expense.item || ''} / ${Number(expense.amount || 0).toLocaleString('ko-KR')}원`,
+    refId:String(expense.id)
+  });
   expenseList = expenseList.filter(x=>x.id!==id);
   saveExpenses();
   renderExpenses();
