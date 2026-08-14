@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260812q3">
+<link rel="stylesheet" href="styles/main.css?v=20260814m03a">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -1996,31 +1996,30 @@
     </div>
     <div class="tbl-wrap">
       <table id="traders-table">
+        <colgroup>
+          <col style="width:70px;">
+          <col style="width:160px;">
+          <col style="width:100px;">
+          <col style="width:145px;">
+          <col style="width:125px;">
+          <col style="width:135px;">
+          <col style="width:150px;">
+          <col style="width:100px;">
+        </colgroup>
         <thead>
           <tr>
-            <th id="tr-th-registrationNo" onclick="traderSort('registrationNo')" style="width:52px;text-align:center;cursor:pointer;user-select:none;" title="순번으로 정렬">순번 <span id="tr-sort-registrationNo">▲</span></th>
-            <th id="tr-th-code" onclick="traderSort('code')" style="cursor:pointer;user-select:none;" title="거래처코드로 정렬">코드 <span id="tr-sort-code">↕</span></th>
-            <th id="tr-th-name" onclick="traderSort('name')" style="cursor:pointer;user-select:none;" title="거래처명으로 정렬">거래처명 <span id="tr-sort-name">↕</span></th>
-            <th id="tr-th-tradeType" onclick="traderSort('tradeType')" style="cursor:pointer;user-select:none;" title="거래구분으로 정렬">거래구분 <span id="tr-sort-tradeType">↕</span></th>
-            <th id="tr-th-category" onclick="traderSort('category')" style="cursor:pointer;user-select:none;" title="분류로 정렬">분류 <span id="tr-sort-category">↕</span></th>
-            <th id="tr-th-fullname" onclick="traderSort('fullname')" style="cursor:pointer;user-select:none;" title="정식 상호로 정렬">정식 상호 <span id="tr-sort-fullname">↕</span></th>
-            <th id="tr-th-regno" onclick="traderSort('regno')" style="cursor:pointer;user-select:none;" title="사업자번호로 정렬">사업자번호 <span id="tr-sort-regno">↕</span></th>
-            <th id="tr-th-ceo" onclick="traderSort('ceo')" style="cursor:pointer;user-select:none;" title="대표자명으로 정렬">대표 <span id="tr-sort-ceo">↕</span></th>
-            <th id="tr-th-manager" onclick="traderSort('manager')" style="cursor:pointer;user-select:none;" title="담당자로 정렬">담당자 <span id="tr-sort-manager">↕</span></th>
-            <th id="tr-th-managerPhone" onclick="traderSort('managerPhone')" style="cursor:pointer;user-select:none;" title="담당자 연락처로 정렬">담당자 연락처 <span id="tr-sort-managerPhone">↕</span></th>
-            <th id="tr-th-phone" onclick="traderSort('phone')" style="cursor:pointer;user-select:none;" title="일반전화로 정렬">일반전화 <span id="tr-sort-phone">↕</span></th>
-            <th id="tr-th-email" onclick="traderSort('email')" style="cursor:pointer;user-select:none;" title="이메일로 정렬">이메일 <span id="tr-sort-email">↕</span></th>
-            <th id="tr-th-fax" onclick="traderSort('fax')" style="cursor:pointer;user-select:none;" title="팩스번호로 정렬">팩스번호 <span id="tr-sort-fax">↕</span></th>
-            <th id="tr-th-addr" onclick="traderSort('addr')" style="cursor:pointer;user-select:none;" title="주소로 정렬">주소 <span id="tr-sort-addr">↕</span></th>
-            <th id="tr-th-biz" onclick="traderSort('biz')" style="cursor:pointer;user-select:none;" title="업태로 정렬">업태 <span id="tr-sort-biz">↕</span></th>
-            <th id="tr-th-paymentTerms" onclick="traderSort('paymentTerms')" style="cursor:pointer;user-select:none;" title="결제조건으로 정렬">결제조건 <span id="tr-sort-paymentTerms">↕</span></th>
-            <th id="tr-th-creditLimit" onclick="traderSort('creditLimit')" style="cursor:pointer;user-select:none;" title="여신한도로 정렬">여신한도 <span id="tr-sort-creditLimit">↕</span></th>
-            <th id="tr-th-active" onclick="traderSort('active')" style="cursor:pointer;user-select:none;" title="사용상태로 정렬">상태 <span id="tr-sort-active">↕</span></th>
-            <th style="text-align:center;">관리</th>
+            <th id="tr-th-registrationNo" onclick="traderSort('registrationNo')" title="순번으로 정렬">순번·코드 <span id="tr-sort-registrationNo">▲</span></th>
+            <th id="tr-th-name" onclick="traderSort('name')" title="거래처명으로 정렬">거래처 <span id="tr-sort-name">↕</span></th>
+            <th id="tr-th-tradeType" onclick="traderSort('tradeType')" title="거래구분으로 정렬">거래구분 <span id="tr-sort-tradeType">↕</span></th>
+            <th id="tr-th-regno" onclick="traderSort('regno')" title="사업자번호로 정렬">사업자정보 <span id="tr-sort-regno">↕</span></th>
+            <th id="tr-th-manager" onclick="traderSort('manager')" title="담당자로 정렬">담당자 <span id="tr-sort-manager">↕</span></th>
+            <th id="tr-th-phone" onclick="traderSort('phone')" title="일반전화로 정렬">연락처 <span id="tr-sort-phone">↕</span></th>
+            <th id="tr-th-paymentTerms" onclick="traderSort('paymentTerms')" title="결제조건으로 정렬">결제조건 <span id="tr-sort-paymentTerms">↕</span></th>
+            <th id="tr-th-active" onclick="traderSort('active')" title="사용상태로 정렬">상태·관리 <span id="tr-sort-active">↕</span></th>
           </tr>
         </thead>
         <tbody id="traders-tbody">
-          <tr><td colspan="19" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
+          <tr><td colspan="8" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -13135,11 +13134,11 @@ function renderTraders(){
       : `전체 ${allKeys.length}건`;
   }
   if(!allKeys.length){
-    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
     return;
   }
   if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;padding:20px;color:#888">검색 조건에 해당하는 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">검색 조건에 해당하는 거래처가 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(row=>{
@@ -13147,29 +13146,38 @@ function renderTraders(){
     const nameText = htmlEscape(name);
     const nameArg = jsArg(name);
     const isActive = info.active !== false;
-    return `<tr style="${isActive?'':'opacity:.58;'}">
-      <td style="text-align:center;font-weight:700;color:#555;">${registrationNo}</td>
-      <td style="font-family:var(--font-mono);font-size:10px;white-space:nowrap;">${htmlEscape(info.code||'-')}</td>
-      <td><strong>${nameText}</strong></td>
-      <td style="white-space:nowrap;">${htmlEscape(info.tradeType||'미지정')}</td>
-      <td>${htmlEscape(info.category||'-')}</td>
-      <td>${htmlEscape(info.fullname||'-')}</td>
-      <td style="font-family:monospace;font-size:11px;">${htmlEscape(info.regno||'-')}</td>
-      <td>${htmlEscape(info.ceo||'-')}</td>
-      <td>${htmlEscape(info.manager||'-')}</td>
-      <td style="white-space:nowrap;">${htmlEscape(info.managerPhone||'-')}</td>
-      <td style="white-space:nowrap;">${htmlEscape(info.phone||'-')}</td>
-      <td style="white-space:nowrap;">${htmlEscape(info.email||'-')}</td>
-      <td style="white-space:nowrap;">${htmlEscape(info.fax||'-')}${info.faxAlt ? `<br><span style="color:#667085;">${htmlEscape(info.faxAlt)}</span>` : ''}</td>
-      <td style="font-size:11px;">${htmlEscape(info.addr||'-')}</td>
-      <td>${htmlEscape(info.biz||'-')}</td>
-      <td style="font-size:11px;">${htmlEscape(info.paymentTerms||'-')}${info.paymentDueDays!=null ? `<br><span style="color:#667085;">${Number(info.paymentDueDays).toLocaleString()}일</span>` : ''}</td>
-      <td style="text-align:right;white-space:nowrap;">${Number(info.creditLimit||0).toLocaleString()}원</td>
-      <td style="text-align:center;white-space:nowrap;font-weight:700;">${isActive?'사용':'중지'}</td>
-      <td style="text-align:center;white-space:nowrap;">
+    const identity = [info.regno, info.ceo ? `대표 ${info.ceo}` : ''].filter(Boolean).map(htmlEscape).join('<br>') || '-';
+    const manager = [info.manager, info.managerPhone].filter(Boolean).map(htmlEscape).join('<br>') || '-';
+    const contacts = [info.phone, info.email].filter(Boolean).map(htmlEscape).join('<br>') || '-';
+    const payment = [info.paymentTerms, info.paymentDueDays!=null ? `${Number(info.paymentDueDays).toLocaleString()}일` : ''].filter(Boolean).map(htmlEscape).join('<br>') || '-';
+    const industry = [info.biz ? `업태 ${info.biz}` : '', info.businessItems ? `종목 ${info.businessItems}` : ''].filter(Boolean).map(htmlEscape).join('<br>') || '-';
+    const fax = [info.fax, info.faxAlt].filter(Boolean).map(htmlEscape).join(' · ') || '-';
+    const identifiers = [
+      ['MeatWatch',traderIdentifierValue(info,'meatwatch','partner_manage_no')],
+      ['이력제',traderIdentifierValue(info,'mtrace','corp_no')],
+      ['창고',traderIdentifierValue(info,'meatwatch','warehouse_manage_no')]
+    ].filter(([,value])=>value).map(([label,value])=>`${htmlEscape(label)} ${htmlEscape(value)}`).join('<br>') || '-';
+    return `<tr class="trader-primary-row${isActive?'':' trader-inactive-row'}">
+      <td class="trader-sequence-cell"><strong>${registrationNo}</strong><span>${htmlEscape(info.code||'-')}</span></td>
+      <td><strong class="trader-name">${nameText}</strong><span class="trader-subtext">${htmlEscape(info.fullname||'-')}</span></td>
+      <td><strong>${htmlEscape(info.tradeType||'미지정')}</strong><span class="trader-subtext">${htmlEscape(info.category||'-')}</span></td>
+      <td>${identity}</td>
+      <td>${manager}</td>
+      <td class="trader-break-text">${contacts}</td>
+      <td>${payment}</td>
+      <td class="trader-actions-cell" rowspan="2">
+        <span class="trader-status${isActive?'':' is-inactive'}">${isActive?'사용':'중지'}</span>
         <button class="btn btn-sm" style="font-size:11px;padding:3px 8px;" onclick="editTrader(${nameArg})">수정</button>
         ${isActive ? `<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="deleteTrader(${nameArg})">중지</button>` : ''}
       </td>
+    </tr>
+    <tr class="trader-detail-row${isActive?'':' trader-inactive-row'}">
+      <td class="trader-detail-label">상세</td>
+      <td colspan="2"><span class="trader-cell-label">주소</span>${htmlEscape(info.addr||'-')}</td>
+      <td><span class="trader-cell-label">업태·종목</span>${industry}</td>
+      <td class="trader-break-text"><span class="trader-cell-label">팩스</span>${fax}</td>
+      <td><span class="trader-cell-label">여신한도</span>${Number(info.creditLimit||0).toLocaleString()}원</td>
+      <td class="trader-break-text"><span class="trader-cell-label">기관 관리번호</span>${identifiers}</td>
     </tr>`;
   }).join('');
 }

@@ -141,6 +141,30 @@
   /* 단가표 행높이 축소 (기본의 80%) */
   #p-prices td{padding:7px 10px;}
 
+  /* 거래처 기준정보: 한 거래처를 기본정보/상세정보 2개 행으로 표시 */
+  #traders-table{min-width:985px;table-layout:fixed;}
+  #traders-table th{padding:9px 8px;cursor:pointer;user-select:none;white-space:nowrap;}
+  #traders-table td{padding:8px 9px;line-height:1.45;overflow-wrap:anywhere;}
+  #traders-table .trader-primary-row td{border-bottom:0;vertical-align:top;background:#fff;}
+  #traders-table .trader-detail-row td{padding-top:6px;padding-bottom:7px;background:#f6f7f8;border-top:1px dashed #dfe3e7;border-bottom:2px solid #d6dbe0;color:#4f5963;font-size:11px;}
+  #traders-table .trader-primary-row:hover td,
+  #traders-table .trader-primary-row:hover + .trader-detail-row td,
+  #traders-table .trader-primary-row:has(+ .trader-detail-row:hover) td,
+  #traders-table .trader-detail-row:hover td{background:#f0f2f4;}
+  #traders-table .trader-inactive-row td{opacity:.58;}
+  #traders-table .trader-sequence-cell{text-align:center;white-space:nowrap;}
+  #traders-table .trader-sequence-cell strong{display:block;font-size:13px;color:#414951;}
+  #traders-table .trader-sequence-cell span{display:block;margin-top:4px;font-family:var(--font-mono);font-size:10px;color:#77808a;}
+  #traders-table .trader-name{display:block;font-size:13px;color:#243547;}
+  #traders-table .trader-subtext{display:block;margin-top:3px;color:#6d7680;font-size:11px;}
+  #traders-table .trader-cell-label{display:block;margin-bottom:2px;color:#858e97;font-size:10px;font-weight:700;}
+  #traders-table .trader-detail-label{text-align:center;color:#7b848d;font-weight:700;vertical-align:middle;}
+  #traders-table .trader-break-text{word-break:break-word;}
+  #traders-table .trader-actions-cell{text-align:center;vertical-align:middle;white-space:nowrap;border-bottom:2px solid #d6dbe0;}
+  #traders-table .trader-actions-cell .btn{display:inline-block;margin:3px 1px 0;}
+  #traders-table .trader-status{display:block;margin:0 auto 5px;font-size:11px;font-weight:800;color:#247442;}
+  #traders-table .trader-status.is-inactive{color:#777;}
+
   /* 생산일보 테이블 - 열 너비 고정, 텍스트 자연 줄바꿈 */
   #p-production table{table-layout:fixed;width:100%;}
   tr:last-child td{border-bottom:none;}
