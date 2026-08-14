@@ -3410,6 +3410,14 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg
 const SUPABASE_ENABLED_KEY = 'dbmt_supabase_enabled';
 const SUPABASE_PENDING_CORE_KEY = 'dbmt_supabase_pending_core_save';
 const SUPABASE_SESSION_TOKEN_KEY = 'dbmt_supabase_session_token';
+// Supabase가 원본인 대용량 업무자료는 localStorage에 이중 보관하지 않는다.
+// localStorage는 브라우저별 용량이 작아 거래가 누적되면 정상적인 서버 로드 중에도
+// QuotaExceededError가 발생한다. 연동 전 로컬 모드에서는 기존 방식 그대로 저장한다.
+const SUPABASE_SERVER_MANAGED_LOCAL_KEYS = new Set([
+  'dbmt_user_transactions',
+  'dbmt_user_prod',
+  'dbmt_submaterial_usages'
+]);
 let GS_TOKEN = readSupabaseSessionPassword();
 try { localStorage.removeItem('dbmt_gs_token'); } catch(e) {}
 
@@ -3447,18 +3455,41 @@ function isStorageQuotaError(err){
   return /quota|exceeded|QUOTA/i.test(String(err?.name || '') + ' ' + String(err?.message || err || ''));
 }
 
+function isSupabaseServerManagedLocalKey(key){
+  return localStorage.getItem(SUPABASE_ENABLED_KEY) === '1' && SUPABASE_SERVER_MANAGED_LOCAL_KEYS.has(key);
+}
+
 function safeLocalStorageSet(key, value, optional=false){
+  if(optional && isSupabaseServerManagedLocalKey(key)){
+    try{ localStorage.removeItem(key); }catch(e){}
+    return false;
+  }
   try{
     localStorage.setItem(key, value);
     return true;
   }catch(err){
-    console.warn('localStorage 저장 실패:', key, err);
     if(isStorageQuotaError(err) && optional){
       try{ localStorage.removeItem(key); }catch(e){}
       return false;
     }
+    console.warn('localStorage 저장 실패:', key, err);
     throw err;
   }
+}
+
+function cleanupSupabaseLegacyCoreCache(){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return;
+  SUPABASE_SERVER_MANAGED_LOCAL_KEYS.forEach(key => {
+    try{ localStorage.removeItem(key); }catch(e){}
+  });
+  [GS_CORE_SNAPSHOT_KEY, GS_PENDING_CORE_KEY].forEach(key => {
+    try{ localStorage.removeItem(key); }catch(e){}
+  });
+  try{
+    Object.keys(localStorage)
+      .filter(key => key.startsWith('dbmt_pre_gs_load_backup_'))
+      .forEach(key => localStorage.removeItem(key));
+  }catch(e){}
 }
 
 function cacheAppDataValue(key, reg, value){
@@ -12723,6 +12754,7 @@ function applySupabasePayload(data){
   userProdEntries = data.prod || [];
   prices = data.prices || prices || [];
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+  cleanupSupabaseLegacyCoreCache();
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
   safeLocalStorageSet('dbmt_prices', JSON.stringify(prices), true);
