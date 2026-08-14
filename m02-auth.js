@@ -79,6 +79,8 @@
     saveProdEntry:['production','write'],
     openEditProdEntry:['production','update'],
     deleteProdEntry:['production','delete'],
+    addSubMaterialUsageDraftRow:['production','update'],
+    removeSubMaterialUsageDraftRow:['production','update'],
     saveSubMaterialUsageModal:['production','update'],
     deleteSubMaterialUsage:['production','delete'],
 

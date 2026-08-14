@@ -10260,17 +10260,28 @@ function createSubMaterialUsageDraft(row={}){
   };
 }
 
+function subMaterialUsagePersonalCan(action){
+  return typeof DBMTAuth === 'object' && DBMTAuth.isPersonal() && DBMTAuth.can('production', action);
+}
+
 function updateSubMaterialUsageDraft(draftId, field, value){
   const row = subMaterialUsageDraftRows.find(r => r.draftId === draftId);
   if(row) row[field] = value;
 }
 
 function addSubMaterialUsageDraftRow(){
+  if(!subMaterialUsagePersonalCan('update')){ toast('부자재 사용항목 수정 권한이 없습니다.'); return; }
   subMaterialUsageDraftRows.push(createSubMaterialUsageDraft());
   renderSubMaterialUsageDraftRows();
 }
 
 function removeSubMaterialUsageDraftRow(draftId){
+  const target = subMaterialUsageDraftRows.find(r => r.draftId === draftId);
+  const action = target?.id ? 'delete' : 'update';
+  if(!subMaterialUsagePersonalCan(action)){
+    toast(action === 'delete' ? '부자재 사용항목 삭제 권한이 없습니다.' : '부자재 사용항목 수정 권한이 없습니다.');
+    return;
+  }
   subMaterialUsageDraftRows = subMaterialUsageDraftRows.filter(r => r.draftId !== draftId);
   if(!subMaterialUsageDraftRows.length) subMaterialUsageDraftRows.push(createSubMaterialUsageDraft());
   renderSubMaterialUsageDraftRows();
@@ -10306,6 +10317,8 @@ function renderSubMaterialUsageDraftRows(){
     String(a.name||'').localeCompare(String(b.name||''),'ko') ||
     String(a.spec||'').localeCompare(String(b.spec||''),'ko')
   );
+  const canUpdate = subMaterialUsagePersonalCan('update');
+  const canDelete = subMaterialUsagePersonalCan('delete');
   body.innerHTML = subMaterialUsageDraftRows.map(row => {
     const selectedItem = subMaterialItems.find(i => String(i.id) === String(row.itemId));
     const lots = subMaterialLots
@@ -10326,13 +10339,13 @@ function renderSubMaterialUsageDraftRows(){
       return `<option value="${htmlEscape(lot.id)}"${String(lot.id)===String(row.lotId)?' selected':''}>${htmlEscape(lot.lot || '')} · ${htmlEscape(lot.date || '')} · 가용 ${baseAvailable.toLocaleString('ko-KR',{maximumFractionDigits:2})}${htmlEscape(lot.unit || selectedItem?.unit || '')}</option>`;
     }).join('');
     return `<tr>
-      <td><select style="width:100%;" onchange="onSubMaterialUsageItemChange(${jsArg(row.draftId)},this.value)">${itemOptions}</select></td>
-      <td><select style="width:100%;" onchange="onSubMaterialUsageLotChange(${jsArg(row.draftId)},this.value)"${row.itemId?'':' disabled'}>${lotOptions}</select></td>
+      <td><select style="width:100%;" onchange="onSubMaterialUsageItemChange(${jsArg(row.draftId)},this.value)"${canUpdate?'':' disabled'}>${itemOptions}</select></td>
+      <td><select style="width:100%;" onchange="onSubMaterialUsageLotChange(${jsArg(row.draftId)},this.value)"${row.itemId && canUpdate?'':' disabled'}>${lotOptions}</select></td>
       <td style="text-align:right;font-weight:700;color:${available < 0 ? '#c0392b' : '#34495e'};">${row.lotId ? available.toLocaleString('ko-KR',{maximumFractionDigits:2}) : '-'}</td>
-      <td><input type="number" min="0" step="0.01" value="${htmlEscape(row.qty)}" style="width:100%;text-align:right;" oninput="updateSubMaterialUsageDraft(${jsArg(row.draftId)},'qty',this.value)"></td>
+      <td><input type="number" min="0" step="0.01" value="${htmlEscape(row.qty)}" style="width:100%;text-align:right;" oninput="updateSubMaterialUsageDraft(${jsArg(row.draftId)},'qty',this.value)"${canUpdate?'':' readonly'}></td>
       <td>${htmlEscape(selectedItem?.unit || subMaterialLots.find(l=>String(l.id)===String(row.lotId))?.unit || '-')}</td>
-      <td><input value="${htmlEscape(row.note)}" style="width:100%;" placeholder="선택 입력" oninput="updateSubMaterialUsageDraft(${jsArg(row.draftId)},'note',this.value)"></td>
-      <td style="text-align:center;"><button type="button" class="btn btn-danger btn-sm" title="사용항목 삭제" onclick="removeSubMaterialUsageDraftRow(${jsArg(row.draftId)})">×</button></td>
+      <td><input value="${htmlEscape(row.note)}" style="width:100%;" placeholder="선택 입력" oninput="updateSubMaterialUsageDraft(${jsArg(row.draftId)},'note',this.value)"${canUpdate?'':' readonly'}></td>
+      <td style="text-align:center;">${(row.id ? canDelete : canUpdate) ? `<button type="button" class="btn btn-danger btn-sm" title="사용항목 삭제" onclick="removeSubMaterialUsageDraftRow(${jsArg(row.draftId)})">×</button>` : '-'}</td>
     </tr>`;
   }).join('');
 }
@@ -10369,6 +10382,7 @@ function closeSubMaterialUsageModal(){
 }
 
 function saveSubMaterialUsageModal(){
+  if(!subMaterialUsagePersonalCan('update')){ toast('부자재 사용항목 수정 권한이 없습니다.'); return; }
   const productionId = activeSubMaterialUsageProductionId;
   const entry = subMaterialUsageProductionEntry(productionId);
   if(!entry){ toast('연결된 생산 작업을 찾을 수 없습니다.'); return; }
@@ -10429,6 +10443,9 @@ function saveSubMaterialUsageModal(){
   const keepIds = new Set(rows.map(r=>String(r.id)));
   const deletedIds = existing.filter(u=>!keepIds.has(String(u.id))).map(u=>u.id);
   const deletedRows = existing.filter(u=>!keepIds.has(String(u.id)));
+  if(deletedIds.length && !subMaterialUsagePersonalCan('delete')){
+    return fail('기존 사용항목을 삭제할 권한이 없습니다. 삭제 항목을 다시 불러온 뒤 저장해주세요.');
+  }
   subMaterialUsages = subMaterialUsages
     .filter(u => String(u.productionId || '') !== String(productionId))
     .concat(rows);
@@ -18367,6 +18384,6 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260813m01"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
-<script src="m02-auth.js?v=20260814m02permissions2"></script>
+<script src="m02-auth.js?v=20260814m02permissions3"></script>
 </body>
 </html>
