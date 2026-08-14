@@ -8891,7 +8891,7 @@ function renderProdOutProductSuggestions(id){
   box.innerHTML = items.slice(0, 80).map(({p, idx})=>{
     const pack = labelProductPackUnitText(p);
     const sub = `${p.kind || '원료육'} · ${normalizeOriginName(p.origin)} · ${p.storage || '냉동'}${pack ? ' · 포장 ' + pack : ''}`;
-    return `<button type="button" onclick="selectProdOutProduct(${id},${idx})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
+    return `<button type="button" onpointerdown="event.preventDefault()" onclick="selectProdOutProduct(${id},${idx})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}${pack ? ` <span style="font-size:11px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 6px;">${htmlEscape(pack)}</span>` : ''}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
     </button>`;
