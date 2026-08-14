@@ -45,6 +45,144 @@
     .filter(([nav])=>nav !== 'nav-label-print-standalone')
     .map(([nav,menu])=>['p-' + nav.slice(4), menu]));
 
+  // One permission registry drives both button visibility and direct calls.
+  // `write` is used only by legacy forms that share one save button for create/update.
+  const ACTION_POLICIES = Object.freeze({
+    'DBMTAuth.newUser':['access_control','admin','uiOnly'],
+    'DBMTAuth.saveUser':['access_control','admin','uiOnly'],
+    'DBMTAuth.newRole':['access_control','admin','uiOnly'],
+    'DBMTAuth.saveRole':['access_control','admin','uiOnly'],
+
+    newCompanyBusinessSite:['company_master','create','uiOnly'],
+    saveCompanyMasterRecord:['company_master','update'],
+    saveCompanyBusinessSite:['company_master','write'],
+    newDocumentSenderProfile:['company_master','create','uiOnly'],
+    saveDocumentSenderProfile:['company_master','write'],
+    clearCompanyIdentifierForm:['company_master','create','uiOnly'],
+    saveCompanySiteIdentifier:['company_master','write'],
+
+    addSamsungVendor:['samsung','create'],
+    deleteSamsungVendor:['samsung','delete'],
+    addSamsungVendorProduct:['samsung','write'],
+    editSamsungVendorProduct:['samsung','update'],
+    deleteSamsungVendorProduct:['samsung','delete'],
+
+    addTransaction:['transactions','write'],
+    saveBulkInbound:['transactions','create'],
+    saveBulkOutbound:['transactions','create'],
+    saveEditTxn:['transactions','update'],
+    loadTxnToForm:['transactions','update'],
+    deleteTransaction:['transactions','delete'],
+
+    addProdInputRow:['production','write','uiOnly'],
+    addProdOutputRow:['production','write','uiOnly'],
+    saveProdEntry:['production','write'],
+    openEditProdEntry:['production','update'],
+    deleteProdEntry:['production','delete'],
+    saveSubMaterialUsageModal:['production','update'],
+    deleteSubMaterialUsage:['production','delete'],
+
+    openStockAdjust:['stock','update'],
+    saveStockAdjust:['stock','update'],
+
+    newColdStorageRequest:['cold_storage_request','create','uiOnly'],
+    addColdStorageRequestItem:['cold_storage_request','create','uiOnly'],
+    saveColdStorageRequest:['cold_storage_request','write'],
+    deleteColdStorageRequest:['cold_storage_request','delete'],
+    sendColdStorageRequestFax:['cold_storage_request','apiSend'],
+
+    addSubMaterialItem:['submaterials','write'],
+    editSubMaterialItem:['submaterials','update'],
+    deleteSubMaterialItem:['submaterials','delete'],
+    addSubMaterialInbound:['submaterials','create'],
+    deleteSubMaterialLot:['submaterials','delete'],
+    addSubMaterialCount:['submaterials','create'],
+    deleteSubMaterialCount:['submaterials','delete'],
+
+    savePrice:['prices','write'],
+    editPrice:['prices','update'],
+    deletePrice:['prices','delete'],
+    doImport:['import','create'],
+    restoreAllData:['import','admin'],
+
+    toggleDocCheckKeys:['document_check','update'],
+    sendDocumentRequests:['document_check','apiSend'],
+    saveTraderInfo:['traders','write'],
+    editTrader:['traders','update'],
+    deleteTrader:['traders','delete'],
+
+    saveEmployee:['employees','write'],
+    editEmployee:['employees','update'],
+    openResignModal:['employees','update'],
+    deleteEmployee:['employees','delete'],
+    saveResignation:['employees','update'],
+    reinstateEmployee:['employees','update'],
+    reopenSettlement:['employees','update'],
+    saveLeave:['attendance','write'],
+    editLeave:['attendance','update'],
+    deleteLeave:['attendance','delete'],
+    saveLeaveDeduction:['attendance','write'],
+    editLeaveDeduction:['attendance','update'],
+    deleteLeaveDeduction:['attendance','delete'],
+    saveWeekendWork:['attendance','write'],
+    editWeekendWork:['attendance','update'],
+    deleteWeekendWork:['attendance','delete'],
+
+    saveDriverAccount:['driver_attendance','admin'],
+    editDriverAccount:['driver_attendance','admin'],
+    setDriverAccountActive:['driver_attendance','admin'],
+    saveDriverAttendanceAdmin:['driver_attendance','write'],
+    editDriverAttendance:['driver_attendance','update'],
+    deleteDriverAttendance:['driver_attendance','delete'],
+    saveDriverLocation:['driver_attendance','admin'],
+    editDriverLocation:['driver_attendance','admin'],
+    saveMobileAdminAccount:['mobile_admin','admin'],
+    editMobileAdminAccount:['mobile_admin','admin'],
+
+    addMaterialRow:['cost_calculator','create','uiOnly'],
+    saveCostCalc:['cost_calculator','create'],
+    deleteCostCalc:['cost_calculator','delete'],
+    newQuotation:['quotation','create','uiOnly'],
+    addQuotationRow:['quotation','create','uiOnly'],
+    saveQuotation:['quotation','write'],
+    deleteQuotation:['quotation','delete'],
+
+    newFactorySimScenario:['factory_sim','create','uiOnly'],
+    saveFactorySimScenario:['factory_sim','write'],
+    deleteFactorySimScenario:['factory_sim','delete'],
+    addFactorySimZone:['factory_sim','create','uiOnly'],
+    addFactorySimEquipment:['factory_sim','create','uiOnly'],
+    addFactorySimRoute:['factory_sim','create','uiOnly'],
+
+    applySalaryToExpense:['expense_settings','update'],
+    savePangwanbi:['expense_settings','write'],
+    editPangwanbi:['expense_settings','update'],
+    deletePangwanbi:['expense_settings','delete'],
+    addExpense:['expenses','write'],
+    editExpense:['expenses','update'],
+    deleteExpense:['expenses','delete'],
+
+    saveLabelProduct:['label_products','write'],
+    editLabelProduct:['label_products','update'],
+    saveInlineLabelProduct:['label_products','update'],
+    deleteLabelProduct:['label_products','delete'],
+    saveWorkOrder:['workorders','write'],
+    editWorkOrder:['workorders','update'],
+    deleteWorkOrder:['workorders','delete'],
+    printLabel:['label','create'],
+    saveLabelTemplate:['label','create'],
+    deleteLabelTemplate:['label','delete']
+  });
+
+  const SELECTOR_POLICIES = Object.freeze([
+    ['#doc-request-email-btn','document_check','apiSend'],
+    ['#doc-request-fax-btn','document_check','apiSend'],
+    ['#doc-request-send-btn','document_check','apiSend'],
+    ['#m02-user-save','access_control','admin'],
+    ['#m02-role-save','access_control','admin'],
+    ['[data-identifier-key]','company_master','update']
+  ]);
+
   let state = {user:null, permissions:new Map(), authMode:'optional'};
   let adminData = null;
   let selectedUserId = '';
@@ -106,9 +244,22 @@
   }
 
   function can(menuCode, action='view'){
-    if(!state.user) return true;
+    if(!state.user) return action === 'view';
     const row = state.permissions.get(menuCode);
     return Boolean(row && row[ACTION_FIELDS[action] || action]);
+  }
+
+  function canAction(menuCode, action='view'){
+    if(action === 'write') return can(menuCode, 'create') || can(menuCode, 'update');
+    return can(menuCode, action);
+  }
+
+  function requireAction(menuCode, action, silent=false){
+    if(canAction(menuCode, action)) return true;
+    if(!silent && typeof window.toast === 'function'){
+      window.toast(state.user ? '이 작업을 수행할 권한이 없습니다.' : '이 작업은 개인 사용자 로그인이 필요합니다.');
+    }
+    return false;
   }
 
   function isPersonal(){ return Boolean(state.user && sessionToken()); }
@@ -123,6 +274,60 @@
     if(typeof window.renderStock === 'function' && document.getElementById('p-stock')?.classList.contains('active')){
       window.renderStock();
     }
+    applyActionPermissions();
+  }
+
+  function policyForElement(el){
+    const onclick = el.getAttribute?.('onclick') || '';
+    for(const [name, spec] of Object.entries(ACTION_POLICIES)){
+      if(onclick.includes(name + '(')) return spec;
+    }
+    for(const [selector, menuCode, action] of SELECTOR_POLICIES){
+      if(el.matches?.(selector)) return [menuCode, action];
+    }
+    const page = el.closest?.('.tab-panel[id^="p-"]');
+    const menuCode = page ? PAGE_MENU[page.id] : '';
+    const label = String(el.textContent || el.value || '').replace(/\s+/g, ' ').trim();
+    if(menuCode && label){
+      if(/remove[A-Za-z0-9_]*Row\s*\(|\.remove\s*\(\)/.test(onclick)) return [menuCode, 'write'];
+      if(/(팩스|요청 발송|API\s*전송)/.test(label)) return [menuCode, 'apiSend'];
+      if(/(영구삭제|실사삭제|삭제)/.test(label) || /^(×|✕)$/.test(label)) return [menuCode, 'delete'];
+      if(/(수정|퇴사처리|복직|반영)/.test(label)) return [menuCode, 'update'];
+      if(/(저장|등록|일괄 저장|가져오기 실행)/.test(label) || /^\+\s*/.test(label) || /^새 (요청|견적|시나리오)/.test(label)) return [menuCode, 'write'];
+    }
+    return null;
+  }
+
+  function setActionElementVisible(el, visible){
+    if(!el?.style) return;
+    if(el.dataset.m02OriginalDisplay === undefined) el.dataset.m02OriginalDisplay = el.style.display || '';
+    el.style.display = visible ? el.dataset.m02OriginalDisplay : 'none';
+    el.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  }
+
+  function applyActionPermissions(root=document){
+    const scope = root?.querySelectorAll ? root : document;
+    const candidates = [];
+    if(scope.matches?.('[onclick],button,input[type="button"],input[type="submit"]')) candidates.push(scope);
+    candidates.push(...scope.querySelectorAll('[onclick],button,input[type="button"],input[type="submit"]'));
+    candidates.forEach(el=>{
+      const spec = policyForElement(el);
+      if(spec) setActionElementVisible(el, canAction(spec[0], spec[1]));
+    });
+  }
+
+  function installActionGuards(){
+    Object.entries(ACTION_POLICIES).forEach(([name, spec])=>{
+      if(spec[2] === 'uiOnly') return;
+      const original = window[name];
+      if(typeof original !== 'function' || original.__m02PermissionGuard) return;
+      const guarded = function(...args){
+        if(!requireAction(spec[0], spec[1])) return undefined;
+        return original.apply(this, args);
+      };
+      Object.defineProperty(guarded, '__m02PermissionGuard', {value:true});
+      window[name] = guarded;
+    });
   }
 
   function canOpenPage(pageId){
@@ -237,7 +442,7 @@
   }
 
   function ensureAdminAction(){
-    if(state.user && !can('access_control', 'admin')) throw new Error('사용자·권한 관리 권한이 없습니다.');
+    if(!isPersonal() || !can('access_control', 'admin')) throw new Error('사용자·권한 관리 권한이 없습니다.');
   }
 
   async function initAdminPage(){
@@ -443,14 +648,23 @@
 
   const api={
     initializeSession, openLogin, closeLogin, loginFromModal, logoutConfirm,
-    can, canOpenPage, isPersonal, getSessionToken, auditIdentity, applyNavigation,
+    can, canAction, requireAction, canOpenPage, isPersonal, getSessionToken, auditIdentity, applyNavigation,
+    applyActionPermissions,
     initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole, saveUser, saveRole
   };
   window.DBMTAuth=api;
 
   function bootstrap(){
+    installActionGuards();
     renderHeader();
     applyNavigation();
+    applyActionPermissions();
+    if(document.body && typeof MutationObserver === 'function'){
+      const observer = new MutationObserver(changes=>changes.forEach(change=>change.addedNodes.forEach(node=>{
+        if(node?.nodeType === 1) applyActionPermissions(node);
+      })));
+      observer.observe(document.body, {childList:true, subtree:true});
+    }
     initializeSession();
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bootstrap);
