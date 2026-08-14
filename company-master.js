@@ -13,7 +13,7 @@ const LEGACY_MASTER = {
     {
       id: 'legacy_dongbumt', code: 'dongbumt', legalName: '주식회사 동부엠티', displayName: '동부엠티',
       englishName: '', representativeName: '이창성', corporateRegistrationNo: '1201110960816',
-      sealAssetKey: 'assets/company-seal.png', logoAssetKey: '', isPrimary: true, active: true,
+      sealAssetKey: 'assets/company-seal.png', logoAssetKey: 'assets/company-logo.png', isPrimary: true, active: true,
       isLegacyDraft: true, revision: null,
       sites: [{
         id: 'legacy_dongbumt_main', companyId: 'legacy_dongbumt', code: 'processing_plant', name: '가공장',
