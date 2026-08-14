@@ -72,6 +72,7 @@
     saveBulkOutbound:['transactions','create'],
     saveEditTxn:['transactions','update'],
     loadTxnToForm:['transactions','update'],
+    updateTxnPrice:['transactions','update'],
     deleteTransaction:['transactions','delete'],
 
     addProdInputRow:['production','write','uiOnly'],

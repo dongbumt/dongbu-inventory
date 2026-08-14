@@ -4986,74 +4986,107 @@ function normalizeRowsForUpsert(rows, prefix='row'){
   return copy;
 }
 
-async function supabaseSaveTransactionRows(rows, deletedIds){
-  const password = requireSupabasePassword();
-  const upsertRows = normalizeRowsForUpsert(rows, 'tx');
-  const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
+function personalServerWriteToken(menuCode, action){
+  if(typeof DBMTAuth !== 'object' || !DBMTAuth.isPersonal()){
+    throw new Error('이 작업은 개인 사용자 로그인이 필요합니다.');
+  }
+  if(!DBMTAuth.can(menuCode, action)){
+    throw new Error('이 작업을 수행할 권한이 없습니다.');
+  }
+  const token = DBMTAuth.getSessionToken();
+  if(!token) throw new Error('개인 사용자 로그인이 만료되었습니다. 다시 로그인해주세요.');
+  return token;
+}
+
+function assertPersonalServerResult(result, fallbackMessage){
+  if(!result?.ok) throw new Error(result?.message || fallbackMessage || '서버 권한 확인에 실패했습니다.');
+  return result;
+}
+
+async function refreshProtectedCoreAfterFailure(){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return;
   try{
-    if(upsertRows.length){
-      await sbRpc('dbmt_upsert_transactions', {p_password: password, p_rows: upsertRows});
-    }
-    for(const id of deleteIds){
-      await sbRpc('dbmt_delete_transaction', {p_password: password, p_id: id});
-    }
-    gsShowSync('Supabase transaction save complete');
-  } catch(err){
-    console.warn('Supabase transaction row save failed; falling back to full core sync:', err);
-    await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
+    const password = requireSupabasePassword();
+    const data = await sbRpc('dbmt_get_all', {p_password:password});
+    try{ data.subMaterialUsages = await supabaseLoadSubMaterialUsages(password); }catch(_){ }
+    applySupabasePayload(data);
+    renderAll();
+    renderScheduleCalendar();
+  }catch(refreshErr){
+    console.error('권한 저장 실패 후 서버 데이터 복구 실패:', refreshErr);
   }
 }
 
-function saveTransactionRows(rows, deletedIds, deletedRows, options={}){
+async function supabaseSaveTransactionRows(rows, deletedIds, options={}){
+  const upsertRows = normalizeRowsForUpsert(rows, 'tx');
+  const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
+  if(options.serverMode === 'import'){
+    const token = personalServerWriteToken('import', 'create');
+    if(deleteIds.length) throw new Error('엑셀 가져오기에서는 거래내역을 삭제할 수 없습니다.');
+    const result = await sbRpc('dbmt_erp_import_transactions', {p_token:token, p_rows:upsertRows});
+    assertPersonalServerResult(result, '엑셀 거래내역을 저장할 권한이 없습니다.');
+    gsShowSync('✅ 엑셀 거래내역 서버 저장 완료');
+    return result;
+  }
+  const expectedAction = deleteIds.length && !upsertRows.length
+    ? 'delete'
+    : (options.action === '수정' ? 'update' : 'create');
+  const token = personalServerWriteToken('transactions', expectedAction);
+  const result = await sbRpc('dbmt_erp_save_transactions', {
+    p_token:token, p_rows:upsertRows, p_delete_ids:deleteIds
+  });
+  assertPersonalServerResult(result, '거래내역을 저장할 권한이 없습니다.');
+  gsShowSync('✅ Supabase 거래내역 저장 완료');
+  return result;
+}
+
+async function saveTransactionRows(rows, deletedIds, deletedRows, options={}){
   markLocalCoreChanged();
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    try{
+      await supabaseSaveTransactionRows(rows, deletedIds, options);
+    }catch(err){
+      console.error('Supabase transaction save error:', err);
+      await refreshProtectedCoreAfterFailure();
+      throw err;
+    }
+  }
   recordTransactionChange(rows, deletedIds, deletedRows, options);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
-  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
-    supabaseSaveTransactionRows(rows, deletedIds).catch(err=>{
-      console.error('Supabase transaction save error:', err);
-      const detail = String(err?.message || err || '').slice(0, 180);
-      gsShowSync(`Supabase transaction save failed${detail ? ': ' + detail : ''}`, true);
-    });
-    return;
-  }
-  save();
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') save();
 }
 
 async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId){
-  const password = requireSupabasePassword();
-  try{
-    if(deletedProdId){
-      await sbRpc('dbmt_delete_production', {p_password: password, p_id: String(deletedProdId)});
-    }
-    if(entry){
-      await sbRpc('dbmt_upsert_production', {p_password: password, p_rows: [entry]});
-    }
-    const txnRows = normalizeRowsForUpsert(transactionRows, 'tx');
-    if(txnRows.length){
-      await sbRpc('dbmt_upsert_transactions', {p_password: password, p_rows: txnRows});
-    }
-    gsShowSync('Supabase production save complete');
-  } catch(err){
-    console.warn('Supabase production row save failed; falling back to full core sync:', err);
-    await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
-  }
+  const action = entry ? (deletedProdId ? 'update' : 'create') : 'delete';
+  const token = personalServerWriteToken('production', action);
+  const txnRows = normalizeRowsForUpsert(transactionRows, 'tx');
+  const result = await sbRpc('dbmt_erp_save_production', {
+    p_token:token,
+    p_entry:entry || null,
+    p_transaction_rows:txnRows,
+    p_replace_id:deletedProdId ? String(deletedProdId) : null
+  });
+  assertPersonalServerResult(result, '생산일보를 저장할 권한이 없습니다.');
+  gsShowSync('✅ Supabase 생산일보 저장 완료');
+  return result;
 }
 
-function saveProductionRows(entry, transactionRows, deletedProdId, deletedProdEntry){
+async function saveProductionRows(entry, transactionRows, deletedProdId, deletedProdEntry){
   markLocalCoreChanged();
   normalizeLocalTransactionIds();
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+    try{
+      await supabaseSaveProductionRows(entry, transactionRows, deletedProdId);
+    }catch(err){
+      console.error('Supabase production save error:', err);
+      await refreshProtectedCoreAfterFailure();
+      throw err;
+    }
+  }
   recordProductionChange(entry, transactionRows, deletedProdId, deletedProdEntry);
   safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
-  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
-    supabaseSaveProductionRows(entry, transactionRows, deletedProdId).catch(err=>{
-      console.error('Supabase production save error:', err);
-      const detail = String(err?.message || err || '').slice(0, 180);
-      gsShowSync(`Supabase production save failed${detail ? ': ' + detail : ''}`, true);
-    });
-    return;
-  }
-  save();
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') save();
 }
 
 async function supabaseLoadSubMaterialUsages(password=requireSupabasePassword()){
@@ -5111,7 +5144,7 @@ function saveSubMaterialUsageRows(rows, deletedIds, options={}){
       });
     }
   }
-  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+  if(!options.skipServer && localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     supabaseSaveSubMaterialUsageRows(upserts, deletes).catch(err=>{
       console.error('Supabase submaterial usage save failed:', err);
       const detail = String(err?.message || err || '').slice(0, 180);
@@ -7285,7 +7318,7 @@ function updateTraderList(){
   }
 }
 
-function updateTxnPrice(id, newPriceStr){
+async function updateTxnPrice(id, newPriceStr){
   const newPrice = parseFloat(newPriceStr)||0;
   const txn = userTransactions.find(t=>String(t.id)===String(id));
   if(!txn) return;
@@ -7298,7 +7331,12 @@ function updateTxnPrice(id, newPriceStr){
   txn.amount = Math.round(newPrice * txn.weight);
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   invalidateStockMap();
-  saveTransactionRows(txn, null, null, {action:'수정'});
+  try{
+    await saveTransactionRows(txn, null, null, {action:'수정'});
+  }catch(err){
+    toast(String(err?.message || err || '단가 수정에 실패했습니다.'));
+    return;
+  }
   // 금액 셀만 즉시 업데이트 (전체 re-render 없이)
   const domId = String(id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
   const amtEl = document.getElementById(`txn-amt-${domId}`);
@@ -7389,7 +7427,7 @@ function getTxnSamsungMeta(){
 }
 
 
-function addTransaction(){
+async function addTransaction(){
   const date=document.getElementById('t-date').value;
   const type=document.getElementById('t-type').value;
   if(type === '출고' || type === '재고이동') autoSelectTxnStockFromSearch(false);
@@ -7501,7 +7539,13 @@ function addTransaction(){
   _stockMapCache=null;
   const wasEditTxn = !!_editTxnId;
   const savedProduct = product;
-  saveTransactionRows(savedTxn, null, null, {action: wasEditTxn ? '수정' : '저장'});
+  try{
+    await saveTransactionRows(savedTxn, null, null, {action: wasEditTxn ? '수정' : '저장'});
+  }catch(err){
+    showTransactionSaveStatus('거래내역 저장 실패 — 서버 권한 또는 로그인 상태를 확인해주세요.');
+    toast(String(err?.message || err || '거래내역 저장에 실패했습니다.'));
+    return;
+  }
   clearTransactionForm({resetType:true});
   renderTransactions(); updateProductList(); updateOutProductList();
   renderStock();
@@ -7726,7 +7770,7 @@ function applyBulkInboundPrice(){
   });
   toast(cnt ? `${cnt}개 행에 단가를 채웠습니다.` : '빈 단가 칸이 없습니다.');
 }
-function saveBulkInbound(){
+async function saveBulkInbound(){
   const date = document.getElementById('bulk-in-date')?.value || '';
   if(!date){ toast('입고일자를 선택하세요.'); return; }
   const rows = document.querySelectorAll('#bulk-inbound-tbody tr');
@@ -7766,7 +7810,12 @@ function saveBulkInbound(){
   toAdd.forEach(t => userTransactions.push(t));
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   _stockMapCache = null;
-  saveTransactionRows(toAdd);
+  try{
+    await saveTransactionRows(toAdd);
+  }catch(err){
+    toast(String(err?.message || err || '입고 일괄 저장에 실패했습니다.'));
+    return;
+  }
   renderTransactions(); updateProductList(); renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   clearBulkInbound();
@@ -8157,7 +8206,7 @@ function getBulkOutboundSamsungMeta(tr){
   return getSamsungProductMeta(vendorId, rowId);
 }
 
-function saveBulkOutbound(){
+async function saveBulkOutbound(){
   const date = document.getElementById('bulk-out-date')?.value || '';
   if(!date){ toast('출고일자를 선택하세요.'); return; }
   const stockByKey = {};
@@ -8242,7 +8291,12 @@ function saveBulkOutbound(){
   });
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   _stockMapCache = null;
-  saveTransactionRows(addedRows);
+  try{
+    await saveTransactionRows(addedRows);
+  }catch(err){
+    toast(String(err?.message || err || '출고 일괄 저장에 실패했습니다.'));
+    return;
+  }
   renderTransactions(); updateProductList(); updateOutProductList(); renderStock();
   if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
   initInvoiceDates();
@@ -8327,12 +8381,18 @@ function renderTransactions(){
   </tr>`;
   }).join('');
 }
-function deleteTransaction(id){
+async function deleteTransaction(id){
   if(!confirm('삭제하시겠습니까?'))return;
   const deletedTxn = userTransactions.find(t=>String(t.id)===String(id));
   userTransactions=userTransactions.filter(t=>String(t.id)!==String(id));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveTransactionRows([], [id], deletedTxn ? [deletedTxn] : []); renderTransactions(); renderStock();
+  try{
+    await saveTransactionRows([], [id], deletedTxn ? [deletedTxn] : []);
+  }catch(err){
+    toast(String(err?.message || err || '거래내역 삭제에 실패했습니다.'));
+    return;
+  }
+  renderTransactions(); renderStock();
 }
 
 // ── 거래내역 수정 모달 ──
@@ -8340,7 +8400,7 @@ let _editTxnId=null;
 // 구 모달 함수 (호환성 유지용, 실제로는 loadTxnToForm 사용)
 function openEditTxnModal(id){ loadTxnToForm(id); }
 function closeEditTxnModal(){ clearTransactionForm(); }
-function saveEditTxn(){ addTransaction(); }
+function saveEditTxn(){ return addTransaction(); }
 
 function loadTxnToForm(id){
   const t=userTransactions.find(x=>String(x.id)===String(id));
@@ -8882,7 +8942,7 @@ function getProdOutSamsungMeta(id){
   return getSamsungProductMeta(vendorId, rowId);
 }
 
-function saveProdEntry(){
+async function saveProdEntry(){
   const date = document.getElementById('prod-date').value;
   const jobNo = document.getElementById('prod-job-no').value.trim() || '1';
   const jobNote = document.getElementById('prod-note')?.value.trim() || '';
@@ -9030,7 +9090,13 @@ function saveProdEntry(){
     }
   });
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveProductionRows(entry, productionTxns, deletedProdId, deletedProdEntry);
+  try{
+    await saveProductionRows(entry, productionTxns, deletedProdId, deletedProdEntry);
+  }catch(err){
+    if(editingProdId) _editProdId = editingProdId;
+    toast(String(err?.message || err || '생산일보 저장에 실패했습니다.'));
+    return;
+  }
   if(editingProdId) syncSubMaterialUsageProductionMetadata(entry);
   renderProduction();
   renderStock();
@@ -9053,7 +9119,7 @@ function clearProdForm(){
   autoSetJobNo();
 }
 
-function deleteProdEntry(id){
+async function deleteProdEntry(id){
   const linkedSubMaterialUsages = getProductionSubMaterialUsages(id);
   const usageNotice = linkedSubMaterialUsages.length
     ? `\n연결된 부자재 사용 ${linkedSubMaterialUsages.length}건도 취소되어 재고가 복원됩니다.`
@@ -9063,15 +9129,24 @@ function deleteProdEntry(id){
   userProdEntries=userProdEntries.filter(e=>String(e.id)!==String(id));
   userTransactions=userTransactions.filter(t=>String(t._prodId)!==String(id));
   if(linkedSubMaterialUsages.length){
-    const deletedUsageIds = linkedSubMaterialUsages.map(u=>u.id);
     subMaterialUsages = subMaterialUsages.filter(u=>String(u.productionId||'')!==String(id));
-    saveSubMaterialUsageRows([], deletedUsageIds, {
-      target:subMaterialProductionSummary(deletedProdEntry),
-      deletedRows:linkedSubMaterialUsages
-    });
   }
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveProductionRows(null, [], id, deletedProdEntry); renderProduction(); renderStock(); renderTransactions();
+  try{
+    await saveProductionRows(null, [], id, deletedProdEntry);
+  }catch(err){
+    toast(String(err?.message || err || '생산일보 삭제에 실패했습니다.'));
+    return;
+  }
+  if(linkedSubMaterialUsages.length){
+    const deletedUsageIds = linkedSubMaterialUsages.map(u=>u.id);
+    saveSubMaterialUsageRows([], deletedUsageIds, {
+      target:subMaterialProductionSummary(deletedProdEntry),
+      deletedRows:linkedSubMaterialUsages,
+      skipServer:true
+    });
+  }
+  renderProduction(); renderStock(); renderTransactions();
   if(document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
   if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
   toast('생산일보 삭제 완료. 재고가 복원됐습니다.');
@@ -12331,7 +12406,7 @@ function renderImportPreview(){
   }
 }
 
-function doImport(){
+async function doImport(){
   const newItems = importParsed.filter(r=>r._status==='new');
   if(!newItems.length){ alert('추가할 항이 없습니다.'); return; }
 
@@ -12360,7 +12435,12 @@ function doImport(){
   });
 
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveTransactionRows(addedRows);
+  try{
+    await saveTransactionRows(addedRows, null, null, {serverMode:'import', action:'저장'});
+  }catch(err){
+    toast(String(err?.message || err || '엑셀 거래내역 가져오기에 실패했습니다.'));
+    return;
+  }
   renderTransactions();
   updateProductList();
   updateOutProductList();
@@ -18415,6 +18495,6 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260813m01"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
-<script src="m02-auth.js?v=20260814m02permissions3"></script>
+<script src="m02-auth.js?v=20260814m02permissions4"></script>
 </body>
 </html>

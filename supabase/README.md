@@ -64,6 +64,10 @@ Editor query for each file:
 42. `schema-rpc-20-erp-users-roles.sql`
 43. `schema-rpc-21-erp-schedule-permissions.sql`
 44. `schema-rpc-22-erp-stock-adjust-permission.sql`
+45. `schema-rpc-23-erp-transaction-permissions.sql`
+46. `schema-rpc-24-erp-production-permissions.sql`
+47. `schema-rpc-25-erp-excel-import-permissions.sql`
+48. `schema-rpc-26-erp-core-write-hardening.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -102,6 +106,9 @@ This creates:
 - `dbmt_erp_save_schedule(token, id, date, text)`
 - `dbmt_erp_delete_schedule(token, id)`
 - `dbmt_erp_save_stock_adjust(token, record)`
+- `dbmt_erp_save_transactions(token, rows, delete_ids)`
+- `dbmt_erp_save_production(token, entry, transaction_rows, replace_id)`
+- `dbmt_erp_import_transactions(token, rows)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.
@@ -171,6 +178,25 @@ administrator keeps its independent authenticated schedule RPC.
 Apply `20260814160000_erp_stock_adjust_permission.sql` to require a personal
 session with the 재고현황 `update` permission for the 재고 정리 action. The ERP
 uses the dedicated `dbmt_erp_save_stock_adjust` RPC and records the acting user.
+Apply the next three M02 migrations in order:
+
+1. `20260814170000_erp_transaction_permissions.sql` moves 거래내역 create,
+   update, and delete writes to `dbmt_erp_save_transactions`.
+2. `20260814180000_erp_production_permissions.sql` moves 생산일보 writes to the
+   atomic `dbmt_erp_save_production` RPC, including linked transaction rows and
+   submaterial-usage cancellation on delete.
+3. `20260814190000_erp_excel_import_permissions.sql` moves the active Excel
+   transaction import to `dbmt_erp_import_transactions` with the `import/create`
+   permission.
+
+These migrations revoke browser execution of the corresponding legacy
+shared-password upsert, delete, full-sync, and migration RPCs. Trusted
+`service_role` maintenance access is retained; never expose that key to the
+browser.
+Apply `20260814200000_erp_core_write_hardening.sql` after them. It prevents a
+transaction writer from taking over production/stock-adjustment row IDs,
+requires update permission when a deleted transaction ID is reused, and blocks
+production transaction IDs that already belong to another record.
 
 ## 3. Document request delivery
 
