@@ -363,11 +363,12 @@
       </div>
     </div>
     <div id="sch-calendar-title" style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;"></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:#f8f9fa;border:1px solid var(--border);border-radius:8px;">
+    <div id="sch-event-editor" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:#f8f9fa;border:1px solid var(--border);border-radius:8px;">
       <input type="date" id="sch-event-date" style="width:145px;font-size:12px;">
-      <input id="sch-event-text" placeholder="일정 입력" onkeydown="if(event.key==='Enter') addScheduleEvent()" style="flex:1;min-width:220px;font-size:12px;">
-      <button type="button" class="btn btn-primary btn-sm" onclick="addScheduleEvent()" style="margin:0;">+ 일정 추가</button>
+      <input id="sch-event-text" maxlength="300" placeholder="일정 입력" onkeydown="if(event.key==='Enter') addScheduleEvent()" style="flex:1;min-width:220px;font-size:12px;">
+      <button type="button" class="btn btn-primary btn-sm" id="sch-event-add-btn" onclick="addScheduleEvent()" style="margin:0;">+ 일정 추가</button>
     </div>
+    <div id="sch-permission-note" class="m02-note" style="display:none;margin-bottom:12px;">일정 등록은 개인 사용자 로그인이 필요합니다.</div>
     <div id="sch-calendar" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:#dce3ea;border:1px solid #dce3ea;border-radius:8px;overflow:hidden;"></div>
   </div>
 </div>
@@ -6006,46 +6007,80 @@ function moveScheduleMonth(delta){
   renderScheduleCalendar();
 }
 
-function addScheduleEvent(date){
+function schedulePersonalCan(action){
+  return typeof DBMTAuth === 'object' && DBMTAuth.isPersonal() && DBMTAuth.can('schedule', action);
+}
+
+function applySchedulePermissionState(){
+  const canCreate = schedulePersonalCan('create');
+  const editor = document.getElementById('sch-event-editor');
+  const note = document.getElementById('sch-permission-note');
+  if(editor) editor.style.display = canCreate ? 'flex' : 'none';
+  if(note){
+    note.style.display = canCreate ? 'none' : 'block';
+    note.textContent = (typeof DBMTAuth === 'object' && DBMTAuth.isPersonal())
+      ? '이 역할에는 일정 등록 권한이 없습니다.'
+      : '일정 등록·삭제는 개인 사용자 로그인이 필요합니다.';
+  }
+}
+
+function applyPersonalScheduleResult(result){
+  if(!result?.ok) throw new Error(result?.message || '일정 처리 권한이 없습니다.');
+  if(Array.isArray(result.events)) scheduleEvents = result.events;
+  safeLocalStorageSet('dbmt_schedule_events', JSON.stringify(scheduleEvents), true);
+  if(result.logEntry){
+    dataChangeLogs = [result.logEntry, ...dataChangeLogs.filter(row=>row?.id !== result.logEntry.id)];
+    saveDataChangeLogsLocal();
+  }
+  resetDataChangeAppDataBaseline();
+}
+
+async function addScheduleEvent(date){
   const dateEl = document.getElementById('sch-event-date');
   const textEl = document.getElementById('sch-event-text');
   const eventDate = date || dateEl?.value || today;
   const text = textEl?.value.trim() || '';
+  if(!schedulePersonalCan('create')){ toast('일정 등록 권한이 없습니다.'); return; }
   if(!eventDate){ toast('일정 날짜를 선택하세요.'); return; }
   if(!text){ toast('일정 내용을 입력하세요.'); return; }
-  const event = { id:Date.now()+Math.random(), date:eventDate, text };
-  scheduleEvents.push(event);
-  const dateLabel = dataChangeDateLabel(eventDate);
-  queueAppDataChangeDetail('scheduleEvents', {
-    action:'저장',
-    target:dateLabel,
-    summary:`일정 저장: ${dateLabel} / ${text}`,
-    refId:event.id
-  });
-  saveScheduleEvents();
-  if(textEl) textEl.value = '';
-  const monthEl = document.getElementById('sch-month');
-  if(monthEl && eventDate.slice(0,7) !== monthEl.value) monthEl.value = eventDate.slice(0,7);
-  renderScheduleCalendar();
+  const button = document.getElementById('sch-event-add-btn');
+  if(button) button.disabled = true;
+  try{
+    const result = await sbRpc('dbmt_erp_save_schedule', {
+      p_token:DBMTAuth.getSessionToken(), p_id:null, p_date:eventDate, p_text:text
+    });
+    applyPersonalScheduleResult(result);
+    if(textEl) textEl.value = '';
+    const monthEl = document.getElementById('sch-month');
+    if(monthEl && eventDate.slice(0,7) !== monthEl.value) monthEl.value = eventDate.slice(0,7);
+    renderScheduleCalendar();
+    toast('일정을 등록했습니다.');
+  }catch(err){
+    toast(String(err?.message || err || '일정 등록에 실패했습니다.'));
+  }finally{
+    if(button) button.disabled = false;
+  }
 }
 
-function deleteScheduleEvent(id){
+async function deleteScheduleEvent(id){
+  if(!schedulePersonalCan('delete')){ toast('일정 삭제 권한이 없습니다.'); return; }
   const targetId = String(id ?? '');
   const event = scheduleEvents.find(e => String(e.id ?? '') === targetId);
   if(!event) return;
-  const dateLabel = dataChangeDateLabel(event.date);
-  queueAppDataChangeDetail('scheduleEvents', {
-    action:'삭제',
-    target:dateLabel,
-    summary:`일정 삭제: ${dateLabel}${event.text ? ' / ' + event.text : ''}`,
-    refId:targetId
-  });
-  scheduleEvents = scheduleEvents.filter(e => String(e.id ?? '') !== targetId);
-  saveScheduleEvents();
-  renderScheduleCalendar();
+  try{
+    const result = await sbRpc('dbmt_erp_delete_schedule', {
+      p_token:DBMTAuth.getSessionToken(), p_id:targetId
+    });
+    applyPersonalScheduleResult(result);
+    renderScheduleCalendar();
+    toast('일정을 삭제했습니다.');
+  }catch(err){
+    toast(String(err?.message || err || '일정 삭제에 실패했습니다.'));
+  }
 }
 
 function selectScheduleDate(date){
+  if(!schedulePersonalCan('create')) return;
   const dateEl = document.getElementById('sch-event-date');
   const textEl = document.getElementById('sch-event-text');
   if(dateEl) dateEl.value = date;
@@ -6104,6 +6139,9 @@ function getDailyProductionInputMap(){
 function renderScheduleCalendar(){
   const cal = document.getElementById('sch-calendar');
   if(!cal) return;
+  applySchedulePermissionState();
+  const canCreateSchedule = schedulePersonalCan('create');
+  const canDeleteSchedule = schedulePersonalCan('delete');
   const eventDateEl = document.getElementById('sch-event-date');
   if(eventDateEl && !eventDateEl.value) eventDateEl.value = today;
   const month = scheduleMonthValue();
@@ -6151,7 +6189,7 @@ function renderScheduleCalendar(){
     const eventHtml = dayEvents.map(e=>`
       <div style="display:flex;gap:4px;align-items:flex-start;background:#f8f9fa;border:1px solid #edf0f2;border-radius:6px;padding:4px 5px;margin-bottom:4px;">
         <div style="flex:1;font-size:11px;line-height:1.35;color:#2c3e50;word-break:break-word;">${htmlEscape(e.text)}</div>
-        <button type="button" onclick="deleteScheduleEvent(${jsArg(e.id)})" title="삭제" style="border:0;background:#e74c3c;color:#fff;border-radius:4px;font-size:10px;line-height:1;padding:3px 5px;cursor:pointer;">×</button>
+        ${canDeleteSchedule ? `<button type="button" onclick="deleteScheduleEvent(${jsArg(e.id)})" title="삭제" style="border:0;background:#e74c3c;color:#fff;border-radius:4px;font-size:10px;line-height:1;padding:3px 5px;cursor:pointer;">×</button>` : ''}
       </div>
     `).join('');
     const prodHtml = prodInputQty > 0 ? `
@@ -6162,7 +6200,7 @@ function renderScheduleCalendar(){
     cells.push(`
       <div style="background:${holiday?'#fff8f8':'#fff'};min-height:128px;padding:7px;display:flex;flex-direction:column;gap:5px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span onclick="selectScheduleDate('${date}')" title="이 날짜에 일정 입력" style="font-weight:800;font-size:12px;color:${isToday?'#fff':dayColor};background:${isToday?dayColor:'transparent'};border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;">${day}</span>
+          <span ${canCreateSchedule ? `onclick="selectScheduleDate('${date}')" title="이 날짜에 일정 입력"` : ''} style="font-weight:800;font-size:12px;color:${isToday?'#fff':dayColor};background:${isToday?dayColor:'transparent'};border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:${canCreateSchedule?'pointer':'default'};">${day}</span>
           ${holiday ? `<span style="font-size:10px;color:#c0392b;font-weight:800;text-align:right;">${htmlEscape(holiday)}</span>` : (dayEvents.length ? `<span style="font-size:10px;color:#777;">${dayEvents.length}건</span>` : '')}
         </div>
         <div style="flex:1;">${eventHtml}</div>
@@ -18296,6 +18334,6 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260813m01"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
-<script src="m02-auth.js?v=20260814m02pin4"></script>
+<script src="m02-auth.js?v=20260814m02schedule"></script>
 </body>
 </html>

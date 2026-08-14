@@ -80,6 +80,7 @@
     state.permissions = new Map((payload?.permissions || []).map(row=>[row.menuCode, row]));
     renderHeader();
     applyNavigation();
+    notifyPermissionSurfaces();
   }
 
   function clearSession(){
@@ -108,6 +109,16 @@
     if(!state.user) return true;
     const row = state.permissions.get(menuCode);
     return Boolean(row && row[ACTION_FIELDS[action] || action]);
+  }
+
+  function isPersonal(){ return Boolean(state.user && sessionToken()); }
+  function getSessionToken(){ return isPersonal() ? sessionToken() : ''; }
+
+  function notifyPermissionSurfaces(){
+    if(typeof window.applySchedulePermissionState === 'function') window.applySchedulePermissionState();
+    if(typeof window.renderScheduleCalendar === 'function' && document.getElementById('p-schedule')?.classList.contains('active')){
+      window.renderScheduleCalendar();
+    }
   }
 
   function canOpenPage(pageId){
@@ -428,7 +439,7 @@
 
   const api={
     initializeSession, openLogin, closeLogin, loginFromModal, logoutConfirm,
-    can, canOpenPage, auditIdentity, applyNavigation,
+    can, canOpenPage, isPersonal, getSessionToken, auditIdentity, applyNavigation,
     initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole, saveUser, saveRole
   };
   window.DBMTAuth=api;

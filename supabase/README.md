@@ -62,6 +62,7 @@ Editor query for each file:
 40. `schema-rpc-18-cold-storage-public.sql`
 41. `schema-rpc-19-company-master.sql`
 42. `schema-rpc-20-erp-users-roles.sql`
+43. `schema-rpc-21-erp-schedule-permissions.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -158,6 +159,11 @@ seed a user or a known password.
 Apply `20260814140000_erp_user_four_digit_pin.sql` after it to use a four-digit
 numeric personal PIN. The historical `130000` migration is intentionally not
 rewritten after deployment.
+Apply `20260814150000_erp_schedule_permissions.sql` to enforce personal
+`create`, `update`, and `delete` permissions for 일정관리. After this migration,
+the generic shared-password app-data RPC cannot replace `scheduleEvents`;
+desktop ERP users must be personally logged in to change schedules. The mobile
+administrator keeps its independent authenticated schedule RPC.
 
 ## 3. Document request delivery
 
