@@ -63,6 +63,7 @@ Editor query for each file:
 41. `schema-rpc-19-company-master.sql`
 42. `schema-rpc-20-erp-users-roles.sql`
 43. `schema-rpc-21-erp-schedule-permissions.sql`
+44. `schema-rpc-22-erp-stock-adjust-permission.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -98,6 +99,9 @@ This creates:
 - `dbmt_m02_get_admin(password)`
 - `dbmt_m02_save_role(password, ..., permissions, expected_revision)`
 - `dbmt_m02_save_user(password, ..., login_password, expected_revision)`
+- `dbmt_erp_save_schedule(token, id, date, text)`
+- `dbmt_erp_delete_schedule(token, id)`
+- `dbmt_erp_save_stock_adjust(token, record)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.
@@ -164,6 +168,9 @@ Apply `20260814150000_erp_schedule_permissions.sql` to enforce personal
 the generic shared-password app-data RPC cannot replace `scheduleEvents`;
 desktop ERP users must be personally logged in to change schedules. The mobile
 administrator keeps its independent authenticated schedule RPC.
+Apply `20260814160000_erp_stock_adjust_permission.sql` to require a personal
+session with the 재고현황 `update` permission for the 재고 정리 action. The ERP
+uses the dedicated `dbmt_erp_save_stock_adjust` RPC and records the acting user.
 
 ## 3. Document request delivery
 

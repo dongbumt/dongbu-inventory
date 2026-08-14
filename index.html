@@ -1158,7 +1158,7 @@
           <th onclick="stockSort('price')" style="text-align:right;cursor:pointer;user-select:none;">단가 <span id="ss-price"></span></th>
           <th onclick="stockSort('stock_amount')" style="text-align:right;cursor:pointer;user-select:none;">재고금액 <span id="ss-stock_amount"></span></th>
           <th>상태</th>
-          <th>관리</th>
+          <th id="stock-manage-head">관리</th>
         </tr></thead>
         <tbody id="stock-body"></tbody>
       </table>
@@ -9613,6 +9613,8 @@ function scheduleRenderStock(delay=180){
 }
 
 function renderStock(){
+  applyStockPermissionState();
+  const canAdjustStock = stockPersonalCan('update');
   const q=document.getElementById('stock-search').value.toLowerCase();
   const el_sf=document.getElementById('stock-filter-status'); const filterStatus=el_sf ? (el_sf.value??'재고') : '재고';
   const locationFilter = document.getElementById('stock-location-filter')?.value || '';
@@ -9676,7 +9678,7 @@ function renderStock(){
 
   const b=document.getElementById('stock-body');
   if(!rows.length){
-    b.innerHTML='<tr><td colspan="14" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
+    b.innerHTML=`<tr><td colspan="${canAdjustStock ? 14 : 13}" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>`;
     return;
   }
   b.innerHTML=rows.map(s=>{
@@ -9701,12 +9703,24 @@ function renderStock(){
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
-      <td><button class="btn btn-sm" style="background:#3440a0;color:#fff;" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)})">정리</button></td>
+      ${canAdjustStock ? `<td><button class="btn btn-sm" style="background:#3440a0;color:#fff;" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)})">정리</button></td>` : ''}
     </tr>`;
   }).join('');
 }
 
+function stockPersonalCan(action){
+  return typeof DBMTAuth === 'object' && DBMTAuth.isPersonal() && DBMTAuth.can('stock', action);
+}
+
+function applyStockPermissionState(){
+  const canAdjust = stockPersonalCan('update');
+  const head = document.getElementById('stock-manage-head');
+  if(head) head.style.display = canAdjust ? '' : 'none';
+  if(!canAdjust) closeStockAdjust();
+}
+
 function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit='', stockLocation=''){
+  if(!stockPersonalCan('update')){ toast('재고 정리 권한이 없습니다.'); return; }
   const set = (id, value) => { const el=document.getElementById(id); if(el) el.value=value; };
   const loc = normalizeStockLocation(stockLocation);
   set('stock-adj-product', product || '');
@@ -9743,7 +9757,8 @@ function calcStockAdjustDiff(){
   if(el) el.value = `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}`;
 }
 
-function saveStockAdjust(){
+async function saveStockAdjust(){
+  if(!stockPersonalCan('update')){ closeStockAdjust(); toast('재고 정리 권한이 없습니다.'); return; }
   const date = document.getElementById('stock-adj-date')?.value || localDateString();
   const product = document.getElementById('stock-adj-product')?.value || '';
   const lot = document.getElementById('stock-adj-lot')?.value || '';
@@ -9760,7 +9775,7 @@ function saveStockAdjust(){
   if(Math.abs(diff) < 0.01){ alert('현재 전산재고와 실제 재고가 같습니다.'); return; }
   const note = `재고정리: 전산 ${current.toFixed(2)}KG → 실사 ${actual.toFixed(2)}KG (${diff >= 0 ? '+' : ''}${diff.toFixed(2)}KG)${memo ? ' / ' + memo : ''}`;
   const adjustTxn = {
-    id: Date.now(),
+    id: `stock_adjust_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     date,
     type: '재고조정',
     trader: '재고정리',
@@ -9782,13 +9797,31 @@ function saveStockAdjust(){
     stockBefore: current,
     stockActual: actual
   };
-  userTransactions.push(adjustTxn);
-  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  saveTransactionRows(adjustTxn);
-  closeStockAdjust();
-  renderTransactions();
-  renderStock();
-  toast('재고정리 내역이 저장되었습니다.');
+  const saveButton = document.querySelector('#stock-adjust-modal .btn-primary');
+  if(saveButton) saveButton.disabled = true;
+  try{
+    const result = await sbRpc('dbmt_erp_save_stock_adjust', {
+      p_token:DBMTAuth.getSessionToken(), p_record:adjustTxn
+    });
+    if(!result?.ok) throw new Error(result?.message || '재고 정리 권한이 없습니다.');
+    const saved = result.transaction || adjustTxn;
+    userTransactions.push(saved);
+    transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+    markLocalCoreChanged();
+    safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
+    if(result.logEntry){
+      dataChangeLogs = [result.logEntry, ...dataChangeLogs.filter(row=>row?.id !== result.logEntry.id)];
+      saveDataChangeLogsLocal();
+    }
+    closeStockAdjust();
+    renderTransactions();
+    renderStock();
+    toast('재고정리 내역이 저장되었습니다.');
+  }catch(err){
+    toast(String(err?.message || err || '재고 정리에 실패했습니다.'));
+  }finally{
+    if(saveButton) saveButton.disabled = false;
+  }
 }
 
 // ─── 부자재 관리 ───────────────────────────────────────────
@@ -18334,6 +18367,6 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260813m01"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
-<script src="m02-auth.js?v=20260814m02schedule"></script>
+<script src="m02-auth.js?v=20260814m02stock"></script>
 </body>
 </html>

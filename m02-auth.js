@@ -119,6 +119,10 @@
     if(typeof window.renderScheduleCalendar === 'function' && document.getElementById('p-schedule')?.classList.contains('active')){
       window.renderScheduleCalendar();
     }
+    if(typeof window.applyStockPermissionState === 'function') window.applyStockPermissionState();
+    if(typeof window.renderStock === 'function' && document.getElementById('p-stock')?.classList.contains('active')){
+      window.renderStock();
+    }
   }
 
   function canOpenPage(pageId){
