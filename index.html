@@ -12512,9 +12512,17 @@ function backupAllData(){
     'dbmt_expenses','dbmt_costcalc','dbmt_quotations','dbmt_label_templates',
     'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_change_logs','dbmt_gs_url','dbmt_gs_skip'
   ];
+  const liveCoreValues = {
+    dbmt_user_transactions: JSON.stringify(Array.isArray(userTransactions) ? userTransactions : []),
+    dbmt_user_prod: JSON.stringify(Array.isArray(userProdEntries) ? userProdEntries : []),
+    dbmt_prices: JSON.stringify(Array.isArray(prices) ? prices : []),
+    dbmt_submaterial_usages: JSON.stringify(Array.isArray(subMaterialUsages) ? subMaterialUsages : [])
+  };
   const backup = { _version: 2, _date: new Date().toISOString(), data: {} };
   KEYS.forEach(k => {
-    const v = localStorage.getItem(k);
+    const v = Object.prototype.hasOwnProperty.call(liveCoreValues, k)
+      ? liveCoreValues[k]
+      : localStorage.getItem(k);
     if(v) backup.data[k] = v;
   });
   const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
