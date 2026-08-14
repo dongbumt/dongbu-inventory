@@ -13,8 +13,8 @@ const COLD_STORAGE_SENDER_PROFILE_FALLBACKS = {
     phone:'032-766-1812', fax:'032-232-1812', email:'dongbumt1812@hanmail.net', seal:'assets/company-seal.png', isDefault:true
   },
   dongbu_distribution:{
-    id:'dongbu_distribution', displayName:'동부축산유통', name:'주식회사 동부엠티', representative:'이창성', registrationNo:'495-88-01108',
-    address:'인천광역시 검단구 소담2로 36, 2동 201호 (금곡동)',
+    id:'dongbu_distribution', displayName:'(주)동부축산유통', name:'(주)동부축산유통', representative:'이동대', registrationNo:'137-81-38748',
+    address:'인천광역시 서구 가좌로96번길 11',
     phone:'032-579-3920', fax:'032-578-0108', email:'', seal:'assets/company-seal-trading.png', isDefault:false
   }
 };
@@ -41,14 +41,15 @@ function coldStorageSenderProfiles(){
     const fallback = COLD_STORAGE_SENDER_PROFILE_FALLBACKS[id] || COLD_STORAGE_SENDER_PROFILE_FALLBACKS.dongbumt;
     const linked = window.DBMTCompanyMaster?.getProfileByCode?.(id) || {};
     const allowLegacyFallback = !useRemote && (masterSource === 'legacy' || row.isLegacyDraft === true);
+    const documentOverride = id === 'dongbu_distribution' ? fallback : null;
     return [id,{
       id,
       displayName:String(row.displayName || row.label || linked.senderLabel || (allowLegacyFallback ? fallback.displayName : '') || id).trim(),
-      name:String(row.legalName || linked.legalName || (allowLegacyFallback ? fallback.name : '') || '').trim(),
-      representative:String(row.representativeName || linked.representativeName || (allowLegacyFallback ? fallback.representative : '') || '').trim(),
-      registrationNo:String(row.registrationNo || linked.registrationNo || (allowLegacyFallback ? fallback.registrationNo : '') || '').trim(),
-      address:String(row.address || linked.address || (allowLegacyFallback ? fallback.address : '') || '').trim(),
-      phone:String(row.phone || linked.phone || (allowLegacyFallback ? fallback.phone : '') || '').trim(),
+      name:String(row.documentName || row.document_name || documentOverride?.name || row.legalName || linked.legalName || (allowLegacyFallback ? fallback.name : '') || '').trim(),
+      representative:String(row.documentRepresentativeName || row.document_representative_name || documentOverride?.representative || row.representativeName || linked.representativeName || (allowLegacyFallback ? fallback.representative : '') || '').trim(),
+      registrationNo:String(row.documentRegistrationNo || row.document_registration_no || documentOverride?.registrationNo || row.registrationNo || linked.registrationNo || (allowLegacyFallback ? fallback.registrationNo : '') || '').trim(),
+      address:String(row.documentAddress || row.document_address || documentOverride?.address || row.address || linked.address || (allowLegacyFallback ? fallback.address : '') || '').trim(),
+      phone:String(row.documentPhone || row.document_phone || documentOverride?.phone || row.phone || linked.phone || (allowLegacyFallback ? fallback.phone : '') || '').trim(),
       fax:String(row.replyFax || linked.fax || (allowLegacyFallback ? fallback.fax : '') || '').trim(),
       email:String(row.replyEmail || linked.email || (allowLegacyFallback ? fallback.email : '') || '').trim(),
       seal:String(row.sealAssetKey || linked.sealAssetKey || (allowLegacyFallback ? fallback.seal : '') || '').trim(),

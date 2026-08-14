@@ -69,6 +69,11 @@ interface SenderProfileDefinition {
   replyEmail: string;
   replyFax: string;
   phone: string;
+  documentName: string;
+  documentRepresentativeName: string;
+  documentRegistrationNo: string;
+  documentAddress: string;
+  documentPhone: string;
   sealAssetKey: string;
   isDefault: boolean;
 }
@@ -82,6 +87,11 @@ const SENDER_PROFILE_DEFAULTS: SenderProfileDefinition[] = [
     replyEmail: "dongbumt1812@hanmail.net",
     replyFax: "032-232-1812",
     phone: "032-766-1812",
+    documentName: "",
+    documentRepresentativeName: "",
+    documentRegistrationNo: "",
+    documentAddress: "",
+    documentPhone: "",
     sealAssetKey: "assets/company-seal.png",
     isDefault: true,
   },
@@ -93,6 +103,11 @@ const SENDER_PROFILE_DEFAULTS: SenderProfileDefinition[] = [
     replyEmail: "",
     replyFax: "032-578-0108",
     phone: "032-579-3920",
+    documentName: "(주)동부축산유통",
+    documentRepresentativeName: "이동대",
+    documentRegistrationNo: "1378138748",
+    documentAddress: "인천광역시 서구 가좌로96번길 11",
+    documentPhone: "032-579-3920",
     sealAssetKey: "assets/company-seal-trading.png",
     isDefault: false,
   },
@@ -230,7 +245,7 @@ async function getCompanyMasterProjection(supabase: any, includeEmail = false) {
     sites = siteRows || [];
   }
   const { data: senderRows, error: senderError } = await supabase.from("document_sender_profiles")
-    .select("code,label,business_site_id,reply_email,reply_fax,seal_asset_key,secret_alias,is_default,active")
+    .select("code,label,business_site_id,document_name,document_representative_name,document_registration_no,document_address,document_phone,reply_email,reply_fax,seal_asset_key,secret_alias,is_default,active")
     .order("is_default", { ascending: false })
     .order("code", { ascending: true });
   if (senderError) console.warn("Document-sender projection unavailable:", senderError.message);
@@ -272,6 +287,11 @@ async function getCompanyMasterProjection(supabase: any, includeEmail = false) {
       code: clean(profile.code, 50),
       label: clean(profile.label, 100),
       businessSiteId: clean(profile.business_site_id, 100),
+      documentName: clean(profile.document_name, 200),
+      documentRepresentativeName: clean(profile.document_representative_name, 100),
+      documentRegistrationNo: clean(profile.document_registration_no, 10),
+      documentAddress: clean(profile.document_address, 500),
+      documentPhone: clean(profile.document_phone, 40),
       replyEmail: clean(profile.reply_email, 200),
       replyFax: clean(profile.reply_fax, 40),
       sealAssetKey: clean(profile.seal_asset_key, 250),
@@ -299,6 +319,11 @@ function senderDefinitionsFromMaster(master: any): SenderProfileDefinition[] {
     replyEmail: clean(row.replyEmail, 200),
     replyFax: clean(row.replyFax, 40),
     phone: "",
+    documentName: clean(row.documentName, 200),
+    documentRepresentativeName: clean(row.documentRepresentativeName, 100),
+    documentRegistrationNo: clean(row.documentRegistrationNo, 10),
+    documentAddress: clean(row.documentAddress, 500),
+    documentPhone: clean(row.documentPhone, 40),
     sealAssetKey: clean(row.sealAssetKey, 250),
     isDefault: Boolean(row.isDefault),
   })).filter((row: SenderProfileDefinition) =>
@@ -313,6 +338,11 @@ function allSenderDefinitionsFromMaster(master: any): SenderProfileDefinition[] 
     id: clean(row.code, 50), businessSiteId: clean(row.businessSiteId, 100),
     secretAlias: normalizedSecretAlias(row.secretAlias), displayName: clean(row.label, 100),
     replyEmail: clean(row.replyEmail, 200), replyFax: clean(row.replyFax, 40), phone: "",
+    documentName: clean(row.documentName, 200),
+    documentRepresentativeName: clean(row.documentRepresentativeName, 100),
+    documentRegistrationNo: clean(row.documentRegistrationNo, 10),
+    documentAddress: clean(row.documentAddress, 500),
+    documentPhone: clean(row.documentPhone, 40),
     sealAssetKey: clean(row.sealAssetKey, 250), isDefault: Boolean(row.isDefault),
   })).filter((row: SenderProfileDefinition) =>
     /^[a-z][a-z0-9_-]{1,49}$/.test(row.id) && row.displayName && row.secretAlias
@@ -346,8 +376,8 @@ async function getRequestSenderProfile(supabase: any, senderProfileId = "", incl
   }
   const senderSite = linkedSenderSite || legalSite;
   const identitySite = hasBusinessNumber(senderSite) ? senderSite : legalIdentitySite;
-  const name = clean(company.legalName, 150);
-  const businessRegistrationNo = clean(identitySite.businessRegistrationNo, 10);
+  const name = senderDefinition.documentName || clean(company.legalName, 150);
+  const businessRegistrationNo = senderDefinition.documentRegistrationNo || clean(identitySite.businessRegistrationNo, 10);
   if (!name || !/^\d{10}$/.test(businessRegistrationNo)) {
     throw new Error("기본 법인의 법인명과 사업자번호를 확인해주세요.");
   }
@@ -359,9 +389,9 @@ async function getRequestSenderProfile(supabase: any, senderProfileId = "", incl
     displayName: senderDefinition.displayName,
     email: senderDefinition.replyEmail || clean(senderSite.email, 200),
     fax: senderDefinition.replyFax || clean(senderSite.fax, 40),
-    phone: senderDefinition.phone || clean(senderSite.phone, 40),
-    representativeName: clean(company.representativeName, 100),
-    address: [clean(identitySite.roadAddress, 250), clean(identitySite.detailAddress, 200)].filter(Boolean).join(" "),
+    phone: senderDefinition.documentPhone || senderDefinition.phone || clean(senderSite.phone, 40),
+    representativeName: senderDefinition.documentRepresentativeName || clean(company.representativeName, 100),
+    address: senderDefinition.documentAddress || [clean(identitySite.roadAddress, 250), clean(identitySite.detailAddress, 200)].filter(Boolean).join(" "),
     sealAssetKey: senderDefinition.sealAssetKey || clean(company.sealAssetKey, 250),
     businessRegistrationNo,
   } satisfies RequestSenderProfile;

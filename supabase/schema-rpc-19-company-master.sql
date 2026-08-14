@@ -273,6 +273,11 @@ create table if not exists public.document_sender_profiles (
   code text not null,
   label text not null,
   business_site_id uuid references public.business_sites(id) on delete restrict,
+  document_name text,
+  document_representative_name text,
+  document_registration_no text,
+  document_address text,
+  document_phone text,
   reply_email text,
   reply_fax text,
   seal_asset_key text,
@@ -288,6 +293,25 @@ create table if not exists public.document_sender_profiles (
   ),
   constraint document_sender_profiles_label_valid check (
     label = btrim(label) and char_length(label) between 1 and 200
+  ),
+  constraint document_sender_profiles_document_name_valid check (
+    document_name is null
+    or (document_name = btrim(document_name) and char_length(document_name) between 1 and 200)
+  ),
+  constraint document_sender_profiles_document_representative_valid check (
+    document_representative_name is null
+    or (document_representative_name = btrim(document_representative_name) and char_length(document_representative_name) between 1 and 100)
+  ),
+  constraint document_sender_profiles_document_registration_valid check (
+    document_registration_no is null or document_registration_no ~ '^[0-9]{10}$'
+  ),
+  constraint document_sender_profiles_document_address_valid check (
+    document_address is null
+    or (document_address = btrim(document_address) and char_length(document_address) between 1 and 500)
+  ),
+  constraint document_sender_profiles_document_phone_valid check (
+    document_phone is null
+    or (document_phone = btrim(document_phone) and char_length(document_phone) between 3 and 40 and document_phone !~ '[[:cntrl:]]')
   ),
   constraint document_sender_profiles_reply_email_valid check (
     reply_email is null
@@ -443,6 +467,11 @@ begin
       'code', p.code,
       'label', p.label,
       'businessSiteId', p.business_site_id,
+      'documentName', p.document_name,
+      'documentRepresentativeName', p.document_representative_name,
+      'documentRegistrationNo', p.document_registration_no,
+      'documentAddress', p.document_address,
+      'documentPhone', p.document_phone,
       'replyEmail', p.reply_email,
       'replyFax', p.reply_fax,
       'sealAssetKey', p.seal_asset_key,
