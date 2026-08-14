@@ -1,8 +1,5 @@
--- Public cold-storage requests are written through the Edge Function's service
--- role. The row lock prevents simultaneous PC/mobile saves from replacing each
--- other's history. Browser roles keep no direct table access.
-
-grant select on table public.app_data to service_role;
+-- M01: prefer the immutable requester snapshot when writing cold-storage
+-- change-log summaries. Existing records without a snapshot keep their code.
 
 create or replace function public.dbmt_cold_storage_public_write(
   p_action text,
@@ -99,6 +96,9 @@ begin
 end;
 $dbmt$;
 
-revoke all on function public.dbmt_cold_storage_public_write(text, jsonb, text) from public, anon, authenticated;
-grant execute on function public.dbmt_cold_storage_public_write(text, jsonb, text) to service_role;
-revoke insert, update on table public.app_data from service_role;
+revoke all on function public.dbmt_cold_storage_public_write(text, jsonb, text)
+  from public, anon, authenticated;
+grant execute on function public.dbmt_cold_storage_public_write(text, jsonb, text)
+  to service_role;
+
+notify pgrst, 'reload schema';

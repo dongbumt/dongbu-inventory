@@ -18,7 +18,7 @@
         <h1>냉동창고 요청</h1>
       </div>
     </div>
-    <span id="csr-public-connection" class="csr-public-connection">서버 연결 중</span>
+    <button type="button" id="csr-public-connection" class="csr-public-connection" onclick="requestColdStoragePublicAccess()" title="서버 연결 다시 시도">서버 연결 중</button>
   </header>
 
   <main class="csr-public-main">
@@ -40,10 +40,10 @@
             </div>
             <div class="form-group"><label>요청일</label><input id="csr-date" type="date" onchange="coldStorageRequestMetaChanged('requestDate',this.value)"></div>
             <div class="form-group csr-wide-field">
-              <label>요청자</label>
-              <select id="csr-requester" onchange="coldStorageRequesterChanged(this.value)">
-                <option value="dongbumt">주식회사 동부엠티</option>
-                <option value="dongbu_distribution">(주)동부축산유통</option>
+              <label>발신 프로필</label>
+              <select id="csr-sender-profile" onchange="coldStorageSenderProfileChanged(this.value)">
+                <option value="dongbumt">팩스 발신 1 (동부엠티)</option>
+                <option value="dongbu_distribution">팩스 발신 2 (기존 동부축산유통)</option>
               </select>
             </div>
             <div class="form-group csr-wide-field">
@@ -126,7 +126,7 @@
         <div class="tbl-wrap csr-history-wrap">
           <table class="csr-history-table">
             <thead><tr>
-              <th>요청일</th><th>구분</th><th>요청자</th><th>냉동창고</th><th>요청내용</th>
+              <th>요청일</th><th>구분</th><th>발신 프로필</th><th>냉동창고</th><th>요청내용</th>
               <th style="text-align:right;">총수량</th><th>팩스번호</th><th>상태</th><th>관리</th>
             </tr></thead>
             <tbody id="csr-history-body"><tr><td colspan="9" class="csr-empty-cell">서버 데이터를 불러오는 중입니다.</td></tr></tbody>
@@ -138,6 +138,7 @@
   <div id="csr-public-toast" class="csr-public-toast" role="status" aria-live="polite"></div>
 
   <script src="cold-storage-standalone.js?v=20260813a"></script>
-  <script src="cold-storage-request.js?v=20260813e"></script>
+  <script src="company-master.js?v=20260813m01a"></script>
+  <script src="cold-storage-request.js?v=20260813m01"></script>
 </body>
 </html>

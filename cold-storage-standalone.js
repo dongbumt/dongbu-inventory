@@ -2,6 +2,9 @@
 
 window.DBMT_COLD_STORAGE_STANDALONE = true;
 
+const COLD_STORAGE_PUBLIC_ACCESS_KEY = 'dbmt_cold_storage_public_access';
+let coldStoragePublicAccessRequired = false;
+
 const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
 var traderInfoMap = {};
@@ -24,7 +27,7 @@ function htmlEscape(value){
 }
 
 function jsArg(value){
-  return JSON.stringify(String(value ?? '')).replace(/</g,'\\u003c');
+  return htmlEscape(JSON.stringify(String(value ?? '')).replace(/</g,'\\u003c'));
 }
 
 function safeLocalStorageSet(key,value){
@@ -52,6 +55,10 @@ function toast(message){
 }
 
 async function sbFunctionRequest(functionName,payload){
+  const requestPayload = {...(payload || {})};
+  if(String(requestPayload.action || '').startsWith('cold_storage_public_')){
+    requestPayload.publicAccessKey = sessionStorage.getItem(COLD_STORAGE_PUBLIC_ACCESS_KEY) || '';
+  }
   const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`,{
     method:'POST',
     headers:{
@@ -59,15 +66,37 @@ async function sbFunctionRequest(functionName,payload){
       Authorization:`Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
       'Content-Type':'application/json'
     },
-    body:JSON.stringify(payload || {})
+    body:JSON.stringify(requestPayload)
   });
   const text = await response.text();
   let data = null;
   try{ data = text ? JSON.parse(text) : null; }
   catch(err){ data = {error:text}; }
-  if(!response.ok) throw new Error(data?.error || data?.message || `서버 요청 실패 (${response.status})`);
+  if(response.status === 401){
+    coldStoragePublicAccessRequired = true;
+    sessionStorage.removeItem(COLD_STORAGE_PUBLIC_ACCESS_KEY);
+  }
+  if(!response.ok){
+    const error = new Error(data?.error || data?.message || `서버 요청 실패 (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
+
+function requestColdStoragePublicAccess(){
+  if(!coldStoragePublicAccessRequired && !sessionStorage.getItem(COLD_STORAGE_PUBLIC_ACCESS_KEY)){
+    location.reload();
+    return true;
+  }
+  const entered = window.prompt('냉동창고 요청 접속코드를 입력하세요.');
+  const value = String(entered || '').trim();
+  if(!value) return false;
+  sessionStorage.setItem(COLD_STORAGE_PUBLIC_ACCESS_KEY,value);
+  location.reload();
+  return true;
+}
+window.requestColdStoragePublicAccess = requestColdStoragePublicAccess;
 
 window.addEventListener('DOMContentLoaded',async()=>{
   const connection = document.getElementById('csr-public-connection');
@@ -75,6 +104,11 @@ window.addEventListener('DOMContentLoaded',async()=>{
     await window.initColdStorageRequestPage();
     if(connection){ connection.textContent='서버 연결됨';connection.classList.add('connected'); }
   }catch(err){
+    if(err?.status === 401){
+      if(connection){ connection.textContent='접속코드 필요';connection.classList.add('failed'); }
+      requestColdStoragePublicAccess();
+      return;
+    }
     if(connection){ connection.textContent='연결 실패';connection.classList.add('failed'); }
     toast(`서버 연결 실패: ${err?.message || err}`);
   }

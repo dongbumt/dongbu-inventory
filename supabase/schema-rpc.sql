@@ -15,10 +15,8 @@ create table if not exists public.app_config (
 alter table public.app_config enable row level security;
 
 insert into public.app_config(key, value)
-values ('app_password_sha256', 'e982589ecbd4d4445fe66f211a86ef19a9b0da59cce20381e77e351963febc63')
-on conflict (key) do update
-set value = excluded.value,
-    updated_at = now();
+values ('app_password_sha256', 'disabled_rotate_before_use')
+on conflict (key) do nothing;
 
 create or replace function public.dbmt_safe_date(value text)
 returns date
@@ -84,8 +82,11 @@ stable
 security definer
 set search_path = public, extensions
 as $$
-  select encode(extensions.digest(coalesce(p_password, ''), 'sha256'), 'hex') =
-         (select value from public.app_config where key = 'app_password_sha256');
+  select coalesce(
+    encode(extensions.digest(coalesce(p_password, ''), 'sha256'), 'hex') =
+      (select value from public.app_config where key = 'app_password_sha256'),
+    false
+  );
 $$;
 
 create or replace function public.dbmt_import_all(p_password text, p_payload jsonb)
@@ -331,7 +332,8 @@ begin
 end;
 $$;
 
-grant execute on function public.dbmt_check_password(text) to anon, authenticated;
+revoke all on function public.dbmt_check_password(text) from public;
+grant execute on function public.dbmt_check_password(text) to anon, authenticated, service_role;
 grant execute on function public.dbmt_import_all(text, jsonb) to anon, authenticated;
 grant execute on function public.dbmt_get_all(text) to anon, authenticated;
 

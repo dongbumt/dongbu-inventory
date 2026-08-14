@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
 <link rel="stylesheet" href="styles/main.css?v=20260812q3">
+<link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('xlsx CDN 로드 실패 — Excel 내보내기 기능만 비활성화')"></script>
 </head>
@@ -48,6 +49,10 @@
   <div class="edit-modal" style="max-width:820px;">
     <h3 id="doc-request-modal-title">필요서류 요청</h3>
     <div id="doc-request-modal-summary" class="alert alert-info"></div>
+    <div class="form-group" style="max-width:360px;margin:10px 0 12px;">
+      <label for="doc-request-sender-profile">발신 프로필</label>
+      <select id="doc-request-sender-profile" onchange="loadDocumentRequestCapabilities(this.value)"></select>
+    </div>
     <div id="doc-request-modal-body" class="doc-request-preview"></div>
     <div id="doc-request-modal-status" style="display:none;margin-top:12px;font-size:12px;line-height:1.7;"></div>
     <div class="em-btns">
@@ -200,7 +205,7 @@
     <div class="logo-icon">📦</div>
     <div>
       <div class="header-sub">ERP SYSTEM</div>
-      <h1>동부엠티 ERP 시스템</h1>
+      <h1 id="erp-company-title">동부엠티 ERP 시스템</h1>
     </div>
   </div>
   <div class="header-right">
@@ -220,6 +225,9 @@
 <nav class="nav-tabs">
   <div class="nav-tab active" onclick="showPage('p-schedule',this);renderScheduleCalendar();" id="nav-schedule" style="color:#34495e;font-weight:700;">
     🗓️ 일정관리
+  </div>
+  <div class="nav-tab" onclick="showPage('p-company-master',this);initCompanyMasterPage();" id="nav-company-master" style="color:#4b5563;font-weight:700;">
+    🏢 법인·사업장·창고
   </div>
   <div class="nav-tab" onclick="showPage('p-labelproducts',this);renderLabelProducts();" id="nav-labelproducts" style="color:#e67e22;font-weight:700;">
     📦 품목관리
@@ -336,6 +344,143 @@
       <button type="button" class="btn btn-primary btn-sm" onclick="addScheduleEvent()" style="margin:0;">+ 일정 추가</button>
     </div>
     <div id="sch-calendar" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:#dce3ea;border:1px solid #dce3ea;border-radius:8px;overflow:hidden;"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     법인·사업장·창고 기준정보 (M01)
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-company-master">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:#6b7280;"></div>
+        법인·사업장·창고 기준정보
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary btn-sm" id="cm-refresh" onclick="refreshCompanyMaster()">서버 새로고침</button>
+      </div>
+    </div>
+
+    <div class="cm-source">
+      <div id="cm-source-status">법인 기준정보를 준비하는 중입니다.</div>
+      <div style="white-space:nowrap;font-size:11px;color:#6b7280;">M01 기준정보</div>
+    </div>
+
+    <div class="cm-summary">
+      <section class="cm-editor">
+        <div class="cm-subcard">
+          <div class="cm-subcard-title">
+            <span id="cm-company-form-title">법인 기본정보</span>
+            <span class="cm-badge">단일 법인</span>
+          </div>
+          <div class="cm-note">이 ERP는 법인 1개를 기준으로 운영합니다. 사업장·공장·자체 창고·외부 냉동창고는 아래 장소 목록에 추가하세요.</div>
+          <input type="hidden" id="cm-company-id"><input type="hidden" id="cm-company-revision">
+          <div class="cm-form-grid">
+            <div class="cm-field"><label>법인 코드 *</label><input id="cm-company-code" maxlength="50" value="dongbumt" readonly></div>
+            <div class="cm-field span-2"><label>법인명 *</label><input id="cm-company-legal-name" maxlength="150" placeholder="사업자등록증의 상호"></div>
+            <div class="cm-field"><label>표시명</label><input id="cm-company-display-name" maxlength="100" placeholder="메뉴·문서 제목용"></div>
+            <div class="cm-field span-2"><label>영문 법인명</label><input id="cm-company-english-name" maxlength="200"></div>
+            <div class="cm-field"><label>대표자 *</label><input id="cm-company-representative" maxlength="100"></div>
+            <div class="cm-field"><label>법인등록번호</label><input id="cm-company-corporate-no" inputmode="numeric" maxlength="14" placeholder="숫자 13자리"></div>
+            <div class="cm-field span-2"><label>도장 자산 경로</label><input id="cm-company-seal" maxlength="250" placeholder="assets/company-seal.png"></div>
+            <div class="cm-field span-2"><label>로고 자산 경로</label><input id="cm-company-logo" maxlength="250"></div>
+          </div>
+          <div class="cm-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="cm-save-company" onclick="saveCompanyMasterRecord()">법인 기본정보 저장</button>
+          </div>
+        </div>
+
+        <div class="cm-subcard">
+          <div class="cm-subcard-title">
+            <span id="cm-site-form-title">사업장·창고 정보</span>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="newCompanyBusinessSite()">+ 장소</button>
+          </div>
+          <div class="cm-site-tabs" id="cm-site-tabs"></div>
+          <input type="hidden" id="cm-site-id"><input type="hidden" id="cm-site-revision">
+          <div class="cm-form-grid">
+            <div class="cm-field"><label>장소 코드 *</label><input id="cm-site-code" maxlength="50" placeholder="main"></div>
+            <div class="cm-field"><label>장소명 *</label><input id="cm-site-name" maxlength="150" placeholder="가공장 / ○○냉동창고"></div>
+            <div class="cm-field"><label>장소 구분</label><select id="cm-site-type" onchange="syncCompanyBusinessSiteType()"><option value="head_office">본점</option><option value="office">사무실</option><option value="factory">공장·가공장</option><option value="warehouse">자체 창고</option><option value="external_warehouse">외부 냉동창고</option><option value="other">기타</option></select></div>
+            <div class="cm-field"><label>소유·운영 형태</label><select id="cm-site-ownership"><option value="owned">자가</option><option value="leased">임차</option><option value="third_party">제3자 운영</option></select></div>
+            <div class="cm-field"><label>운영사명 (선택)</label><input id="cm-site-operator-name" maxlength="200" placeholder="외부 창고 운영사"></div>
+            <div class="cm-field"><label>거래처 연결키 (선택)</label><input id="cm-site-operator-key" maxlength="200" placeholder="ERP 거래처 식별값"></div>
+            <div class="cm-field"><label>사업자등록번호 (선택)</label><input id="cm-site-business-no" inputmode="numeric" maxlength="12" placeholder="000-00-00000"></div>
+            <div class="cm-field"><label>우편번호</label><input id="cm-site-postal" maxlength="12"></div>
+            <div class="cm-field span-2"><label>도로명주소 *</label><input id="cm-site-road-address" maxlength="250"></div>
+            <div class="cm-field"><label>상세주소</label><input id="cm-site-detail-address" maxlength="200"></div>
+            <div class="cm-field span-2"><label>영문주소</label><input id="cm-site-english-address" maxlength="350"></div>
+            <div class="cm-field"><label>업태</label><input id="cm-site-business-type" maxlength="150"></div>
+            <div class="cm-field"><label>종목</label><input id="cm-site-business-items" maxlength="200"></div>
+            <div class="cm-field span-2"><label>공식 이메일</label><input type="email" id="cm-site-email" maxlength="200"></div>
+            <div class="cm-field"><label>대표 전화</label><input id="cm-site-phone" maxlength="40"></div>
+            <div class="cm-field"><label>팩스</label><input id="cm-site-fax" maxlength="40"></div>
+            <div class="cm-field"><label>휴대전화</label><input id="cm-site-mobile" maxlength="40"></div>
+            <div class="cm-field span-2"><label>축산물·식품 영업허가번호</label><input id="cm-site-license" maxlength="100"></div>
+            <div class="cm-field span-4">
+              <div class="cm-checks">
+                <label><input type="checkbox" id="cm-site-inventory"> 재고 거점</label>
+                <label><input type="checkbox" id="cm-site-head"> 본점</label>
+                <label><input type="checkbox" id="cm-site-default"> 문서 기본 장소</label>
+                <label><input type="checkbox" id="cm-site-active" checked> 사용</label>
+              </div>
+            </div>
+          </div>
+          <div class="cm-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="cm-save-site" onclick="saveCompanyBusinessSite()">사업장·창고 저장</button>
+          </div>
+        </div>
+
+        <div class="cm-subcard">
+          <div class="cm-subcard-title">
+            <span id="cm-sender-form-title">팩스·메일 발신 프로필</span>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="newDocumentSenderProfile()">+ 발신 프로필</button>
+          </div>
+          <div class="cm-note">발신 프로필은 회사가 아니라 팩스·메일 발송 계정과 회신처를 고르는 단위입니다. 인증키는 저장하지 않고 서버 비밀키 별칭만 연결합니다.</div>
+          <div class="cm-site-tabs" id="cm-sender-tabs"></div>
+          <input type="hidden" id="cm-sender-id"><input type="hidden" id="cm-sender-revision">
+          <div class="cm-form-grid">
+            <div class="cm-field"><label>프로필 코드 *</label><input id="cm-sender-code" maxlength="50" placeholder="dongbumt"></div>
+            <div class="cm-field span-2"><label>표시명 *</label><input id="cm-sender-label" maxlength="200" placeholder="팩스 발신 선택 목록에 표시할 이름"></div>
+            <div class="cm-field"><label>연결 사업장</label><select id="cm-sender-site"><option value="">연결 안 함</option></select></div>
+            <div class="cm-field span-2"><label>회신 이메일</label><input type="email" id="cm-sender-email" maxlength="254"></div>
+            <div class="cm-field"><label>회신 팩스번호</label><input id="cm-sender-fax" maxlength="40"></div>
+            <div class="cm-field"><label>서버 비밀키 별칭 *</label><input id="cm-sender-secret-alias" maxlength="50" placeholder="dongbumt"></div>
+            <div class="cm-field span-2"><label>도장 자산 경로</label><input id="cm-sender-seal" maxlength="200" placeholder="assets/company-seal.png"></div>
+            <div class="cm-field span-2">
+              <div class="cm-checks">
+                <label><input type="checkbox" id="cm-sender-default"> 기본 발신 프로필</label>
+                <label><input type="checkbox" id="cm-sender-active" checked> 사용</label>
+              </div>
+            </div>
+          </div>
+          <div class="cm-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="cm-save-sender" onclick="saveDocumentSenderProfile()">발신 프로필 저장</button>
+          </div>
+        </div>
+
+        <div class="cm-subcard">
+          <div class="cm-subcard-title">
+            <span>외부기관 사업장 식별번호</span>
+            <span style="font-size:11px;font-weight:500;color:#70777e;">비밀번호·API 키 저장 금지</span>
+          </div>
+          <input type="hidden" id="cm-identifier-id"><input type="hidden" id="cm-identifier-revision">
+          <div class="cm-form-grid">
+            <div class="cm-field"><label>기관 코드</label><input id="cm-identifier-provider" maxlength="50" placeholder="meatwatch"></div>
+            <div class="cm-field"><label>식별자 종류</label><input id="cm-identifier-type" maxlength="50" placeholder="bplc_manage_no"></div>
+            <div class="cm-field span-2"><label>식별번호</label><input id="cm-identifier-value" maxlength="200"></div>
+            <div class="cm-field"><label>사용 시작일</label><input type="date" id="cm-identifier-from"></div>
+            <div class="cm-field"><label>사용 종료일</label><input type="date" id="cm-identifier-to"></div>
+            <div class="cm-field"><div class="cm-checks"><label><input type="checkbox" id="cm-identifier-active" checked> 사용</label></div></div>
+            <div class="cm-field"><div class="cm-actions" style="margin-top:0;"><button type="button" class="btn btn-secondary btn-sm" onclick="clearCompanyIdentifierForm()">새로 입력</button><button type="button" class="btn btn-primary btn-sm" id="cm-save-identifier" onclick="saveCompanySiteIdentifier()">저장</button></div></div>
+          </div>
+          <div class="tbl-wrap" style="max-height:240px;margin-top:12px;">
+            <table class="cm-identifier-table"><thead><tr><th>기관</th><th>종류</th><th>식별번호</th><th>사용기간</th><th>상태</th><th></th></tr></thead><tbody id="cm-identifier-body"></tbody></table>
+          </div>
+        </div>
+        <div id="cm-inline-message" class="cm-inline-error"></div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -1052,10 +1197,10 @@
         </div>
         <div class="form-group"><label>요청일</label><input id="csr-date" type="date" onchange="coldStorageRequestMetaChanged('requestDate',this.value)"></div>
         <div class="form-group csr-wide-field">
-          <label>요청자</label>
-          <select id="csr-requester" onchange="coldStorageRequesterChanged(this.value)">
-            <option value="dongbumt">주식회사 동부엠티</option>
-            <option value="dongbu_distribution">(주)동부축산유통</option>
+          <label>발신 프로필</label>
+          <select id="csr-sender-profile" onchange="coldStorageSenderProfileChanged(this.value)">
+            <option value="dongbumt">팩스 발신 1 (동부엠티)</option>
+            <option value="dongbu_distribution">팩스 발신 2 (기존 동부축산유통)</option>
           </select>
         </div>
         <div class="form-group csr-wide-field">
@@ -1144,7 +1289,7 @@
     <div class="tbl-wrap">
       <table class="csr-history-table">
         <thead><tr>
-          <th>요청일</th><th>구분</th><th>요청자</th><th>냉동창고</th><th>요청내용</th>
+          <th>요청일</th><th>구분</th><th>발신 프로필</th><th>냉동창고</th><th>요청내용</th>
           <th style="text-align:right;">총수량</th><th>팩스번호</th><th>상태</th><th>관리</th>
         </tr></thead>
         <tbody id="csr-history-body"><tr><td colspan="9" class="csr-empty-cell">저장된 요청이 없습니다.</td></tr></tbody>
@@ -3241,7 +3386,7 @@ function cacheAppDataValue(key, reg, value){
 function supabaseFriendlyError(err){
   const detail = String(err?.message || err || '').trim();
   if(/invalid app password/i.test(detail)){
-    return '비밀번호가 맞지 않습니다. dong540916! 를 정확히 입력해주세요.';
+    return '비밀번호가 맞지 않습니다. 관리자에게 현재 연동 비밀번호를 확인해주세요.';
   }
   if(/Storage|setItem|quota|exceeded/i.test(detail)){
     return '브라우저 임시 저장공간이 가득 찼습니다. 연결 상태 초기화 후 다시 시도해주세요.';
@@ -4140,6 +4285,7 @@ function localInit(){
 // 전체 렌더
 function renderAll(){
   renderScheduleCalendar();
+  if(typeof renderCompanyMasterPage === 'function' && document.getElementById('p-company-master')?.classList.contains('active')) renderCompanyMasterPage();
   renderTransactions();
   updateProductList();
   if(typeof updateOriginList === 'function') updateOriginList();
@@ -5707,6 +5853,7 @@ async function showPage(id, btn){
   if(id==='p-transactions'){ updateTransactionForm(); initBulkInbound(); initBulkOutbound(); }
   if(id==='p-incheck') initIncheck();
   if(id==='p-schedule') renderScheduleCalendar();
+  if(id==='p-company-master' && typeof initCompanyMasterPage === 'function') initCompanyMasterPage();
   if(id==='p-production'){renderProduction();initProdForm();updateOriginList();}
   if(id==='p-prod-loss') renderProductionLoss();
   if(id==='p-workorders'){ initWorkOrderForm(); renderWorkOrders(); }
@@ -5963,6 +6110,14 @@ function getTxnStockLocation(t){
 
 function getKnownStockLocations(){
   const set = new Set([STOCK_LOCATION_DEFAULT, STOCK_LOCATION_SECONDARY]);
+  try {
+    const masterLocations = typeof DBMTCompanyMaster === 'object' && typeof DBMTCompanyMaster.getInventoryLocations === 'function'
+      ? DBMTCompanyMaster.getInventoryLocations() : [];
+    masterLocations.forEach(location=>{
+      const name = String(location?.name || location?.code || '').trim();
+      if(name) set.add(name);
+    });
+  } catch(e) {}
   userTransactions.forEach(t=>{
     [t.stockLocation, t.location, t.fromLocation, t.toLocation].forEach(v=>{
       const loc = String(v || '').trim();
@@ -10602,6 +10757,14 @@ function loadInvoiceByDate(){
   const totalAmount = items.reduce((s,i)=>s+i.amount,0);
   const prevUnpaid  = excelInv ? excelInv.prev_unpaid : calcPrevUnpaid(date, trader);
   const totalUnpaid = prevUnpaid + totalAmount;
+  const supplierProfile = typeof DBMTCompanyMaster === 'object' ? DBMTCompanyMaster.getPrimaryProfile() : null;
+  const supplierMasterSource = typeof DBMTCompanyMaster === 'object' ? DBMTCompanyMaster.getSource?.() : 'legacy';
+  const supplier = supplierProfile || ((supplierMasterSource === 'server' || supplierMasterSource === 'cache') ? {} : {
+    registrationNo:'495-88-01108', legalName:'주식회사 동부엠티', representativeName:'이창성',
+    address:'인천광역시 검단구 소담2로 36, 2동 201호 (금곡동)', businessType:'도매 및 소매업, 제조업',
+    businessItems:'축산물유통전문, 식육포장처리업, 축산물무역업', phone:'032-766-1812', fax:'032-232-1812'
+  });
+  const supplierBusiness = [supplier.businessType, supplier.businessItems].filter(Boolean).join(' / ');
 
   let itemRows='';
   items.forEach(item=>{
@@ -10633,13 +10796,13 @@ function loadInvoiceByDate(){
     <div class="inv-row">
       <div class="inv-box">
         <div class="inv-box-title" style="background:#1a252f;color:#fff;padding:4px;border-radius:4px 4px 0 0;margin:-10px -10px 8px;">공　급　자</div>
-        <div class="inv-line"><span>등록번호</span><span>495-88-01108</span></div>
-        <div class="inv-line"><span>상호</span><span style="font-weight:600;">주식회사 동부엠티</span></div>
-        <div class="inv-line"><span>대표</span><span>이창성</span></div>
-        <div class="inv-line"><span>주소</span><span style="font-size:10px;">인천광역시 서구 소담2로 36, 2동 201호</span></div>
-        <div class="inv-line"><span>업태</span><span>도매및소매업, 제조업</span></div>
-        <div class="inv-line"><span>전화</span><span>070-4609-9290</span></div>
-        <div class="inv-line"><span>팩스</span><span>02-589-6417</span></div>
+        <div class="inv-line"><span>등록번호</span><span>${htmlEscape(supplier.registrationNo || supplier.businessRegistrationNo || '')}</span></div>
+        <div class="inv-line"><span>상호</span><span style="font-weight:600;">${htmlEscape(supplier.legalName || supplier.name || '')}</span></div>
+        <div class="inv-line"><span>대표</span><span>${htmlEscape(supplier.representativeName || supplier.representative || '')}</span></div>
+        <div class="inv-line"><span>주소</span><span style="font-size:10px;">${htmlEscape(supplier.address || '')}</span></div>
+        <div class="inv-line"><span>업태/종목</span><span>${htmlEscape(supplierBusiness)}</span></div>
+        <div class="inv-line"><span>전화</span><span>${htmlEscape(supplier.phone || '')}</span></div>
+        <div class="inv-line"><span>팩스</span><span>${htmlEscape(supplier.fax || '')}</span></div>
       </div>
       <div class="inv-box">
         <div class="inv-box-title" style="background:#2980b9;color:#fff;padding:4px;border-radius:4px 4px 0 0;margin:-10px -10px 8px;">공급 받는 자</div>
@@ -12306,7 +12469,16 @@ async function supabaseInit(){
   const password = requireSupabasePassword();
   const startRevision = localCoreRevision;
   gsShowSync('Supabase에서 데이터 불러오는 중...');
-  const data = await sbRpc('dbmt_get_all', {p_password: password});
+  const companyMasterPromise = typeof DBMTCompanyMaster === 'object'
+    ? DBMTCompanyMaster.loadRemote(password).catch(err=>{
+        console.warn('회사·사업장 기준정보 RPC가 아직 설치되지 않았거나 로드에 실패했습니다:', err);
+        return null;
+      })
+    : Promise.resolve(null);
+  const [data] = await Promise.all([
+    sbRpc('dbmt_get_all', {p_password: password}),
+    companyMasterPromise
+  ]);
   try{
     data.subMaterialUsages = await supabaseLoadSubMaterialUsages(password);
   } catch(err){
@@ -12575,6 +12747,7 @@ let docRequestSelectedKeys = new Set();
 let docRequestPendingGroups = [];
 let docRequestPendingChannel = '';
 let docRequestCapabilities = {email:false, fax:false, faxProvider:'바로빌', faxMode:'테스트'};
+let docRequestSenderProfiles = null;
 let documentRequestLogs = [];
 let documentRequestLogsLoaded = false;
 
@@ -12762,7 +12935,7 @@ function updateDocumentRequestButtons(){
   }
 }
 
-async function loadDocumentRequestCapabilities(){
+async function loadDocumentRequestCapabilities(senderProfileId=''){
   const configEl = document.getElementById('doc-request-config');
   const password = getSupabasePassword();
   if(!password){
@@ -12776,14 +12949,20 @@ async function loadDocumentRequestCapabilities(){
   }
   try{
     const data = await sbFunctionRequest('send-document-request', {
-      action:'capabilities',
-      appPassword:password
+      action:'capabilities', appPassword:password, senderProfileId
     });
+    if(Array.isArray(data?.senderProfiles)){
+      docRequestSenderProfiles = data.senderProfiles;
+      if(!document.getElementById('doc-request-modal')?.classList.contains('hidden')){
+        populateDocumentSenderProfileSelect(senderProfileId || data?.senderProfileId || '');
+      }
+    }
     docRequestCapabilities = {
       email:!!data?.email,
-      fax:!!data?.fax,
+      fax:senderProfileId ? !!data?.fax : ((docRequestSenderProfiles || []).some(profile=>profile.faxConfigured) || !!data?.fax),
       faxProvider:data?.faxProvider || '바로빌',
-      faxMode:data?.faxMode || '테스트'
+      faxMode:senderProfileId ? (data?.faxMode || '테스트')
+        : ((docRequestSenderProfiles || []).some(profile=>profile.faxConfigured && profile.faxMode === '운영') ? '운영' : (data?.faxMode || '테스트'))
     };
     if(configEl){
       const messages = [];
@@ -12805,6 +12984,30 @@ async function loadDocumentRequestCapabilities(){
     }
   }
   updateDocumentRequestButtons();
+  const modalSend = document.getElementById('doc-request-send-btn');
+  if(modalSend && docRequestPendingChannel){
+    modalSend.disabled = !docRequestCapabilities[docRequestPendingChannel];
+  }
+}
+
+function populateDocumentSenderProfileSelect(preferredId=''){
+  const select = document.getElementById('doc-request-sender-profile');
+  if(!select) return '';
+  const local = typeof DBMTCompanyMaster === 'object' && typeof DBMTCompanyMaster.getSenderProfiles === 'function'
+    ? DBMTCompanyMaster.getSenderProfiles().filter(profile=>profile.active !== false).map(profile=>({
+      id:profile.code, displayName:profile.label || profile.code, isDefault:profile.isDefault
+    })) : [];
+  const masterRows = typeof DBMTCompanyMaster === 'object' && typeof DBMTCompanyMaster.getMaster === 'function'
+    ? DBMTCompanyMaster.getMaster()?.documentSenderProfiles : null;
+  const remoteLoaded = Array.isArray(docRequestSenderProfiles);
+  const profiles = remoteLoaded ? docRequestSenderProfiles : local;
+  const fallback = profiles.length ? profiles
+    : (!remoteLoaded && (!Array.isArray(masterRows) || !masterRows.length) ? [{id:'dongbumt',displayName:'동부엠티',isDefault:true}] : []);
+  if(!fallback.length){ select.replaceChildren(); return ''; }
+  const selected = preferredId || select.value || fallback.find(profile=>profile.isDefault)?.id || fallback[0].id;
+  select.replaceChildren(...fallback.map(profile=>new Option(profile.displayName || profile.id,profile.id)));
+  select.value = fallback.some(profile=>profile.id === selected) ? selected : (fallback.find(profile=>profile.isDefault)?.id || fallback[0].id);
+  return select.value;
 }
 
 function toggleDocumentRequestSelection(key, checked){
@@ -12880,6 +13083,8 @@ function openDocumentRequestModal(channel){
   const status = document.getElementById('doc-request-modal-status');
   const sendBtn = document.getElementById('doc-request-send-btn');
   const cancelBtn = document.getElementById('doc-request-cancel-btn');
+  const senderProfileId = populateDocumentSenderProfileSelect();
+  if(senderProfileId) loadDocumentRequestCapabilities(senderProfileId);
   if(title) title.textContent = channel === 'email' ? '필요서류 메일 요청' : '필요서류 바로빌 팩스 요청';
   if(summary) summary.textContent = `${docRequestPendingGroups.length}개 거래처 · 총 ${selectedRows.length}건을 발송합니다. 수신처와 요청 내용을 확인해주세요.`;
   if(body){
@@ -12913,6 +13118,14 @@ async function sendDocumentRequests(){
     gsShowSetup();
     return;
   }
+  const senderProfileId = document.getElementById('doc-request-sender-profile')?.value || '';
+  await loadDocumentRequestCapabilities(senderProfileId);
+  if(!docRequestCapabilities[docRequestPendingChannel]){
+    toast(docRequestPendingChannel === 'fax'
+      ? '선택한 발신 프로필의 바로빌 설정을 확인하세요.'
+      : '메일 발송 설정을 확인하세요.');
+    return;
+  }
   const sendBtn = document.getElementById('doc-request-send-btn');
   const cancelBtn = document.getElementById('doc-request-cancel-btn');
   const statusEl = document.getElementById('doc-request-modal-status');
@@ -12933,6 +13146,8 @@ async function sendDocumentRequests(){
       const result = await sbFunctionRequest('send-document-request', {
         action:'send',
         appPassword:password,
+        senderProfileId,
+        companyCode:senderProfileId, // 이전 배포된 Edge 함수와의 호환 별칭
         channel:docRequestPendingChannel,
         trader:group.trader,
         recipient:group.recipient,
@@ -16189,8 +16404,19 @@ const LBL_DEFAULTS = {
   storage:      '-18℃이하 냉동보관',
   manufacturer: '주식회사동부엠티',
   phone:        '032-766-1812',
-  address:      '인천광역시 서구 소담2로 36, 2동 201호',
+  address:      '인천광역시 검단구 소담2로 36, 2동 201호 (금곡동)',
 };
+
+document.addEventListener('dbmt-company-master-changed',()=>{
+  if(typeof refreshLocationSelectOptions === 'function') refreshLocationSelectOptions();
+  if(document.getElementById('p-invoice')?.classList.contains('active') && document.getElementById('inv-date')?.value){
+    loadInvoiceByDate();
+  }
+  [['lbl-licenseno','licenseno'],['lbl-manufacturer','manufacturer'],['lbl-phone','phone'],['lbl-address','address']].forEach(([id,key])=>{
+    const input=document.getElementById(id);
+    if(input && !input.value) input.value=LBL_DEFAULTS[key] || '';
+  });
+});
 
 function workOrderId(){
   return 'wo_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
@@ -16952,7 +17178,7 @@ function buildLabelBody(d){
   var pad = 'padding:1.8pt 2.2pt;';
   var oh = 'overflow:hidden;';
   var sh = 'flex-shrink:0;';
-  var manufacturerName = htmlEscape(d.manufacturer || '주식회사 동부엠티').replace(/주식회사\s*동부엠티/g, '주식회사 동부엠티');
+  var manufacturerName = htmlEscape(d.manufacturer || LBL_DEFAULTS.manufacturer).replace(/주식회사\s*동부엠티/g, '주식회사 동부엠티');
   var rows = '';
 
   // 제품명
@@ -17972,7 +18198,8 @@ function initSamsung(){
 }
 
 </script>
-<script src="quotation.js?v=20260812q4"></script>
-<script src="cold-storage-request.js?v=20260813e"></script>
+<script src="company-master.js?v=20260813m01"></script>
+<script src="quotation.js?v=20260813m01"></script>
+<script src="cold-storage-request.js?v=20260813m01"></script>
 </body>
 </html>

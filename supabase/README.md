@@ -59,6 +59,8 @@ Editor query for each file:
 37. `schema-rpc-17d-mobile-admin-data.sql`
 38. `schema-rpc-17e-mobile-admin-driver-week.sql`
 39. `schema-rpc-17f-mobile-admin-schedule-write.sql`
+40. `schema-rpc-18-cold-storage-public.sql`
+41. `schema-rpc-19-company-master.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -83,9 +85,55 @@ This creates:
 - `dbmt_upsert_submaterial_usages(password, rows)`
 - `dbmt_delete_submaterial_usage(password, id)`
 - `dbmt_get_document_request_logs(password, limit)`
+- `dbmt_get_company_master(password)`
+- `dbmt_save_company(password, record, expected_revision)`
+- `dbmt_save_business_site(password, record, expected_revision)`
+- `dbmt_save_business_site_identifier(password, record, expected_revision)`
+- `dbmt_save_document_sender_profile(password, record, expected_revision)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.
+
+The shared ERP password is stored only as a SHA-256 hash in
+`app_config.app_password_sha256`; never put its plaintext in this repository or
+browser code. Re-running `schema-rpc-01-config.sql` preserves the existing
+verifier for operational compatibility. Fresh installations start with a
+deliberately disabled value until an administrator stores a password hash.
+Rotating legacy passwords remains strongly recommended, even though an existing
+deployment may deliberately keep its current verifier.
+
+`schema-rpc-19-company-master.sql` creates `companies`, `business_sites`,
+`business_site_identifiers`, and `document_sender_profiles`. `companies` is a
+database-enforced singleton: this ERP can store one legal company and cannot
+create a second company. The `companies` array remains in the read response for
+compatibility, but it contains at most one record; `company` is the preferred
+single-record field.
+
+One company can have any number of business sites and inventory locations.
+`siteType` supports `head_office`, `office`, `factory`, `warehouse`,
+`external_warehouse`, and `other`; `ownershipType` supports `owned`, `leased`,
+and `third_party`. A warehouse is always an inventory location. An external
+cold-storage company that holds our stock should be saved as
+`external_warehouse` + `third_party` + `inventoryLocation=true`. Its own trader
+master key/name may be stored in `operatorTraderKey` and `operatorName`, while
+`businessRegistrationNo` may be empty for a location that is not our registered
+place of business. The head office must have a business registration number.
+
+`document_sender_profiles` separates the two fax/document sender choices from
+the legal-company master. A profile can select a business site and override only
+its label, reply email/fax, seal asset, and non-secret `secretAlias`. It does not
+duplicate legal-company or business-registration data. Actual Barobill account
+credentials stay in Edge Function secrets. The script intentionally inserts no
+master data. Confirm the legal company and site details before entering them
+through the ERP. Saves use the current `revision` value to reject stale browser
+writes, and records are deactivated instead of physically deleted. Edge
+Functions using the Supabase service role receive read-only table access.
+
+If migrations are applied instead of the split schema files, apply
+`20260813125000_password_check_fail_closed.sql` before
+`20260813130000_company_master.sql`, then apply
+`20260813131000_cold_storage_company_snapshot.sql`. The verified DBMT production
+master is inserted separately by `20260814090000_m01_official_master_data.sql`.
 
 ## 3. Document request delivery
 
@@ -99,6 +147,7 @@ DAUM_SMTP_USER
 DAUM_SMTP_APP_PASSWORD
 DAUM_SMTP_FROM
 DOCUMENT_REQUEST_PHONE
+COLD_STORAGE_PUBLIC_ACCESS_SHA256
 ```
 
 Barobill Fax additionally needs:
@@ -111,6 +160,27 @@ BAROBILL_SENDER_ID
 BAROBILL_MEMBER_PASSWORD
 BAROBILL_FROM_NUMBER
 ```
+
+`COLD_STORAGE_PUBLIC_ACCESS_SHA256` is optional. When set, it is the SHA-256 hash
+of an access code entered by staff on the standalone cold-storage page. When it
+is absent, the operator-approved legacy no-login public workflow remains active;
+the public request history/write/delete/fax surface is therefore intentionally
+accepted. Never put a plaintext access code in HTML, JavaScript, URLs, or this
+repository.
+
+Each document-sender profile may use `BAROBILL_PROFILE_<ALIAS>_*` secrets, where
+`<ALIAS>` is the profile's non-secret `secretAlias` in uppercase. For example,
+the legacy alias `dongbu_distribution` selects
+`BAROBILL_PROFILE_DONGBU_DISTRIBUTION_CERT_KEY`, `_CORP_NUM`, `_SENDER_ID`,
+`_MEMBER_PASSWORD`, `_FROM_NUMBER`, and `_ENV`. Profile-scoped values take
+priority. Account credentials and the outbound number may fall back to the
+common `BAROBILL_*` values above because both sender profiles belong to the same
+legal company. A scoped `_FROM_NUMBER` overrides the common number when a sender
+needs a separate outbound identity. The alias selects a credential group; credentials themselves
+must never be stored in the database. Every
+profile's Barobill corporate number must match the single ERP company's legal
+corporate/business identity expected by the delivery function, or fax delivery
+must be rejected.
 
 Use `BAROBILL_ENV=test` until test fax delivery is verified. Change it to
 `production` only after the Barobill production account and balance are ready.

@@ -1,0 +1,215 @@
+#p-company-master .cm-summary {
+  display: block;
+}
+
+#p-company-master .cm-sidebar,
+#p-company-master .cm-editor {
+  min-width: 0;
+}
+
+#p-company-master .cm-source {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  border: 1px solid #cfd4da;
+  border-radius: 8px;
+  background: #f6f7f8;
+  color: #3f4750;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+#p-company-master .cm-source strong {
+  color: #22272c;
+}
+
+#p-company-master .cm-company-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+#p-company-master .cm-company-button {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid #d6d9dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  text-align: left;
+  cursor: pointer;
+}
+
+#p-company-master .cm-company-button:hover,
+#p-company-master .cm-company-button.active {
+  border-color: #7c838a;
+  background: #f0f1f2;
+}
+
+#p-company-master .cm-company-button .name {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#p-company-master .cm-company-button .meta {
+  display: block;
+  margin-top: 3px;
+  color: #727980;
+  font-size: 11px;
+}
+
+#p-company-master .cm-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 6px;
+  border: 1px solid #c4c8cc;
+  border-radius: 999px;
+  background: #f4f5f6;
+  color: #555d65;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+#p-company-master .cm-subcard {
+  padding: 13px;
+  margin-bottom: 12px;
+  border: 1px solid #dfe2e5;
+  border-radius: 9px;
+  background: #fff;
+}
+
+#p-company-master .cm-subcard-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+  color: #30353a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+#p-company-master .cm-note {
+  padding: 9px 11px;
+  margin: -1px 0 12px;
+  border: 1px solid #dfe2e5;
+  border-radius: 7px;
+  background: #f7f8f9;
+  color: #5c646c;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+#p-company-master .cm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+#p-company-master .cm-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#p-company-master .cm-field.span-2 { grid-column: span 2; }
+#p-company-master .cm-field.span-3 { grid-column: span 3; }
+#p-company-master .cm-field.span-4 { grid-column: 1 / -1; }
+
+#p-company-master .cm-field label {
+  color: #5e656c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#p-company-master .cm-checks {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 13px;
+}
+
+#p-company-master .cm-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #444b52;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#p-company-master .cm-checks input {
+  width: auto;
+}
+
+#p-company-master .cm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+#p-company-master .cm-site-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 11px;
+}
+
+#p-company-master .cm-site-tab {
+  padding: 5px 9px;
+  border: 1px solid #d4d8dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #555d65;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#p-company-master .cm-site-tab.active {
+  border-color: #747c84;
+  background: #eceeef;
+  color: #24282c;
+  font-weight: 700;
+}
+
+#p-company-master .cm-empty {
+  padding: 18px 10px;
+  color: #7b8288;
+  font-size: 12px;
+  text-align: center;
+}
+
+#p-company-master .cm-inline-error {
+  min-height: 18px;
+  margin-top: 7px;
+  color: #7a2f2f;
+  font-size: 11px;
+  text-align: right;
+}
+
+#p-company-master .cm-identifier-table td,
+#p-company-master .cm-identifier-table th {
+  padding: 7px 8px;
+  font-size: 11px;
+}
+
+@media (max-width: 1050px) {
+  #p-company-master .cm-form-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  #p-company-master .cm-field.span-3,
+  #p-company-master .cm-field.span-4 { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  #p-company-master .cm-form-grid { grid-template-columns: 1fr; }
+  #p-company-master .cm-field.span-2,
+  #p-company-master .cm-field.span-3,
+  #p-company-master .cm-field.span-4 { grid-column: 1; }
+}

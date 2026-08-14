@@ -503,6 +503,7 @@
     </section>
   </main>
 
+  <script src="company-master.js?v=20260813m01"></script>
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
@@ -530,13 +531,13 @@
     };
 
     const DEFAULTS = {
-      licenseno: '제025-0293093호',
+      licenseno: '제2025-0293093호',
       prodtype: '식품의유형',
       packaging: '내포장(PE), 외포장(종이)',
       storage: '-18℃이하 냉동보관',
       manufacturer: '주식회사 동부엠티',
       phone: '032-766-1812',
-      address: '인천광역시 서구 소담2로 36, 2동 201호'
+      address: '인천광역시 검단구 소담2로 36, 2동 201호 (금곡동)'
     };
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -664,6 +665,11 @@
       setStatus('Supabase 연결 중...', 'warn');
       try {
         const data = await sbRpc('dbmt_get_all', {p_password: password});
+        try {
+          if(window.DBMTCompanyMaster?.loadRemote) await window.DBMTCompanyMaster.loadRemote(password);
+        } catch(companyError) {
+          console.warn('회사·사업장 기준정보를 불러오지 못해 기존 라벨 기본값을 사용합니다:', companyError);
+        }
         const appData = data?.appData || {};
         state.password = password;
         state.workOrders = normalizeArray(appData.workOrders);

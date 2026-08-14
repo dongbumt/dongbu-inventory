@@ -16,6 +16,14 @@ desktop.ini
 *.bak
 *.tmp
 *~
+~$*.xlsx
+
+# 로컬 문서 생성 런타임
+**/node_modules/
 
 # Supabase CLI local cache
 supabase/.temp/
+
+# Python local cache
+**/__pycache__/
+*.pyc

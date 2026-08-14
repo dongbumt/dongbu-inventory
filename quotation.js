@@ -5,13 +5,41 @@ const QUOTATION_STORAGE_KEY = 'dbmt_quotations';
 const QUOTATION_MAX_ROWS = 8;
 const QUOTATION_CANVAS_WIDTH = 2480;
 const QUOTATION_CANVAS_HEIGHT = 3508;
-const QUOTATION_COMPANY = {
+const QUOTATION_COMPANY_FALLBACK = {
   name: '주식회사 동부엠티',
   ceo: '이창성',
   registrationNo: '495-88-01108',
-  address: '인천광역시 검단구 소담2로36, 2동 201호',
-  phoneFax: '032-579-3920 / 032-232-1812',
+  address: '인천광역시 검단구 소담2로 36, 2동 201호 (금곡동)',
+  phoneFax: '032-766-1812 / 032-232-1812',
 };
+
+function quotationCompany(record={}){
+  const snapshot = record.companyProfile || null;
+  const profile = snapshot || window.DBMTCompanyMaster?.getPrimaryProfile?.();
+  const masterSource = window.DBMTCompanyMaster?.getSource?.() || 'legacy';
+  if(!profile) return masterSource === 'server' || masterSource === 'cache'
+    ? {name:'',ceo:'',registrationNo:'',address:'',phoneFax:''}
+    : QUOTATION_COMPANY_FALLBACK;
+  const allowLegacyFallback = profile.isLegacyDraft === true || profile.source === 'legacy' || (!snapshot && masterSource === 'legacy');
+  return {
+    name:profile.legalName || profile.name || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.name : ''),
+    ceo:profile.representativeName || profile.representative || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.ceo : ''),
+    registrationNo:profile.registrationNo || profile.businessRegistrationNo || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.registrationNo : ''),
+    address:profile.address || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.address : ''),
+    phoneFax:profile.phoneFax || [profile.phone,profile.fax].filter(Boolean).join(' / ') || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.phoneFax : '')
+  };
+}
+
+function quotationCompanySnapshot(){
+  const company=quotationCompany();
+  const profile=window.DBMTCompanyMaster?.getPrimaryProfile?.();
+  const masterSource = window.DBMTCompanyMaster?.getSource?.() || 'legacy';
+  const allowLegacySeal = profile?.isLegacyDraft === true || masterSource === 'legacy';
+  return {
+    ...company, sealAssetKey:profile?.sealAssetKey || (allowLegacySeal ? 'assets/company-seal.png' : ''),
+    source:masterSource, isLegacyDraft:profile?.isLegacyDraft === true, capturedAt:new Date().toISOString()
+  };
+}
 
 let quotationList = [];
 try{
@@ -44,7 +72,7 @@ function quotationBlankDraft(){
     customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가',
     managerName:'김상영 과장', managerPhone:'010-2414-5406',
     note:'위 품목은 시세에 따라 단가가 변동됩니다.', rows:[quotationBlankRow()],
-    createdAt:'', updatedAt:''
+    companyProfile:null, createdAt:'', updatedAt:''
   };
 }
 
@@ -238,6 +266,7 @@ function applyQuotationSuggested(id){
 function newQuotation(){
   if(quotationDraft && quotationRowsForOutput(quotationDraft).length && !confirm('작성 중인 내용을 지우고 새 견적을 시작할까요?')) return;
   quotationEditingId = '';
+  quotationSealPromise = null;
   quotationDraft = quotationBlankDraft();
   quotationSyncMetaInputs();
   renderQuotationRows();
@@ -266,6 +295,7 @@ function saveQuotation(){
   const record = quotationNormalize({
     ...quotationDraft,
     id:quotationEditingId || quotationId(), rows,
+    companyProfile:prior?.companyProfile || quotationDraft.companyProfile || quotationCompanySnapshot(),
     createdAt:prior?.createdAt || now, updatedAt:now
   });
   const action = prior ? '수정' : '저장';
@@ -285,6 +315,7 @@ function loadQuotation(id){
   const record = quotationList.find(row=>row.id===id);
   if(!record) return;
   quotationEditingId = id;
+  quotationSealPromise = null;
   quotationDraft = quotationNormalize(JSON.parse(JSON.stringify(record)));
   quotationSyncMetaInputs();
   renderQuotationRows();
@@ -296,11 +327,12 @@ function duplicateQuotation(id){
   const record = quotationList.find(row=>row.id===id);
   if(!record) return;
   quotationEditingId = '';
+  quotationSealPromise = null;
   quotationDraft = quotationNormalize({
     ...JSON.parse(JSON.stringify(record)), id:'',
     subject:`${record.subject || '견적서'} 복사본`,
     date:typeof localDateString === 'function' ? localDateString() : new Date().toISOString().slice(0,10),
-    createdAt:'', updatedAt:'', rows:(record.rows||[]).map(row=>({...row,id:quotationId('qtr')}))
+    companyProfile:null, createdAt:'', updatedAt:'', rows:(record.rows||[]).map(row=>({...row,id:quotationId('qtr')}))
   });
   quotationSyncMetaInputs();
   renderQuotationRows();
@@ -373,14 +405,27 @@ function scheduleQuotationPreview(immediate=false){
 
 function quotationSealImage(){
   if(quotationSealPromise) return quotationSealPromise;
+  const snapshot = quotationDraft?.companyProfile;
+  const profile = window.DBMTCompanyMaster?.getPrimaryProfile?.();
+  const masterSource = window.DBMTCompanyMaster?.getSource?.() || 'legacy';
+  const allowLegacySeal = snapshot
+    ? snapshot.isLegacyDraft === true || snapshot.source === 'legacy'
+    : (profile?.isLegacyDraft === true || masterSource === 'legacy');
+  const source = snapshot?.sealAssetKey || (!snapshot ? profile?.sealAssetKey : '') || (allowLegacySeal ? 'assets/company-seal.png' : '');
+  if(!source) return Promise.resolve(null);
   quotationSealPromise = new Promise(resolve=>{
     const image = new Image();
     image.onload=()=>resolve(image);
     image.onerror=()=>resolve(null);
-    image.src='assets/company-seal.png';
+    image.src=source;
   });
   return quotationSealPromise;
 }
+
+document.addEventListener('dbmt-company-master-changed',()=>{
+  quotationSealPromise=null;
+  if(document.getElementById('p-quotation')?.classList.contains('active')) scheduleQuotationPreview(true);
+});
 
 function qSetFont(ctx,size,weight=400){
   ctx.font=`${weight} ${size}px "Malgun Gothic","Noto Sans KR",Arial,sans-serif`;
@@ -490,6 +535,7 @@ function qDrawPublicTable(ctx,record,rows,startY,{compact=false}={}){
 }
 
 async function qDrawExternalQuotation(ctx,record){
+  const company=quotationCompany(record);
   const rows=quotationRowsForOutput(record);
   ctx.fillStyle='#fff';ctx.fillRect(0,0,QUOTATION_CANVAS_WIDTH,QUOTATION_CANVAS_HEIGHT);
   qDrawText(ctx,'견 적 서',QUOTATION_CANVAS_WIDTH/2,175,{size:92,weight:700,align:'center'});
@@ -502,11 +548,11 @@ async function qDrawExternalQuotation(ctx,record){
 
   qDrawCell(ctx,{x:rightX,y:top,w:rightW,h:294,text:'',fill:'#fff'});
   qDrawText(ctx,'공 급 자',rightX+34,top+38,{size:24,weight:700,color:'#4b4b4b'});
-  qDrawText(ctx,QUOTATION_COMPANY.name,rightX+225,top+60,{size:38,weight:700,maxWidth:600});
-  qDrawText(ctx,`대표자  ${QUOTATION_COMPANY.ceo}`,rightX+225,top+112,{size:25,weight:500});
-  qDrawText(ctx,`등록번호  ${QUOTATION_COMPANY.registrationNo}`,rightX+34,top+170,{size:23});
-  qDrawText(ctx,`주소  ${QUOTATION_COMPANY.address}`,rightX+34,top+215,{size:22,maxWidth:930});
-  qDrawText(ctx,`전화/FAX  ${QUOTATION_COMPANY.phoneFax}`,rightX+34,top+258,{size:22});
+  qDrawText(ctx,company.name,rightX+225,top+60,{size:38,weight:700,maxWidth:600});
+  qDrawText(ctx,`대표자  ${company.ceo}`,rightX+225,top+112,{size:25,weight:500});
+  qDrawText(ctx,`등록번호  ${company.registrationNo}`,rightX+34,top+170,{size:23});
+  qDrawText(ctx,`주소  ${company.address}`,rightX+34,top+215,{size:22,maxWidth:930});
+  qDrawText(ctx,`전화/FAX  ${company.phoneFax}`,rightX+34,top+258,{size:22});
   const seal=await quotationSealImage();
   if(seal){ ctx.save();ctx.globalAlpha=.88;ctx.drawImage(seal,rightX+825,top+28,250,250);ctx.restore(); }
 
@@ -519,8 +565,8 @@ async function qDrawExternalQuotation(ctx,record){
   const noteLines=qWrapLines(ctx,record.note||'',1980,4);
   noteLines.forEach((line,index)=>qDrawText(ctx,line,175,footerY+105+index*42,{size:28}));
   qDrawText(ctx,`담당자 : ${record.managerName||'-'} (${record.managerPhone||'-'})`,175,footerY+235,{size:28,weight:600});
-  qDrawText(ctx,QUOTATION_COMPANY.name,1530,footerY+300,{size:34,weight:700,align:'center'});
-  qDrawText(ctx,`대표  ${QUOTATION_COMPANY.ceo}`,1530,footerY+360,{size:30,weight:600,align:'center'});
+  qDrawText(ctx,company.name,1530,footerY+300,{size:34,weight:700,align:'center'});
+  qDrawText(ctx,`대표  ${company.ceo}`,1530,footerY+360,{size:30,weight:600,align:'center'});
   if(seal){ ctx.save();ctx.globalAlpha=.9;ctx.drawImage(seal,1740,footerY+225,190,190);ctx.restore(); }
 }
 
