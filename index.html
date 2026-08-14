@@ -608,6 +608,7 @@
         <!-- 입고: 품목관리 기준 선택 -->
         <div id="t-product-managed-wrap" style="display:none;position:relative;">
           <input id="t-product-managed" placeholder="품목명 검색" oninput="onManagedProductSearch()" onfocus="showManagedProductSuggestions()" onblur="hideManagedProductSuggestionsSoon()" autocomplete="off">
+          <input type="hidden" id="t-label-product-id">
           <div id="t-product-managed-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);max-height:220px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.12);z-index:1500;"></div>
         </div>
         <!-- 출고: 재고품목 검색 -->
@@ -3168,6 +3169,14 @@
             <input id="lp-name" placeholder="예) 돈등심(작업)" style="font-size:13px;">
           </div>
           <div class="form-group">
+            <label>브랜드</label>
+            <input id="lp-brand" maxlength="100" placeholder="예) 동부미트" style="font-size:13px;">
+          </div>
+          <div class="form-group">
+            <label>공장넘버</label>
+            <input id="lp-factory-no" maxlength="100" placeholder="예) EST-12345" style="font-size:13px;">
+          </div>
+          <div class="form-group">
             <label>포장단위 <span style="font-size:10px;color:#999;">((작업) 제품)</span></label>
             <input id="lp-packunit" placeholder="예) 5KG, 10KG" style="font-size:13px;">
           </div>
@@ -3222,7 +3231,7 @@
       <div class="card">
         <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>📋 등록 품목 목록</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input id="lp-search" placeholder="🔍 제품명·원산지·포장단위·품목번호 등 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
+          <input id="lp-search" placeholder="🔍 제품명·브랜드·공장넘버·원산지·품목번호 등 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
           <span id="lp-search-count" style="font-size:11px;color:#888;white-space:nowrap;"></span>
         </div>
         <div id="lp-list-wrap" style="overflow-x:auto;">
@@ -6511,23 +6520,33 @@ function sameOriginText(a, b){
   return originKey(a) === originKey(b);
 }
 
-function refreshTxnManagedProductControls(preferredProduct, preferredOrigin, preferredStorage){
+function refreshTxnManagedProductControls(preferredProduct, preferredOrigin, preferredStorage, preferredProductId){
   if(labelProducts.length && !refreshTxnManagedProductControls._migrated){
     refreshTxnManagedProductControls._migrated = true;
     migrateLabelProducts();
   }
   const prodInput = document.getElementById('t-product-managed');
+  const productIdEl = document.getElementById('t-label-product-id');
+  const packunitEl = document.getElementById('t-packunit');
   const originSel = document.getElementById('t-origin-managed');
   const storageSel = document.getElementById('t-storage-managed');
-  if(!prodInput || !originSel || !storageSel) return;
+  if(!prodInput || !productIdEl || !originSel || !storageSel) return;
 
   const productValue = preferredProduct ?? prodInput.value;
+  if(preferredProductId !== undefined) productIdEl.value = preferredProductId || '';
+  let selectedVariant = labelProducts.find(p => String(p.id || '') === String(productIdEl.value || '')) || null;
+  if(selectedVariant && productValue && !samePriceText(selectedVariant.name, productValue)){
+    productIdEl.value = '';
+    selectedVariant = null;
+  }
   const products = [...new Set(labelProducts.map(p => p.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
-  prodInput.placeholder = products.length ? '품목명 검색' : '품목관리에서 먼저 품목을 등록하세요';
-  if(productValue) prodInput.value = productValue;
+  prodInput.placeholder = products.length ? '품목명·브랜드·공장넘버 검색' : '품목관리에서 먼저 품목을 등록하세요';
+  if(selectedVariant) prodInput.value = selectedVariant.name || '';
+  else if(productValue) prodInput.value = productValue;
+  if(selectedVariant && packunitEl) packunitEl.value = selectedVariant.packunit || '';
 
   const selectedProduct = prodInput.value;
-  const rows = labelProducts.filter(p => p.name === selectedProduct);
+  const rows = selectedVariant ? [selectedVariant] : labelProducts.filter(p => p.name === selectedProduct);
   const origins = [...new Set(rows.map(p => normalizeOriginName(p.origin)).filter(Boolean))];
   const originValue = normalizeOriginName(preferredOrigin ?? originSel.value);
   originSel.innerHTML = '<option value="">-- 원산지 선택 --</option>' +
@@ -6570,6 +6589,12 @@ function hideManagedProductSuggestionsSoon(){
 }
 
 function onManagedProductSearch(){
+  const input = document.getElementById('t-product-managed');
+  const hidden = document.getElementById('t-label-product-id');
+  if(hidden?.value){
+    const selected = labelProducts.find(p => String(p.id || '') === String(hidden.value));
+    if(!selected || !samePriceText(selected.name, input?.value || '')) hidden.value = '';
+  }
   renderManagedProductSuggestions();
   onManagedProductChange();
 }
@@ -6579,29 +6604,35 @@ function renderManagedProductSuggestions(){
   const box = document.getElementById('t-product-managed-results');
   if(!input || !box) return;
   const q = priceKey(input.value);
-  const names = getManagedProductNames().filter(name => !q || priceKey(name).includes(q));
-  if(!names.length){
+  const rows = (labelProducts || [])
+    .filter(p => !q || priceKey(labelProductSearchText(p)).includes(q))
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko') || String(a.brand||'').localeCompare(String(b.brand||''),'ko'));
+  if(!rows.length){
     box.innerHTML = '<div style="padding:9px 11px;font-size:12px;color:#888;">검색 결과 없음</div>';
     box.style.display = 'block';
     return;
   }
-  box.innerHTML = names.slice(0, 80).map(name => {
-    const variants = labelProducts.filter(p => p.name === name);
-    const sub = [...new Set(variants.map(p => `${normalizeOriginName(p.origin)} · ${p.storage || '냉동'}`).filter(Boolean))].slice(0, 3).join(' / ');
-    return `<button type="button" onclick="selectManagedProduct(${jsArg(name)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
-      <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(name)}</div>
+  box.innerHTML = rows.slice(0, 80).map(p => {
+    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
+    return `<button type="button" onclick="selectManagedProduct(${jsArg(p.id)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
+      <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
     </button>`;
   }).join('');
   box.style.display = 'block';
 }
 
-function selectManagedProduct(name){
+function selectManagedProduct(productId){
+  const product = labelProducts.find(p => String(p.id || '') === String(productId || ''));
+  if(!product) return;
   const input = document.getElementById('t-product-managed');
+  const hidden = document.getElementById('t-label-product-id');
   const box = document.getElementById('t-product-managed-results');
-  if(input) input.value = name;
+  if(input) input.value = product.name || '';
+  if(hidden) hidden.value = product.id || '';
   if(box) box.style.display = 'none';
-  onManagedProductChange();
+  refreshTxnManagedProductControls(product.name, product.origin, product.storage, product.id);
+  autoFillTxnPrice();
 }
 
 function onManagedProductChange(){
@@ -7356,6 +7387,9 @@ function getTStorage(){
 function getTPackunit(){
   return document.getElementById('t-packunit')?.value.trim() || '';
 }
+function getTLabelProductId(){
+  return document.getElementById('t-label-product-id')?.value.trim() || '';
+}
 // 원산지 datalist 초기화 (단가표 기반)
 function updateOriginList(){
   const origins = [...new Set(prices.map(p=>p.origin).filter(Boolean))].sort();
@@ -7505,6 +7539,7 @@ async function addTransaction(){
   const origin=getTOrigin();
   const storage=getTStorage();
   const packunit=getTPackunit();
+  const selectedLabelProductId=getTLabelProductId();
   const stockLocation=getTStockLocation();
   const fromLocation=getTMoveFromLocation();
   const toLocation=getTMoveToLocation();
@@ -7515,12 +7550,20 @@ async function addTransaction(){
   const note=document.getElementById('t-note').value.trim();
   if(!date||!product||!weight){alert('날짜, 품목명, 중량은 필수입니다.');return;}
   const managedRows = type === '입고'
-    ? labelProducts.filter(p => p.name === product && sameOriginText(p.origin, origin) && samePriceText(p.storage, storage))
+    ? labelProducts.filter(p =>
+        (!selectedLabelProductId || String(p.id || '') === String(selectedLabelProductId)) &&
+        p.name === product && sameOriginText(p.origin, origin) && samePriceText(p.storage, storage)
+      )
     : [];
   if(type==='입고' && (!origin || !storage || !managedRows.length)){
     alert('입고는 품목관리에서 등록된 품목을 검색 선택한 뒤, 등록된 원산지와 냉동/냉장을 선택해야 합니다.');
     return;
   }
+  if(type==='입고' && !selectedLabelProductId && managedRows.length > 1){
+    alert('같은 품목명·원산지·보관조건의 품목이 여러 개입니다. 브랜드와 공장넘버를 확인하여 검색 목록에서 정확한 품목을 선택해주세요.');
+    return;
+  }
+  const managedProduct = type === '입고' ? managedRows[0] : null;
   const autoPriceEl = document.getElementById('t-price');
   const tablePrice = getPrice(product,origin,trader);
   let price = parseFloat(autoPriceEl?.value) || tablePrice;
@@ -7578,7 +7621,12 @@ async function addTransaction(){
     // 수정 모드: 기존 항목 업데이트
     const t=userTransactions.find(x=>String(x.id)===String(_editTxnId));
     if(t){
-      t.date=date; t.type=type; t.product=product; t.origin=origin; t.packunit=packunit;
+      t.date=date; t.type=type; t.product=product; t.origin=origin; t.packunit=managedProduct?.packunit || packunit;
+      if(type === '입고'){
+        t.labelProductId=managedProduct?.id || '';
+        t.brand=managedProduct?.brand || '';
+        t.factoryNo=managedProduct?.factoryNo || '';
+      }
       t.trader=trader; t.lot=lot; t.proddate=proddateForSave;
       t.weight=weight; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
       t.stockUnitPrice = selectedStock ? parseAppNumber(selectedStock.price) : '';
@@ -7593,7 +7641,9 @@ async function addTransaction(){
   } else {
     // 신규 추가
     const newItem={
-      id:Date.now(),date,type,product,origin,packunit,trader,lot,proddate:proddateForSave,weight,note,storage,price,amount:Math.round(price*weight),
+      id:Date.now(),date,type,product,origin,packunit:managedProduct?.packunit || packunit,
+      labelProductId:managedProduct?.id || '',brand:managedProduct?.brand || '',factoryNo:managedProduct?.factoryNo || '',
+      trader,lot,proddate:proddateForSave,weight,note,storage,price,amount:Math.round(price*weight),
       stockUnitPrice: selectedStock ? parseAppNumber(selectedStock.price) : '',
       stockProddate: selectedStock ? (selectedStock.proddate || proddateForSave || '') : '',
       stockLocation: selectedStock ? (selectedStock.stockLocation || stockLocation) : stockLocation,
@@ -7642,7 +7692,7 @@ function showTransactionSaveStatus(message){
 function clearTransactionForm(options={}){
   const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
   showTransactionSaveStatus('');
-  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-stock-key','t-stock-price'].forEach(id=>{
+  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-label-product-id','t-stock-key','t-stock-price'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   const stockResults=document.getElementById('t-stock-search-results'); if(stockResults){ stockResults.style.display='none'; stockResults.innerHTML=''; }
@@ -7698,7 +7748,7 @@ function bulkProductWrap(inp){
   return inp.closest('td') || inp.closest('.form-group') || inp.parentElement;
 }
 function bulkProductLabel(p){
-  return `${p.name||''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
+  return `${p.name||''}${p.brand?' / '+p.brand:''}${p.factoryNo?' / 공장 '+p.factoryNo:''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
 }
 function onBulkProductSearch(inp, isInput){
   const wrap = bulkProductWrap(inp);
@@ -7720,7 +7770,7 @@ function onBulkProductSearch(inp, isInput){
   const q = (inp.value||'').toLowerCase().trim();
   let list = labelProducts || [];
   if(q) list = list.filter(p =>
-    `${p.name||''} ${p.origin||''} ${p.storage||''} ${p.packunit||''}`.toLowerCase().includes(q)
+    `${p.name||''} ${p.brand||''} ${p.factoryNo||''} ${p.origin||''} ${p.storage||''} ${p.packunit||''}`.toLowerCase().includes(q)
   );
   list = list.slice(0, 80);
   if(!list.length){
@@ -7728,7 +7778,7 @@ function onBulkProductSearch(inp, isInput){
   } else {
     box.innerHTML = list.map(p =>
       `<div class="bulk-prod-opt" data-id="${htmlEscape(String(p.id))}" style="padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
-        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;"> / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
+        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;">${p.brand?' / '+htmlEscape(p.brand):''}${p.factoryNo?' / 공장 '+htmlEscape(p.factoryNo):''} / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
       </div>`
     ).join('');
     box.querySelectorAll('.bulk-prod-opt').forEach(opt => {
@@ -7869,6 +7919,7 @@ async function saveBulkInbound(){
       date, type:'입고',
       product: lp.name, origin: lp.origin, storage: lp.storage || '',
       packunit: lp.packunit || '',
+      labelProductId: lp.id || '', brand: lp.brand || '', factoryNo: lp.factoryNo || '',
       trader, lot, proddate:'',
       weight, price, amount: Math.round(price*weight),
       note, _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
@@ -8511,7 +8562,7 @@ function loadTxnToForm(id){
     if(stockPriceEl) stockPriceEl.value = t.stockUnitPrice || '';
     showTxnStockFromTransaction(t);
   } else if(t.type==='입고'){
-    refreshTxnManagedProductControls(t.product, t.origin, t.storage);
+    refreshTxnManagedProductControls(t.product, t.origin, t.storage, t.labelProductId || '');
   } else {
     document.getElementById('t-product-input').value=t.product||'';
     document.getElementById('t-origin-input').value =t.origin||'';
@@ -8896,7 +8947,7 @@ function labelProductPackUnitText(p){
 }
 
 function labelProductSearchText(p){
-  return [p?.name, p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
+  return [p?.name, p?.brand, p?.factoryNo, p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
 }
 
 function findLabelProductForProduction(name, packunit='', productId=''){
@@ -8960,7 +9011,7 @@ function renderProdOutProductSuggestions(id){
 
   box.innerHTML = items.slice(0, 80).map(({p, idx})=>{
     const pack = labelProductPackUnitText(p);
-    const sub = `${p.kind || '원료육'} · ${normalizeOriginName(p.origin)} · ${p.storage || '냉동'}${pack ? ' · 포장 ' + pack : ''}`;
+    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.kind || '원료육', normalizeOriginName(p.origin), p.storage || '냉동', pack && `포장 ${pack}`].filter(Boolean).join(' · ');
     return `<button type="button" onpointerdown="event.preventDefault()" onclick="selectProdOutProduct(${id},${idx})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}${pack ? ` <span style="font-size:11px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 6px;">${htmlEscape(pack)}</span>` : ''}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
@@ -11346,7 +11397,9 @@ function renderPriceProductSuggestions(){
     return;
   }
   const q = priceKey(input.value);
-  const filtered = names.filter(name => !q || priceKey(name).includes(q)).slice(0, 80);
+  const filtered = names.filter(name => !q || priceKey(name).includes(q) || (labelProducts || []).some(p =>
+    samePriceText(p.name, name) && priceKey(labelProductSearchText(p)).includes(q)
+  )).slice(0, 80);
   if(!filtered.length){
     box.innerHTML = '<div style="padding:9px 11px;font-size:12px;color:#888;">검색 결과 없음</div>';
     box.style.display = 'block';
@@ -11355,6 +11408,8 @@ function renderPriceProductSuggestions(){
   box.innerHTML = filtered.map(name => {
     const variants = (labelProducts || []).filter(p => samePriceText(p.name, name));
     const sub = [...new Set(variants.map(p => [
+      p.brand ? '브랜드 ' + p.brand : '',
+      p.factoryNo ? '공장 ' + p.factoryNo : '',
       normalizeOriginName(p.origin),
       p.storage || '',
       p.packunit || ''
@@ -16968,7 +17023,7 @@ function selectedWorkOrderLabelProduct(){
 }
 
 function workOrderProductSearchText(p){
-  return [p.name, p.packunit, p.origin, p.meattype, p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
+  return [p.name, p.brand, p.factoryNo, p.packunit, p.origin, p.meattype, p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
 }
 
 function renderWorkOrderProductResults(){
@@ -16991,7 +17046,7 @@ function renderWorkOrderProductResults(){
       <div data-id="${htmlEscape(p.id || '')}" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;"
         onmousedown="selectWorkOrderLabelProduct(this.dataset.id)">
         <div style="font-weight:800;color:#2c3e50;">${htmlEscape(p.name || '')}${p.packunit ? ' / ' + htmlEscape(p.packunit) : ''}</div>
-        <div style="color:#666;margin-top:2px;">${htmlEscape([p.origin, p.meattype, p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
+        <div style="color:#666;margin-top:2px;">${htmlEscape([p.brand && '브랜드 '+p.brand, p.factoryNo && '공장 '+p.factoryNo, p.origin, p.meattype, p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
       </div>
     `).join('');
   }
@@ -17473,14 +17528,14 @@ function renderLabelProducts(){
     if(countEl) countEl.textContent = '';
     return;
   }
-  // 검색 필터 (제품명·원산지·유형·육종·보관·포장단위·품목번호·등급)
+  // 검색 필터 (제품명·브랜드·공장넘버·원산지·유형·육종·보관·포장단위·품목번호·등급)
   const searchEl = document.getElementById('lp-search');
   const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
   const sorted = labelProducts
     .map((p,i)=>({p,i}))
     .filter(({p})=>{
       if(!q) return true;
-      const text = [p.name,p.origin,p.kind,p.meattype,p.storage,p.packunit,p.itemno,p.grade]
+      const text = [p.name,p.brand,p.factoryNo,p.origin,p.kind,p.meattype,p.storage,p.packunit,p.itemno,p.grade]
         .map(v=>String(v||'')).join(' ').toLowerCase();
       return text.includes(q);
     })
@@ -17502,6 +17557,8 @@ function renderLabelProducts(){
       <tr style="background:#fff8e8;">
         <td style="text-align:center;">${displayIdx+1}</td>
         <td><input id="lp-row-name-${i}" value="${htmlEscape(p.name||'')}" style="font-size:11px;min-width:140px;"></td>
+        <td><input id="lp-row-brand-${i}" maxlength="100" value="${htmlEscape(p.brand||'')}" placeholder="브랜드" style="font-size:11px;min-width:90px;"></td>
+        <td><input id="lp-row-factory-no-${i}" maxlength="100" value="${htmlEscape(p.factoryNo||'')}" placeholder="공장넘버" style="font-size:11px;min-width:100px;"></td>
         <td><input id="lp-row-origin-${i}" value="${htmlEscape(p.origin||'')}" style="font-size:11px;min-width:80px;"></td>
         <td style="text-align:center;">
           <select id="lp-row-kind-${i}" onchange="autoFillInlineLabelProductShelfDays(${i})" style="font-size:11px;padding:3px 5px;">
@@ -17547,15 +17604,17 @@ function renderLabelProducts(){
     return `
     <tr>
       <td style="text-align:center;">${displayIdx+1}</td>
-      <td><strong>${p.name||''}</strong></td>
-      <td>${p.origin||''}</td>
-      <td style="text-align:center;"><span style="${kindStyle}${badgeBase}">${kind}</span></td>
-      <td style="text-align:center;"><span style="${meatStyle}${badgeBase}">${meat}</span></td>
-      <td style="text-align:center;"><span style="${storageStyle}${badgeBase}">${storage}</span></td>
-      <td style="text-align:center;">${p.shelfdays||''}일</td>
-      <td style="font-size:11px;">${p.packunit||''}</td>
-      <td style="font-size:11px;">${p.grade||''}</td>
-      <td style="font-size:11px;">${p.itemno||''}</td>
+      <td><strong>${htmlEscape(p.name||'')}</strong></td>
+      <td>${htmlEscape(p.brand||'')}</td>
+      <td style="font-family:var(--font-mono);font-size:11px;">${htmlEscape(p.factoryNo||'')}</td>
+      <td>${htmlEscape(p.origin||'')}</td>
+      <td style="text-align:center;"><span style="${kindStyle}${badgeBase}">${htmlEscape(kind)}</span></td>
+      <td style="text-align:center;"><span style="${meatStyle}${badgeBase}">${htmlEscape(meat)}</span></td>
+      <td style="text-align:center;"><span style="${storageStyle}${badgeBase}">${htmlEscape(storage)}</span></td>
+      <td style="text-align:center;">${htmlEscape(p.shelfdays||'')}일</td>
+      <td style="font-size:11px;">${htmlEscape(p.packunit||'')}</td>
+      <td style="font-size:11px;">${htmlEscape(p.grade||'')}</td>
+      <td style="font-size:11px;">${htmlEscape(p.itemno||'')}</td>
       <td style="text-align:center;">
         <button class="btn btn-sm" onclick="editLabelProduct(${i})" style="background:#2980b9;color:#fff;padding:2px 8px;font-size:11px;">수정</button>
         <button class="btn btn-sm" onclick="deleteLabelProduct(${i})" style="background:#e74c3c;color:#fff;padding:2px 8px;font-size:11px;margin-left:2px;">삭제</button>
@@ -17568,6 +17627,8 @@ function renderLabelProducts(){
         <tr style="border-bottom:2px solid #e67e22;">
           ${labelProductSortHeader('no','No','text-align:center;width:30px;')}
           ${labelProductSortHeader('name','제품명')}
+          ${labelProductSortHeader('brand','브랜드')}
+          ${labelProductSortHeader('factoryNo','공장넘버')}
           ${labelProductSortHeader('origin','원산지')}
           ${labelProductSortHeader('kind','유형','text-align:center;')}
           ${labelProductSortHeader('meattype','육종','text-align:center;')}
@@ -17588,7 +17649,10 @@ function refreshLabelProductSelect(){
   if(!sel) return;
   const cur = sel.value;
   sel.innerHTML = '<option value="">-- 직접 입력 --</option>' +
-    labelProducts.map((p,i) => `<option value="${i}">${p.name}${p.origin?' ('+p.origin+')':''}</option>`).join('');
+    labelProducts.map((p,i) => {
+      const meta = [p.brand, p.factoryNo ? `공장 ${p.factoryNo}` : '', p.origin].filter(Boolean).join(' / ');
+      return `<option value="${i}">${htmlEscape(p.name||'')}${meta?' ('+htmlEscape(meta)+')':''}</option>`;
+    }).join('');
   sel.value = cur;
 }
 
@@ -17771,6 +17835,8 @@ function autoFillLabelProductShelfDaysIfBlank(){
 
 function sameLabelProduct(a, b){
   return samePriceText(a.name, b.name) &&
+    samePriceText(a.brand, b.brand) &&
+    samePriceText(a.factoryNo, b.factoryNo) &&
     sameOriginText(a.origin, b.origin) &&
     samePriceText(a.kind || '원료육', b.kind || '원료육') &&
     samePriceText(a.meattype, b.meattype) &&
@@ -17787,6 +17853,8 @@ function saveLabelProduct(){
   const prod = {
     id:          editId || String(Date.now()),
     name,
+    brand:       gv('lp-brand'),
+    factoryNo:   gv('lp-factory-no'),
     origin:      normalizeOriginName(gv('lp-origin')),
     kind:        document.getElementById('lp-kind')?.value || '원료육',
     meattype:    document.getElementById('lp-meattype')?.value || '돼지고기',
@@ -17801,6 +17869,8 @@ function saveLabelProduct(){
     alert(`이미 같은 품목이 등록되어 있습니다.
 
 제품명: ${prod.name}
+브랜드: ${prod.brand || '-'}
+공장넘버: ${prod.factoryNo || '-'}
 원산지: ${prod.origin || '-'}
 육종: ${prod.meattype}
 유형: ${prod.kind}
@@ -17872,6 +17942,8 @@ function saveInlineLabelProduct(idx){
   const next = {
     ...current,
     name: gv(`lp-row-name-${idx}`),
+    brand: gv(`lp-row-brand-${idx}`),
+    factoryNo: gv(`lp-row-factory-no-${idx}`),
     origin: normalizeOriginName(gv(`lp-row-origin-${idx}`)),
     kind: document.getElementById(`lp-row-kind-${idx}`)?.value || '원료육',
     meattype: document.getElementById(`lp-row-meattype-${idx}`)?.value || '돼지고기',
@@ -17903,7 +17975,7 @@ function deleteLabelProduct(idx){
 }
 
 function resetLabelProductForm(){
-  ['lp-edit-id','lp-name','lp-packunit','lp-origin','lp-shelfdays','lp-itemno','lp-grade'].forEach(id=>{
+  ['lp-edit-id','lp-name','lp-brand','lp-factory-no','lp-packunit','lp-origin','lp-shelfdays','lp-itemno','lp-grade'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value='';
   });
   const kind = document.getElementById('lp-kind'); if(kind) kind.value='원료육';
