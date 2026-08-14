@@ -68,6 +68,7 @@ Editor query for each file:
 46. `schema-rpc-24-erp-production-permissions.sql`
 47. `schema-rpc-25-erp-excel-import-permissions.sql`
 48. `schema-rpc-26-erp-core-write-hardening.sql`
+49. `schema-rpc-27-erp-schedule-delete-fix.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -197,6 +198,8 @@ Apply `20260814200000_erp_core_write_hardening.sql` after them. It prevents a
 transaction writer from taking over production/stock-adjustment row IDs,
 requires update permission when a deleted transaction ID is reused, and blocks
 production transaction IDs that already belong to another record.
+Apply `20260814210000_erp_schedule_delete_fix.sql` after it. It repairs the
+schedule-delete change-log summary so authorized deletions complete normally.
 
 ## 3. Document request delivery
 
