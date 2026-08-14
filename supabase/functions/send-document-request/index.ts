@@ -958,7 +958,9 @@ async function getPublicColdStorageData(supabase: any) {
     requests: Array.isArray(values.coldStorageRequests) ? values.coldStorageRequests : [],
     traderInfoMap: Object.fromEntries(Object.entries(traderInfo).filter(([, raw]) => {
       const info = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-      return clean(info.tradeType, 30) === "보관(냉동창고)";
+      return clean(info.tradeType, 30) === "보관(냉동창고)"
+        && info.active !== false
+        && info.alias !== true;
     }).map(([name, raw]) => {
       const info = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
       return [clean(name, 100), {

@@ -70,6 +70,7 @@ Editor query for each file:
 48. `schema-rpc-26-erp-core-write-hardening.sql`
 49. `schema-rpc-27-erp-schedule-delete-fix.sql`
 50. `schema-rpc-28-erp-submaterial-usage-permissions.sql`
+51. `schema-rpc-29-business-partner-master.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -204,6 +205,12 @@ schedule-delete change-log summary so authorized deletions complete normally.
 Apply `20260814220000_erp_submaterial_usage_permissions.sql` last. It moves
 production-linked submaterial usage saves and deletes to personal production
 permissions and reserves the legacy shared-password writers for maintenance.
+Apply `20260814230000_business_partner_master.sql` after it for M03. It assigns
+stable partner IDs/codes, preserves renamed partner aliases, links existing
+transactions and prices without rewriting their historical display names, and
+moves partner create/update/deactivate actions to personal `traders`
+permissions. The existing `traderInfoMap` remains a read-only compatibility
+projection for older document and cold-storage consumers.
 
 ## 3. Document request delivery
 

@@ -1864,6 +1864,12 @@
     </div>
     <!-- 입력 폼 -->
     <div class="form-row" style="align-items:flex-end;" id="trader-form-row">
+      <input id="tr-id" type="hidden">
+      <input id="tr-revision" type="hidden">
+      <div class="form-group">
+        <label>거래처코드</label>
+        <input id="tr-code" placeholder="저장 시 자동 부여" readonly style="background:#f5f5f5;">
+      </div>
       <div class="form-group">
         <label>거래처명 <span style="color:var(--red)">*</span></label>
         <input id="tr-name" placeholder="예) 동원홈푸드">
@@ -1926,6 +1932,38 @@
         <label>업태</label>
         <input id="tr-biz" placeholder="예) 제조, 도소매">
       </div>
+      <div class="form-group">
+        <label>종목</label>
+        <input id="tr-business-items" placeholder="예) 축산물 유통">
+      </div>
+      <div class="form-group">
+        <label>결제조건</label>
+        <input id="tr-payment-terms" placeholder="예) 월말 마감 익월 15일">
+      </div>
+      <div class="form-group">
+        <label>결제기일(일)</label>
+        <input id="tr-payment-due-days" type="number" min="0" max="3650" step="1" placeholder="예) 30">
+      </div>
+      <div class="form-group">
+        <label>여신한도(원)</label>
+        <input id="tr-credit-limit" type="number" min="0" step="1000" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>MeatWatch 거래처 관리번호</label>
+        <input id="tr-meatwatch-manage-no" placeholder="발급된 경우 입력">
+      </div>
+      <div class="form-group">
+        <label>축산물이력제 업체번호</label>
+        <input id="tr-mtrace-corp-no" placeholder="발급된 경우 입력">
+      </div>
+      <div class="form-group">
+        <label>창고·입출고처 관리번호</label>
+        <input id="tr-warehouse-manage-no" placeholder="발급된 경우 입력">
+      </div>
+      <div class="form-group">
+        <label>사용상태</label>
+        <select id="tr-active"><option value="1">사용</option><option value="0">중지</option></select>
+      </div>
       <div class="form-group" style="flex:0;">
         <label>&nbsp;</label>
         <div style="display:flex;gap:6px;">
@@ -1961,6 +1999,7 @@
         <thead>
           <tr>
             <th id="tr-th-registrationNo" onclick="traderSort('registrationNo')" style="width:52px;text-align:center;cursor:pointer;user-select:none;" title="순번으로 정렬">순번 <span id="tr-sort-registrationNo">▲</span></th>
+            <th id="tr-th-code" onclick="traderSort('code')" style="cursor:pointer;user-select:none;" title="거래처코드로 정렬">코드 <span id="tr-sort-code">↕</span></th>
             <th id="tr-th-name" onclick="traderSort('name')" style="cursor:pointer;user-select:none;" title="거래처명으로 정렬">거래처명 <span id="tr-sort-name">↕</span></th>
             <th id="tr-th-tradeType" onclick="traderSort('tradeType')" style="cursor:pointer;user-select:none;" title="거래구분으로 정렬">거래구분 <span id="tr-sort-tradeType">↕</span></th>
             <th id="tr-th-category" onclick="traderSort('category')" style="cursor:pointer;user-select:none;" title="분류로 정렬">분류 <span id="tr-sort-category">↕</span></th>
@@ -1974,11 +2013,14 @@
             <th id="tr-th-fax" onclick="traderSort('fax')" style="cursor:pointer;user-select:none;" title="팩스번호로 정렬">팩스번호 <span id="tr-sort-fax">↕</span></th>
             <th id="tr-th-addr" onclick="traderSort('addr')" style="cursor:pointer;user-select:none;" title="주소로 정렬">주소 <span id="tr-sort-addr">↕</span></th>
             <th id="tr-th-biz" onclick="traderSort('biz')" style="cursor:pointer;user-select:none;" title="업태로 정렬">업태 <span id="tr-sort-biz">↕</span></th>
+            <th id="tr-th-paymentTerms" onclick="traderSort('paymentTerms')" style="cursor:pointer;user-select:none;" title="결제조건으로 정렬">결제조건 <span id="tr-sort-paymentTerms">↕</span></th>
+            <th id="tr-th-creditLimit" onclick="traderSort('creditLimit')" style="cursor:pointer;user-select:none;" title="여신한도로 정렬">여신한도 <span id="tr-sort-creditLimit">↕</span></th>
+            <th id="tr-th-active" onclick="traderSort('active')" style="cursor:pointer;user-select:none;" title="사용상태로 정렬">상태 <span id="tr-sort-active">↕</span></th>
             <th style="text-align:center;">관리</th>
           </tr>
         </thead>
         <tbody id="traders-tbody">
-          <tr><td colspan="15" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
+          <tr><td colspan="19" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -4500,7 +4542,7 @@ const APP_DATA_REGISTRY = {
   leaveRecs:     { get:()=>leaveRecs,     set:v=>{ leaveRecs=v; },     ls:'dbmt_leaves'      },
   weekendWorkRecs:{ get:()=>weekendWorkRecs,set:v=>{ weekendWorkRecs=v; },ls:'dbmt_weekend_work' },
   leaveDeductRecs:{ get:()=>leaveDeductRecs,set:v=>{ leaveDeductRecs=v; },ls:'dbmt_leave_deductions' },
-  traderInfoMap: { get:()=>traderInfoMap, set:v=>{ traderInfoMap=v; }, ls:'dbmt_trader_info' },
+  traderInfoMap: { get:()=>traderInfoMap, set:v=>{ traderInfoMap=v; }, ls:'dbmt_trader_info', readOnly:true },
   docChecks:     { get:()=>docChecks,     set:v=>{ docChecks=v; },     ls:'dbmt_doc_checks'  },
   pgbList:       { get:()=>pgbList,       set:v=>{ pgbList=v; },       ls:'dbmt_pangwanbi'   },
   expenseList:   { get:()=>expenseList,   set:v=>{ expenseList=v; },   ls:'dbmt_expenses'    },
@@ -7326,7 +7368,7 @@ function updateOriginList(){
 function updateTraderList(){
   const dl = document.getElementById('trader-list');
   const names = Object.keys(traderInfoMap || {})
-    .filter(Boolean)
+    .filter(name => name && traderInfoMap?.[name]?.alias !== true && traderInfoMap?.[name]?.active !== false)
     .sort((a,b)=>a.localeCompare(b,'ko'));
   if(dl) dl.innerHTML = names.map(name => `<option value="${htmlEscape(name)}">`).join('');
   const salesDl = document.getElementById('sales-trader-list');
@@ -12845,27 +12887,40 @@ function resetImport(){
 // ─── 거래처 정보 관리 ─────────────────────────────────────
 let traderInfoMap = JSON.parse(localStorage.getItem('dbmt_trader_info')||'{}');
 
-// 동원홈푸드 기본값 (없으면 자동 세팅)
-if(!traderInfoMap['동원홈푸드']){
-  traderInfoMap['동원홈푸드'] = {
-    fullname:'(주)동원홈푸드', regno:'312-81-25260',
-    ceo:'김성용', addr:'서울특별시 서초구 마방로 68, 14층', biz:'제조, 도소매'
-  };
-  localStorage.setItem('dbmt_trader_info', JSON.stringify(traderInfoMap));
-}
-
 function saveTraderInfoStore(){
-  localStorage.setItem('dbmt_trader_info', JSON.stringify(traderInfoMap));
-  gsSaveAppData();
+  safeLocalStorageSet('dbmt_trader_info', JSON.stringify(traderInfoMap), true);
   updateTraderList();
 }
 function getTraderInfo(name){
   return traderInfoMap[name] || {};
 }
 
+function traderIdentifierValue(info, provider, identifierType){
+  return (Array.isArray(info?.identifiers) ? info.identifiers : [])
+    .find(row => row?.provider === provider && row?.identifierType === identifierType)?.identifierValue || '';
+}
+
+function traderIdentifiersFromForm(){
+  return [
+    {provider:'meatwatch', identifierType:'partner_manage_no', identifierValue:document.getElementById('tr-meatwatch-manage-no')?.value.trim() || ''},
+    {provider:'mtrace', identifierType:'corp_no', identifierValue:document.getElementById('tr-mtrace-corp-no')?.value.trim() || ''},
+    {provider:'meatwatch', identifierType:'warehouse_manage_no', identifierValue:document.getElementById('tr-warehouse-manage-no')?.value.trim() || ''}
+  ].filter(row => row.identifierValue);
+}
+
+function applyTraderServerResult(result){
+  if(result?.traderInfoMap && typeof result.traderInfoMap === 'object') traderInfoMap = result.traderInfoMap;
+  try{ localStorage.removeItem('dbmt_trader_info'); }catch(e){}
+  if(result?.logEntry){
+    dataChangeLogs = [result.logEntry, ...dataChangeLogs.filter(row=>row?.id !== result.logEntry.id)];
+    saveDataChangeLogsLocal();
+  }
+  updateTraderList();
+}
+
 let _traderEditKey = null; // 수정 중인 거래처명
 
-function saveTraderInfo(){
+async function saveTraderInfo(){
   const name         = document.getElementById('tr-name').value.trim();
   const tradeType    = document.getElementById('tr-trade-type').value;
   const category     = document.getElementById('tr-category').value.trim();
@@ -12881,33 +12936,71 @@ function saveTraderInfo(){
   const faxAlt       = document.getElementById('tr-fax-alt').value.trim();
   const addr         = document.getElementById('tr-addr').value.trim();
   const biz          = document.getElementById('tr-biz').value.trim();
+  const businessItems = document.getElementById('tr-business-items').value.trim();
+  const paymentTerms = document.getElementById('tr-payment-terms').value.trim();
+  const paymentDueDays = document.getElementById('tr-payment-due-days').value.trim();
+  const creditLimit = document.getElementById('tr-credit-limit').value.trim();
+  const active = document.getElementById('tr-active').value !== '0';
   if(!name){ toast('거래처명을 입력하세요.'); return; }
   if(email && !emailEl.checkValidity()){ toast('이메일 주소 형식을 확인해주세요.'); emailEl.focus(); return; }
+  const regDigits = regno.replace(/[^0-9]/g,'');
+  if(regno && regDigits.length !== 10){ toast('사업자등록번호는 숫자 10자리로 입력해주세요.'); return; }
+  if(paymentDueDays && (!/^\d+$/.test(paymentDueDays) || Number(paymentDueDays)>3650)){ toast('결제기일은 0~3650일로 입력해주세요.'); return; }
+  if(creditLimit && (!/^\d+(?:\.\d+)?$/.test(creditLimit) || Number(creditLimit)<0)){ toast('여신한도는 0원 이상 숫자로 입력해주세요.'); return; }
   const editingKey = _traderEditKey;
   const isEditing = !!editingKey;
   const previousInfo = traderInfoMap[editingKey || name] || {};
-  // 이름 변경 시 기존 키 삭제
-  if(editingKey && editingKey !== name) delete traderInfoMap[editingKey];
-  traderInfoMap[name] = {
-    ...previousInfo,
-    tradeType, category, fullname, regno, ceo, manager, managerPhone, phone, email, fax, faxAlt, addr, biz
+  const record = {
+    id:document.getElementById('tr-id').value || null,
+    name, tradeType, category, fullname, regno, ceo, manager, managerPhone,
+    phone, email, fax, faxAlt, addr, biz, businessItems, paymentTerms,
+    paymentDueDays:paymentDueDays || null, creditLimit:creditLimit || 0, active,
+    identifiers:traderIdentifiersFromForm()
   };
-  queueAppDataChangeDetail('traderInfoMap', {
-    action:isEditing ? '수정' : '저장',
-    target:name,
-    summary:`거래처 정보 ${isEditing ? '수정' : '저장'}: ${editingKey && editingKey !== name ? editingKey + ' → ' + name : name}`,
-    refId:name
-  });
-  saveTraderInfoStore();
-  clearTraderForm();
-  renderTraders();
-  toast(isEditing ? '거래처 정보가 수정됐습니다.' : '거래처가 추가됐습니다.');
-  _traderEditKey = null;
+  const saveButton = document.getElementById('tr-save-btn');
+  if(saveButton) saveButton.disabled = true;
+  try{
+    if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+      const action = record.id ? 'update' : 'create';
+      const token = personalServerWriteToken('traders', action);
+      const result = await sbRpc('dbmt_erp_save_business_partner', {
+        p_token:token, p_record:record,
+        p_expected_revision:record.id ? Number(document.getElementById('tr-revision').value) : null
+      });
+      assertPersonalServerResult(result, '거래처 정보를 저장할 권한이 없습니다.');
+      applyTraderServerResult(result);
+    }else{
+      const canonicalNames = Object.keys(traderInfoMap).filter(key=>traderInfoMap[key]?.alias !== true);
+      if(canonicalNames.some(key=>key!==editingKey && key.toLocaleLowerCase('ko-KR')===name.toLocaleLowerCase('ko-KR'))) throw new Error('이미 등록된 거래처명입니다.');
+      if(regDigits && canonicalNames.some(key=>key!==editingKey && String(traderInfoMap[key]?.regno||'').replace(/[^0-9]/g,'')===regDigits)) throw new Error('이미 등록된 사업자등록번호입니다.');
+      const id = previousInfo.id || `local_partner_${Date.now().toString(36)}`;
+      const code = previousInfo.code || `LOCAL-${Date.now().toString(36).toUpperCase()}`;
+      if(editingKey && editingKey !== name){
+        traderInfoMap[editingKey] = {...previousInfo, alias:true, name, active};
+      }
+      traderInfoMap[name] = {...previousInfo, ...record, id, code, revision:Number(previousInfo.revision||0)+1, alias:false};
+      saveTraderInfoStore();
+      recordDataChange({menu:'거래처 관리',action:isEditing?'수정':'저장',target:name,
+        summary:`거래처 정보 ${isEditing?'수정':'저장'}: ${editingKey && editingKey!==name ? editingKey+' → '+name : name}`,refId:id});
+    }
+    _traderEditKey = null;
+    clearTraderForm();
+    renderTraders();
+    toast(isEditing ? '거래처 정보가 수정됐습니다.' : '거래처가 추가됐습니다.');
+  }catch(err){
+    console.error('거래처 저장 실패:', err);
+    toast(String(err?.message || err || '거래처 저장에 실패했습니다.'));
+  }finally{
+    if(saveButton) saveButton.disabled = false;
+  }
 }
 
 function editTrader(name){
   const info = traderInfoMap[name] || {};
   _traderEditKey = name;
+  document.getElementById('tr-id').value       = info.id||'';
+  document.getElementById('tr-revision').value = info.revision||'';
+  document.getElementById('tr-code').value     = info.code||'';
   document.getElementById('tr-name').value     = name;
   document.getElementById('tr-trade-type').value = info.tradeType||'';
   document.getElementById('tr-category').value = info.category||'';
@@ -12922,23 +13015,43 @@ function editTrader(name){
   document.getElementById('tr-fax-alt').value  = info.faxAlt||'';
   document.getElementById('tr-addr').value     = info.addr||'';
   document.getElementById('tr-biz').value      = info.biz||'';
+  document.getElementById('tr-business-items').value = info.businessItems||'';
+  document.getElementById('tr-payment-terms').value = info.paymentTerms||'';
+  document.getElementById('tr-payment-due-days').value = info.paymentDueDays??'';
+  document.getElementById('tr-credit-limit').value = Number(info.creditLimit||0);
+  document.getElementById('tr-meatwatch-manage-no').value = traderIdentifierValue(info,'meatwatch','partner_manage_no');
+  document.getElementById('tr-mtrace-corp-no').value = traderIdentifierValue(info,'mtrace','corp_no');
+  document.getElementById('tr-warehouse-manage-no').value = traderIdentifierValue(info,'meatwatch','warehouse_manage_no');
+  document.getElementById('tr-active').value = info.active===false ? '0' : '1';
   document.getElementById('tr-save-btn').textContent = '✏️ 수정 저장';
   document.getElementById('tr-cancel-btn').style.display = '';
   document.getElementById('tr-name').focus();
 }
 
-function deleteTrader(name){
-  if(!confirm(`"${name}" 거래처 정보를 삭제할까요?`)) return;
-  queueAppDataChangeDetail('traderInfoMap', {
-    action:'삭제',
-    target:name,
-    summary:`거래처 정보 삭제: ${name}`,
-    refId:name
-  });
-  delete traderInfoMap[name];
-  saveTraderInfoStore();
-  renderTraders();
-  toast('삭제됐습니다.');
+async function deleteTrader(name){
+  const info = traderInfoMap[name] || {};
+  if(info.active===false){ toast('이미 사용 중지된 거래처입니다.'); return; }
+  if(!confirm(`"${name}" 거래처를 사용 중지할까요?\n과거 거래내역과 문서 연결은 유지됩니다.`)) return;
+  try{
+    if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+      if(!info.id) throw new Error('거래처 서버 ID가 없습니다. 새로고침 후 다시 시도해주세요.');
+      const token = personalServerWriteToken('traders','delete');
+      const result = await sbRpc('dbmt_erp_deactivate_business_partner', {
+        p_token:token,p_id:info.id,p_expected_revision:Number(info.revision)
+      });
+      assertPersonalServerResult(result, '거래처를 중지할 권한이 없습니다.');
+      applyTraderServerResult(result);
+    }else{
+      traderInfoMap[name] = {...info,active:false,revision:Number(info.revision||0)+1};
+      saveTraderInfoStore();
+      recordDataChange({menu:'거래처 관리',action:'중지',target:name,summary:`거래처 사용 중지: ${name}`,refId:info.id||name});
+    }
+    renderTraders();
+    toast('거래처 사용을 중지했습니다.');
+  }catch(err){
+    console.error('거래처 중지 실패:',err);
+    toast(String(err?.message || err || '거래처 사용 중지에 실패했습니다.'));
+  }
 }
 
 function cancelTraderEdit(){
@@ -12947,14 +13060,15 @@ function cancelTraderEdit(){
 }
 
 function clearTraderForm(){
-  ['tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-phone','tr-email','tr-fax','tr-fax-alt','tr-addr','tr-biz'].forEach(id=>{
+  ['tr-id','tr-revision','tr-code','tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-phone','tr-email','tr-fax','tr-fax-alt','tr-addr','tr-biz','tr-business-items','tr-payment-terms','tr-payment-due-days','tr-credit-limit','tr-meatwatch-manage-no','tr-mtrace-corp-no','tr-warehouse-manage-no'].forEach(id=>{
     document.getElementById(id).value = '';
   });
+  document.getElementById('tr-active').value = '1';
   document.getElementById('tr-save-btn').textContent = '➕ 추가';
   document.getElementById('tr-cancel-btn').style.display = 'none';
 }
 
-const TRADER_SORT_KEYS = ['registrationNo','name','tradeType','category','fullname','regno','ceo','manager','managerPhone','phone','email','fax','addr','biz'];
+const TRADER_SORT_KEYS = ['registrationNo','code','name','tradeType','category','fullname','regno','ceo','manager','managerPhone','phone','email','fax','addr','biz','paymentTerms','creditLimit','active'];
 let traderSortKey = 'registrationNo';
 let traderSortDir = 'asc';
 
@@ -12971,6 +13085,7 @@ function traderSort(key){
 function traderSortValue(row, key){
   if(key === 'registrationNo') return row.registrationNo;
   if(key === 'name') return row.name;
+  if(key === 'active') return row.info?.active===false ? 0 : 1;
   return row.info?.[key] ?? '';
 }
 
@@ -12988,7 +13103,7 @@ function renderTraders(){
   updateTraderList();
   const tbody = document.getElementById('traders-tbody');
   if(!tbody) return;
-  const allKeys = Object.keys(traderInfoMap);
+  const allKeys = Object.keys(traderInfoMap).filter(name => traderInfoMap?.[name]?.alias !== true);
   const tradeFilter = document.getElementById('tr-list-trade-filter')?.value || '';
   const nameSearch = (document.getElementById('tr-list-name-search')?.value || '').trim().toLocaleLowerCase('ko-KR');
   const rows = allKeys
@@ -13020,19 +13135,21 @@ function renderTraders(){
       : `전체 ${allKeys.length}건`;
   }
   if(!allKeys.length){
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;padding:20px;color:#888">등록된 거래처가 없습니다.</td></tr>';
     return;
   }
   if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:20px;color:#888">검색 조건에 해당하는 거래처가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;padding:20px;color:#888">검색 조건에 해당하는 거래처가 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(row=>{
     const {name, registrationNo, info} = row;
     const nameText = htmlEscape(name);
     const nameArg = jsArg(name);
-    return `<tr>
+    const isActive = info.active !== false;
+    return `<tr style="${isActive?'':'opacity:.58;'}">
       <td style="text-align:center;font-weight:700;color:#555;">${registrationNo}</td>
+      <td style="font-family:var(--font-mono);font-size:10px;white-space:nowrap;">${htmlEscape(info.code||'-')}</td>
       <td><strong>${nameText}</strong></td>
       <td style="white-space:nowrap;">${htmlEscape(info.tradeType||'미지정')}</td>
       <td>${htmlEscape(info.category||'-')}</td>
@@ -13046,9 +13163,12 @@ function renderTraders(){
       <td style="white-space:nowrap;">${htmlEscape(info.fax||'-')}${info.faxAlt ? `<br><span style="color:#667085;">${htmlEscape(info.faxAlt)}</span>` : ''}</td>
       <td style="font-size:11px;">${htmlEscape(info.addr||'-')}</td>
       <td>${htmlEscape(info.biz||'-')}</td>
+      <td style="font-size:11px;">${htmlEscape(info.paymentTerms||'-')}${info.paymentDueDays!=null ? `<br><span style="color:#667085;">${Number(info.paymentDueDays).toLocaleString()}일</span>` : ''}</td>
+      <td style="text-align:right;white-space:nowrap;">${Number(info.creditLimit||0).toLocaleString()}원</td>
+      <td style="text-align:center;white-space:nowrap;font-weight:700;">${isActive?'사용':'중지'}</td>
       <td style="text-align:center;white-space:nowrap;">
         <button class="btn btn-sm" style="font-size:11px;padding:3px 8px;" onclick="editTrader(${nameArg})">수정</button>
-        <button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="deleteTrader(${nameArg})">삭제</button>
+        ${isActive ? `<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="deleteTrader(${nameArg})">중지</button>` : ''}
       </td>
     </tr>`;
   }).join('');
