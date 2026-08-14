@@ -106,7 +106,7 @@ const SENDER_PROFILE_DEFAULTS: SenderProfileDefinition[] = [
     documentName: "(주)동부축산유통",
     documentRepresentativeName: "이동대",
     documentRegistrationNo: "1378138748",
-    documentAddress: "인천광역시 서구 가좌로96번길 11",
+    documentAddress: "인천광역시 서해구 가좌로96번길 11",
     documentPhone: "032-579-3920",
     sealAssetKey: "assets/company-seal-trading.png",
     isDefault: false,

@@ -14,7 +14,7 @@ const COLD_STORAGE_SENDER_PROFILE_FALLBACKS = {
   },
   dongbu_distribution:{
     id:'dongbu_distribution', displayName:'(주)동부축산유통', name:'(주)동부축산유통', representative:'이동대', registrationNo:'137-81-38748',
-    address:'인천광역시 서구 가좌로96번길 11',
+    address:'인천광역시 서해구 가좌로96번길 11',
     phone:'032-579-3920', fax:'032-578-0108', email:'', seal:'assets/company-seal-trading.png', isDefault:false
   }
 };
