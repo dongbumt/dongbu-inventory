@@ -3160,8 +3160,8 @@
 
     <!-- 등록 폼 -->
     <div style="width:100%;">
-      <div class="card">
-        <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>📦 품목 등록 / 수정</div>
+      <div class="card" id="lp-form-card">
+        <div class="card-title" id="lp-form-title"><div class="ct-bar" style="background:#e67e22;"></div>📦 품목 등록</div>
         <div style="display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:8px;">
           <input type="hidden" id="lp-edit-id">
           <div class="form-group" style="grid-column:span 2;">
@@ -3226,7 +3226,7 @@
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
-          <button class="btn btn-primary" onclick="saveLabelProduct()" style="flex:1;">💾 저장</button>
+          <button class="btn btn-primary" id="lp-save-btn" onclick="saveLabelProduct()" style="flex:1;">💾 저장</button>
           <button class="btn" onclick="resetLabelProductForm()" style="flex:1;background:#95a5a6;color:#fff;">✖ 초기화</button>
         </div>
       </div>
@@ -17545,7 +17545,6 @@ function initLabelForm(){
 
 let labelProductSortKey = 'name';
 let labelProductSortDir = 'asc';
-let inlineEditLabelProductIdx = null;
 
 // SM ITEM.ITE_BUWI + YHT(소 29 / 돼지 38) 국가부위코드표.
 // SM 수입유통 API는 소 BF, 돼지 PK 접두사를 붙여 regnCode/regnNm으로 전송한다.
@@ -17598,15 +17597,6 @@ function nationalPartOptionGroupsHtml(meatType, selectedCode=''){
 function refreshLabelProductNationalPartSelect(selectedCode){
   const select = document.getElementById('lp-national-part-code');
   const meatType = document.getElementById('lp-meattype')?.value || '돼지고기';
-  if(!select) return;
-  const current = String(selectedCode !== undefined ? selectedCode : select.value || '').trim().toUpperCase();
-  select.innerHTML = nationalPartOptionGroupsHtml(meatType, current);
-  select.value = nationalPartRowsForMeatType(meatType).some(row => row.code === current) ? current : '';
-}
-
-function refreshInlineLabelProductNationalPartSelect(idx, selectedCode){
-  const select = document.getElementById(`lp-row-national-part-code-${idx}`);
-  const meatType = document.getElementById(`lp-row-meattype-${idx}`)?.value || '돼지고기';
   if(!select) return;
   const current = String(selectedCode !== undefined ? selectedCode : select.value || '').trim().toUpperCase();
   select.innerHTML = nationalPartOptionGroupsHtml(meatType, current);
@@ -17679,47 +17669,6 @@ function renderLabelProducts(){
     return;
   }
   let rows = sorted.map(({p,i},displayIdx) => {
-    if(inlineEditLabelProductIdx === i){
-      return `
-      <tr style="background:#fff8e8;">
-        <td style="text-align:center;">${displayIdx+1}</td>
-        <td><input id="lp-row-name-${i}" value="${htmlEscape(p.name||'')}" style="font-size:11px;min-width:140px;"></td>
-        <td><input id="lp-row-brand-${i}" maxlength="100" value="${htmlEscape(p.brand||'')}" placeholder="브랜드" style="font-size:11px;min-width:90px;"></td>
-        <td><input id="lp-row-factory-no-${i}" maxlength="100" value="${htmlEscape(p.factoryNo||'')}" placeholder="공장넘버" style="font-size:11px;min-width:100px;"></td>
-        <td><input id="lp-row-origin-${i}" value="${htmlEscape(p.origin||'')}" style="font-size:11px;min-width:80px;"></td>
-        <td style="text-align:center;">
-          <select id="lp-row-kind-${i}" onchange="autoFillInlineLabelProductShelfDays(${i})" style="font-size:11px;padding:3px 5px;">
-            <option value="원료육" ${(p.kind||'원료육')==='원료육'?'selected':''}>원료육</option>
-            <option value="제품" ${(p.kind||'원료육')==='제품'?'selected':''}>제품</option>
-          </select>
-        </td>
-        <td style="text-align:center;">
-          <select id="lp-row-meattype-${i}" onchange="refreshInlineLabelProductNationalPartSelect(${i})" style="font-size:11px;padding:3px 5px;">
-            <option value="돼지고기" ${(p.meattype||'돼지고기')==='돼지고기'?'selected':''}>돼지고기</option>
-            <option value="소고기" ${(p.meattype||'돼지고기')==='소고기'?'selected':''}>소고기</option>
-          </select>
-        </td>
-        <td style="text-align:center;">
-          <select id="lp-row-national-part-code-${i}" style="font-size:11px;padding:3px 5px;min-width:128px;">
-            ${nationalPartOptionGroupsHtml(p.meattype || '돼지고기', p.nationalPartCode || '')}
-          </select>
-        </td>
-        <td style="text-align:center;">
-          <select id="lp-row-storage-${i}" onchange="autoFillInlineLabelProductShelfDays(${i})" style="font-size:11px;padding:3px 5px;">
-            <option value="냉동" ${(p.storage||'냉동')==='냉동'?'selected':''}>냉동</option>
-            <option value="냉장" ${(p.storage||'냉동')==='냉장'?'selected':''}>냉장</option>
-          </select>
-        </td>
-        <td style="text-align:center;"><input id="lp-row-shelfdays-${i}" type="number" min="1" value="${htmlEscape(p.shelfdays||'')}" style="font-size:11px;width:72px;text-align:right;"></td>
-        <td><input id="lp-row-packunit-${i}" value="${htmlEscape(p.packunit||'')}" placeholder="예) 5KG" style="font-size:11px;min-width:70px;"></td>
-        <td><input id="lp-row-grade-${i}" value="${htmlEscape(p.grade||'')}" style="font-size:11px;min-width:90px;"></td>
-        <td><input id="lp-row-itemno-${i}" value="${htmlEscape(p.itemno||'')}" style="font-size:11px;min-width:130px;"></td>
-        <td style="text-align:center;white-space:nowrap;">
-          <button class="btn btn-sm" onclick="saveInlineLabelProduct(${i})" style="background:#27ae60;color:#fff;padding:2px 8px;font-size:11px;">저장</button>
-          <button class="btn btn-sm" onclick="cancelInlineLabelProductEdit()" style="background:#95a5a6;color:#fff;padding:2px 8px;font-size:11px;margin-left:2px;">취소</button>
-        </td>
-      </tr>`;
-    }
     const storage = p.storage || '냉동';
     const storageStyle = storage === '냉장'
       ? 'border:1px solid #27ae60;color:#1e8449;background:#e8f8ef;'
@@ -17990,7 +17939,11 @@ function saveLabelProduct(){
     return;
   }
   const editId = gv('lp-edit-id');
+  const existingProduct = editId
+    ? labelProducts.find(p => String(p.id || '') === String(editId))
+    : null;
   const prod = {
+    ...(existingProduct || {}),
     id:          editId || String(Date.now()),
     name,
     brand:       gv('lp-brand'),
@@ -18006,7 +17959,7 @@ function saveLabelProduct(){
     itemno:      gv('lp-itemno'),
     grade:       gv('lp-grade'),
   };
-  const dupIdx = labelProducts.findIndex(p => p.id !== prod.id && sameLabelProduct(p, prod));
+  const dupIdx = labelProducts.findIndex(p => String(p.id || '') !== String(prod.id || '') && sameLabelProduct(p, prod));
   if(dupIdx >= 0){
     alert(`이미 같은 품목이 등록되어 있습니다.
 
@@ -18025,7 +17978,7 @@ function saveLabelProduct(){
     return;
   }
   if(editId){
-    const idx = labelProducts.findIndex(p => p.id === editId);
+    const idx = labelProducts.findIndex(p => String(p.id || '') === String(editId));
     if(idx >= 0) labelProducts[idx] = prod;
     else labelProducts.push(prod);
   } else {
@@ -18068,57 +18021,30 @@ function migrateLabelProducts(){
 function editLabelProduct(idx){
   const p = labelProducts[idx];
   if(!p) return;
-  inlineEditLabelProductIdx = idx;
-  renderLabelProducts();
-}
-
-function cancelInlineLabelProductEdit(){
-  inlineEditLabelProductIdx = null;
-  renderLabelProducts();
-}
-
-function autoFillInlineLabelProductShelfDays(idx){
-  const kind = document.getElementById(`lp-row-kind-${idx}`)?.value || '원료육';
-  const storage = document.getElementById(`lp-row-storage-${idx}`)?.value || '냉동';
-  const el = document.getElementById(`lp-row-shelfdays-${idx}`);
-  if(el) el.value = getDefaultShelfDays(kind, storage);
-}
-
-function saveInlineLabelProduct(idx){
-  const current = labelProducts[idx];
-  if(!current) return;
-  const gv = id => document.getElementById(id)?.value.trim() || '';
-  const next = {
-    ...current,
-    name: gv(`lp-row-name-${idx}`),
-    brand: gv(`lp-row-brand-${idx}`),
-    factoryNo: gv(`lp-row-factory-no-${idx}`),
-    nationalPartCode: gv(`lp-row-national-part-code-${idx}`).toUpperCase(),
-    origin: normalizeOriginName(gv(`lp-row-origin-${idx}`)),
-    kind: document.getElementById(`lp-row-kind-${idx}`)?.value || '원료육',
-    meattype: document.getElementById(`lp-row-meattype-${idx}`)?.value || '돼지고기',
-    storage: document.getElementById(`lp-row-storage-${idx}`)?.value || '냉동',
-    shelfdays: parseInt(gv(`lp-row-shelfdays-${idx}`)) || getDefaultShelfDays(document.getElementById(`lp-row-kind-${idx}`)?.value || '원료육', document.getElementById(`lp-row-storage-${idx}`)?.value || '냉동'),
-    packunit: gv(`lp-row-packunit-${idx}`),
-    grade: gv(`lp-row-grade-${idx}`),
-    itemno: gv(`lp-row-itemno-${idx}`),
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if(el) el.value = value ?? '';
   };
-  if(!next.name){ alert('제품명을 입력해주세요.'); return; }
-  if(!isNationalPartCodeForMeatType(next.nationalPartCode, next.meattype)){
-    alert(`${next.meattype}에 맞는 국가부위코드를 선택해 주세요.`);
-    return;
-  }
-  next.nationalPartName = nationalPartNameForCode(next.nationalPartCode);
-  const dupIdx = labelProducts.findIndex((p,i)=>i !== idx && sameLabelProduct(p, next));
-  if(dupIdx >= 0){
-    alert('이미 같은 품목이 등록되어 있습니다.');
-    return;
-  }
-  labelProducts[idx] = next;
-  inlineEditLabelProductIdx = null;
-  localStorage.setItem('dbmt_label_products', JSON.stringify(labelProducts));
-  gsSaveAppData();
-  renderLabelProducts();
+  set('lp-edit-id', p.id || '');
+  set('lp-name', p.name || '');
+  set('lp-brand', p.brand || '');
+  set('lp-factory-no', p.factoryNo || '');
+  set('lp-packunit', p.packunit || '');
+  set('lp-origin', p.origin || '');
+  set('lp-kind', p.kind || '원료육');
+  set('lp-meattype', p.meattype || '돼지고기');
+  refreshLabelProductNationalPartSelect(p.nationalPartCode || '');
+  set('lp-storage', p.storage || '냉동');
+  set('lp-shelfdays', p.shelfdays || getDefaultShelfDays(p.kind || '원료육', p.storage || '냉동'));
+  set('lp-itemno', p.itemno || '');
+  set('lp-grade', p.grade || '');
+  const title = document.getElementById('lp-form-title');
+  if(title) title.innerHTML = '<div class="ct-bar" style="background:#e67e22;"></div>✏️ 품목 수정';
+  const saveButton = document.getElementById('lp-save-btn');
+  if(saveButton) saveButton.textContent = '💾 수정 저장';
+  const formCard = document.getElementById('lp-form-card');
+  formCard?.scrollIntoView({behavior:'smooth', block:'start'});
+  setTimeout(()=>document.getElementById('lp-name')?.focus(), 350);
 }
 
 function deleteLabelProduct(idx){
@@ -18138,6 +18064,10 @@ function resetLabelProductForm(){
   const st = document.getElementById('lp-storage');  if(st) st.value='냉동';
   autoFillLabelProductShelfDays();
   refreshLabelProductNationalPartSelect('');
+  const title = document.getElementById('lp-form-title');
+  if(title) title.innerHTML = '<div class="ct-bar" style="background:#e67e22;"></div>📦 품목 등록';
+  const saveButton = document.getElementById('lp-save-btn');
+  if(saveButton) saveButton.textContent = '💾 저장';
 }
 
 function autoSetExpiry(){
