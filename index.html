@@ -3182,7 +3182,7 @@
           </div>
           <div class="form-group">
             <label>원산지</label>
-            <input id="lp-origin" placeholder="국내산" style="font-size:13px;">
+            <input id="lp-origin" value="국내산" placeholder="국내산" oninput="refreshLabelProductNationalPartSelect()" style="font-size:13px;">
           </div>
           <div class="form-group">
             <label>유형</label>
@@ -17546,25 +17546,63 @@ function initLabelForm(){
 let labelProductSortKey = 'name';
 let labelProductSortDir = 'asc';
 
-// SM ITEM.ITE_BUWI + YHT(소 29 / 돼지 38) 국가부위코드표.
-// SM 수입유통 API는 소 BF, 돼지 PK 접두사를 붙여 regnCode/regnNm으로 전송한다.
-const SM_NATIONAL_PART_CODE_SOURCE = Object.freeze({
+// SM ITEM.ITE_BUWI + YHT 국가부위코드표.
+// 국내산: 소 35 / 돼지 36 그룹을 쓰고 MTRACE 전송 시 430 접두사를 붙인다.
+// 수입산: 소 29 / 돼지 38 그룹을 쓰고 MeatWatch 전송 시 BF / PK 코드를 쓴다.
+const SM_IMPORT_PART_CODE_SOURCE = Object.freeze({
   '소고기': 'BF001:안심 BF002:등심 BF003:채끝 BF004:목심 BF005:앞다리 BF006:우둔 BF007:설도 BF008:양지 BF009:사태 BF010:갈비 BF011:기타 BF012:부산물 BF0011:안심살 BF0021:윗등심살 BF0022:꽃등심살 BF0023:아래등심살 BF0024:살치살 BF0031:채끝살 BF0041:목심살 BF0051:꾸리살 BF0052:부채살 BF0053:앞다리살 BF0054:갈비덧살 BF0055:부채덮개살 BF0061:우둔살 BF0062:홍두깨살 BF0071:보섭살 BF0072:설깃살 BF0073:설깃머리살 BF0074:도가니살 BF0075:삼각살 BF0081:양지머리 BF0082:차돌박이 BF0083:업진살 BF0084:업진안살 BF0085:치마양지 BF0086:치마살 BF0087:앞치마살 BF0091:앞사태 BF0092:뒷사태 BF0093:뭉치사태 BF0094:아롱사태 BF0095:상박살 BF0101:본갈비 BF0102:꽃갈비 BF0103:참갈비 BF0104:갈비살 BF0105:마구리 BF0106:토시살 BF0107:안창살 BF0108:제비추리',
   '돼지고기': 'PK001:안심 PK002:등심 PK003:목심 PK004:앞다리 PK005:뒷다리 PK006:삼겹살 PK007:갈비 PK008:기타 PK009:부산물 PK0011:안심살 PK0021:등심살 PK0022:알등심살 PK0023:등심덧살 PK0031:목심살 PK0041:앞다리살 PK0042:앞사태살 PK0043:항정살 PK0044:꾸리살 PK0045:부채살 PK0046:주걱살 PK0051:볼기살 PK0052:설깃살 PK0053:도가니살 PK0054:홍두깨살 PK0055:보섭살 PK0056:뒷사태살 PK0061:삼겹살 PK0062:갈매기살 PK0063:등갈비 PK0064:토시살 PK0065:오돌삼겹 PK0071:갈비 PK0072:갈비살 PK0073:마구리'
 });
 
-const SM_NATIONAL_PART_CODES = Object.freeze(Object.fromEntries(
-  Object.entries(SM_NATIONAL_PART_CODE_SOURCE).map(([meatType, source]) => [
-    meatType,
-    Object.freeze(source.split(' ').map(token => {
-      const splitAt = token.indexOf(':');
-      return Object.freeze({code:token.slice(0, splitAt), name:token.slice(splitAt + 1)});
-    }))
-  ])
-));
+const SM_DOMESTIC_CATTLE_BASE_SOURCE =
+  '10:지육 11:온도체 12:이분도체 13:사분도체 19:기타지육 20:정육 21:안심 22:등심 23:윗등심살 24:아래등심살 25:꽃등심살 26:살치살 27:채끝 28:목심 29:앞다리 30:꾸리살 31:갈비덧살 32:부채살 33:앞다리살 34:우둔살 35:홍두깨살 36:설도 37:보섭살 38:설깃살 39:도가니살 40:양지 41:양지머리 42:업진살 43:차돌박이 44:치마살 45:사태 46:아롱사태 47:뭉치사태 48:앞사태 49:뒷사태 50:갈비 51:마구리 52:토시살 53:안창살 54:제비추리 59:기타정육 60:2차부산물 61:사골 62:꼬리 63:도가니 64:등뼈 69:기타잡뼈 70:1차부산물 71:족 72:머리 73:혈 74:간 75:갑상선 76:고환 77:자궁 78:난소 79:척수 80:비장 81:취장 82:뇌 83:허파 84:태반 85:부신 86:담낭 87:횡경막 88:혀 89:염통 90:우피 91:지방 92:대장 93:소장 94:안심살 95:채끝살 96:목심살 97:부채덮개살 99:기타부산물 A0:우둔 A1:설깃머리살 A2:삼각살 A3:업진안살 A4:치마양살 A5:앞치마살 A6:상박살 A7:본갈비 A8:꽃갈비 A9:참갈비 B0:갈비살 B1:차돌박이';
 
-function nationalPartRowsForMeatType(meatType){
-  return SM_NATIONAL_PART_CODES[meatType] || [];
+const SM_DOMESTIC_PIG_SOURCE =
+  '410:지육 411:온도체 412:이분도체 413:사분도체 419:기타지육 420:정육 421:안심 422:등심 423:채끝 424:목삼겹 425:앞다리 426:뒷다리 427:삼겹살 428:갈비 429:갈매기살 430:사태 431:앞사태 432:뒤사태 433:등심덧살 434:보섭살 435:볼기살 436:설깃살 437:알등심살 438:항정살 439:기타정육 440:부산물 441:족 442:머리 443:뼈 444:간 445:갑상선 446:고환 447:자궁 448:난소 449:척수(등골) 450:비장 451:취장 452:뇌 453:허파 454:공팥 455:태반 456:부신 457:담낭 458:횡경막 459:혀 460:염통 461:돈피 462:내장 463:소장 464:도가니살 465:가브리살 466:안심살 467:등심살 468:목심 469:목심살 470:앞다리살 471:앞사태살 472:홍두깨살 473:뒷사태살 474:등갈비 475:토시살 476:오들삼겹 477:갈비살 478:마구리 499:기타부산물';
+
+function parseNationalPartSource(source, codePrefix='', namePrefix='', group=''){
+  return source.split(' ').map(token => {
+    const splitAt = token.indexOf(':');
+    const sourceCode = token.slice(0, splitAt);
+    const sourceName = token.slice(splitAt + 1);
+    return Object.freeze({
+      code: `${codePrefix}${sourceCode}`,
+      name: `${namePrefix}${sourceName}`,
+      group
+    });
+  });
+}
+
+const SM_DOMESTIC_CATTLE_TYPES = Object.freeze([
+  Object.freeze({code:'1', label:'한우'}),
+  Object.freeze({code:'2', label:'젖소'}),
+  Object.freeze({code:'3', label:'육우'})
+]);
+
+const SM_NATIONAL_PART_CODES = Object.freeze({
+  domestic_cattle: Object.freeze(SM_DOMESTIC_CATTLE_TYPES.flatMap(type =>
+    parseNationalPartSource(SM_DOMESTIC_CATTLE_BASE_SOURCE, `430${type.code}`, `${type.label} `, type.label)
+  )),
+  domestic_pig: Object.freeze(parseNationalPartSource(SM_DOMESTIC_PIG_SOURCE, '430', '', '국내산 돼지')),
+  import_beef: Object.freeze(parseNationalPartSource(SM_IMPORT_PART_CODE_SOURCE['소고기']).map(row =>
+    Object.freeze({...row, group: row.code.length === 5 ? '대분류' : '세부부위'})
+  )),
+  import_pork: Object.freeze(parseNationalPartSource(SM_IMPORT_PART_CODE_SOURCE['돼지고기']).map(row =>
+    Object.freeze({...row, group: row.code.length === 5 ? '대분류' : '세부부위'})
+  ))
+});
+
+function isDomesticOrigin(origin){
+  return normalizeOriginName(origin) === '국내산';
+}
+
+function nationalPartSchemeForProduct(meatType, origin){
+  if(isDomesticOrigin(origin)) return meatType === '소고기' ? 'domestic_cattle' : 'domestic_pig';
+  return meatType === '소고기' ? 'import_beef' : 'import_pork';
+}
+
+function nationalPartRowsForProduct(meatType, origin){
+  return SM_NATIONAL_PART_CODES[nationalPartSchemeForProduct(meatType, origin)] || [];
 }
 
 function nationalPartNameForCode(code){
@@ -17576,31 +17614,32 @@ function nationalPartNameForCode(code){
   return '';
 }
 
-function isNationalPartCodeForMeatType(code, meatType){
+function isNationalPartCodeForProduct(code, meatType, origin){
   const normalized = String(code || '').trim().toUpperCase();
-  return nationalPartRowsForMeatType(meatType).some(row => row.code === normalized);
+  return nationalPartRowsForProduct(meatType, origin).some(row => row.code === normalized);
 }
 
-function nationalPartOptionGroupsHtml(meatType, selectedCode=''){
+function nationalPartOptionGroupsHtml(meatType, origin, selectedCode=''){
   const selected = String(selectedCode || '').trim().toUpperCase();
-  const rows = nationalPartRowsForMeatType(meatType);
+  const rows = nationalPartRowsForProduct(meatType, origin);
   const options = groupRows => groupRows.map(row =>
     `<option value="${row.code}" ${row.code === selected ? 'selected' : ''}>${row.code} · ${htmlEscape(row.name)}</option>`
   ).join('');
-  const baseRows = rows.filter(row => row.code.length === 5);
-  const detailRows = rows.filter(row => row.code.length > 5);
-  return '<option value="">-- 국가부위코드 선택 --</option>' +
-    `<optgroup label="대분류">${options(baseRows)}</optgroup>` +
-    `<optgroup label="세부부위">${options(detailRows)}</optgroup>`;
+  const groups = [...new Set(rows.map(row => row.group || '부위'))];
+  const originLabel = isDomesticOrigin(origin) ? '국내산' : '수입산';
+  return `<option value="">-- ${originLabel} 국가부위코드 선택 --</option>` + groups.map(group =>
+    `<optgroup label="${htmlEscape(group)}">${options(rows.filter(row => (row.group || '부위') === group))}</optgroup>`
+  ).join('');
 }
 
 function refreshLabelProductNationalPartSelect(selectedCode){
   const select = document.getElementById('lp-national-part-code');
   const meatType = document.getElementById('lp-meattype')?.value || '돼지고기';
+  const origin = document.getElementById('lp-origin')?.value || '';
   if(!select) return;
   const current = String(selectedCode !== undefined ? selectedCode : select.value || '').trim().toUpperCase();
-  select.innerHTML = nationalPartOptionGroupsHtml(meatType, current);
-  select.value = nationalPartRowsForMeatType(meatType).some(row => row.code === current) ? current : '';
+  select.innerHTML = nationalPartOptionGroupsHtml(meatType, origin, current);
+  select.value = nationalPartRowsForProduct(meatType, origin).some(row => row.code === current) ? current : '';
 }
 
 function sortLabelProductsBy(key){
@@ -17682,6 +17721,11 @@ function renderLabelProducts(){
       ? 'border:1px solid #c0392b;color:#922b21;background:#fdecea;'
       : 'border:1px solid #f39c12;color:#9a5d00;background:#fff7e6;';
     const badgeBase = 'border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;display:inline-block;min-width:42px;';
+    const partCodeCompatible = !p.nationalPartCode ||
+      isNationalPartCodeForProduct(p.nationalPartCode, p.meattype || '돼지고기', p.origin || '');
+    const partCodeHtml = p.nationalPartCode
+      ? `${htmlEscape(p.nationalPartCode)}<div style="font-family:var(--font-main);color:#777;">${htmlEscape(nationalPartNameForCode(p.nationalPartCode))}</div>${partCodeCompatible ? '' : '<div style="font-family:var(--font-main);color:#c0392b;font-weight:700;">⚠ 원산지 불일치</div>'}`
+      : '<span style="color:#aaa;">미지정</span>';
     return `
     <tr>
       <td style="text-align:center;">${displayIdx+1}</td>
@@ -17691,7 +17735,7 @@ function renderLabelProducts(){
       <td>${htmlEscape(p.origin||'')}</td>
       <td style="text-align:center;"><span style="${kindStyle}${badgeBase}">${htmlEscape(kind)}</span></td>
       <td style="text-align:center;"><span style="${meatStyle}${badgeBase}">${htmlEscape(meat)}</span></td>
-      <td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap;">${p.nationalPartCode ? `${htmlEscape(p.nationalPartCode)}<div style="font-family:var(--font-main);color:#777;">${htmlEscape(nationalPartNameForCode(p.nationalPartCode))}</div>` : '<span style="color:#aaa;">미지정</span>'}</td>
+      <td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap;">${partCodeHtml}</td>
       <td style="text-align:center;"><span style="${storageStyle}${badgeBase}">${htmlEscape(storage)}</span></td>
       <td style="text-align:center;">${htmlEscape(p.shelfdays||'')}일</td>
       <td style="font-size:11px;">${htmlEscape(p.packunit||'')}</td>
@@ -17920,6 +17964,7 @@ function sameLabelProduct(a, b){
   return samePriceText(a.name, b.name) &&
     samePriceText(a.brand, b.brand) &&
     samePriceText(a.factoryNo, b.factoryNo) &&
+    samePriceText(a.nationalPartCode, b.nationalPartCode) &&
     sameOriginText(a.origin, b.origin) &&
     samePriceText(a.kind || '원료육', b.kind || '원료육') &&
     samePriceText(a.meattype, b.meattype) &&
@@ -17933,9 +17978,11 @@ function saveLabelProduct(){
   const name = gv('lp-name');
   if(!name){ alert('제품명을 입력해 주세요.'); return; }
   const meatType = document.getElementById('lp-meattype')?.value || '돼지고기';
+  const origin = normalizeOriginName(gv('lp-origin'));
   const nationalPartCode = gv('lp-national-part-code').toUpperCase();
-  if(!isNationalPartCodeForMeatType(nationalPartCode, meatType)){
-    alert(`${meatType}에 맞는 국가부위코드를 선택해 주세요.`);
+  if(!isNationalPartCodeForProduct(nationalPartCode, meatType, origin)){
+    const originLabel = isDomesticOrigin(origin) ? '국내산' : '수입산';
+    alert(`${originLabel} ${meatType}에 맞는 국가부위코드를 선택해 주세요.`);
     return;
   }
   const editId = gv('lp-edit-id');
@@ -17950,7 +17997,8 @@ function saveLabelProduct(){
     factoryNo:   gv('lp-factory-no'),
     nationalPartCode,
     nationalPartName: nationalPartNameForCode(nationalPartCode),
-    origin:      normalizeOriginName(gv('lp-origin')),
+    nationalPartScheme: nationalPartSchemeForProduct(meatType, origin),
+    origin,
     kind:        document.getElementById('lp-kind')?.value || '원료육',
     meattype:    meatType,
     storage:     document.getElementById('lp-storage')?.value || '냉동',
@@ -18005,6 +18053,10 @@ function migrateLabelProducts(){
       const normalizedName = nationalPartNameForCode(normalizedCode);
       if(normalizedCode !== next.nationalPartCode){ next.nationalPartCode = normalizedCode; changed = true; }
       if(normalizedName && normalizedName !== next.nationalPartName){ next.nationalPartName = normalizedName; changed = true; }
+      if(isNationalPartCodeForProduct(normalizedCode, next.meattype || '돼지고기', next.origin || '')){
+        const normalizedScheme = nationalPartSchemeForProduct(next.meattype || '돼지고기', next.origin || '');
+        if(next.nationalPartScheme !== normalizedScheme){ next.nationalPartScheme = normalizedScheme; changed = true; }
+      }
     }
     if(!next.shelfdays){
       next.shelfdays = getDefaultShelfDays(next.kind || '원료육', next.storage || '냉동');
@@ -18056,9 +18108,10 @@ function deleteLabelProduct(idx){
 }
 
 function resetLabelProductForm(){
-  ['lp-edit-id','lp-name','lp-brand','lp-factory-no','lp-national-part-code','lp-packunit','lp-origin','lp-shelfdays','lp-itemno','lp-grade'].forEach(id=>{
+  ['lp-edit-id','lp-name','lp-brand','lp-factory-no','lp-national-part-code','lp-packunit','lp-shelfdays','lp-itemno','lp-grade'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value='';
   });
+  const origin = document.getElementById('lp-origin'); if(origin) origin.value='국내산';
   const kind = document.getElementById('lp-kind'); if(kind) kind.value='원료육';
   const mt = document.getElementById('lp-meattype'); if(mt) mt.value='돼지고기';
   const st = document.getElementById('lp-storage');  if(st) st.value='냉동';
