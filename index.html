@@ -3220,13 +3220,6 @@
             </select>
           </div>
           <div class="form-group">
-            <label>재고 기준단위</label>
-            <select id="lp-stock-unit" style="font-size:13px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;">
-              <option value="KG">KG</option>
-              <option value="EA">개 (EA)</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label>소비기한 (일)</label>
             <input id="lp-shelfdays" type="number" min="1" max="999" placeholder="예) 365" style="font-size:13px;">
           </div>
@@ -3251,7 +3244,7 @@
       <div class="card">
         <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>📋 등록 품목 목록</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input id="lp-search" placeholder="🔍 제품명·브랜드·공장넘버·국가부위코드·원산지·면세/과세·재고단위 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
+          <input id="lp-search" placeholder="🔍 제품명·브랜드·공장넘버·국가부위코드·원산지·면세/과세 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
           <span id="lp-search-count" style="font-size:11px;color:#888;white-space:nowrap;"></span>
         </div>
         <div id="lp-list-wrap" style="overflow-x:auto;">
@@ -3748,7 +3741,6 @@ function getLocalTraceInfo(traceNo){
     nationalPartCode: tx.nationalPartCode || managed?.nationalPartCode || '',
     nationalPartName: tx.nationalPartName || nationalPartNameForCode(managed?.nationalPartCode),
     taxType: normalizeLabelProductTaxType(tx.taxType || managed?.taxType),
-    stockUnit: normalizeLabelProductStockUnit(tx.stockUnit || managed?.stockUnit),
     grade: managed?.grade || '',
     itemno: managed?.itemno || '',
     shelfdays: managed?.shelfdays || 0,
@@ -7093,7 +7085,6 @@ function getStockMap(){
     if(row.nationalPartCode && !bucket.nationalPartCode) bucket.nationalPartCode = row.nationalPartCode;
     if(row.nationalPartName && !bucket.nationalPartName) bucket.nationalPartName = row.nationalPartName;
     if(row.taxType && !bucket.taxType) bucket.taxType = normalizeLabelProductTaxType(row.taxType);
-    if(row.stockUnit && !bucket.stockUnit) bucket.stockUnit = normalizeLabelProductStockUnit(row.stockUnit);
     return bucket;
   };
 
@@ -7674,7 +7665,6 @@ async function addTransaction(){
         t.nationalPartCode=transactionProductMeta.nationalPartCode || '';
         t.nationalPartName=transactionProductMeta.nationalPartName || nationalPartNameForCode(transactionProductMeta.nationalPartCode);
         t.taxType=normalizeLabelProductTaxType(transactionProductMeta.taxType);
-        t.stockUnit=normalizeLabelProductStockUnit(transactionProductMeta.stockUnit);
       }
       t.trader=trader; t.lot=lot; t.proddate=proddateForSave;
       t.weight=weight; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
@@ -7696,7 +7686,6 @@ async function addTransaction(){
       nationalPartCode:transactionProductMeta?.nationalPartCode || '',
       nationalPartName:transactionProductMeta?.nationalPartName || nationalPartNameForCode(transactionProductMeta?.nationalPartCode),
       taxType:normalizeLabelProductTaxType(transactionProductMeta?.taxType),
-      stockUnit:normalizeLabelProductStockUnit(transactionProductMeta?.stockUnit),
       trader,lot,proddate:proddateForSave,weight,note,storage,price,amount:Math.round(price*weight),
       stockUnitPrice: selectedStock ? parseAppNumber(selectedStock.price) : '',
       stockProddate: selectedStock ? (selectedStock.proddate || proddateForSave || '') : '',
@@ -7975,7 +7964,7 @@ async function saveBulkInbound(){
       packunit: lp.packunit || '',
       labelProductId: lp.id || '', brand: lp.brand || '', factoryNo: lp.factoryNo || '',
       nationalPartCode: lp.nationalPartCode || '', nationalPartName: nationalPartNameForCode(lp.nationalPartCode),
-      taxType: normalizeLabelProductTaxType(lp.taxType), stockUnit: normalizeLabelProductStockUnit(lp.stockUnit),
+      taxType: normalizeLabelProductTaxType(lp.taxType),
       trader, lot, proddate:'',
       weight, price, amount: Math.round(price*weight),
       note, _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
@@ -8452,7 +8441,6 @@ async function saveBulkOutbound(){
       nationalPartCode: s.nationalPartCode || '',
       nationalPartName: s.nationalPartName || nationalPartNameForCode(s.nationalPartCode),
       taxType: normalizeLabelProductTaxType(s.taxType),
-      stockUnit: normalizeLabelProductStockUnit(s.stockUnit),
       trader: row.trader,
       lot: s.lot,
       proddate: s.proddate || '',
@@ -9191,7 +9179,6 @@ async function saveProdEntry(){
         nationalPartCode: registered.nationalPartCode || '',
         nationalPartName: nationalPartNameForCode(registered.nationalPartCode),
         taxType: normalizeLabelProductTaxType(registered.taxType),
-        stockUnit: normalizeLabelProductStockUnit(registered.stockUnit),
         packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta
       });
     }
@@ -9218,7 +9205,7 @@ async function saveProdEntry(){
       product:o.product, productId:o.productId, labelProductId:o.labelProductId,
       brand:o.brand, factoryNo:o.factoryNo,
       nationalPartCode:o.nationalPartCode, nationalPartName:o.nationalPartName,
-      taxType:o.taxType, stockUnit:o.stockUnit,
+      taxType:o.taxType,
       packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin, samsung:o.samsung
     };
   });
@@ -9282,7 +9269,7 @@ async function saveProdEntry(){
         packunit:out.packunit||'', productId:out.productId||'', labelProductId:out.labelProductId||out.productId||'',
         brand:out.brand||'', factoryNo:out.factoryNo||'',
         nationalPartCode:out.nationalPartCode||'', nationalPartName:out.nationalPartName||'',
-        taxType:normalizeLabelProductTaxType(out.taxType), stockUnit:normalizeLabelProductStockUnit(out.stockUnit),
+        taxType:normalizeLabelProductTaxType(out.taxType),
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
         note:`${jobType}완료 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         stockLocation: STOCK_LOCATION_DEFAULT,
@@ -17107,7 +17094,7 @@ function selectedWorkOrderLabelProduct(){
 }
 
 function workOrderProductSearchText(p){
-  return [p.name, p.brand, p.factoryNo, p.nationalPartCode, nationalPartNameForCode(p.nationalPartCode), p.packunit, p.origin, p.meattype, normalizeLabelProductTaxType(p.taxType), labelProductStockUnitLabel(p.stockUnit), p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
+  return [p.name, p.brand, p.factoryNo, p.nationalPartCode, nationalPartNameForCode(p.nationalPartCode), p.packunit, p.origin, p.meattype, normalizeLabelProductTaxType(p.taxType), p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
 }
 
 function renderWorkOrderProductResults(){
@@ -17130,7 +17117,7 @@ function renderWorkOrderProductResults(){
       <div data-id="${htmlEscape(p.id || '')}" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;"
         onmousedown="selectWorkOrderLabelProduct(this.dataset.id)">
         <div style="font-weight:800;color:#2c3e50;">${htmlEscape(p.name || '')}${p.packunit ? ' / ' + htmlEscape(p.packunit) : ''}</div>
-        <div style="color:#666;margin-top:2px;">${htmlEscape([p.brand && '브랜드 '+p.brand, p.factoryNo && '공장 '+p.factoryNo, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, p.origin, p.meattype, normalizeLabelProductTaxType(p.taxType), `재고 ${labelProductStockUnitLabel(p.stockUnit)}`, p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
+        <div style="color:#666;margin-top:2px;">${htmlEscape([p.brand && '브랜드 '+p.brand, p.factoryNo && '공장 '+p.factoryNo, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, p.origin, p.meattype, normalizeLabelProductTaxType(p.taxType), p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
       </div>
     `).join('');
   }
@@ -17302,7 +17289,6 @@ function collectWorkOrderForm(){
     nationalPartCode: selectedProduct?.nationalPartCode || '',
     nationalPartName: nationalPartNameForCode(selectedProduct?.nationalPartCode),
     taxType: normalizeLabelProductTaxType(selectedProduct?.taxType),
-    stockUnit: normalizeLabelProductStockUnit(selectedProduct?.stockUnit),
     labelSize: val('wo-label-size') || '7x10',
     product,
     origin: val('wo-origin').trim(),
@@ -17687,7 +17673,6 @@ function labelProductSortValue(p, key){
   if(key === 'shelfdays') return parseInt(p.shelfdays)||0;
   if(key === 'no') return labelProducts.indexOf(p);
   if(key === 'taxType') return normalizeLabelProductTaxType(p.taxType);
-  if(key === 'stockUnit') return normalizeLabelProductStockUnit(p.stockUnit);
   return String(p[key] ?? '').trim();
 }
 
@@ -17717,14 +17702,14 @@ function renderLabelProducts(){
     if(countEl) countEl.textContent = '';
     return;
   }
-  // 검색 필터 (제품명·브랜드·공장넘버·국가부위코드·원산지·유형·육종·면세/과세·보관·재고단위·포장단위·품목번호·등급)
+  // 검색 필터 (제품명·브랜드·공장넘버·국가부위코드·원산지·유형·육종·면세/과세·보관·포장단위·품목번호·등급)
   const searchEl = document.getElementById('lp-search');
   const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
   const sorted = labelProducts
     .map((p,i)=>({p,i}))
     .filter(({p})=>{
       if(!q) return true;
-      const text = [p.name,p.brand,p.factoryNo,p.nationalPartCode,nationalPartNameForCode(p.nationalPartCode),p.origin,p.kind,p.meattype,normalizeLabelProductTaxType(p.taxType),p.storage,labelProductStockUnitLabel(p.stockUnit),p.stockUnit,p.packunit,p.itemno,p.grade]
+      const text = [p.name,p.brand,p.factoryNo,p.nationalPartCode,nationalPartNameForCode(p.nationalPartCode),p.origin,p.kind,p.meattype,normalizeLabelProductTaxType(p.taxType),p.storage,p.packunit,p.itemno,p.grade]
         .map(v=>String(v||'')).join(' ').toLowerCase();
       return text.includes(q);
     })
@@ -17755,7 +17740,6 @@ function renderLabelProducts(){
       : 'border:1px solid #f39c12;color:#9a5d00;background:#fff7e6;';
     const badgeBase = 'border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;display:inline-block;min-width:42px;';
     const taxType = normalizeLabelProductTaxType(p.taxType);
-    const stockUnit = normalizeLabelProductStockUnit(p.stockUnit);
     const partCodeCompatible = !p.nationalPartCode ||
       isNationalPartCodeForProduct(p.nationalPartCode, p.meattype || '돼지고기', p.origin || '');
     const partCodeHtml = p.nationalPartCode
@@ -17773,7 +17757,6 @@ function renderLabelProducts(){
       <td style="text-align:center;"><span style="${meatStyle}${badgeBase}">${htmlEscape(meat)}</span></td>
       <td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap;">${partCodeHtml}</td>
       <td style="text-align:center;"><span style="${storageStyle}${badgeBase}">${htmlEscape(storage)}</span></td>
-      <td style="text-align:center;font-weight:700;">${htmlEscape(labelProductStockUnitLabel(stockUnit))}</td>
       <td style="text-align:center;">${htmlEscape(p.shelfdays||'')}일</td>
       <td style="font-size:11px;">${htmlEscape(p.packunit||'')}</td>
       <td style="font-size:11px;">${htmlEscape(p.grade||'')}</td>
@@ -17798,7 +17781,6 @@ function renderLabelProducts(){
           ${labelProductSortHeader('meattype','육종','text-align:center;')}
           ${labelProductSortHeader('nationalPartCode','국가부위코드','text-align:center;')}
           ${labelProductSortHeader('storage','보관','text-align:center;')}
-          ${labelProductSortHeader('stockUnit','재고단위','text-align:center;')}
           ${labelProductSortHeader('shelfdays','소비기한','text-align:center;')}
           ${labelProductSortHeader('packunit','포장단위')}
           ${labelProductSortHeader('grade','등급')}
@@ -17991,15 +17973,6 @@ function normalizeLabelProductTaxType(value){
   return String(value || '').trim() === '과세' ? '과세' : '면세';
 }
 
-function normalizeLabelProductStockUnit(value){
-  const normalized = String(value || '').trim().toUpperCase();
-  return ['EA','개','개수'].includes(normalized) ? 'EA' : 'KG';
-}
-
-function labelProductStockUnitLabel(value){
-  return normalizeLabelProductStockUnit(value) === 'EA' ? '개' : 'KG';
-}
-
 function autoFillLabelProductShelfDays(){
   const kind = document.getElementById('lp-kind')?.value || '원료육';
   const storage = document.getElementById('lp-storage')?.value || '냉동';
@@ -18055,12 +18028,12 @@ function saveLabelProduct(){
     taxType:     normalizeLabelProductTaxType(document.getElementById('lp-tax-type')?.value),
     meattype:    meatType,
     storage:     document.getElementById('lp-storage')?.value || '냉동',
-    stockUnit:   normalizeLabelProductStockUnit(document.getElementById('lp-stock-unit')?.value),
     shelfdays:   parseInt(gv('lp-shelfdays')) || getDefaultShelfDays(document.getElementById('lp-kind')?.value || '원료육', document.getElementById('lp-storage')?.value || '냉동'),
     packunit:    gv('lp-packunit'),
     itemno:      gv('lp-itemno'),
     grade:       gv('lp-grade'),
   };
+  delete prod.stockUnit;
   const dupIdx = labelProducts.findIndex(p => String(p.id || '') !== String(prod.id || '') && sameLabelProduct(p, prod));
   if(dupIdx >= 0){
     alert(`이미 같은 품목이 등록되어 있습니다.
@@ -18074,7 +18047,6 @@ function saveLabelProduct(){
 유형: ${prod.kind}
 면세/과세: ${prod.taxType}
 보관: ${prod.storage}
-재고 기준단위: ${labelProductStockUnitLabel(prod.stockUnit)}
 소비기한: ${prod.shelfdays || 0}일
 포장단위: ${prod.packunit || '-'}
 
@@ -18102,8 +18074,7 @@ function migrateLabelProducts(){
     if(!next.kind){ next.kind = '원료육'; changed = true; }
     const normalizedTaxType = normalizeLabelProductTaxType(next.taxType);
     if(normalizedTaxType !== next.taxType){ next.taxType = normalizedTaxType; changed = true; }
-    const normalizedStockUnit = normalizeLabelProductStockUnit(next.stockUnit);
-    if(normalizedStockUnit !== next.stockUnit){ next.stockUnit = normalizedStockUnit; changed = true; }
+    if(Object.prototype.hasOwnProperty.call(next, 'stockUnit')){ delete next.stockUnit; changed = true; }
     if(next.origin){
       const normalized = normalizeOriginName(next.origin);
       if(normalized !== next.origin){ next.origin = normalized; changed = true; }
@@ -18150,7 +18121,6 @@ function editLabelProduct(idx){
   set('lp-meattype', p.meattype || '돼지고기');
   refreshLabelProductNationalPartSelect(p.nationalPartCode || '');
   set('lp-storage', p.storage || '냉동');
-  set('lp-stock-unit', normalizeLabelProductStockUnit(p.stockUnit));
   set('lp-shelfdays', p.shelfdays || getDefaultShelfDays(p.kind || '원료육', p.storage || '냉동'));
   set('lp-itemno', p.itemno || '');
   set('lp-grade', p.grade || '');
@@ -18199,7 +18169,6 @@ function resetLabelProductForm(){
   const taxType = document.getElementById('lp-tax-type'); if(taxType) taxType.value='면세';
   const mt = document.getElementById('lp-meattype'); if(mt) mt.value='돼지고기';
   const st = document.getElementById('lp-storage');  if(st) st.value='냉동';
-  const stockUnit = document.getElementById('lp-stock-unit'); if(stockUnit) stockUnit.value='KG';
   autoFillLabelProductShelfDays();
   refreshLabelProductNationalPartSelect('');
   const title = document.getElementById('lp-form-title');
