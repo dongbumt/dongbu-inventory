@@ -71,6 +71,7 @@ Editor query for each file:
 49. `schema-rpc-27-erp-schedule-delete-fix.sql`
 50. `schema-rpc-28-erp-submaterial-usage-permissions.sql`
 51. `schema-rpc-29-business-partner-master.sql`
+52. `schema-rpc-30-product-codes.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -112,6 +113,8 @@ This creates:
 - `dbmt_erp_save_transactions(token, rows, delete_ids)`
 - `dbmt_erp_save_production(token, entry, transaction_rows, replace_id)`
 - `dbmt_erp_import_transactions(token, rows)`
+- `dbmt_erp_save_label_product(token, record)`
+- `dbmt_erp_delete_label_product(token, product_id, business_registration_no)`
 
 The tables stay protected by RLS. The browser app uses these RPC functions
 instead of direct table access.
@@ -211,6 +214,14 @@ transactions and prices without rewriting their historical display names, and
 moves partner create/update/deactivate actions to personal `traders`
 permissions. The existing `traderInfoMap` remains a read-only compatibility
 projection for older document and cold-storage consumers.
+
+Apply `20260817090000_product_codes.sql` after M03 for the M04 product-code
+registry. It assigns existing products permanent six-digit codes in their
+current registration order: `1xxxxx` for beef, `2xxxxx` for pork, and `3xxxxx`
+for other livestock such as lamb or poultry. New codes are issued only by the
+dedicated personal-session RPC, cannot be edited, and remain reserved after a
+product is deleted. The legacy shared-password app-data RPC can no longer
+replace `labelProducts` after this migration.
 
 ## 3. Document request delivery
 
