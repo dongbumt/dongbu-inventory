@@ -3193,10 +3193,16 @@
           </div>
           <div class="form-group">
             <label>육종</label>
-            <select id="lp-meattype" style="font-size:13px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;">
+            <select id="lp-meattype" onchange="refreshLabelProductNationalPartSelect()" style="font-size:13px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;">
               <option value="돼지고기">돼지고기</option>
               <option value="소고기">소고기</option>
 
+            </select>
+          </div>
+          <div class="form-group">
+            <label>국가부위코드 <span style="color:red">*</span></label>
+            <select id="lp-national-part-code" style="font-size:13px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;">
+              <option value="">-- 육종 선택 후 부위 선택 --</option>
             </select>
           </div>
           <div class="form-group">
@@ -3231,7 +3237,7 @@
       <div class="card">
         <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>📋 등록 품목 목록</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input id="lp-search" placeholder="🔍 제품명·브랜드·공장넘버·원산지·품목번호 등 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
+          <input id="lp-search" placeholder="🔍 제품명·브랜드·공장넘버·국가부위코드·원산지 등 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
           <span id="lp-search-count" style="font-size:11px;color:#888;white-space:nowrap;"></span>
         </div>
         <div id="lp-list-wrap" style="overflow-x:auto;">
@@ -3710,7 +3716,8 @@ function getLocalTraceInfo(traceNo){
   const product = tx.product || '';
   const origin = normalizeOriginName(tx.origin || '');
   const storage = tx.storage || '';
-  const managed = labelProducts.find(p =>
+  const managedId = tx.labelProductId || tx.productId || '';
+  const managed = (managedId ? labelProducts.find(p => String(p.id || '') === String(managedId)) : null) || labelProducts.find(p =>
     samePriceText(p.name, product) &&
     (!origin || sameOriginText(p.origin, origin)) &&
     (!storage || samePriceText(p.storage, storage))
@@ -3721,6 +3728,11 @@ function getLocalTraceInfo(traceNo){
     product,
     origin: origin || managed?.origin || '',
     storage: storage || managed?.storage || '',
+    labelProductId: managed?.id || managedId,
+    brand: tx.brand || managed?.brand || '',
+    factoryNo: tx.factoryNo || managed?.factoryNo || '',
+    nationalPartCode: tx.nationalPartCode || managed?.nationalPartCode || '',
+    nationalPartName: tx.nationalPartName || nationalPartNameForCode(managed?.nationalPartCode),
     grade: managed?.grade || '',
     itemno: managed?.itemno || '',
     shelfdays: managed?.shelfdays || 0,
@@ -6613,7 +6625,7 @@ function renderManagedProductSuggestions(){
     return;
   }
   box.innerHTML = rows.slice(0, 80).map(p => {
-    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
+    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
     return `<button type="button" onclick="selectManagedProduct(${jsArg(p.id)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
@@ -7056,6 +7068,17 @@ function getStockMap(){
     return map[key];
   };
 
+  const applyBucketProductMeta = (bucket, row) => {
+    if(!bucket || !row) return bucket;
+    const labelProductId = row.labelProductId || row.productId || '';
+    if(labelProductId && !bucket.labelProductId) bucket.labelProductId = labelProductId;
+    if(row.brand && !bucket.brand) bucket.brand = row.brand;
+    if(row.factoryNo && !bucket.factoryNo) bucket.factoryNo = row.factoryNo;
+    if(row.nationalPartCode && !bucket.nationalPartCode) bucket.nationalPartCode = row.nationalPartCode;
+    if(row.nationalPartName && !bucket.nationalPartName) bucket.nationalPartName = row.nationalPartName;
+    return bucket;
+  };
+
   const stockTxns = userTransactions
     .map((t, idx)=>({t, idx}))
     .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동'].includes(x.t.type))
@@ -7086,11 +7109,13 @@ function getStockMap(){
         if(inferredPackunits.length === 1) packunit = inferredPackunits[0];
       }
       const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation);
+      applyBucketProductMeta(bucket, t);
       bucket.total_adjust += weight;
       bucket.stock += weight;
       if(!bucket.source) bucket.source = '재고조정';
     } else if(t.type==='입고' || t.type==='생산입고'){
       const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation);
+      applyBucketProductMeta(bucket, t);
       bucket.total_in += weight;
       bucket.stock += weight;
       if(unitPrice > 0 && weight > 0){
@@ -7133,6 +7158,7 @@ function getStockMap(){
         fallback.stock -= remaining;
       }
       const dest = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, toLocation);
+      applyBucketProductMeta(dest, t);
       dest.total_adjust += weight;
       dest.stock += weight;
       if(!dest.source) dest.source = '재고이동';
@@ -7615,6 +7641,7 @@ async function addTransaction(){
     alert('삼성웰스토리 지정 정보를 확인해주세요.\n\n' + samsungMeta.error);
     return;
   }
+  const transactionProductMeta = managedProduct || selectedStock || null;
 
   let savedTxn = null;
   if(_editTxnId){
@@ -7622,10 +7649,12 @@ async function addTransaction(){
     const t=userTransactions.find(x=>String(x.id)===String(_editTxnId));
     if(t){
       t.date=date; t.type=type; t.product=product; t.origin=origin; t.packunit=managedProduct?.packunit || packunit;
-      if(type === '입고'){
-        t.labelProductId=managedProduct?.id || '';
-        t.brand=managedProduct?.brand || '';
-        t.factoryNo=managedProduct?.factoryNo || '';
+      if(transactionProductMeta){
+        t.labelProductId=transactionProductMeta.id || transactionProductMeta.labelProductId || transactionProductMeta.productId || '';
+        t.brand=transactionProductMeta.brand || '';
+        t.factoryNo=transactionProductMeta.factoryNo || '';
+        t.nationalPartCode=transactionProductMeta.nationalPartCode || '';
+        t.nationalPartName=transactionProductMeta.nationalPartName || nationalPartNameForCode(transactionProductMeta.nationalPartCode);
       }
       t.trader=trader; t.lot=lot; t.proddate=proddateForSave;
       t.weight=weight; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
@@ -7642,7 +7671,10 @@ async function addTransaction(){
     // 신규 추가
     const newItem={
       id:Date.now(),date,type,product,origin,packunit:managedProduct?.packunit || packunit,
-      labelProductId:managedProduct?.id || '',brand:managedProduct?.brand || '',factoryNo:managedProduct?.factoryNo || '',
+      labelProductId:transactionProductMeta?.id || transactionProductMeta?.labelProductId || transactionProductMeta?.productId || '',
+      brand:transactionProductMeta?.brand || '',factoryNo:transactionProductMeta?.factoryNo || '',
+      nationalPartCode:transactionProductMeta?.nationalPartCode || '',
+      nationalPartName:transactionProductMeta?.nationalPartName || nationalPartNameForCode(transactionProductMeta?.nationalPartCode),
       trader,lot,proddate:proddateForSave,weight,note,storage,price,amount:Math.round(price*weight),
       stockUnitPrice: selectedStock ? parseAppNumber(selectedStock.price) : '',
       stockProddate: selectedStock ? (selectedStock.proddate || proddateForSave || '') : '',
@@ -7748,7 +7780,7 @@ function bulkProductWrap(inp){
   return inp.closest('td') || inp.closest('.form-group') || inp.parentElement;
 }
 function bulkProductLabel(p){
-  return `${p.name||''}${p.brand?' / '+p.brand:''}${p.factoryNo?' / 공장 '+p.factoryNo:''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
+  return `${p.name||''}${p.brand?' / '+p.brand:''}${p.factoryNo?' / 공장 '+p.factoryNo:''}${p.nationalPartCode?' / '+p.nationalPartCode+' '+nationalPartNameForCode(p.nationalPartCode):''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
 }
 function onBulkProductSearch(inp, isInput){
   const wrap = bulkProductWrap(inp);
@@ -7770,7 +7802,7 @@ function onBulkProductSearch(inp, isInput){
   const q = (inp.value||'').toLowerCase().trim();
   let list = labelProducts || [];
   if(q) list = list.filter(p =>
-    `${p.name||''} ${p.brand||''} ${p.factoryNo||''} ${p.origin||''} ${p.storage||''} ${p.packunit||''}`.toLowerCase().includes(q)
+    `${p.name||''} ${p.brand||''} ${p.factoryNo||''} ${p.nationalPartCode||''} ${nationalPartNameForCode(p.nationalPartCode)} ${p.origin||''} ${p.storage||''} ${p.packunit||''}`.toLowerCase().includes(q)
   );
   list = list.slice(0, 80);
   if(!list.length){
@@ -7778,7 +7810,7 @@ function onBulkProductSearch(inp, isInput){
   } else {
     box.innerHTML = list.map(p =>
       `<div class="bulk-prod-opt" data-id="${htmlEscape(String(p.id))}" style="padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
-        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;">${p.brand?' / '+htmlEscape(p.brand):''}${p.factoryNo?' / 공장 '+htmlEscape(p.factoryNo):''} / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
+        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;">${p.brand?' / '+htmlEscape(p.brand):''}${p.factoryNo?' / 공장 '+htmlEscape(p.factoryNo):''}${p.nationalPartCode?' / '+htmlEscape(p.nationalPartCode)+' '+htmlEscape(nationalPartNameForCode(p.nationalPartCode)):''} / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
       </div>`
     ).join('');
     box.querySelectorAll('.bulk-prod-opt').forEach(opt => {
@@ -7920,6 +7952,7 @@ async function saveBulkInbound(){
       product: lp.name, origin: lp.origin, storage: lp.storage || '',
       packunit: lp.packunit || '',
       labelProductId: lp.id || '', brand: lp.brand || '', factoryNo: lp.factoryNo || '',
+      nationalPartCode: lp.nationalPartCode || '', nationalPartName: nationalPartNameForCode(lp.nationalPartCode),
       trader, lot, proddate:'',
       weight, price, amount: Math.round(price*weight),
       note, _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
@@ -8390,6 +8423,11 @@ async function saveBulkOutbound(){
       origin: s.origin,
       storage: '',
       packunit: s.packunit || '',
+      labelProductId: s.labelProductId || '',
+      brand: s.brand || '',
+      factoryNo: s.factoryNo || '',
+      nationalPartCode: s.nationalPartCode || '',
+      nationalPartName: s.nationalPartName || nationalPartNameForCode(s.nationalPartCode),
       trader: row.trader,
       lot: s.lot,
       proddate: s.proddate || '',
@@ -8947,7 +8985,7 @@ function labelProductPackUnitText(p){
 }
 
 function labelProductSearchText(p){
-  return [p?.name, p?.brand, p?.factoryNo, p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
+  return [p?.name, p?.brand, p?.factoryNo, p?.nationalPartCode, nationalPartNameForCode(p?.nationalPartCode), p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
 }
 
 function findLabelProductForProduction(name, packunit='', productId=''){
@@ -9011,7 +9049,7 @@ function renderProdOutProductSuggestions(id){
 
   box.innerHTML = items.slice(0, 80).map(({p, idx})=>{
     const pack = labelProductPackUnitText(p);
-    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.kind || '원료육', normalizeOriginName(p.origin), p.storage || '냉동', pack && `포장 ${pack}`].filter(Boolean).join(' · ');
+    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, p.kind || '원료육', normalizeOriginName(p.origin), p.storage || '냉동', pack && `포장 ${pack}`].filter(Boolean).join(' · ');
     return `<button type="button" onpointerdown="event.preventDefault()" onclick="selectProdOutProduct(${id},${idx})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}${pack ? ` <span style="font-size:11px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 6px;">${htmlEscape(pack)}</span>` : ''}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
@@ -9119,7 +9157,16 @@ async function saveProdEntry(){
         return;
       }
       const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
-      rawOutputs.push({product: registered.name || product, productId: registered.id || productId, packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta});
+      rawOutputs.push({
+        product: registered.name || product,
+        productId: registered.id || productId,
+        labelProductId: registered.id || productId,
+        brand: registered.brand || '',
+        factoryNo: registered.factoryNo || '',
+        nationalPartCode: registered.nationalPartCode || '',
+        nationalPartName: nationalPartNameForCode(registered.nationalPartCode),
+        packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta
+      });
     }
   });
   if(invalidOutputProduct){
@@ -9140,7 +9187,12 @@ async function saveProdEntry(){
 
   const outputs = rawOutputs.map(o=>{
     const price = o.manualPrice > 0 ? o.manualPrice : autoUnitPrice;
-    return {product:o.product, productId:o.productId, packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin, samsung:o.samsung};
+    return {
+      product:o.product, productId:o.productId, labelProductId:o.labelProductId,
+      brand:o.brand, factoryNo:o.factoryNo,
+      nationalPartCode:o.nationalPartCode, nationalPartName:o.nationalPartName,
+      packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin, samsung:o.samsung
+    };
   });
 
   if(!inputs.length && !outputs.length){alert('투입 또는 생산 항목을 입력해주세요.');return;}
@@ -9199,7 +9251,9 @@ async function saveProdEntry(){
       const newTxn = {
         id:makeProductionTxnId(entry.id, 'out', index), date, type:'생산입고',
         product:out.product, lot:out.lot||'', origin:out.origin||'',
-        packunit:out.packunit||'', productId:out.productId||'',
+        packunit:out.packunit||'', productId:out.productId||'', labelProductId:out.labelProductId||out.productId||'',
+        brand:out.brand||'', factoryNo:out.factoryNo||'',
+        nationalPartCode:out.nationalPartCode||'', nationalPartName:out.nationalPartName||'',
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
         note:`${jobType}완료 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         stockLocation: STOCK_LOCATION_DEFAULT,
@@ -11410,6 +11464,7 @@ function renderPriceProductSuggestions(){
     const sub = [...new Set(variants.map(p => [
       p.brand ? '브랜드 ' + p.brand : '',
       p.factoryNo ? '공장 ' + p.factoryNo : '',
+      p.nationalPartCode ? `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}` : '',
       normalizeOriginName(p.origin),
       p.storage || '',
       p.packunit || ''
@@ -17023,7 +17078,7 @@ function selectedWorkOrderLabelProduct(){
 }
 
 function workOrderProductSearchText(p){
-  return [p.name, p.brand, p.factoryNo, p.packunit, p.origin, p.meattype, p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
+  return [p.name, p.brand, p.factoryNo, p.nationalPartCode, nationalPartNameForCode(p.nationalPartCode), p.packunit, p.origin, p.meattype, p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
 }
 
 function renderWorkOrderProductResults(){
@@ -17046,7 +17101,7 @@ function renderWorkOrderProductResults(){
       <div data-id="${htmlEscape(p.id || '')}" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;"
         onmousedown="selectWorkOrderLabelProduct(this.dataset.id)">
         <div style="font-weight:800;color:#2c3e50;">${htmlEscape(p.name || '')}${p.packunit ? ' / ' + htmlEscape(p.packunit) : ''}</div>
-        <div style="color:#666;margin-top:2px;">${htmlEscape([p.brand && '브랜드 '+p.brand, p.factoryNo && '공장 '+p.factoryNo, p.origin, p.meattype, p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
+        <div style="color:#666;margin-top:2px;">${htmlEscape([p.brand && '브랜드 '+p.brand, p.factoryNo && '공장 '+p.factoryNo, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, p.origin, p.meattype, p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
       </div>
     `).join('');
   }
@@ -17194,6 +17249,7 @@ function collectWorkOrderForm(){
   if(!date){ alert('작업일을 입력해주세요.'); return null; }
   if(!product){ alert('생산물 제품명을 입력해주세요.'); return null; }
   if(!weight){ alert('생산 중량을 입력해주세요.'); return null; }
+  const selectedProduct = selectedWorkOrderLabelProduct();
   return {
     id: val('wo-edit-id') || workOrderId(),
     date,
@@ -17211,7 +17267,11 @@ function collectWorkOrderForm(){
       stock: parseAppNumber(stock.stock)
     } : null,
     inputWeight: parseAppNumber(val('wo-input-weight')),
-    labelProductId: val('wo-label-product-id') || selectedWorkOrderLabelProduct()?.id || '',
+    labelProductId: val('wo-label-product-id') || selectedProduct?.id || '',
+    brand: selectedProduct?.brand || '',
+    factoryNo: selectedProduct?.factoryNo || '',
+    nationalPartCode: selectedProduct?.nationalPartCode || '',
+    nationalPartName: nationalPartNameForCode(selectedProduct?.nationalPartCode),
     labelSize: val('wo-label-size') || '7x10',
     product,
     origin: val('wo-origin').trim(),
@@ -17487,6 +17547,72 @@ let labelProductSortKey = 'name';
 let labelProductSortDir = 'asc';
 let inlineEditLabelProductIdx = null;
 
+// SM ITEM.ITE_BUWI + YHT(소 29 / 돼지 38) 국가부위코드표.
+// SM 수입유통 API는 소 BF, 돼지 PK 접두사를 붙여 regnCode/regnNm으로 전송한다.
+const SM_NATIONAL_PART_CODE_SOURCE = Object.freeze({
+  '소고기': 'BF001:안심 BF002:등심 BF003:채끝 BF004:목심 BF005:앞다리 BF006:우둔 BF007:설도 BF008:양지 BF009:사태 BF010:갈비 BF011:기타 BF012:부산물 BF0011:안심살 BF0021:윗등심살 BF0022:꽃등심살 BF0023:아래등심살 BF0024:살치살 BF0031:채끝살 BF0041:목심살 BF0051:꾸리살 BF0052:부채살 BF0053:앞다리살 BF0054:갈비덧살 BF0055:부채덮개살 BF0061:우둔살 BF0062:홍두깨살 BF0071:보섭살 BF0072:설깃살 BF0073:설깃머리살 BF0074:도가니살 BF0075:삼각살 BF0081:양지머리 BF0082:차돌박이 BF0083:업진살 BF0084:업진안살 BF0085:치마양지 BF0086:치마살 BF0087:앞치마살 BF0091:앞사태 BF0092:뒷사태 BF0093:뭉치사태 BF0094:아롱사태 BF0095:상박살 BF0101:본갈비 BF0102:꽃갈비 BF0103:참갈비 BF0104:갈비살 BF0105:마구리 BF0106:토시살 BF0107:안창살 BF0108:제비추리',
+  '돼지고기': 'PK001:안심 PK002:등심 PK003:목심 PK004:앞다리 PK005:뒷다리 PK006:삼겹살 PK007:갈비 PK008:기타 PK009:부산물 PK0011:안심살 PK0021:등심살 PK0022:알등심살 PK0023:등심덧살 PK0031:목심살 PK0041:앞다리살 PK0042:앞사태살 PK0043:항정살 PK0044:꾸리살 PK0045:부채살 PK0046:주걱살 PK0051:볼기살 PK0052:설깃살 PK0053:도가니살 PK0054:홍두깨살 PK0055:보섭살 PK0056:뒷사태살 PK0061:삼겹살 PK0062:갈매기살 PK0063:등갈비 PK0064:토시살 PK0065:오돌삼겹 PK0071:갈비 PK0072:갈비살 PK0073:마구리'
+});
+
+const SM_NATIONAL_PART_CODES = Object.freeze(Object.fromEntries(
+  Object.entries(SM_NATIONAL_PART_CODE_SOURCE).map(([meatType, source]) => [
+    meatType,
+    Object.freeze(source.split(' ').map(token => {
+      const splitAt = token.indexOf(':');
+      return Object.freeze({code:token.slice(0, splitAt), name:token.slice(splitAt + 1)});
+    }))
+  ])
+));
+
+function nationalPartRowsForMeatType(meatType){
+  return SM_NATIONAL_PART_CODES[meatType] || [];
+}
+
+function nationalPartNameForCode(code){
+  const normalized = String(code || '').trim().toUpperCase();
+  for(const rows of Object.values(SM_NATIONAL_PART_CODES)){
+    const found = rows.find(row => row.code === normalized);
+    if(found) return found.name;
+  }
+  return '';
+}
+
+function isNationalPartCodeForMeatType(code, meatType){
+  const normalized = String(code || '').trim().toUpperCase();
+  return nationalPartRowsForMeatType(meatType).some(row => row.code === normalized);
+}
+
+function nationalPartOptionGroupsHtml(meatType, selectedCode=''){
+  const selected = String(selectedCode || '').trim().toUpperCase();
+  const rows = nationalPartRowsForMeatType(meatType);
+  const options = groupRows => groupRows.map(row =>
+    `<option value="${row.code}" ${row.code === selected ? 'selected' : ''}>${row.code} · ${htmlEscape(row.name)}</option>`
+  ).join('');
+  const baseRows = rows.filter(row => row.code.length === 5);
+  const detailRows = rows.filter(row => row.code.length > 5);
+  return '<option value="">-- 국가부위코드 선택 --</option>' +
+    `<optgroup label="대분류">${options(baseRows)}</optgroup>` +
+    `<optgroup label="세부부위">${options(detailRows)}</optgroup>`;
+}
+
+function refreshLabelProductNationalPartSelect(selectedCode){
+  const select = document.getElementById('lp-national-part-code');
+  const meatType = document.getElementById('lp-meattype')?.value || '돼지고기';
+  if(!select) return;
+  const current = String(selectedCode !== undefined ? selectedCode : select.value || '').trim().toUpperCase();
+  select.innerHTML = nationalPartOptionGroupsHtml(meatType, current);
+  select.value = nationalPartRowsForMeatType(meatType).some(row => row.code === current) ? current : '';
+}
+
+function refreshInlineLabelProductNationalPartSelect(idx, selectedCode){
+  const select = document.getElementById(`lp-row-national-part-code-${idx}`);
+  const meatType = document.getElementById(`lp-row-meattype-${idx}`)?.value || '돼지고기';
+  if(!select) return;
+  const current = String(selectedCode !== undefined ? selectedCode : select.value || '').trim().toUpperCase();
+  select.innerHTML = nationalPartOptionGroupsHtml(meatType, current);
+  select.value = nationalPartRowsForMeatType(meatType).some(row => row.code === current) ? current : '';
+}
+
 function sortLabelProductsBy(key){
   if(labelProductSortKey === key){
     labelProductSortDir = labelProductSortDir === 'asc' ? 'desc' : 'asc';
@@ -17519,6 +17645,7 @@ function renderLabelProducts(){
     migrateLabelProducts();
   }
   autoFillLabelProductShelfDaysIfBlank();
+  refreshLabelProductNationalPartSelect();
   // 라벨출력 탭 제품선택 드롭다운도 갱신
   refreshLabelProductSelect();
   refreshTxnManagedProductControls();
@@ -17528,14 +17655,14 @@ function renderLabelProducts(){
     if(countEl) countEl.textContent = '';
     return;
   }
-  // 검색 필터 (제품명·브랜드·공장넘버·원산지·유형·육종·보관·포장단위·품목번호·등급)
+  // 검색 필터 (제품명·브랜드·공장넘버·국가부위코드·원산지·유형·육종·보관·포장단위·품목번호·등급)
   const searchEl = document.getElementById('lp-search');
   const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
   const sorted = labelProducts
     .map((p,i)=>({p,i}))
     .filter(({p})=>{
       if(!q) return true;
-      const text = [p.name,p.brand,p.factoryNo,p.origin,p.kind,p.meattype,p.storage,p.packunit,p.itemno,p.grade]
+      const text = [p.name,p.brand,p.factoryNo,p.nationalPartCode,nationalPartNameForCode(p.nationalPartCode),p.origin,p.kind,p.meattype,p.storage,p.packunit,p.itemno,p.grade]
         .map(v=>String(v||'')).join(' ').toLowerCase();
       return text.includes(q);
     })
@@ -17567,9 +17694,14 @@ function renderLabelProducts(){
           </select>
         </td>
         <td style="text-align:center;">
-          <select id="lp-row-meattype-${i}" style="font-size:11px;padding:3px 5px;">
+          <select id="lp-row-meattype-${i}" onchange="refreshInlineLabelProductNationalPartSelect(${i})" style="font-size:11px;padding:3px 5px;">
             <option value="돼지고기" ${(p.meattype||'돼지고기')==='돼지고기'?'selected':''}>돼지고기</option>
             <option value="소고기" ${(p.meattype||'돼지고기')==='소고기'?'selected':''}>소고기</option>
+          </select>
+        </td>
+        <td style="text-align:center;">
+          <select id="lp-row-national-part-code-${i}" style="font-size:11px;padding:3px 5px;min-width:128px;">
+            ${nationalPartOptionGroupsHtml(p.meattype || '돼지고기', p.nationalPartCode || '')}
           </select>
         </td>
         <td style="text-align:center;">
@@ -17610,6 +17742,7 @@ function renderLabelProducts(){
       <td>${htmlEscape(p.origin||'')}</td>
       <td style="text-align:center;"><span style="${kindStyle}${badgeBase}">${htmlEscape(kind)}</span></td>
       <td style="text-align:center;"><span style="${meatStyle}${badgeBase}">${htmlEscape(meat)}</span></td>
+      <td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap;">${p.nationalPartCode ? `${htmlEscape(p.nationalPartCode)}<div style="font-family:var(--font-main);color:#777;">${htmlEscape(nationalPartNameForCode(p.nationalPartCode))}</div>` : '<span style="color:#aaa;">미지정</span>'}</td>
       <td style="text-align:center;"><span style="${storageStyle}${badgeBase}">${htmlEscape(storage)}</span></td>
       <td style="text-align:center;">${htmlEscape(p.shelfdays||'')}일</td>
       <td style="font-size:11px;">${htmlEscape(p.packunit||'')}</td>
@@ -17632,6 +17765,7 @@ function renderLabelProducts(){
           ${labelProductSortHeader('origin','원산지')}
           ${labelProductSortHeader('kind','유형','text-align:center;')}
           ${labelProductSortHeader('meattype','육종','text-align:center;')}
+          ${labelProductSortHeader('nationalPartCode','국가부위코드','text-align:center;')}
           ${labelProductSortHeader('storage','보관','text-align:center;')}
           ${labelProductSortHeader('shelfdays','소비기한','text-align:center;')}
           ${labelProductSortHeader('packunit','포장단위')}
@@ -17650,7 +17784,7 @@ function refreshLabelProductSelect(){
   const cur = sel.value;
   sel.innerHTML = '<option value="">-- 직접 입력 --</option>' +
     labelProducts.map((p,i) => {
-      const meta = [p.brand, p.factoryNo ? `공장 ${p.factoryNo}` : '', p.origin].filter(Boolean).join(' / ');
+      const meta = [p.brand, p.factoryNo ? `공장 ${p.factoryNo}` : '', p.nationalPartCode ? `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}` : '', p.origin].filter(Boolean).join(' / ');
       return `<option value="${i}">${htmlEscape(p.name||'')}${meta?' ('+htmlEscape(meta)+')':''}</option>`;
     }).join('');
   sel.value = cur;
@@ -17849,15 +17983,23 @@ function saveLabelProduct(){
   const gv = id => (document.getElementById(id)?.value || '').trim();
   const name = gv('lp-name');
   if(!name){ alert('제품명을 입력해 주세요.'); return; }
+  const meatType = document.getElementById('lp-meattype')?.value || '돼지고기';
+  const nationalPartCode = gv('lp-national-part-code').toUpperCase();
+  if(!isNationalPartCodeForMeatType(nationalPartCode, meatType)){
+    alert(`${meatType}에 맞는 국가부위코드를 선택해 주세요.`);
+    return;
+  }
   const editId = gv('lp-edit-id');
   const prod = {
     id:          editId || String(Date.now()),
     name,
     brand:       gv('lp-brand'),
     factoryNo:   gv('lp-factory-no'),
+    nationalPartCode,
+    nationalPartName: nationalPartNameForCode(nationalPartCode),
     origin:      normalizeOriginName(gv('lp-origin')),
     kind:        document.getElementById('lp-kind')?.value || '원료육',
-    meattype:    document.getElementById('lp-meattype')?.value || '돼지고기',
+    meattype:    meatType,
     storage:     document.getElementById('lp-storage')?.value || '냉동',
     shelfdays:   parseInt(gv('lp-shelfdays')) || getDefaultShelfDays(document.getElementById('lp-kind')?.value || '원료육', document.getElementById('lp-storage')?.value || '냉동'),
     packunit:    gv('lp-packunit'),
@@ -17871,6 +18013,7 @@ function saveLabelProduct(){
 제품명: ${prod.name}
 브랜드: ${prod.brand || '-'}
 공장넘버: ${prod.factoryNo || '-'}
+국가부위코드: ${prod.nationalPartCode} ${prod.nationalPartName}
 원산지: ${prod.origin || '-'}
 육종: ${prod.meattype}
 유형: ${prod.kind}
@@ -17903,6 +18046,12 @@ function migrateLabelProducts(){
     if(next.origin){
       const normalized = normalizeOriginName(next.origin);
       if(normalized !== next.origin){ next.origin = normalized; changed = true; }
+    }
+    if(next.nationalPartCode){
+      const normalizedCode = String(next.nationalPartCode).trim().toUpperCase();
+      const normalizedName = nationalPartNameForCode(normalizedCode);
+      if(normalizedCode !== next.nationalPartCode){ next.nationalPartCode = normalizedCode; changed = true; }
+      if(normalizedName && normalizedName !== next.nationalPartName){ next.nationalPartName = normalizedName; changed = true; }
     }
     if(!next.shelfdays){
       next.shelfdays = getDefaultShelfDays(next.kind || '원료육', next.storage || '냉동');
@@ -17944,6 +18093,7 @@ function saveInlineLabelProduct(idx){
     name: gv(`lp-row-name-${idx}`),
     brand: gv(`lp-row-brand-${idx}`),
     factoryNo: gv(`lp-row-factory-no-${idx}`),
+    nationalPartCode: gv(`lp-row-national-part-code-${idx}`).toUpperCase(),
     origin: normalizeOriginName(gv(`lp-row-origin-${idx}`)),
     kind: document.getElementById(`lp-row-kind-${idx}`)?.value || '원료육',
     meattype: document.getElementById(`lp-row-meattype-${idx}`)?.value || '돼지고기',
@@ -17954,6 +18104,11 @@ function saveInlineLabelProduct(idx){
     itemno: gv(`lp-row-itemno-${idx}`),
   };
   if(!next.name){ alert('제품명을 입력해주세요.'); return; }
+  if(!isNationalPartCodeForMeatType(next.nationalPartCode, next.meattype)){
+    alert(`${next.meattype}에 맞는 국가부위코드를 선택해 주세요.`);
+    return;
+  }
+  next.nationalPartName = nationalPartNameForCode(next.nationalPartCode);
   const dupIdx = labelProducts.findIndex((p,i)=>i !== idx && sameLabelProduct(p, next));
   if(dupIdx >= 0){
     alert('이미 같은 품목이 등록되어 있습니다.');
@@ -17975,13 +18130,14 @@ function deleteLabelProduct(idx){
 }
 
 function resetLabelProductForm(){
-  ['lp-edit-id','lp-name','lp-brand','lp-factory-no','lp-packunit','lp-origin','lp-shelfdays','lp-itemno','lp-grade'].forEach(id=>{
+  ['lp-edit-id','lp-name','lp-brand','lp-factory-no','lp-national-part-code','lp-packunit','lp-origin','lp-shelfdays','lp-itemno','lp-grade'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value='';
   });
   const kind = document.getElementById('lp-kind'); if(kind) kind.value='원료육';
   const mt = document.getElementById('lp-meattype'); if(mt) mt.value='돼지고기';
   const st = document.getElementById('lp-storage');  if(st) st.value='냉동';
   autoFillLabelProductShelfDays();
+  refreshLabelProductNationalPartSelect('');
 }
 
 function autoSetExpiry(){
