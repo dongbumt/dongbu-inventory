@@ -275,7 +275,7 @@ begin
   if v_factory_no is not null and char_length(v_factory_no)>100 then raise exception '공장넘버는 100자 이내로 입력해주세요.'; end if;
   if v_origin is not null and char_length(v_origin)>100 then raise exception '원산지는 100자 이내로 입력해주세요.'; end if;
   if v_kind not in ('원료육','제품') then raise exception '품목 유형을 확인해주세요.'; end if;
-  if v_meat_type not in ('소고기','돼지고기','기타 축종') then raise exception '육종을 확인해주세요.'; end if;
+  if v_meat_type not in ('소고기','돼지고기','가금류','양고기','오리고기','기타 축종') then raise exception '육종을 확인해주세요.'; end if;
   if v_storage not in ('냉동','냉장') then raise exception '보관방법을 확인해주세요.'; end if;
   if v_shelf_days not between 1 and 3650 then raise exception '소비기한은 1~3650일로 입력해주세요.'; end if;
   if v_meat_type in ('소고기','돼지고기') and coalesce(v_part_code,'')='' then
@@ -284,7 +284,7 @@ begin
   if v_part_code is not null and v_part_code !~ '^[A-Z0-9]{2,20}$' then
     raise exception '국가부위코드 형식을 확인해주세요.';
   end if;
-  if v_meat_type='기타 축종' then
+  if v_meat_type not in ('소고기','돼지고기') then
     v_part_code:=null; v_part_name:=null; v_part_scheme:=null;
   end if;
   if exists(

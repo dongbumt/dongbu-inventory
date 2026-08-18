@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260814m03a">
+<link rel="stylesheet" href="styles/main.css?v=20260818m04b">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -1144,10 +1144,12 @@
     </div>
     <div class="stat-grid" id="stock-stats"></div>
     <div class="tbl-wrap">
-      <table>
+      <table id="stock-table">
         <thead><tr>
-          <th onclick="stockSort('stockLocation')" style="cursor:pointer;user-select:none;">지점 <span id="ss-stockLocation"></span></th>
+          <th class="stock-col-location" onclick="stockSort('stockLocation')" style="cursor:pointer;user-select:none;">지점 <span id="ss-stockLocation"></span></th>
           <th onclick="stockSort('product')" style="cursor:pointer;user-select:none;">품목명 <span id="ss-product">▲</span></th>
+          <th onclick="stockSort('brand')" style="cursor:pointer;user-select:none;">브랜드 <span id="ss-brand"></span></th>
+          <th onclick="stockSort('grade')" style="cursor:pointer;user-select:none;">등급 <span id="ss-grade"></span></th>
           <th onclick="stockSort('lot')" style="cursor:pointer;user-select:none;">이력번호 <span id="ss-lot"></span></th>
           <th onclick="stockSort('proddate')" style="cursor:pointer;user-select:none;">생산일 <span id="ss-proddate"></span></th>
           <th onclick="stockSort('origin')" style="cursor:pointer;user-select:none;">원산지 <span id="ss-origin"></span></th>
@@ -1159,7 +1161,7 @@
           <th onclick="stockSort('price')" style="text-align:right;cursor:pointer;user-select:none;">단가 <span id="ss-price"></span></th>
           <th onclick="stockSort('stock_amount')" style="text-align:right;cursor:pointer;user-select:none;">재고금액 <span id="ss-stock_amount"></span></th>
           <th>상태</th>
-          <th id="stock-manage-head">관리</th>
+          <th id="stock-manage-head" class="stock-col-manage">관리</th>
         </tr></thead>
         <tbody id="stock-body"></tbody>
       </table>
@@ -3207,7 +3209,9 @@
             <select id="lp-meattype" onchange="refreshLabelProductNationalPartSelect()" style="font-size:13px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;">
               <option value="돼지고기">돼지고기</option>
               <option value="소고기">소고기</option>
-              <option value="기타 축종">기타 축종 (양고기·가금류 등)</option>
+              <option value="가금류">가금류 (닭 등)</option>
+              <option value="양고기">양고기</option>
+              <option value="오리고기">오리고기</option>
             </select>
           </div>
           <div class="form-group">
@@ -4581,7 +4585,7 @@ const APP_DATA_REGISTRY = {
   expenseList:   { get:()=>expenseList,   set:v=>{ expenseList=v; },   ls:'dbmt_expenses'    },
   costCalcHistory:  { get:()=>costCalcHistory,  set:v=>{ costCalcHistory=v; },  ls:'dbmt_costcalc'         },
   labelTemplates:   { get:()=>labelTemplates,   set:v=>{ labelTemplates=v; },   ls:'dbmt_label_templates'  },
-  labelProducts:    { get:()=>labelProducts,    set:v=>{ labelProducts=v; },    ls:'dbmt_label_products', readOnly:true },
+  labelProducts:    { get:()=>labelProducts,    set:v=>{ labelProducts=v; invalidateStockMap(); },    ls:'dbmt_label_products', readOnly:true },
   workOrders:       { get:()=>workOrders,       set:v=>{ workOrders=v; },       ls:'dbmt_work_orders'      },
   labelPrintLogs:   { get:()=>labelPrintLogs,   set:v=>{ labelPrintLogs=v; },   ls:'dbmt_label_print_logs', readOnly:true },
   subMaterialItems: { get:()=>subMaterialItems, set:v=>{ subMaterialItems=v; }, ls:'dbmt_submaterial_items' },
@@ -6638,7 +6642,7 @@ function renderManagedProductSuggestions(){
     return;
   }
   box.innerHTML = rows.slice(0, 80).map(p => {
-    const sub = [p.productCode && `코드 ${p.productCode}`, p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
+    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.grade && `등급 ${p.grade}`, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
     return `<button type="button" onclick="selectManagedProduct(${jsArg(p.id)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
@@ -7091,6 +7095,7 @@ function getStockMap(){
     if(row.nationalPartCode && !bucket.nationalPartCode) bucket.nationalPartCode = row.nationalPartCode;
     if(row.nationalPartName && !bucket.nationalPartName) bucket.nationalPartName = row.nationalPartName;
     if(row.taxType && !bucket.taxType) bucket.taxType = normalizeLabelProductTaxType(row.taxType);
+    if(row.grade && !bucket.grade) bucket.grade = row.grade;
     return bucket;
   };
 
@@ -7214,6 +7219,24 @@ function getStockMap(){
         fallback.stock -= remaining;
       }
     }
+  });
+  // 과거 재고행은 품목 스냅샷이 없을 수 있다. 영구 ID/제품코드 또는 유일하게
+  // 식별되는 품목만 마스터와 연결해 브랜드·등급을 보완한다.
+  Object.values(map).forEach(bucket=>{
+    let managed = null;
+    const managedId = bucket.labelProductId || bucket.productId || '';
+    if(managedId) managed = labelProducts.find(p=>String(p.id||'')===String(managedId));
+    if(!managed && bucket.productCode) managed = labelProducts.find(p=>String(p.productCode||'')===String(bucket.productCode));
+    if(!managed){
+      let candidates = labelProducts.filter(p=>samePriceText(p.name,bucket.product));
+      if(bucket.origin) candidates = candidates.filter(p=>sameOriginText(p.origin,bucket.origin));
+      if(bucket.packunit) candidates = candidates.filter(p=>samePriceText(p.packunit,bucket.packunit));
+      if(bucket.brand) candidates = candidates.filter(p=>samePriceText(p.brand,bucket.brand));
+      if(candidates.length===1) managed=candidates[0];
+    }
+    if(managed) applyBucketProductMeta(bucket,managed);
+    if(bucket.brand===undefined) bucket.brand='';
+    if(bucket.grade===undefined) bucket.grade='';
   });
   _stockMapCache = map;
   return map;
@@ -7672,6 +7695,7 @@ async function addTransaction(){
         t.nationalPartCode=transactionProductMeta.nationalPartCode || '';
         t.nationalPartName=transactionProductMeta.nationalPartName || nationalPartNameForCode(transactionProductMeta.nationalPartCode);
         t.taxType=normalizeLabelProductTaxType(transactionProductMeta.taxType);
+        t.grade=transactionProductMeta.grade || '';
       }
       t.trader=trader; t.lot=lot; t.proddate=proddateForSave;
       t.weight=weight; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
@@ -7694,6 +7718,7 @@ async function addTransaction(){
       nationalPartCode:transactionProductMeta?.nationalPartCode || '',
       nationalPartName:transactionProductMeta?.nationalPartName || nationalPartNameForCode(transactionProductMeta?.nationalPartCode),
       taxType:normalizeLabelProductTaxType(transactionProductMeta?.taxType),
+      grade:transactionProductMeta?.grade || '',
       trader,lot,proddate:proddateForSave,weight,note,storage,price,amount:Math.round(price*weight),
       stockUnitPrice: selectedStock ? parseAppNumber(selectedStock.price) : '',
       stockProddate: selectedStock ? (selectedStock.proddate || proddateForSave || '') : '',
@@ -7799,7 +7824,7 @@ function bulkProductWrap(inp){
   return inp.closest('td') || inp.closest('.form-group') || inp.parentElement;
 }
 function bulkProductLabel(p){
-  return `${p.productCode ? p.productCode+' / ' : ''}${p.name||''}${p.brand?' / '+p.brand:''}${p.factoryNo?' / 공장 '+p.factoryNo:''}${p.nationalPartCode?' / '+p.nationalPartCode+' '+nationalPartNameForCode(p.nationalPartCode):''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
+  return `${p.name||''}${p.brand?' / '+p.brand:''}${p.factoryNo?' / 공장 '+p.factoryNo:''}${p.grade?' / 등급 '+p.grade:''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
 }
 function onBulkProductSearch(inp, isInput){
   const wrap = bulkProductWrap(inp);
@@ -7829,7 +7854,7 @@ function onBulkProductSearch(inp, isInput){
   } else {
     box.innerHTML = list.map(p =>
       `<div class="bulk-prod-opt" data-id="${htmlEscape(String(p.id))}" style="padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
-        <strong>${htmlEscape(p.productCode ? p.productCode+' · ' : '')}${htmlEscape(p.name||'')}</strong><span style="color:#888;">${p.brand?' / '+htmlEscape(p.brand):''}${p.factoryNo?' / 공장 '+htmlEscape(p.factoryNo):''}${p.nationalPartCode?' / '+htmlEscape(p.nationalPartCode)+' '+htmlEscape(nationalPartNameForCode(p.nationalPartCode)):''} / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
+        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;">${p.brand?' / '+htmlEscape(p.brand):''}${p.factoryNo?' / 공장 '+htmlEscape(p.factoryNo):''}${p.grade?' / 등급 '+htmlEscape(p.grade):''} / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
       </div>`
     ).join('');
     box.querySelectorAll('.bulk-prod-opt').forEach(opt => {
@@ -9008,7 +9033,7 @@ function labelProductPackUnitText(p){
 }
 
 function labelProductSearchText(p){
-  return [p?.productCode, p?.name, p?.brand, p?.factoryNo, p?.nationalPartCode, nationalPartNameForCode(p?.nationalPartCode), p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
+  return [p?.productCode, p?.name, p?.brand, p?.factoryNo, p?.nationalPartCode, nationalPartNameForCode(p?.nationalPartCode), p?.grade, p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
 }
 
 function findLabelProductForProduction(name, packunit='', productId=''){
@@ -9072,7 +9097,7 @@ function renderProdOutProductSuggestions(id){
 
   box.innerHTML = items.slice(0, 80).map(({p, idx})=>{
     const pack = labelProductPackUnitText(p);
-    const sub = [p.productCode && `코드 ${p.productCode}`, p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, p.kind || '원료육', normalizeOriginName(p.origin), p.storage || '냉동', pack && `포장 ${pack}`].filter(Boolean).join(' · ');
+    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.grade && `등급 ${p.grade}`, p.kind || '원료육', normalizeOriginName(p.origin), p.storage || '냉동', pack && `포장 ${pack}`].filter(Boolean).join(' · ');
     return `<button type="button" onpointerdown="event.preventDefault()" onclick="selectProdOutProduct(${id},${idx})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}${pack ? ` <span style="font-size:11px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 6px;">${htmlEscape(pack)}</span>` : ''}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
@@ -9190,6 +9215,7 @@ async function saveProdEntry(){
         nationalPartCode: registered.nationalPartCode || '',
         nationalPartName: nationalPartNameForCode(registered.nationalPartCode),
         taxType: normalizeLabelProductTaxType(registered.taxType),
+        grade: registered.grade || '',
         packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta
       });
     }
@@ -9218,6 +9244,7 @@ async function saveProdEntry(){
       brand:o.brand, factoryNo:o.factoryNo,
       nationalPartCode:o.nationalPartCode, nationalPartName:o.nationalPartName,
       taxType:o.taxType,
+      grade:o.grade || '',
       packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin, samsung:o.samsung
     };
   });
@@ -9283,6 +9310,7 @@ async function saveProdEntry(){
         brand:out.brand||'', factoryNo:out.factoryNo||'',
         nationalPartCode:out.nationalPartCode||'', nationalPartName:out.nationalPartName||'',
         taxType:normalizeLabelProductTaxType(out.taxType),
+        grade:out.grade||'',
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
         note:`${jobType}완료 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         stockLocation: STOCK_LOCATION_DEFAULT,
@@ -9920,20 +9948,20 @@ function renderStock(){
   if(locationFilter) rows=rows.filter(s=>stockLocationKey(s.stockLocation || '') === stockLocationKey(locationFilter));
   // 전체('')는 필터 없음
 
-  if(q) rows=rows.filter(s=>(s.stockLocation+s.product+(s.packunit||'')+s.lot+(s.proddate||'')+s.origin+String(s.price||'')).toLowerCase().includes(q));
+  if(q) rows=rows.filter(s=>(s.stockLocation+s.product+(s.brand||'')+(s.grade||'')+(s.packunit||'')+s.lot+(s.proddate||'')+s.origin+String(s.price||'')).toLowerCase().includes(q));
 
   // 정렬: 클릭한 열 기준 오름차순/내림차순
   const _dir = stockSortDir === 'asc' ? 1 : -1;
   rows.sort((a,b)=>{
     const k = stockSortKey;
-    if(k==='product'||k==='lot'||k==='origin'||k==='proddate'||k==='stockLocation')
+    if(k==='product'||k==='brand'||k==='grade'||k==='lot'||k==='origin'||k==='proddate'||k==='stockLocation')
       return _dir * String(a[k]||'').localeCompare(String(b[k]||''),'ko');
     if(k==='stock_amount')
       return _dir * (((a.stock||0) * (a.price||0)) - ((b.stock||0) * (b.price||0)));
     return _dir * ((a[k]||0) - (b[k]||0));
   });
   // 정렬 표시(▲▼) 업데이트
-  ['stockLocation','product','lot','proddate','origin','price','total_in','total_use','total_out','total_adjust','stock','stock_amount'].forEach(k=>{
+  ['stockLocation','product','brand','grade','lot','proddate','origin','price','total_in','total_use','total_out','total_adjust','stock','stock_amount'].forEach(k=>{
     const el=document.getElementById('ss-'+k);
     if(el) el.textContent = k===stockSortKey ? (stockSortDir==='asc'?'▲':'▼') : '';
   });
@@ -9957,7 +9985,7 @@ function renderStock(){
 
   const b=document.getElementById('stock-body');
   if(!rows.length){
-    b.innerHTML=`<tr><td colspan="${canAdjustStock ? 14 : 13}" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>`;
+    b.innerHTML=`<tr><td colspan="${canAdjustStock ? 16 : 15}" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>`;
     return;
   }
   b.innerHTML=rows.map(s=>{
@@ -9969,11 +9997,13 @@ function renderStock(){
     const stkStyle=isMinus?'text-align:right;font-weight:700;color:#e74c3c':'text-align:right;font-weight:700';
     const rowBg=isMinus?'background:#fff5f5;':'';
     return `<tr style="${rowBg}">
-      <td style="white-space:nowrap;"><span style="font-size:11px;color:#6c3483;border:1px solid #eadcf8;border-radius:4px;padding:1px 6px;background:#fbf8ff;">${htmlEscape(s.stockLocation || STOCK_LOCATION_DEFAULT)}</span></td>
-      <td>${s.product}${s.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(s.packunit)}</span>`:''}</td>
-      <td style="font-family:monospace;font-size:11px">${s.lot||'-'}</td>
+      <td class="stock-col-location"><span class="stock-location-badge">${htmlEscape(s.stockLocation || STOCK_LOCATION_DEFAULT)}</span></td>
+      <td>${htmlEscape(s.product||'')}${s.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(s.packunit)}</span>`:''}</td>
+      <td>${htmlEscape(s.brand||'-')}</td>
+      <td>${htmlEscape(s.grade||'-')}</td>
+      <td style="font-family:monospace;font-size:11px">${htmlEscape(s.lot||'-')}</td>
       <td style="font-size:11px;white-space:nowrap;">${s.proddate||'-'}</td>
-      <td>${s.origin||'-'}</td>
+      <td>${htmlEscape(s.origin||'-')}</td>
       <td style="text-align:right">${(s.total_in||0).toFixed(2)}</td>
       <td style="text-align:right">${(s.total_use||0).toFixed(2)}</td>
       <td style="text-align:right">${(s.total_out||0).toFixed(2)}</td>
@@ -9982,7 +10012,7 @@ function renderStock(){
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
-      ${canAdjustStock ? `<td><button class="btn btn-sm" style="background:#3440a0;color:#fff;" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)})">정리</button></td>` : ''}
+      ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)})">정리</button></td>` : ''}
     </tr>`;
   }).join('');
 }
@@ -12097,9 +12127,9 @@ function exportProductionCSV(){
   downloadCSV(rows, fname);
 }
 function exportStockCSV(){
-  const header=['지점','품목명','이력번호','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고'];
+  const header=['지점','품목명','브랜드','등급','이력번호','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고'];
   const rows=Object.values(getStockMap()).map(r=>[
-    r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.lot||'',r.origin||'',
+    r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.brand||'',r.grade||'',r.lot||'',r.origin||'',
     Number(r.total_in||0).toFixed(2),
     Number(r.total_use||0).toFixed(2),
     Number(r.total_out||0).toFixed(2),
@@ -17634,6 +17664,14 @@ function nationalPartSchemeForProduct(meatType, origin){
   return meatType === '소고기' ? 'import_beef' : 'import_pork';
 }
 
+function usesNationalPartCode(meatType){
+  return meatType === '소고기' || meatType === '돼지고기';
+}
+
+function productSpeciesPrefixForMeatType(meatType){
+  return meatType === '소고기' ? 1 : (meatType === '돼지고기' ? 2 : 3);
+}
+
 function nationalPartRowsForProduct(meatType, origin){
   return SM_NATIONAL_PART_CODES[nationalPartSchemeForProduct(meatType, origin)] || [];
 }
@@ -17655,7 +17693,7 @@ function isNationalPartCodeForProduct(code, meatType, origin){
 function nationalPartOptionGroupsHtml(meatType, origin, selectedCode=''){
   const selected = String(selectedCode || '').trim().toUpperCase();
   const rows = nationalPartRowsForProduct(meatType, origin);
-  if(!rows.length) return '<option value="">-- 기타 축종은 국가부위코드 미사용 --</option>';
+  if(!rows.length) return '<option value="">-- 해당 육종은 국가부위코드 미사용 --</option>';
   const options = groupRows => groupRows.map(row =>
     `<option value="${row.code}" ${row.code === selected ? 'selected' : ''}>${row.code} · ${htmlEscape(row.name)}</option>`
   ).join('');
@@ -17767,7 +17805,7 @@ function renderLabelProducts(){
       isNationalPartCodeForProduct(p.nationalPartCode, p.meattype || '돼지고기', p.origin || '');
     const partCodeHtml = p.nationalPartCode
       ? `${htmlEscape(p.nationalPartCode)}<div style="font-family:var(--font-main);color:#777;">${htmlEscape(nationalPartNameForCode(p.nationalPartCode))}</div>${partCodeCompatible ? '' : '<div style="font-family:var(--font-main);color:#c0392b;font-weight:700;">⚠ 원산지 불일치</div>'}`
-      : (meat === '기타 축종' ? '<span style="color:#888;">미사용</span>' : '<span style="color:#aaa;">미지정</span>');
+      : (!usesNationalPartCode(meat) ? '<span style="color:#888;">미사용</span>' : '<span style="color:#aaa;">미지정</span>');
     return `
     <tr>
       <td style="text-align:center;">${displayIdx+1}</td>
@@ -18026,6 +18064,7 @@ function sameLabelProduct(a, b){
 function applyLabelProductServerResult(result){
   assertPersonalServerResult(result, '품목을 저장할 권한이 없습니다.');
   if(Array.isArray(result.products)) labelProducts = result.products;
+  invalidateStockMap();
   safeLocalStorageSet('dbmt_label_products', JSON.stringify(labelProducts), true);
   if(result.logEntry){
     dataChangeLogs = [result.logEntry, ...dataChangeLogs.filter(row=>row?.id !== result.logEntry.id)];
@@ -18041,7 +18080,7 @@ async function saveLabelProduct(){
   const meatType = document.getElementById('lp-meattype')?.value || '돼지고기';
   const origin = normalizeOriginName(gv('lp-origin'));
   const nationalPartCode = gv('lp-national-part-code').toUpperCase();
-  if(meatType !== '기타 축종' && !isNationalPartCodeForProduct(nationalPartCode, meatType, origin)){
+  if(usesNationalPartCode(meatType) && !isNationalPartCodeForProduct(nationalPartCode, meatType, origin)){
     const originLabel = isDomesticOrigin(origin) ? '국내산' : '수입산';
     alert(`${originLabel} ${meatType}에 맞는 국가부위코드를 선택해 주세요.`);
     return;
@@ -18050,7 +18089,7 @@ async function saveLabelProduct(){
   const existingProduct = editId
     ? labelProducts.find(p => String(p.id || '') === String(editId))
     : null;
-  if(existingProduct?.productCode && existingProduct.meattype !== meatType){
+  if(existingProduct?.productCode && productSpeciesPrefixForMeatType(existingProduct.meattype) !== productSpeciesPrefixForMeatType(meatType)){
     alert(`제품코드 ${existingProduct.productCode}의 육종은 변경할 수 없습니다.\n\n다른 육종은 새 품목으로 등록해주세요.`);
     return;
   }
@@ -18061,9 +18100,9 @@ async function saveLabelProduct(){
     name,
     brand:       gv('lp-brand'),
     factoryNo:   gv('lp-factory-no'),
-    nationalPartCode: meatType === '기타 축종' ? '' : nationalPartCode,
-    nationalPartName: meatType === '기타 축종' ? '' : nationalPartNameForCode(nationalPartCode),
-    nationalPartScheme: meatType === '기타 축종' ? '' : nationalPartSchemeForProduct(meatType, origin),
+    nationalPartCode: usesNationalPartCode(meatType) ? nationalPartCode : '',
+    nationalPartName: usesNationalPartCode(meatType) ? nationalPartNameForCode(nationalPartCode) : '',
+    nationalPartScheme: usesNationalPartCode(meatType) ? nationalPartSchemeForProduct(meatType, origin) : '',
     origin,
     kind:        document.getElementById('lp-kind')?.value || '원료육',
     taxType:     normalizeLabelProductTaxType(document.getElementById('lp-tax-type')?.value),

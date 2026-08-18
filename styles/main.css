@@ -140,6 +140,12 @@
     color:var(--text);vertical-align:middle;}
   /* 단가표 행높이 축소 (기본의 80%) */
   #p-prices td{padding:7px 10px;}
+  #stock-table{min-width:1320px;}
+  #stock-table th,#stock-table td{padding:8px 7px;white-space:nowrap;}
+  #stock-table .stock-col-location{width:58px;max-width:64px;padding-left:4px;padding-right:4px;font-size:10px;text-align:center;}
+  #stock-table .stock-location-badge{display:inline-block;font-size:9px;color:#4f5965;border:1px solid #d7dce2;border-radius:4px;padding:1px 4px;background:#f6f7f8;}
+  #stock-table .stock-col-manage{width:42px;max-width:42px;padding-left:3px;padding-right:3px;text-align:center;}
+  #stock-table .stock-adjust-btn{min-width:32px;padding:3px 5px;border-radius:5px;background:#3440a0;color:#fff;font-size:10px;}
 
   /* 거래처 기준정보: 한 거래처를 기본정보/상세정보 2개 행으로 표시 */
   #traders-table{min-width:985px;table-layout:fixed;}

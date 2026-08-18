@@ -223,6 +223,10 @@ dedicated personal-session RPC, cannot be edited, and remain reserved after a
 product is deleted. The legacy shared-password app-data RPC can no longer
 replace `labelProducts` after this migration.
 
+Apply `20260818090000_product_species_details.sql` after it. It separates the
+`3xxxxx` family into `가금류`, `양고기`, and `오리고기` choices while keeping
+the same permanent `3xxxxx` code sequence for all three.
+
 ## 3. Document request delivery
 
 The `send-document-request` Edge Function sends document requests through Daum
