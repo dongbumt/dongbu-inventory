@@ -6642,7 +6642,7 @@ function renderManagedProductSuggestions(){
     return;
   }
   box.innerHTML = rows.slice(0, 80).map(p => {
-    const sub = [p.brand && `브랜드 ${p.brand}`, p.factoryNo && `공장 ${p.factoryNo}`, p.grade && `등급 ${p.grade}`, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
+    const sub = [p.brand, p.factoryNo, p.grade, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
     return `<button type="button" onclick="selectManagedProduct(${jsArg(p.id)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}</div>
       <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
@@ -7824,7 +7824,7 @@ function bulkProductWrap(inp){
   return inp.closest('td') || inp.closest('.form-group') || inp.parentElement;
 }
 function bulkProductLabel(p){
-  return `${p.name||''}${p.brand?' / '+p.brand:''}${p.factoryNo?' / 공장 '+p.factoryNo:''}${p.grade?' / 등급 '+p.grade:''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
+  return `${p.name||''}${p.brand?' / '+p.brand:''}${p.factoryNo?' / '+p.factoryNo:''}${p.grade?' / '+p.grade:''} / ${p.origin||'-'} / ${p.storage||'-'}${p.packunit?' / '+p.packunit:''}`;
 }
 function onBulkProductSearch(inp, isInput){
   const wrap = bulkProductWrap(inp);
@@ -7854,7 +7854,7 @@ function onBulkProductSearch(inp, isInput){
   } else {
     box.innerHTML = list.map(p =>
       `<div class="bulk-prod-opt" data-id="${htmlEscape(String(p.id))}" style="padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
-        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;">${p.brand?' / '+htmlEscape(p.brand):''}${p.factoryNo?' / 공장 '+htmlEscape(p.factoryNo):''}${p.grade?' / 등급 '+htmlEscape(p.grade):''} / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
+        <strong>${htmlEscape(p.name||'')}</strong><span style="color:#888;">${p.brand?' / '+htmlEscape(p.brand):''}${p.factoryNo?' / '+htmlEscape(p.factoryNo):''}${p.grade?' / '+htmlEscape(p.grade):''} / ${htmlEscape(p.origin||'-')} / ${htmlEscape(p.storage||'-')}${p.packunit?' / '+htmlEscape(p.packunit):''}</span>
       </div>`
     ).join('');
     box.querySelectorAll('.bulk-prod-opt').forEach(opt => {
