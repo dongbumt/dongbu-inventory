@@ -435,6 +435,36 @@ begin
 end;
 $dbmt$;
 
+create or replace function public.dbmt_guard_product_species_immutability()
+returns trigger
+language plpgsql
+set search_path = public, extensions
+as $dbmt$
+begin
+  if old.key='labelProducts' and new.key='labelProducts'
+    and jsonb_typeof(old.payload)='array' and jsonb_typeof(new.payload)='array'
+    and exists(
+      select 1
+      from jsonb_array_elements(old.payload) old_product
+      join jsonb_array_elements(new.payload) new_product
+        on new_product->>'id'=old_product->>'id'
+      where btrim(coalesce(old_product->>'meattype','돼지고기'))
+        <> btrim(coalesce(new_product->>'meattype','돼지고기'))
+    )
+  then
+    raise exception '등록된 품목의 육종은 변경할 수 없습니다. 다른 육종은 새 품목으로 등록해주세요.';
+  end if;
+  return new;
+end;
+$dbmt$;
+
+drop trigger if exists trg_dbmt_product_species_immutable on public.app_data;
+create trigger trg_dbmt_product_species_immutable
+before update of payload on public.app_data
+for each row
+when (old.key='labelProducts')
+execute function public.dbmt_guard_product_species_immutability();
+
 -- Product master writes now require a personal session and the dedicated RPC.
 create or replace function public.dbmt_import_app_data(p_password text, p_payload jsonb)
 returns jsonb
@@ -467,6 +497,7 @@ revoke all on function public.dbmt_product_species_prefix(text) from public, ano
 revoke all on function public.dbmt_ensure_product_codes(jsonb) from public, anon, authenticated;
 revoke all on function public.dbmt_erp_save_label_product(text,jsonb) from public;
 revoke all on function public.dbmt_erp_delete_label_product(text,text,text) from public;
+revoke all on function public.dbmt_guard_product_species_immutability() from public, anon, authenticated;
 grant execute on function public.dbmt_erp_save_label_product(text,jsonb) to anon, authenticated;
 grant execute on function public.dbmt_erp_delete_label_product(text,text,text) to anon, authenticated;
 grant execute on function public.dbmt_import_app_data(text,jsonb) to anon, authenticated;

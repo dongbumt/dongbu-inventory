@@ -17668,10 +17668,6 @@ function usesNationalPartCode(meatType){
   return meatType === '소고기' || meatType === '돼지고기';
 }
 
-function productSpeciesPrefixForMeatType(meatType){
-  return meatType === '소고기' ? 1 : (meatType === '돼지고기' ? 2 : 3);
-}
-
 function nationalPartRowsForProduct(meatType, origin){
   return SM_NATIONAL_PART_CODES[nationalPartSchemeForProduct(meatType, origin)] || [];
 }
@@ -18089,7 +18085,7 @@ async function saveLabelProduct(){
   const existingProduct = editId
     ? labelProducts.find(p => String(p.id || '') === String(editId))
     : null;
-  if(existingProduct?.productCode && productSpeciesPrefixForMeatType(existingProduct.meattype) !== productSpeciesPrefixForMeatType(meatType)){
+  if(existingProduct?.productCode && existingProduct.meattype !== meatType){
     alert(`제품코드 ${existingProduct.productCode}의 육종은 변경할 수 없습니다.\n\n다른 육종은 새 품목으로 등록해주세요.`);
     return;
   }
