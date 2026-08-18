@@ -280,7 +280,33 @@ must be rejected.
 Use `BAROBILL_ENV=test` until test fax delivery is verified. Change it to
 `production` only after the Barobill production account and balance are ready.
 
-## 4. Project values
+## 4. MeatWatch imported-meat processing-date lookup
+
+The `meatwatch-lookup` Edge Function is the first M05 integration. A personally
+logged-in user with transaction create/update permission can query one imported
+meat trace number. The browser receives only the earliest export-country
+processing date, the range end date, and the query time. The selected product's
+`shelfdays` is then applied in the ERP and the calculated date is written to the
+transaction note as `소비기한: YYYY-MM-DD`. Other MeatWatch response fields are
+not copied into the transaction.
+
+Set the registered MeatWatch system identifier as a server-only secret:
+
+```text
+MEATWATCH_SYS_ID
+```
+
+Do not put the identifier in HTML or browser JavaScript. Deploy with:
+
+```powershell
+npx supabase functions deploy meatwatch-lookup --no-verify-jwt
+```
+
+`verify_jwt` is disabled because the ERP uses its own short-lived personal
+session token. The function validates that token and the transaction permission
+on the server before calling MeatWatch.
+
+## 5. Project values
 
 Current project URL:
 

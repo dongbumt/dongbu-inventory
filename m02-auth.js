@@ -68,6 +68,7 @@
     deleteSamsungVendorProduct:['samsung','delete'],
 
     addTransaction:['transactions','write'],
+    lookupImportedMeatExpiry:['transactions','write'],
     saveBulkInbound:['transactions','create'],
     saveBulkOutbound:['transactions','create'],
     saveEditTxn:['transactions','update'],
@@ -278,6 +279,7 @@
       window.renderStock();
     }
     applyActionPermissions();
+    if(typeof window.updateMeatwatchLookupState === 'function') window.updateMeatwatchLookupState();
   }
 
   function policyForElement(el){

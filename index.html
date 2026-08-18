@@ -593,7 +593,7 @@
     <div class="form-row">
       <div class="form-group"><label>날짜</label><input type="date" id="t-date"></div>
       <div class="form-group"><label>구분</label>
-        <select id="t-type" onchange="updateTransactionForm()">
+        <select id="t-type" onchange="clearMeatwatchLookupResult({removeNote:true});updateTransactionForm()">
           <option value="입고">입고</option>
           <option value="출고">출고</option>
           <option value="사용">사용</option>
@@ -638,7 +638,7 @@
       </div>
       <div class="form-group" id="t-storage-managed-wrap" style="display:none;">
         <label>보관</label>
-        <select id="t-storage-managed" onchange="autoFillTxnPrice()">
+        <select id="t-storage-managed" onchange="clearMeatwatchLookupResult({removeNote:true});autoFillTxnPrice();updateMeatwatchLookupState()">
           <option value="">-- 냉동/냉장 선택 --</option>
           <option value="냉동">냉동</option>
           <option value="냉장">냉장</option>
@@ -669,9 +669,15 @@
     <div class="form-row">
       <div class="form-group t-trader"><label>거래처</label><input id="t-trader" list="trader-list" placeholder="거래처명" oninput="autoFillTxnPrice()"></div>
       <div class="form-group"><label>이력번호</label>
-        <div style="position:relative;">
-          <input id="t-lot" placeholder="LOT번호 (출고 시 아래 목록 선택)" oninput="clearTxnStockSelection()">
+        <div style="display:flex;gap:5px;align-items:center;">
+          <input id="t-lot" placeholder="LOT번호 (출고 시 아래 목록 선택)" oninput="clearTxnStockSelection();clearMeatwatchLookupResult({removeNote:true});updateMeatwatchLookupState()" style="min-width:0;flex:1;">
+          <button type="button" id="t-meatwatch-lookup-btn" class="btn btn-secondary btn-sm" onclick="lookupImportedMeatExpiry()" style="display:none;white-space:nowrap;padding:6px 8px;">가공일 조회</button>
         </div>
+        <input type="hidden" id="t-meatwatch-process-begin">
+        <input type="hidden" id="t-meatwatch-process-end">
+        <input type="hidden" id="t-meatwatch-expiry">
+        <input type="hidden" id="t-meatwatch-queried-at">
+        <div id="t-meatwatch-status" style="display:none;margin-top:4px;font-size:10px;line-height:1.35;color:#666;"></div>
       </div>
       <div class="form-group t-proddate" style="display:none"><label>생산일</label><input type="date" id="t-proddate" oninput="clearTxnStockSelection()"></div>
       <div class="form-group"><label>중량(KG)</label><input type="number" id="t-weight" placeholder="0.00" step="0.01" oninput="autoFillTxnPrice()"></div>
@@ -6527,6 +6533,7 @@ function updateTransactionForm(){
     updateOriginList(); // 입고 시에도 원산지 datalist 갱신
   }
   autoFillTxnPrice();
+  if(typeof updateMeatwatchLookupState === 'function') updateMeatwatchLookupState();
 }
 
 function normalizeOriginName(value){
@@ -6618,6 +6625,7 @@ function hideManagedProductSuggestionsSoon(){
 }
 
 function onManagedProductSearch(){
+  if(typeof clearMeatwatchLookupResult === 'function') clearMeatwatchLookupResult({removeNote:true});
   const input = document.getElementById('t-product-managed');
   const hidden = document.getElementById('t-label-product-id');
   if(hidden?.value){
@@ -6652,6 +6660,7 @@ function renderManagedProductSuggestions(){
 }
 
 function selectManagedProduct(productId){
+  if(typeof clearMeatwatchLookupResult === 'function') clearMeatwatchLookupResult({removeNote:true});
   const product = labelProducts.find(p => String(p.id || '') === String(productId || ''));
   if(!product) return;
   const input = document.getElementById('t-product-managed');
@@ -6662,6 +6671,7 @@ function selectManagedProduct(productId){
   if(box) box.style.display = 'none';
   refreshTxnManagedProductControls(product.name, product.origin, product.storage, product.id);
   autoFillTxnPrice();
+  if(typeof updateMeatwatchLookupState === 'function') updateMeatwatchLookupState();
 }
 
 function onManagedProductChange(){
@@ -6670,8 +6680,10 @@ function onManagedProductChange(){
 }
 
 function onManagedOriginChange(){
+  if(typeof clearMeatwatchLookupResult === 'function') clearMeatwatchLookupResult({removeNote:true});
   refreshTxnManagedProductControls();
   autoFillTxnPrice();
+  if(typeof updateMeatwatchLookupState === 'function') updateMeatwatchLookupState();
 }
 
 function updateOutProductList(){
@@ -7699,6 +7711,10 @@ async function addTransaction(){
       }
       t.trader=trader; t.lot=lot; t.proddate=proddateForSave;
       t.weight=weight; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
+      t.meatwatchProcessBeginDate=document.getElementById('t-meatwatch-process-begin')?.value || '';
+      t.meatwatchProcessEndDate=document.getElementById('t-meatwatch-process-end')?.value || '';
+      t.meatwatchExpiryDate=document.getElementById('t-meatwatch-expiry')?.value || '';
+      t.meatwatchQueriedAt=document.getElementById('t-meatwatch-queried-at')?.value || '';
       t.stockUnitPrice = selectedStock ? parseAppNumber(selectedStock.price) : '';
       t.stockProddate = selectedStock ? (selectedStock.proddate || proddateForSave || '') : '';
       t.stockLocation = selectedStock ? (selectedStock.stockLocation || stockLocation) : stockLocation;
@@ -7720,6 +7736,10 @@ async function addTransaction(){
       taxType:normalizeLabelProductTaxType(transactionProductMeta?.taxType),
       grade:transactionProductMeta?.grade || '',
       trader,lot,proddate:proddateForSave,weight,note,storage,price,amount:Math.round(price*weight),
+      meatwatchProcessBeginDate:document.getElementById('t-meatwatch-process-begin')?.value || '',
+      meatwatchProcessEndDate:document.getElementById('t-meatwatch-process-end')?.value || '',
+      meatwatchExpiryDate:document.getElementById('t-meatwatch-expiry')?.value || '',
+      meatwatchQueriedAt:document.getElementById('t-meatwatch-queried-at')?.value || '',
       stockUnitPrice: selectedStock ? parseAppNumber(selectedStock.price) : '',
       stockProddate: selectedStock ? (selectedStock.proddate || proddateForSave || '') : '',
       stockLocation: selectedStock ? (selectedStock.stockLocation || stockLocation) : stockLocation,
@@ -7768,7 +7788,7 @@ function showTransactionSaveStatus(message){
 function clearTransactionForm(options={}){
   const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
   showTransactionSaveStatus('');
-  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-label-product-id','t-stock-key','t-stock-price'].forEach(id=>{
+  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   const stockResults=document.getElementById('t-stock-search-results'); if(stockResults){ stockResults.style.display='none'; stockResults.innerHTML=''; }
@@ -7800,6 +7820,7 @@ function clearTransactionForm(options={}){
   const typeEl = document.getElementById('t-type');
   if(resetType && typeEl) typeEl.value='입고';
   updateTransactionForm();
+  if(typeof clearMeatwatchLookupResult === 'function') clearMeatwatchLookupResult();
 }
 
 function toggleBulkCard(kind, forceOpen){
@@ -8660,6 +8681,7 @@ function loadTxnToForm(id){
   document.getElementById('t-weight').value  =t.weight||'';
   document.getElementById('t-price').value   =t.price||'';
   document.getElementById('t-note').value    =t.note||'';
+  if(typeof restoreMeatwatchLookupFromTransaction === 'function') restoreMeatwatchLookupFromTransaction(t);
   if(t.type==='출고'){
     const sw = normalizeSamsungMeta(t);
     refreshTxnSamsungVendorSelect(sw?.vendorId || '');
@@ -19037,6 +19059,7 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260813m01"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
+<script src="meatwatch-lookup.js?v=20260818m05lookup1"></script>
 <script src="m02-auth.js?v=20260814m02permissions4"></script>
 </body>
 </html>

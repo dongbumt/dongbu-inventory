@@ -2,3 +2,6 @@ project_id = "hdwjwtmbsxfjrlvicgnn"
 
 [functions.send-document-request]
 verify_jwt = false
+
+[functions.meatwatch-lookup]
+verify_jwt = false
