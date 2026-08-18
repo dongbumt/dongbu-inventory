@@ -245,22 +245,22 @@
 <div class="app-body">
 <!-- 사이드바 탭 -->
 <nav class="nav-tabs">
-  <div class="nav-tab active" onclick="showPage('p-schedule',this);renderScheduleCalendar();" id="nav-schedule" style="color:#34495e;font-weight:700;">
+  <div class="nav-tab active" onclick="showPage('p-schedule',this)" id="nav-schedule" style="color:#34495e;font-weight:700;">
     🗓️ 일정관리
   </div>
-  <div class="nav-tab" onclick="showPage('p-company-master',this);initCompanyMasterPage();" id="nav-company-master" style="color:#4b5563;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-company-master',this)" id="nav-company-master" style="color:#4b5563;font-weight:700;">
     🏢 법인·사업장·창고
   </div>
-  <div class="nav-tab" onclick="showPage('p-access-control',this);DBMTAuth.initAdminPage();" id="nav-access-control" style="color:#4b5563;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-access-control',this)" id="nav-access-control" style="color:#4b5563;font-weight:700;">
     🔐 사용자·권한
   </div>
-  <div class="nav-tab" onclick="showPage('p-labelproducts',this);renderLabelProducts();" id="nav-labelproducts" style="color:#e67e22;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-labelproducts',this)" id="nav-labelproducts" style="color:#e67e22;font-weight:700;">
     📦 품목관리
   </div>
   <div class="nav-tab" onclick="showPage('p-traders',this)" id="nav-traders" style="color:#16a085;font-weight:700;">
     🏢 거래처 관리
   </div>
-  <div class="nav-tab" onclick="showPage('p-samsung',this);renderSamsung();" id="nav-samsung" style="color:#1428a0;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-samsung',this)" id="nav-samsung" style="color:#1428a0;font-weight:700;">
     🏬 삼성웰스토리
   </div>
   <div class="nav-tab" onclick="showPage('p-transactions',this)" id="nav-transactions">
@@ -269,7 +269,7 @@
   <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">
     🏭 생산일보
   </div>
-  <div class="nav-tab" onclick="showPage('p-prod-loss',this);renderProductionLoss();" id="nav-prod-loss" style="color:#c0392b;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss" style="color:#c0392b;font-weight:700;">
     📉 생산 로스율
   </div>
   <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">
@@ -284,10 +284,10 @@
   <div class="nav-tab" onclick="showPage('p-prices',this)" id="nav-prices">
     💰 단가표
   </div>
-  <div class="nav-tab" onclick="showPage('p-workorders',this);renderWorkOrders();" id="nav-workorders" style="color:#6c3483;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders" style="color:#6c3483;font-weight:700;">
     📝 작업지시
   </div>
-  <div class="nav-tab" onclick="showPage('p-label',this);initLabelForm();" id="nav-label" style="color:#8e44ad;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label" style="color:#8e44ad;font-weight:700;">
     🏷️ 라벨출력
   </div>
   <div class="nav-tab" onclick="window.open('label-print.html','_blank');" id="nav-label-print-standalone" style="color:#1d4ed8;font-weight:700;">
@@ -299,7 +299,7 @@
   <div class="nav-tab" onclick="showPage('p-costcalc',this)" id="nav-costcalc" style="color:#8e44ad;font-weight:700;">
     🧮 원가계산기
   </div>
-  <div class="nav-tab" onclick="showPage('p-costcompare',this);renderCostCompare();" id="nav-costcompare" style="color:#9b59b6;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-costcompare',this)" id="nav-costcompare" style="color:#9b59b6;font-weight:700;">
     📊 생산원가비교
   </div>
   <div class="nav-tab" onclick="showPage('p-quotation',this)" id="nav-quotation" style="color:#4b5563;font-weight:700;">
@@ -308,7 +308,7 @@
   <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">
     🧾 거래명세서
   </div>
-  <div class="nav-tab" onclick="showPage('p-incheck',this);initIncheck();" id="nav-incheck" style="color:#2c7a7b;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-incheck',this)" id="nav-incheck" style="color:#2c7a7b;font-weight:700;">
     🧾 입고검사일지
   </div>
   <div class="nav-tab" onclick="showPage('p-shiplog',this)" id="nav-shiplog">
@@ -329,16 +329,16 @@
   <div class="nav-tab" onclick="showPage('p-mobile-admin',this)" id="nav-mobile-admin" style="color:#374151;font-weight:700;">
     📱 모바일 관리자
   </div>
-  <div class="nav-tab" onclick="showPage('p-expense',this);renderExpenses();" id="nav-expense" style="color:#1a7ab5;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-expense',this)" id="nav-expense" style="color:#1a7ab5;font-weight:700;">
     💳 지출관리
   </div>
   <div class="nav-tab" onclick="showPage('p-import',this)" id="nav-import" style="color:var(--green);font-weight:700;">
     📥 엑셀 가져오기
   </div>
-  <div class="nav-tab" onclick="showPage('p-factorysim',this);renderFactorySim();" id="nav-factorysim" style="color:#0f766e;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-factorysim',this)" id="nav-factorysim" style="color:#0f766e;font-weight:700;">
     🏗 확장공장 시뮬레이터
   </div>
-  <div class="nav-tab" onclick="showPage('p-change-log',this);renderDataChangeLog();" id="nav-change-log" style="color:#475467;font-weight:700;">
+  <div class="nav-tab" onclick="showPage('p-change-log',this)" id="nav-change-log" style="color:#475467;font-weight:700;">
     🧾 변경이력
   </div>
 </nav>
@@ -3445,6 +3445,34 @@ function localShortDateString(date = new Date()){
   return localDateString(date).slice(2, 10);
 }
 const today = localDateString();
+const DBMT_PERF = window.DBMT_PERF = {
+  startedAt: performance.now(),
+  history: [],
+  lastByName: {},
+  record(name, startedAt, detail={}){
+    const row = {
+      name,
+      ms: Math.round((performance.now() - startedAt) * 10) / 10,
+      at: new Date().toISOString(),
+      ...detail
+    };
+    this.history.push(row);
+    if(this.history.length > 100) this.history.shift();
+    this.lastByName[name] = row;
+    console.debug(`[DBMT 성능] ${name}: ${row.ms}ms`, detail);
+    return row;
+  },
+  recent(){ return this.history.slice(-20); }
+};
+const DBMT_PAGE_INITIALIZED = new Set();
+
+function initializePageOnce(pageId, callback){
+  if(DBMT_PAGE_INITIALIZED.has(pageId)) return false;
+  callback();
+  DBMT_PAGE_INITIALIZED.add(pageId);
+  return true;
+}
+
 // DOM 접근이 필요한 초기화는 initDOM()으로 분리 → DOMContentLoaded에서 호출
 function initDOM(){
   const tDate = document.getElementById('t-date');
@@ -4374,8 +4402,7 @@ async function gsInit(){
       if(overlay) overlay.classList.add('hidden');
       gsApplyCorePayload(pending.data);
       await new Promise(r => setTimeout(r, 30));
-      renderAll();
-      renderScheduleCalendar();
+      renderAll('sheets-pending-local');
       gsShowSync('⚠ 저장 확인 전 로컬 변경사항이 있어 Sheets 덮어쓰기를 중단했습니다', true);
       gsFlushPendingCoreSave(pending);
       return;
@@ -4389,8 +4416,7 @@ async function gsInit(){
       if(overlay) overlay.classList.add('hidden');
       gsApplyCorePayload(betterLocal.data);
       await new Promise(r => setTimeout(r, 30));
-      renderAll();
-      renderScheduleCalendar();
+      renderAll('sheets-local-priority');
       gsShowSync(`⚠ ${betterLocal.source}가 Sheets보다 많아 로컬 데이터를 우선 보존했습니다`, true);
       gsFlushPendingCoreSave(pendingFromLocal);
       return;
@@ -4424,7 +4450,6 @@ async function gsInit(){
     gsSetStatus(true);
     if(overlay) overlay.classList.add('hidden');
     await new Promise(r => setTimeout(r, 30)); // 화면 갱신 후 렌더링
-    renderAll();
     gsShowSync('✅ Google Sheets 데이터 로드 완료');
     // 로컬 백업
     localStorage.setItem('dbmt_user_transactions', JSON.stringify(userTransactions));
@@ -4439,15 +4464,14 @@ async function gsInit(){
         cacheAppDataValue(k, r, app[k]);
       }
     });
-    renderAll();
-    renderScheduleCalendar();
+    renderAll('sheets-load');
   } catch(err) {
     console.error('GS 로드 오류:', err);
     gsSetStatus(false);
     if(overlay) overlay.classList.add('hidden');
     await new Promise(r => setTimeout(r, 30));
     localInit();
-    renderAll();
+    renderAll('sheets-fallback');
     const detail = String(err?.message || err || '').trim();
     gsShowSync(`⚠ Sheets 연결 실패${detail ? ' — ' + detail : ''}`, true);
     if(/비밀번호|token|일치하지 않습니다/i.test(detail)) gsShowSetup();
@@ -4485,34 +4509,164 @@ function localInit(){
   if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
 }
 
-// 전체 렌더
-function renderAll(){
-  renderScheduleCalendar();
-  if(typeof renderCompanyMasterPage === 'function' && document.getElementById('p-company-master')?.classList.contains('active')) renderCompanyMasterPage();
-  renderTransactions();
-  updateProductList();
-  if(typeof updateOriginList === 'function') updateOriginList();
-  if(typeof updateTraderList === 'function') updateTraderList();
-  initProdForm();
-  updateOutProductList();
-  if(typeof updateTransactionForm === 'function') updateTransactionForm();
-  if(typeof renderWorkOrders === 'function' && document.getElementById('p-workorders')?.classList.contains('active')) renderWorkOrders();
-  if(typeof renderProductionLoss === 'function' && document.getElementById('p-prod-loss')?.classList.contains('active')) renderProductionLoss();
-  if(typeof refreshLabelWorkOrderSelect === 'function' && document.getElementById('p-label')?.classList.contains('active')) refreshLabelWorkOrderSelect();
-  if(typeof renderSubMaterials === 'function' && document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
-  if(typeof renderFactorySim === 'function' && document.getElementById('p-factorysim')?.classList.contains('active')) renderFactorySim();
-  if(typeof renderCostCompare === 'function' && document.getElementById('p-costcompare')?.classList.contains('active')) renderCostCompare();
-  if(typeof initQuotationPage === 'function' && document.getElementById('p-quotation')?.classList.contains('active')) initQuotationPage();
-  if(typeof initColdStorageRequestPage === 'function' && document.getElementById('p-cold-storage-request')?.classList.contains('active')) initColdStorageRequestPage();
-  if(typeof renderDataChangeLog === 'function' && document.getElementById('p-change-log')?.classList.contains('active')) renderDataChangeLog();
-  if(document.getElementById('p-leaves')?.classList.contains('active')){
-    renderEmployees();
-    renderLeaves();
-    renderLeaveCalendar();
-    renderLeaveRecords();
-    renderWeekendWorkRecords();
-    renderLeaveDeductions();
+function activePageId(){
+  return document.querySelector('.tab-panel.active')?.id || 'p-schedule';
+}
+
+function renderPageById(id, reason='menu'){
+  const startedAt = performance.now();
+  let asyncTask = null;
+  try{
+    switch(id){
+      case 'p-schedule':
+        renderScheduleCalendar();
+        break;
+      case 'p-company-master':
+        if(typeof initCompanyMasterPage === 'function') asyncTask = initCompanyMasterPage();
+        break;
+      case 'p-access-control':
+        if(typeof DBMTAuth === 'object') asyncTask = DBMTAuth.initAdminPage();
+        break;
+      case 'p-labelproducts':
+        renderLabelProducts();
+        break;
+      case 'p-traders':
+        renderTraders();
+        break;
+      case 'p-samsung':
+        initSamsung();
+        break;
+      case 'p-transactions':
+        renderTransactions();
+        updateProductList();
+        updateOriginList();
+        updateTraderList();
+        updateTransactionForm();
+        break;
+      case 'p-production':
+        initializePageOnce(id, initProdForm);
+        updateOriginList();
+        renderProduction();
+        break;
+      case 'p-prod-loss':
+        renderProductionLoss();
+        break;
+      case 'p-stock':
+        renderStock();
+        break;
+      case 'p-cold-storage-request':
+        if(typeof initColdStorageRequestPage === 'function') asyncTask = initColdStorageRequestPage();
+        break;
+      case 'p-submaterials':
+        renderSubMaterials();
+        asyncTask = refreshSubMaterialUsagesFromSupabase().then(changed=>{
+          if(changed && activePageId() === id) renderSubMaterials();
+        });
+        break;
+      case 'p-prices':
+        if(reason === 'menu') cancelEditPrice();
+        renderPrices();
+        break;
+      case 'p-workorders':
+        initializePageOnce(id, initWorkOrderForm);
+        renderWorkOrders();
+        break;
+      case 'p-label':
+        initLabelForm();
+        break;
+      case 'p-pangwanbi':
+        renderPangwanbi();
+        renderSalarySummary();
+        break;
+      case 'p-costcalc':
+        renderMaterialRows();
+        renderCostExpenseArea();
+        renderCostHistory();
+        break;
+      case 'p-costcompare':
+        renderCostCompare();
+        break;
+      case 'p-quotation':
+        if(typeof initQuotationPage === 'function') initQuotationPage();
+        break;
+      case 'p-invoice':
+        initInvoiceDates();
+        break;
+      case 'p-incheck':
+        initIncheck();
+        break;
+      case 'p-shiplog':
+        initShipDates();
+        break;
+      case 'p-doccheck':
+        openDocCheckPage();
+        break;
+      case 'p-employees':
+        renderEmployees();
+        renderRetiredEmployees();
+        break;
+      case 'p-leaves':
+        initializePageOnce(id, ()=>{
+          const month = localMonthString();
+          const calMonth = document.getElementById('lv-cal-month');
+          const filterMonth = document.getElementById('lv-filter-month');
+          if(calMonth && !calMonth.value) calMonth.value = month;
+          if(filterMonth && !filterMonth.value) filterMonth.value = month;
+        });
+        renderEmployees();
+        renderLeaves();
+        renderLeaveCalendar();
+        renderLeaveRecords();
+        renderWeekendWorkRecords();
+        renderLeaveDeductions();
+        break;
+      case 'p-driver-attendance':
+        asyncTask = initDriverAdmin();
+        break;
+      case 'p-mobile-admin':
+        asyncTask = initMobileAdminSettings();
+        break;
+      case 'p-expense':
+        initializePageOnce(id, ()=>{
+          const monthEl = document.getElementById('exp-month');
+          if(monthEl && !monthEl.value) monthEl.value = expMonthKey(new Date());
+          updateExpStoreList();
+          clearExpenseForm();
+        });
+        renderExpenses();
+        break;
+      case 'p-factorysim':
+        renderFactorySim();
+        break;
+      case 'p-change-log':
+        renderDataChangeLog();
+        break;
+      case 'p-import':
+      default:
+        break;
+    }
+  }catch(error){
+    DBMT_PERF.record(`render:${id}`, startedAt, {reason, error:true});
+    console.error(`메뉴 렌더 실패: ${id}`, error);
+    return null;
   }
+
+  if(asyncTask && typeof asyncTask.then === 'function'){
+    Promise.resolve(asyncTask).then(()=>{
+      DBMT_PERF.record(`render:${id}`, startedAt, {reason, async:true});
+    }).catch(error=>{
+      DBMT_PERF.record(`render:${id}`, startedAt, {reason, async:true, error:true});
+      console.error(`메뉴 비동기 렌더 실패: ${id}`, error);
+    });
+  }else{
+    DBMT_PERF.record(`render:${id}`, startedAt, {reason});
+  }
+  return asyncTask;
+}
+
+// 데이터가 바뀌어도 현재 보고 있는 메뉴만 다시 그린다.
+function renderAll(reason='data-refresh'){
+  return renderPageById(activePageId(), reason);
 }
 
 // ── 사용자가 앱에서 직접 추가 입력한 데이터 ──
@@ -5126,8 +5280,7 @@ async function refreshProtectedCoreAfterFailure(){
     const data = await sbRpc('dbmt_get_all', {p_password:password});
     try{ data.subMaterialUsages = await supabaseLoadSubMaterialUsages(password); }catch(_){ }
     applySupabasePayload(data);
-    renderAll();
-    renderScheduleCalendar();
+    renderAll('server-recovery');
   }catch(refreshErr){
     console.error('권한 저장 실패 후 서버 데이터 복구 실패:', refreshErr);
   }
@@ -6091,36 +6244,8 @@ async function showPage(id, btn){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(btn) btn.classList.add('active');
-  if(id==='p-transactions'){ updateTransactionForm(); initBulkInbound(); initBulkOutbound(); }
-  if(id==='p-incheck') initIncheck();
-  if(id==='p-schedule') renderScheduleCalendar();
-  if(id==='p-company-master' && typeof initCompanyMasterPage === 'function') initCompanyMasterPage();
-  if(id==='p-access-control' && typeof DBMTAuth === 'object') DBMTAuth.initAdminPage();
-  if(id==='p-production'){renderProduction();initProdForm();updateOriginList();}
-  if(id==='p-prod-loss') renderProductionLoss();
-  if(id==='p-workorders'){ initWorkOrderForm(); renderWorkOrders(); }
-  if(id==='p-stock') renderStock();
-  if(id==='p-cold-storage-request') initColdStorageRequestPage();
-  if(id==='p-submaterials'){
-    renderSubMaterials();
-    refreshSubMaterialUsagesFromSupabase().then(changed=>{ if(changed) renderSubMaterials(); });
-  }
-  if(id==='p-invoice') initInvoiceDates();
-  if(id==='p-shiplog') initShipDates();
-  if(id==='p-prices'){ cancelEditPrice(); renderPrices(); }
-  if(id==='p-doccheck') openDocCheckPage();
-  if(id==='p-traders') renderTraders();
-  if(id==='p-samsung') initSamsung();
-  if(id==='p-employees'){ renderEmployees(); renderRetiredEmployees(); }
-  if(id==='p-leaves'){ renderEmployees(); renderLeaves(); renderLeaveCalendar(); renderLeaveRecords(); renderWeekendWorkRecords(); renderLeaveDeductions(); }
-  if(id==='p-driver-attendance') initDriverAdmin();
-  if(id==='p-mobile-admin') initMobileAdminSettings();
-  if(id==='p-change-log') renderDataChangeLog();
-  if(id==='p-costcalc'){ renderMaterialRows(); renderCostExpenseArea(); renderCostHistory(); }
-  if(id==='p-costcompare') renderCostCompare();
-  if(id==='p-quotation') initQuotationPage();
-  if(id==='p-factorysim') renderFactorySim();
-  if(id==='p-pangwanbi'){ renderPangwanbi(); renderSalarySummary(); }
+  renderPageById(id, 'menu');
+  return true;
 }
 
 // ─── 일정관리 ───────────────────────────────────────────
@@ -6368,7 +6493,6 @@ function openProductionByDate(date){
   if(product) product.value = '';
   if(lot) lot.value = '';
   showPage('p-production', document.getElementById('nav-production'));
-  renderProduction();
 }
 
 // ─── 거래내역 ───────────────────────────────────────────
@@ -7763,11 +7887,7 @@ async function addTransaction(){
     return;
   }
   clearTransactionForm({resetType:true});
-  renderTransactions(); updateProductList(); updateOutProductList();
-  renderStock();
-  if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
-  // 출고면 거래명세서 날짜 목록 갱신
-  if(type==='출고') initInvoiceDates();
+  renderTransactions(); updateProductList();
   showTransactionSaveStatus(wasEditTxn
     ? `수정 저장 완료 — ${savedProduct || '거래내역'} 항목이 반영됐고 입력칸을 초기화했습니다.`
     : `거래내역 추가 완료 — ${savedProduct || '신규 항목'} 항목이 저장됐고 입력칸을 초기화했습니다.`);
@@ -8037,8 +8157,7 @@ async function saveBulkInbound(){
     toast(String(err?.message || err || '입고 일괄 저장에 실패했습니다.'));
     return;
   }
-  renderTransactions(); updateProductList(); renderStock();
-  if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
+  renderTransactions(); updateProductList();
   clearBulkInbound();
   toast(`입고 ${toAdd.length}건 일괄 저장 완료!`);
 }
@@ -8525,9 +8644,7 @@ async function saveBulkOutbound(){
     toast(String(err?.message || err || '출고 일괄 저장에 실패했습니다.'));
     return;
   }
-  renderTransactions(); updateProductList(); updateOutProductList(); renderStock();
-  if(document.getElementById('p-incheck')?.classList.contains('active')) renderIncheck();
-  initInvoiceDates();
+  renderTransactions(); updateProductList(); updateOutProductList();
   clearBulkOutbound();
   toast(`출고 ${staged.length}건 일괄 저장 완료!`);
 }
@@ -8620,7 +8737,7 @@ async function deleteTransaction(id){
     toast(String(err?.message || err || '거래내역 삭제에 실패했습니다.'));
     return;
   }
-  renderTransactions(); renderStock();
+  renderTransactions();
 }
 
 // ── 거래내역 수정 모달 ──
@@ -9353,8 +9470,6 @@ async function saveProdEntry(){
   }
   if(editingProdId) syncSubMaterialUsageProductionMetadata(entry);
   renderProduction();
-  renderStock();
-  if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
   toast('생산일보 저장 완료! 재고에 반영됐습니다.');
   clearProdForm();
   setTimeout(()=>openSubMaterialUsageModal(entry.id, true), 0);
@@ -9400,9 +9515,7 @@ async function deleteProdEntry(id){
       skipServer:true
     });
   }
-  renderProduction(); renderStock(); renderTransactions();
-  if(document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
-  if(document.getElementById('p-schedule')?.classList.contains('active')) renderScheduleCalendar();
+  renderProduction();
   toast('생산일보 삭제 완료. 재고가 복원됐습니다.');
 }
 
@@ -10145,7 +10258,6 @@ async function saveStockAdjust(){
       saveDataChangeLogsLocal();
     }
     closeStockAdjust();
-    renderTransactions();
     renderStock();
     toast('재고정리 내역이 저장되었습니다.');
   }catch(err){
@@ -10793,8 +10905,7 @@ async function saveSubMaterialUsageModal(){
     return fail(String(err?.message || err || '부자재 사용이력 저장에 실패했습니다.'));
   }
   closeSubMaterialUsageModal();
-  renderProduction();
-  if(document.getElementById('p-submaterials')?.classList.contains('active')) renderSubMaterials();
+  renderAll('submaterial-save');
   toast(rows.length ? `부자재 사용 ${rows.length}건을 저장했습니다.` : '부자재 사용 기록을 비웠습니다.');
 }
 
@@ -10826,8 +10937,7 @@ async function deleteSubMaterialUsage(id){
     toast(String(err?.message || err || '부자재 사용 기록 삭제에 실패했습니다.'));
     return;
   }
-  renderSubMaterials();
-  renderProduction();
+  renderAll('submaterial-delete');
   toast('부자재 사용 기록을 삭제했습니다.');
 }
 
@@ -12720,11 +12830,6 @@ async function doImport(){
     toast(String(err?.message || err || '엑셀 거래내역 가져오기에 실패했습니다.'));
     return;
   }
-  renderTransactions();
-  updateProductList();
-  updateOutProductList();
-  renderStock();
-
   // 완료 화면
   document.getElementById('import-step2').style.display='none';
   document.getElementById('import-step3').style.display='block';
@@ -13016,6 +13121,7 @@ function applySupabasePayload(data){
 }
 
 async function supabaseInit(){
+  const supabaseStartedAt = performance.now();
   const password = requireSupabasePassword();
   const startRevision = localCoreRevision;
   gsShowSync('Supabase에서 데이터 불러오는 중...');
@@ -13025,6 +13131,7 @@ async function supabaseInit(){
         return null;
       })
     : Promise.resolve(null);
+  const fetchStartedAt = performance.now();
   const [data] = await Promise.all([
     sbRpc('dbmt_get_all', {p_password: password}),
     companyMasterPromise
@@ -13035,24 +13142,30 @@ async function supabaseInit(){
     subMaterialUsageRpcInstalled = false;
     console.warn('부자재 사용이력 RPC가 아직 설치되지 않았습니다:', err);
   }
+  DBMT_PERF.record('supabase:fetch', fetchStartedAt, {
+    transactions:Array.isArray(data.transactions) ? data.transactions.length : 0,
+    production:Array.isArray(data.prod) ? data.prod.length : 0,
+    prices:Array.isArray(data.prices) ? data.prices.length : 0
+  });
   if(localCoreRevision !== startRevision){
     invalidateStockMap();
     try{
-      renderAll();
-      renderScheduleCalendar();
+      renderAll('supabase-local-priority');
     }catch(renderErr){
       console.error('Supabase local-priority render failed:', renderErr);
       gsShowSync('✅ Supabase 연결 완료 — 화면 갱신 중 일부 오류가 있어 새로고침이 필요할 수 있습니다', true);
     }
     gsShowSync('✅ 방금 저장한 로컬 변경사항을 우선 반영했습니다');
+    DBMT_PERF.record('supabase:total', supabaseStartedAt, {localPriority:true});
     return data;
   }
+  const applyStartedAt = performance.now();
   applySupabasePayload(data);
+  DBMT_PERF.record('supabase:apply', applyStartedAt);
   GS_LOAD_OK = true;
   gsSetStatus(true);
   try{
-    renderAll();
-    renderScheduleCalendar();
+    renderAll('supabase-load');
   }catch(renderErr){
     console.error('Supabase data render failed:', renderErr);
     gsShowSync('✅ Supabase 연결 완료 — 화면 갱신 중 일부 오류가 있어 새로고침이 필요할 수 있습니다', true);
@@ -13060,6 +13173,7 @@ async function supabaseInit(){
   }
   gsShowSync('✅ Supabase 데이터 로드 완료');
   if(typeof DBMTAuth === 'object') await DBMTAuth.initializeSession();
+  DBMT_PERF.record('supabase:total', supabaseStartedAt, {page:activePageId()});
   return data;
 }
 
@@ -15138,24 +15252,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // DOM 초기화 (날짜 세팅, 헤더 표시)
   initDOM();
 
-  // 원가계산기 저장 내역 렌더
-  renderMaterialRows();
-  renderCostExpenseArea();
-  renderCostHistory();
-  renderPangwanbi();
-  renderSalarySummary();
-  // 지출관리 초기화
-  expSetThisMonth();
-  updateExpStoreList();
-  clearExpenseForm();
-  // 근태 달력 초기화
-  lvCalToday();
-
   // 1) 즉시 로컬 데이터로 앱 시작 (오버레이 즉시 닫기)
   const overlay = document.getElementById('gs-overlay');
   if(overlay) overlay.classList.add('hidden');
+  const localStartedAt = performance.now();
   localInit();
-  renderAll();
+  DBMT_PERF.record('startup:local-data', localStartedAt, {
+    transactions:userTransactions.length,
+    production:userProdEntries.length,
+    prices:prices.length
+  });
+  renderAll('local-startup');
+  DBMT_PERF.record('startup:interactive', DBMT_PERF.startedAt, {page:activePageId()});
 
   // 2) Supabase 우선 로드
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
