@@ -1134,7 +1134,7 @@
         전체 재고현황
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" oninput="markStockSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runStockSearch();}">
+        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" autocomplete="off" oninput="markStockSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runStockSearch();}">
         <button id="stock-search-btn" class="btn btn-primary btn-sm" onclick="runStockSearch()">조회</button>
         <select id="stock-location-filter" style="font-size:12px;padding:7px 10px;width:auto;" onchange="markStockSearchPending()">
           <option value="">전체 지점</option>
