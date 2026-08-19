@@ -356,7 +356,7 @@
   .bulk-in-row-product-content{display:flex;align-items:center;gap:8px;min-width:460px;}
   .bulk-in-row-product-content .bulk-in-product-search-shell{flex:0 0 190px;}
   .bulk-in-row-product-search{display:flex;align-items:center;gap:4px;}
-  .bulk-in-row-product-search .bulk-in-product{flex:1;min-width:0;cursor:pointer;}
+  .bulk-in-row-product-search .bulk-in-product{flex:1;min-width:0;}
   .bulk-in-row-product-search .btn{flex:0 0 auto;padding:5px 8px;white-space:nowrap;}
   .bulk-in-row-product-content .bulk-in-product{width:100%;padding:6px 7px;font-size:12px;}
   .bulk-in-row-product-content .bulk-in-product-meta{flex:1 1 250px;grid-template-columns:repeat(2,minmax(0,1fr));}

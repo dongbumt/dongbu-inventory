@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819bulkinpopup1">
+<link rel="stylesheet" href="styles/main.css?v=20260819bulkinpopup2">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -813,7 +813,7 @@
           <div class="bulk-in-common-product-content">
             <div class="bulk-in-product-search-shell">
               <div style="display:flex;gap:4px;">
-                <input id="bulk-in-product-common" class="bulk-in-product" placeholder="품목 선택" autocomplete="off" readonly onclick="openBulkInboundProductPicker(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)" style="flex:1;cursor:pointer;">
+                <input id="bulk-in-product-common" class="bulk-in-product" placeholder="품목명 검색" autocomplete="off" oninput="onBulkInboundProductInput(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)" style="flex:1;">
                 <button type="button" class="btn btn-sm btn-secondary" onclick="openBulkInboundProductPicker(document.getElementById('bulk-in-product-common'))" title="품목 검색 팝업 열기" style="white-space:nowrap;">검색</button>
                 <button type="button" id="bulk-in-product-apply" class="btn btn-sm btn-secondary" onclick="applyBulkInboundProduct()" title="비어있는 모든 행에 품목 채우기" style="white-space:nowrap;">↓ 적용</button>
               </div>
@@ -8414,8 +8414,15 @@ function openBulkInboundProductPicker(inp){
   const selectedId = wrap?.querySelector('.bulk-in-product-id')?.value || '';
   openTxnProductPicker(selectedId ? '' : (inp.value || ''), inp);
 }
+function onBulkInboundProductInput(inp){
+  const wrap = bulkProductWrap(inp);
+  if(!wrap) return;
+  const idEl = wrap.querySelector('.bulk-in-product-id');
+  if(idEl) idEl.value = '';
+  updateBulkInboundProductMeta(wrap, null);
+}
 function handleBulkInboundProductPickerKeydown(event, inp){
-  if(event.key === 'Enter' || event.key === 'F4' || event.key === ' ' || (event.altKey && event.key === 'ArrowDown')){
+  if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
     event.preventDefault();
     openBulkInboundProductPicker(inp);
   }
@@ -8501,7 +8508,7 @@ function addBulkInboundRow(){
   if(!tbody) return;
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td class="bulk-in-product-cell"><div class="bulk-in-row-product-content"><div class="bulk-in-product-search-shell"><div class="bulk-in-row-product-search"><input class="bulk-in-product" placeholder="품목 선택" autocomplete="off" readonly onclick="openBulkInboundProductPicker(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)"><button type="button" class="btn btn-sm btn-secondary" onclick="openBulkInboundProductPicker(this.parentElement.querySelector('.bulk-in-product'))" title="품목 검색 팝업 열기">검색</button></div><input type="hidden" class="bulk-in-product-id"></div><div class="bulk-in-product-meta" aria-live="polite"></div></div></td>
+    <td class="bulk-in-product-cell"><div class="bulk-in-row-product-content"><div class="bulk-in-product-search-shell"><div class="bulk-in-row-product-search"><input class="bulk-in-product" placeholder="품목명 검색" autocomplete="off" oninput="onBulkInboundProductInput(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)"><button type="button" class="btn btn-sm btn-secondary" onclick="openBulkInboundProductPicker(this.parentElement.querySelector('.bulk-in-product'))" title="품목 검색 팝업 열기">검색</button></div><input type="hidden" class="bulk-in-product-id"></div><div class="bulk-in-product-meta" aria-live="polite"></div></div></td>
     <td><input class="bulk-in-trader" list="purchase-trader-list" placeholder="거래처" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td><input class="bulk-in-lot" placeholder="LOT번호" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
