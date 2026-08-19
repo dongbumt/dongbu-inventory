@@ -178,9 +178,155 @@
     }
   }
 
+  function bulkRowProduct(row){
+    const id = row?.querySelector('.bulk-in-product-id')?.value || '';
+    return (typeof labelProducts !== 'undefined' ? labelProducts : [])
+      .find(product=>String(product?.id || '') === String(id)) || null;
+  }
+
+  function setBulkRowStatus(row, message, kind='normal'){
+    const el = row?.querySelector('.bulk-in-meatwatch-status');
+    if(!el) return;
+    el.textContent = message || '';
+    el.style.display = message ? 'block' : 'none';
+    el.style.color = STATUS_COLORS[kind] || STATUS_COLORS.normal;
+  }
+
+  function clearBulkInboundMeatwatchResult(row, options={}){
+    if(!row) return;
+    const expiryEl = row.querySelector('.bulk-in-meatwatch-expiry');
+    const previousExpiry = expiryEl?.value || '';
+    if(options?.removeNote && previousExpiry){
+      const noteEl = row.querySelector('.bulk-in-note');
+      if(noteEl) noteEl.value = removeGeneratedExpiryNote(noteEl.value, previousExpiry);
+    }
+    ['bulk-in-meatwatch-process-begin','bulk-in-meatwatch-process-end','bulk-in-meatwatch-expiry','bulk-in-meatwatch-queried-at']
+      .forEach(className=>{
+        const el = row.querySelector(`.${className}`);
+        if(el) el.value = '';
+      });
+    setBulkRowStatus(row, '');
+  }
+
+  function bulkRowLookupContext(row){
+    const product = bulkRowProduct(row);
+    return {
+      row,
+      product,
+      traceNo:String(row?.querySelector('.bulk-in-lot')?.value || '').trim(),
+      shelfDays:Number.parseInt(product?.shelfdays,10),
+      weight:Number.parseFloat(row?.querySelector('.bulk-in-weight')?.value || 0) || 0,
+      trader:String(row?.querySelector('.bulk-in-trader')?.value || '').trim(),
+      note:String(row?.querySelector('.bulk-in-note')?.value || '').trim()
+    };
+  }
+
+  async function lookupBulkInboundRow(context, sessionToken){
+    const {row, traceNo, shelfDays} = context;
+    setBulkRowStatus(row, 'MeatWatch에서 가공일을 조회하고 있습니다.');
+    const result = await sbFunctionRequest('meatwatch-lookup', {
+      sessionToken,
+      traceNo,
+      permissionAction:'create'
+    });
+    const processBeginDate = validIsoDate(result?.processBeginDate);
+    const processEndDate = validIsoDate(result?.processEndDate);
+    const expiryDate = calculateExpiryDate(processBeginDate, shelfDays);
+    if(!processBeginDate || !expiryDate) throw new Error('가공일 또는 소비기한을 계산할 수 없습니다.');
+    const values = {
+      'bulk-in-meatwatch-process-begin':processBeginDate,
+      'bulk-in-meatwatch-process-end':processEndDate,
+      'bulk-in-meatwatch-expiry':expiryDate,
+      'bulk-in-meatwatch-queried-at':String(result?.queriedAt || '')
+    };
+    Object.entries(values).forEach(([className,value])=>{
+      const el = row.querySelector(`.${className}`);
+      if(el) el.value = value;
+    });
+    const noteEl = row.querySelector('.bulk-in-note');
+    if(noteEl) noteEl.value = expiryNote(noteEl.value, expiryDate);
+    const range = processEndDate && processEndDate !== processBeginDate
+      ? `${processBeginDate}~${processEndDate}` : processBeginDate;
+    setBulkRowStatus(row, `가공일 ${range} · 소비기한 ${expiryDate}`, 'success');
+  }
+
+  async function lookupAllBulkInboundMeatExpiry(){
+    if(typeof DBMTAuth !== 'object' || !DBMTAuth.requireAction('transactions','create')) return;
+    const sessionToken = DBMTAuth.getSessionToken();
+    if(!sessionToken){
+      if(typeof toast === 'function') toast('개인 사용자 로그인이 필요합니다.');
+      return;
+    }
+    const rows = [...document.querySelectorAll('#bulk-inbound-tbody tr')];
+    const targets = [];
+    let invalidCount = 0;
+    rows.forEach((row,index)=>{
+      const context = bulkRowLookupContext(row);
+      const hasRowData = context.traceNo || context.weight > 0 || context.trader || context.note;
+      if(!hasRowData){
+        setBulkRowStatus(row,'');
+        return;
+      }
+      if(!context.product){
+        if(context.traceNo){
+          setBulkRowStatus(row, `${index+1}행: 품목을 먼저 선택하세요.`, 'error');
+          invalidCount++;
+        }
+        return;
+      }
+      if(!isImportedOrigin(context.product.origin)){
+        setBulkRowStatus(row,'');
+        return;
+      }
+      if(!context.traceNo){
+        setBulkRowStatus(row, `${index+1}행: 이력번호를 입력하세요.`, 'error');
+        invalidCount++;
+        return;
+      }
+      if(!Number.isInteger(context.shelfDays) || context.shelfDays < 1){
+        setBulkRowStatus(row, `${index+1}행: 품목관리의 소비기한(일)을 확인하세요.`, 'error');
+        invalidCount++;
+        return;
+      }
+      targets.push(context);
+    });
+    if(!targets.length){
+      if(typeof toast === 'function') toast(invalidCount ? '조회 조건을 확인하세요.' : '조회할 수입 원료육 행이 없습니다.');
+      return;
+    }
+
+    const button = byId('bulk-in-meatwatch-lookup-all-btn');
+    const originalText = button?.textContent || '이력번호 일괄조회';
+    if(button) button.disabled = true;
+    let successCount = 0;
+    let failedCount = 0;
+    for(let index=0; index<targets.length; index++){
+      const context = targets[index];
+      if(button) button.textContent = `조회 중 ${index+1}/${targets.length}`;
+      try{
+        await lookupBulkInboundRow(context, sessionToken);
+        successCount++;
+      }catch(error){
+        failedCount++;
+        setBulkRowStatus(context.row, `조회 실패: ${String(error?.message || error)}`, 'error');
+      }
+    }
+    if(button){
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+    if(typeof toast === 'function'){
+      toast(failedCount
+        ? `이력번호 조회 완료: 성공 ${successCount}건 / 실패 ${failedCount}건`
+        : `이력번호 ${successCount}건 조회 완료`);
+    }
+  }
+
   window.updateMeatwatchLookupState = updateMeatwatchLookupState;
   window.clearMeatwatchLookupResult = clearMeatwatchLookupResult;
   window.restoreMeatwatchLookupFromTransaction = restoreMeatwatchLookupFromTransaction;
   window.lookupImportedMeatExpiry = lookupImportedMeatExpiry;
+  window.clearBulkInboundMeatwatchResult = clearBulkInboundMeatwatchResult;
+  window.lookupAllBulkInboundMeatExpiry = lookupAllBulkInboundMeatExpiry;
   document.addEventListener('DOMContentLoaded', updateMeatwatchLookupState);
 })();

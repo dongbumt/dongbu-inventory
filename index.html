@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819bulkinmeta1">
+<link rel="stylesheet" href="styles/main.css?v=20260819bulkinlookup1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -840,12 +840,15 @@
           </div>
         </div>
       </div>
+      <div class="bulk-in-lookup-toolbar">
+        <button type="button" id="bulk-in-meatwatch-lookup-all-btn" class="btn btn-secondary btn-sm" onclick="lookupAllBulkInboundMeatExpiry()">이력번호 일괄조회</button>
+      </div>
       <div class="tbl-wrap" style="max-height:none;overflow:visible;">
         <table class="bulk-inbound-table" style="font-size:12px;">
           <thead><tr>
             <th style="min-width:540px;">품목 및 등록정보 (품목관리 기준)</th>
             <th style="min-width:120px;">거래처</th>
-            <th style="min-width:140px;">이력번호(LOT)</th>
+            <th style="min-width:230px;">이력번호(LOT)</th>
             <th style="min-width:96px;text-align:right;">중량(KG)</th>
             <th style="min-width:92px;text-align:right;">단가(선택)</th>
             <th style="min-width:110px;">비고</th>
@@ -8423,6 +8426,8 @@ function onBulkInboundProductInput(inp){
   const idEl = wrap.querySelector('.bulk-in-product-id');
   if(idEl) idEl.value = '';
   updateBulkInboundProductMeta(wrap, null);
+  const tr = inp.closest('tr');
+  if(tr && typeof clearBulkInboundMeatwatchResult === 'function') clearBulkInboundMeatwatchResult(tr,{removeNote:true});
 }
 function handleBulkInboundProductPickerKeydown(event, inp){
   if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
@@ -8497,6 +8502,8 @@ function selectBulkProduct(inp, id){
   updateBulkInboundProductMeta(wrap, lp);
   const box = wrap.querySelector('.bulk-in-product-results');
   if(box) box.style.display = 'none';
+  const tr = inp.closest('tr');
+  if(tr && typeof clearBulkInboundMeatwatchResult === 'function') clearBulkInboundMeatwatchResult(tr,{removeNote:true});
 }
 function hideBulkProductResults(inp){
   const wrap = bulkProductWrap(inp);
@@ -8631,7 +8638,7 @@ function addBulkInboundRow(){
   tr.innerHTML = `
     <td class="bulk-in-product-cell"><div class="bulk-in-row-product-content"><div class="bulk-in-product-search-shell"><div class="bulk-in-row-product-search"><input class="bulk-in-product" placeholder="품목명 검색" autocomplete="off" oninput="onBulkInboundProductInput(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)"><button type="button" class="btn btn-sm btn-secondary" onclick="openBulkInboundProductPicker(this.parentElement.querySelector('.bulk-in-product'))" title="품목 검색 팝업 열기">검색</button></div><input type="hidden" class="bulk-in-product-id"></div><div class="bulk-in-product-meta" aria-live="polite"></div></div></td>
     <td><div class="txn-trader-search-wrap bulk-in-trader-search-wrap"><input class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkInboundTraderSearch(this,true)" onfocus="onBulkInboundTraderSearch(this,false)" onblur="hideBulkInboundTraderResults(this)" onkeydown="handleBulkInboundTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-in-trader-results" role="listbox" style="display:none;"></div></div></td>
-    <td><input class="bulk-in-lot" placeholder="LOT번호" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td class="bulk-in-lot-cell"><input class="bulk-in-lot" placeholder="LOT번호" oninput="clearBulkInboundMeatwatchResult(this.closest('tr'),{removeNote:true})"><input type="hidden" class="bulk-in-meatwatch-process-begin"><input type="hidden" class="bulk-in-meatwatch-process-end"><input type="hidden" class="bulk-in-meatwatch-expiry"><input type="hidden" class="bulk-in-meatwatch-queried-at"><div class="bulk-in-meatwatch-status"></div></td>
     <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-price" type="number" step="1" placeholder="자동" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-note" placeholder="비고" style="width:100%;font-size:12px;padding:5px 6px;"></td>
@@ -8728,7 +8735,12 @@ async function saveBulkInbound(){
       taxType: normalizeLabelProductTaxType(lp.taxType),
       trader, lot, proddate:'',
       weight, price, amount: Math.round(price*weight),
-      note, _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
+      note,
+      meatwatchProcessBeginDate:tr.querySelector('.bulk-in-meatwatch-process-begin')?.value || '',
+      meatwatchProcessEndDate:tr.querySelector('.bulk-in-meatwatch-process-end')?.value || '',
+      meatwatchExpiryDate:tr.querySelector('.bulk-in-meatwatch-expiry')?.value || '',
+      meatwatchQueriedAt:tr.querySelector('.bulk-in-meatwatch-queried-at')?.value || '',
+      _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
     });
   });
   if(errorMsg){ toast(errorMsg); return; }
@@ -19906,7 +19918,7 @@ function initSamsung(){
 <script src="company-master.js?v=20260813m01"></script>
 <script src="quotation.js?v=20260819quote3"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
-<script src="meatwatch-lookup.js?v=20260818m05lookup1"></script>
+<script src="meatwatch-lookup.js?v=20260819bulkinlookup1"></script>
 <script src="m02-auth.js?v=20260814m02permissions4"></script>
 </body>
 </html>
