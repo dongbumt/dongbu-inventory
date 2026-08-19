@@ -515,7 +515,7 @@ function qDrawPublicTable(ctx,record,rows,startY,{compact=false}={}){
   const mainH=compact?76:100;
   const specH=compact?54:72;
   let x=x0;
-  headers.forEach((header,index)=>{ qDrawCell(ctx,{x,y:startY,w:widths[index],h:headH,text:header,size:compact?24:28,weight:700,fill:'#ededed'}); x+=widths[index]; });
+  headers.forEach((header,index)=>{ qDrawCell(ctx,{x,y:startY,w:widths[index],h:headH,text:header,size:compact?24:34,weight:700,fill:'#ededed'}); x+=widths[index]; });
   let y=startY+headH;
   rows.forEach(row=>{
     const calc=quotationCalc(row);
@@ -523,12 +523,12 @@ function qDrawPublicTable(ctx,record,rows,startY,{compact=false}={}){
     const values=[row.category,row.product,row.grade,row.origin,row.unit,qMoney(price1),qMoney(row.price2),row.note];
     x=x0;
     values.forEach((value,index)=>{
-      qDrawCell(ctx,{x,y,w:widths[index],h:mainH,text:value||'',size:compact?22:27,weight:index===1?700:400,align:[5,6].includes(index)?'right':'center',maxLines:2});
+      qDrawCell(ctx,{x,y,w:widths[index],h:mainH,text:value||'',size:compact?22:32,weight:index===1?700:400,align:[5,6].includes(index)?'right':'center',maxLines:2});
       x+=widths[index];
     });
     y+=mainH;
-    qDrawCell(ctx,{x:x0,y,w:widths[0],h:specH,text:'스펙',size:compact?20:24,weight:700,fill:'#f7f7f7'});
-    qDrawCell(ctx,{x:x0+widths[0],y,w:widths.slice(1).reduce((sum,n)=>sum+n,0),h:specH,text:row.spec||'',size:compact?20:23,align:'left',padding:20,maxLines:2,fill:'#fafafa'});
+    qDrawCell(ctx,{x:x0,y,w:widths[0],h:specH,text:'스펙',size:compact?20:28,weight:700,fill:'#f7f7f7'});
+    qDrawCell(ctx,{x:x0+widths[0],y,w:widths.slice(1).reduce((sum,n)=>sum+n,0),h:specH,text:row.spec||'',size:compact?20:29,align:'left',padding:20,maxLines:2,fill:'#fafafa'});
     y+=specH;
   });
   return y;
@@ -542,31 +542,29 @@ async function qDrawExternalQuotation(ctx,record){
   ctx.strokeStyle='#222';ctx.lineWidth=4;ctx.strokeRect(730,82,1020,190);
 
   const leftX=140,leftW=1040,rightX=1210,rightW=1130,top=330;
-  qDrawCell(ctx,{x:leftX,y:top,w:leftW,h:86,text:`작성일자 : ${qKoreanDate(record.date)}`,size:28,weight:700});
-  qDrawCell(ctx,{x:leftX,y:top+86,w:leftW,h:104,text:`${record.customer||''} ${record.recipient||'귀하'}`,size:34,weight:700});
-  qDrawCell(ctx,{x:leftX,y:top+190,w:leftW,h:104,text:record.subject||'아래와 같이 견적합니다',size:29,weight:600,maxLines:2});
+  qDrawCell(ctx,{x:leftX,y:top,w:leftW,h:86,text:`작성일자 : ${qKoreanDate(record.date)}`,size:34,weight:700});
+  qDrawCell(ctx,{x:leftX,y:top+86,w:leftW,h:104,text:`${record.customer||''} ${record.recipient||'귀하'}`,size:42,weight:700});
+  qDrawCell(ctx,{x:leftX,y:top+190,w:leftW,h:104,text:record.subject||'아래와 같이 견적합니다',size:36,weight:600,maxLines:2});
 
   qDrawCell(ctx,{x:rightX,y:top,w:rightW,h:294,text:'',fill:'#fff'});
-  qDrawText(ctx,'공 급 자',rightX+34,top+38,{size:24,weight:700,color:'#4b4b4b'});
-  qDrawText(ctx,company.name,rightX+225,top+60,{size:38,weight:700,maxWidth:600});
-  qDrawText(ctx,`대표자  ${company.ceo}`,rightX+225,top+112,{size:25,weight:500});
-  qDrawText(ctx,`등록번호  ${company.registrationNo}`,rightX+34,top+170,{size:23});
-  qDrawText(ctx,`주소  ${company.address}`,rightX+34,top+215,{size:22,maxWidth:930});
-  qDrawText(ctx,`전화/FAX  ${company.phoneFax}`,rightX+34,top+258,{size:22});
-  const seal=await quotationSealImage();
-  if(seal){ ctx.save();ctx.globalAlpha=.88;ctx.drawImage(seal,rightX+825,top+28,250,250);ctx.restore(); }
+  qDrawText(ctx,'공 급 자',rightX+34,top+46,{size:29,weight:700,color:'#4b4b4b'});
+  qDrawText(ctx,company.name,rightX+225,top+58,{size:46,weight:700,maxWidth:850});
+  qDrawText(ctx,`사업자번호  ${company.registrationNo}`,rightX+34,top+128,{size:31,weight:500});
+  qDrawText(ctx,`주소  ${company.address}`,rightX+34,top+194,{size:28,maxWidth:1030});
+  qDrawText(ctx,`전화/FAX  ${company.phoneFax}`,rightX+34,top+254,{size:28});
 
   qDrawPublicTable(ctx,record,rows,700);
 
   const footerY=2800;
   ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.strokeRect(140,footerY,2200,430);
-  qDrawText(ctx,'[ 비 고 ]',175,footerY+48,{size:30,weight:700});
-  qSetFont(ctx,28,400);
+  qDrawText(ctx,'[ 비 고 ]',175,footerY+50,{size:38,weight:700});
+  qSetFont(ctx,34,400);
   const noteLines=qWrapLines(ctx,record.note||'',1980,4);
-  noteLines.forEach((line,index)=>qDrawText(ctx,line,175,footerY+105+index*42,{size:28}));
-  qDrawText(ctx,`담당자 : ${record.managerName||'-'} (${record.managerPhone||'-'})`,175,footerY+235,{size:28,weight:600});
-  qDrawText(ctx,company.name,1530,footerY+300,{size:34,weight:700,align:'center'});
-  qDrawText(ctx,`대표  ${company.ceo}`,1530,footerY+360,{size:30,weight:600,align:'center'});
+  noteLines.forEach((line,index)=>qDrawText(ctx,line,175,footerY+112+index*50,{size:34}));
+  qDrawText(ctx,`담당자 : ${record.managerName||'-'} (${record.managerPhone||'-'})`,175,footerY+245,{size:34,weight:600});
+  qDrawText(ctx,company.name,1530,footerY+295,{size:40,weight:700,align:'center'});
+  qDrawText(ctx,`대표  ${company.ceo}`,1530,footerY+360,{size:34,weight:600,align:'center'});
+  const seal=await quotationSealImage();
   if(seal){ ctx.save();ctx.globalAlpha=.9;ctx.drawImage(seal,1740,footerY+225,190,190);ctx.restore(); }
 }
 
