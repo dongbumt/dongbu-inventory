@@ -981,6 +981,7 @@
           <button class="btn btn-primary btn-sm" onclick="runTransactionExactDateSearch()">특정일 조회</button>
           <button class="btn btn-secondary btn-sm" onclick="runTransactionRecentSearch(15)">최근 15일</button>
           <button class="btn btn-secondary btn-sm" onclick="runTransactionRecentSearch(30)">최근 30일</button>
+          <button class="btn btn-secondary btn-sm" onclick="runTransactionAllSearch()">전체</button>
           <span style="font-size:12px;color:#666;white-space:nowrap;margin-left:4px;">기간</span>
           <input type="date" id="t-search-from" aria-label="거래 시작일" title="거래 시작일" style="width:135px;font-size:12px;" onchange="markTransactionSearchPending('range')" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionRangeSearch();}">
           <span style="font-size:12px;color:#888;">~</span>
@@ -9459,6 +9460,16 @@ function runTransactionRecentSearch(days){
   if(exactDate) exactDate.value = '';
   if(dateFrom) dateFrom.value = localDateString(startDate);
   if(dateTo) dateTo.value = localDateString(endDate);
+  runTransactionSearch();
+}
+
+function runTransactionAllSearch(){
+  ['t-search-date','t-search-from','t-search-to','t-search-product','t-search-lot'].forEach(id=>{
+    const element = document.getElementById(id);
+    if(element) element.value = '';
+  });
+  const typeFilter = document.getElementById('t-filter-type');
+  if(typeFilter) typeFilter.value = '';
   runTransactionSearch();
 }
 
