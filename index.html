@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819productpicker2">
+<link rel="stylesheet" href="styles/main.css?v=20260819txntrader1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -722,7 +722,13 @@
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group t-trader"><label>거래처</label><input id="t-trader" list="trader-list" placeholder="거래처명" oninput="autoFillTxnPrice()"></div>
+      <div class="form-group t-trader">
+        <label>거래처</label>
+        <div class="txn-trader-search-wrap">
+          <input id="t-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-controls="t-trader-results" aria-expanded="false" oninput="onTxnTraderSearch(true)" onfocus="onTxnTraderSearch(false)" onblur="hideTxnTraderResults()" onkeydown="handleTxnTraderSearchKeydown(event)">
+          <div id="t-trader-results" class="txn-trader-results" role="listbox" style="display:none;"></div>
+        </div>
+      </div>
       <div class="form-group"><label>이력번호</label>
         <div style="display:flex;gap:5px;align-items:center;">
           <input id="t-lot" placeholder="LOT번호 (출고 시 아래 목록 선택)" oninput="clearTxnStockSelection();clearMeatwatchLookupResult({removeNote:true});updateMeatwatchLookupState()" style="min-width:0;flex:1;">
@@ -6650,7 +6656,11 @@ function updateTransactionForm(){
   const traderListId = t === '출고'
     ? 'sales-trader-list'
     : (t === '입고' ? 'purchase-trader-list' : 'trader-list');
-  if(traderInput) traderInput.setAttribute('list', traderListId);
+  if(traderInput){
+    traderInput.removeAttribute('list');
+    traderInput.dataset.traderScope = traderListId;
+  }
+  hideTxnTraderResults(true);
   document.querySelector('.t-proddate').style.display = isStockPick ? 'flex' : 'none';
 
   const inpProd  = document.getElementById('t-product-input');
@@ -7907,6 +7917,133 @@ function updateTraderList(){
       return tradeType === '매입' || tradeType === '매입/매출';
     });
     purchaseDl.innerHTML = purchaseNames.map(name => `<option value="${htmlEscape(name)}">`).join('');
+  }
+}
+
+let txnTraderSearchRows = [];
+let txnTraderSearchIndex = -1;
+let txnTraderSearchHideTimer = null;
+
+function getTxnTraderSearchRows(){
+  const type = document.getElementById('t-type')?.value || '';
+  return Object.keys(traderInfoMap || {})
+    .filter(name => {
+      const info = traderInfoMap?.[name] || {};
+      if(!name || info.alias === true || info.active === false) return false;
+      const tradeType = String(info.tradeType || '').trim();
+      if(type === '입고') return tradeType === '매입' || tradeType === '매입/매출';
+      if(type === '출고') return tradeType === '매출' || tradeType === '매입/매출';
+      return true;
+    })
+    .map(name => ({name, info:traderInfoMap[name] || {}}))
+    .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+}
+
+function txnTraderSearchText(row){
+  const info = row?.info || {};
+  return [row?.name, info.fullname, info.tradeType, info.category, info.manager, info.managerPhone, info.phone]
+    .filter(Boolean).join(' ').toLowerCase();
+}
+
+function txnTraderOptionDetail(info){
+  return [
+    info?.tradeType || '구분 미지정',
+    info?.category,
+    info?.manager && `담당 ${info.manager}`
+  ].filter(Boolean).join(' / ');
+}
+
+function onTxnTraderSearch(isInput){
+  const input = document.getElementById('t-trader');
+  const box = document.getElementById('t-trader-results');
+  if(!input || !box) return;
+  if(txnTraderSearchHideTimer){
+    clearTimeout(txnTraderSearchHideTimer);
+    txnTraderSearchHideTimer = null;
+  }
+  if(isInput) autoFillTxnPrice();
+  const query = String(input.value || '').trim().toLowerCase();
+  const filtered = getTxnTraderSearchRows().filter(row => !query || txnTraderSearchText(row).includes(query));
+  txnTraderSearchRows = filtered.slice(0, 80);
+  const exactIndex = txnTraderSearchRows.findIndex(row => samePriceText(row.name, input.value));
+  txnTraderSearchIndex = exactIndex >= 0 ? exactIndex : (txnTraderSearchRows.length ? 0 : -1);
+  if(!txnTraderSearchRows.length){
+    box.innerHTML = '<div class="txn-trader-empty">검색 결과 없음</div>';
+  } else {
+    box.innerHTML = txnTraderSearchRows.map((row,index)=>`<div class="txn-trader-option${index===txnTraderSearchIndex?' active':''}" role="option" aria-selected="${index===txnTraderSearchIndex?'true':'false'}" data-index="${index}">
+      <strong>${htmlEscape(row.name)}</strong>
+      <span>${htmlEscape(txnTraderOptionDetail(row.info))}</span>
+    </div>`).join('');
+    box.querySelectorAll('.txn-trader-option').forEach(option=>{
+      option.addEventListener('mousedown', event=>{
+        event.preventDefault();
+        selectTxnTraderSearchResult(Number(option.dataset.index));
+      });
+    });
+  }
+  box.style.display = 'block';
+  input.setAttribute('aria-expanded','true');
+}
+
+function syncTxnTraderSearchSelection(){
+  const box = document.getElementById('t-trader-results');
+  if(!box) return;
+  box.querySelectorAll('.txn-trader-option').forEach(option=>{
+    const selected = Number(option.dataset.index) === txnTraderSearchIndex;
+    option.classList.toggle('active', selected);
+    option.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  box.querySelector(`.txn-trader-option[data-index="${txnTraderSearchIndex}"]`)?.scrollIntoView({block:'nearest'});
+}
+
+function selectTxnTraderSearchResult(index){
+  const row = txnTraderSearchRows[index];
+  const input = document.getElementById('t-trader');
+  if(!row || !input) return;
+  input.value = row.name;
+  hideTxnTraderResults(true);
+  autoFillTxnPrice();
+}
+
+function handleTxnTraderSearchKeydown(event){
+  const box = document.getElementById('t-trader-results');
+  const isOpen = box && box.style.display !== 'none';
+  if(event.key === 'Escape'){
+    event.preventDefault();
+    hideTxnTraderResults(true);
+    return;
+  }
+  if(event.key === 'ArrowDown' || event.key === 'ArrowUp'){
+    event.preventDefault();
+    if(!isOpen) onTxnTraderSearch(false);
+    if(!txnTraderSearchRows.length) return;
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    txnTraderSearchIndex = Math.max(0, Math.min((txnTraderSearchIndex < 0 ? 0 : txnTraderSearchIndex) + delta, txnTraderSearchRows.length - 1));
+    syncTxnTraderSearchSelection();
+    return;
+  }
+  if(event.key === 'Enter' && isOpen && txnTraderSearchIndex >= 0){
+    event.preventDefault();
+    selectTxnTraderSearchResult(txnTraderSearchIndex);
+  }
+}
+
+function hideTxnTraderResults(immediate=false){
+  const hide = () => {
+    const box = document.getElementById('t-trader-results');
+    const input = document.getElementById('t-trader');
+    if(box) box.style.display = 'none';
+    if(input) input.setAttribute('aria-expanded','false');
+  };
+  if(txnTraderSearchHideTimer) clearTimeout(txnTraderSearchHideTimer);
+  if(immediate){
+    txnTraderSearchHideTimer = null;
+    hide();
+  } else {
+    txnTraderSearchHideTimer = setTimeout(()=>{
+      txnTraderSearchHideTimer = null;
+      hide();
+    }, 180);
   }
 }
 
