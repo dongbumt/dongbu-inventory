@@ -1098,30 +1098,27 @@
         <div class="ct-bar" style="background:var(--orange);"></div>
         생산일보 목록
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;">
-          <div class="form-group" style="flex:0 0 auto;gap:4px;">
-            <label style="font-size:11px;font-weight:700;color:#666;">시작일</label>
-            <input type="date" id="prod-filter-from" style="width:145px;font-size:12px;" onchange="renderProduction()">
-          </div>
-          <div class="form-group" style="flex:0 0 auto;gap:4px;">
-            <label style="font-size:11px;font-weight:700;color:#666;">종료일</label>
-            <input type="date" id="prod-filter-to" style="width:145px;font-size:12px;" onchange="renderProduction()">
-          </div>
-          <div class="form-group" style="flex:0 0 auto;gap:4px;">
-            <label style="font-size:11px;font-weight:700;color:#666;">품목명</label>
-            <input id="prod-filter-product" placeholder="품목명 검색..." style="width:160px;font-size:12px;" oninput="renderProduction()">
-          </div>
-          <div class="form-group" style="flex:0 0 auto;gap:4px;">
-            <label style="font-size:11px;font-weight:700;color:#666;">이력번호</label>
-            <input id="prod-filter-lot" placeholder="이력번호 검색..." style="width:150px;font-size:12px;" oninput="renderProduction()">
-          </div>
-          <button class="btn btn-secondary btn-sm" style="margin-bottom:1px;" onclick="clearProductionFilters()">전체</button>
-          <button class="btn btn-secondary btn-sm" style="margin-bottom:1px;" onclick="setProdFilterToday()">오늘</button>
-          <button class="btn btn-secondary btn-sm" style="margin-bottom:1px;" onclick="setProdFilterThisMonth()">이번달</button>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;max-width:100%;">
+        <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
+          <span style="font-size:12px;color:#666;white-space:nowrap;">특정일</span>
+          <input type="date" id="prod-filter-date" aria-label="생산일보 특정일" title="생산일보 특정일" style="width:135px;font-size:12px;" onchange="markProductionSearchPending('exact')" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionExactDateSearch();}">
+          <button class="btn btn-primary btn-sm" onclick="runProductionExactDateSearch()">특정일 조회</button>
+          <button class="btn btn-secondary btn-sm" onclick="runProductionRecentSearch(15)">최근 15일</button>
+          <button class="btn btn-secondary btn-sm" onclick="runProductionRecentSearch(30)">최근 30일</button>
+          <button class="btn btn-secondary btn-sm" onclick="runProductionAllSearch()">전체</button>
+          <span style="font-size:12px;color:#666;white-space:nowrap;margin-left:4px;">기간</span>
+          <input type="date" id="prod-filter-from" aria-label="생산일보 시작일" title="생산일보 시작일" style="width:135px;font-size:12px;" onchange="markProductionSearchPending('range')" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionRangeSearch();}">
+          <span style="font-size:12px;color:#888;">~</span>
+          <input type="date" id="prod-filter-to" aria-label="생산일보 종료일" title="생산일보 종료일" style="width:135px;font-size:12px;" onchange="markProductionSearchPending('range')" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionRangeSearch();}">
+          <button class="btn btn-primary btn-sm" onclick="runProductionRangeSearch()">기간 조회</button>
         </div>
-        <button class="btn btn-primary btn-sm" style="margin-bottom:1px;" onclick="printFilteredProduction()">인쇄</button>
-        <button class="btn btn-secondary btn-sm" style="margin-bottom:1px;" onclick="exportProductionCSV()">📥 CSV</button>
+        <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
+          <input id="prod-filter-product" placeholder="품목명 검색..." style="width:160px;font-size:12px;" autocomplete="off" oninput="markProductionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionSearch();}">
+          <input id="prod-filter-lot" placeholder="이력번호 검색..." style="width:150px;font-size:12px;" autocomplete="off" oninput="markProductionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionSearch();}">
+          <button class="btn btn-primary btn-sm" onclick="runProductionSearch()">조건 조회</button>
+          <button class="btn btn-primary btn-sm" onclick="printFilteredProduction()">인쇄</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportProductionCSV()">CSV 저장</button>
+        </div>
       </div>
     </div>
     <div style="font-size:11px;color:#888;margin-bottom:12px;padding:8px 12px;background:#f8f9fa;border-radius:6px;border-left:3px solid var(--orange);display:flex;justify-content:space-between;align-items:center;">
@@ -4681,7 +4678,8 @@ function renderPageById(id, reason='menu'){
       case 'p-production':
         initializePageOnce(id, initProdForm);
         updateOriginList();
-        renderProduction();
+        if(reason === 'menu') prepareProductionList();
+        else renderProduction();
         break;
       case 'p-prod-loss':
         renderProductionLoss();
@@ -10459,28 +10457,102 @@ function getProdEntryNote(entry){
 function isProductionCountedEntry(entry){
   return getProdJobType(entry) === '생산';
 }
-// 오늘/이번달 단축 버튼
-function setProdFilterToday(){
-  const d=localDateString();
-  document.getElementById('prod-filter-from').value=d;
-  document.getElementById('prod-filter-to').value=d;
-  renderProduction();
+
+let productionListQueryActive = false;
+
+function setProductionListIdle(){
+  const body = document.getElementById('prod-body');
+  const status = document.getElementById('prod-filter-status');
+  if(body) body.innerHTML = '';
+  if(status) status.textContent = '(조회 전)';
 }
-function setProdFilterThisMonth(){
-  const t=new Date();
-  const y=t.getFullYear(), mo=String(t.getMonth()+1).padStart(2,'0');
-  const last=new Date(y,t.getMonth()+1,0).getDate();
-  document.getElementById('prod-filter-from').value=`${y}-${mo}-01`;
-  document.getElementById('prod-filter-to').value=`${y}-${mo}-${String(last).padStart(2,'0')}`;
+
+function prepareProductionList(){
+  const exactDate = document.getElementById('prod-filter-date');
+  const dateFrom = document.getElementById('prod-filter-from');
+  const dateTo = document.getElementById('prod-filter-to');
+  if(exactDate && !exactDate.value && !dateFrom?.value && !dateTo?.value) exactDate.value = today;
+  productionListQueryActive = false;
+  setProductionListIdle();
+}
+
+function markProductionSearchPending(dateMode=''){
+  if(dateMode === 'exact'){
+    const dateFrom = document.getElementById('prod-filter-from');
+    const dateTo = document.getElementById('prod-filter-to');
+    if(dateFrom) dateFrom.value = '';
+    if(dateTo) dateTo.value = '';
+  }else if(dateMode === 'range'){
+    const exactDate = document.getElementById('prod-filter-date');
+    if(exactDate) exactDate.value = '';
+  }
+  productionListQueryActive = false;
+  setProductionListIdle();
+}
+
+function validateProductionDateRange(){
+  const dateFrom = document.getElementById('prod-filter-from')?.value || '';
+  const dateTo = document.getElementById('prod-filter-to')?.value || '';
+  if(dateFrom && dateTo && dateFrom > dateTo){
+    toast('생산일보 시작일은 종료일보다 늦을 수 없습니다.');
+    return false;
+  }
+  return true;
+}
+
+function runProductionSearch(){
+  if(!validateProductionDateRange()) return;
+  productionListQueryActive = true;
   renderProduction();
 }
 
-function clearProductionFilters(){
-  ['prod-filter-from','prod-filter-to','prod-filter-product','prod-filter-lot'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.value = '';
+function runProductionExactDateSearch(){
+  const exactDate = document.getElementById('prod-filter-date');
+  if(!exactDate?.value){
+    toast('조회할 특정 날짜를 선택하세요.');
+    exactDate?.focus();
+    return;
+  }
+  const dateFrom = document.getElementById('prod-filter-from');
+  const dateTo = document.getElementById('prod-filter-to');
+  if(dateFrom) dateFrom.value = '';
+  if(dateTo) dateTo.value = '';
+  runProductionSearch();
+}
+
+function runProductionRangeSearch(){
+  const dateFrom = document.getElementById('prod-filter-from');
+  const dateTo = document.getElementById('prod-filter-to');
+  if(!dateFrom?.value && !dateTo?.value){
+    toast('조회할 시작일 또는 종료일을 선택하세요.');
+    dateFrom?.focus();
+    return;
+  }
+  const exactDate = document.getElementById('prod-filter-date');
+  if(exactDate) exactDate.value = '';
+  runProductionSearch();
+}
+
+function runProductionRecentSearch(days){
+  const rangeDays = Number(days) === 30 ? 30 : 15;
+  const endDate = new Date(`${today}T00:00:00`);
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - (rangeDays - 1));
+  const exactDate = document.getElementById('prod-filter-date');
+  const dateFrom = document.getElementById('prod-filter-from');
+  const dateTo = document.getElementById('prod-filter-to');
+  if(exactDate) exactDate.value = '';
+  if(dateFrom) dateFrom.value = localDateString(startDate);
+  if(dateTo) dateTo.value = localDateString(endDate);
+  runProductionSearch();
+}
+
+function runProductionAllSearch(){
+  ['prod-filter-date','prod-filter-from','prod-filter-to','prod-filter-product','prod-filter-lot'].forEach(id=>{
+    const element = document.getElementById(id);
+    if(element) element.value = '';
   });
-  renderProduction();
+  runProductionSearch();
 }
 
 function productionMatchesSearch(entry, productQ, lotQ){
@@ -10494,6 +10566,7 @@ function productionMatchesSearch(entry, productQ, lotQ){
 }
 
 function getFilteredProductionEntries(sortDirection='desc'){
+  const exactDate = document.getElementById('prod-filter-date')?.value || '';
   const filterFrom = document.getElementById('prod-filter-from')?.value || '';
   const filterTo = document.getElementById('prod-filter-to')?.value || '';
   const productQ = (document.getElementById('prod-filter-product')?.value || '').toLowerCase().trim();
@@ -10505,16 +10578,21 @@ function getFilteredProductionEntries(sortDirection='desc'){
   });
   const entries = allProd.filter(e=>{
     const d = normProdDate(e.date);
+    if(exactDate && d !== exactDate) return false;
     if(filterFrom && d < filterFrom) return false;
     if(filterTo && d > filterTo) return false;
     return productionMatchesSearch(e, productQ, lotQ);
   });
-  return { entries, filterFrom, filterTo, productQ, lotQ };
+  return { entries, exactDate, filterFrom, filterTo, productQ, lotQ };
 }
 
 function renderProduction(){
+  if(!productionListQueryActive){
+    setProductionListIdle();
+    return;
+  }
   const b=document.getElementById('prod-body');
-  const { entries, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('desc');
+  const { entries, exactDate, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('desc');
   
   if(!entries.length){
     b.innerHTML='<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--color-text-secondary)">검색 조건에 맞는 생산일보가 없습니다</td></tr>';
@@ -10604,17 +10682,17 @@ function renderProduction(){
     const searchLabels = [];
     if(productQ) searchLabels.push(`품목: ${document.getElementById('prod-filter-product')?.value || ''}`);
     if(lotQ) searchLabels.push(`이력번호: ${document.getElementById('prod-filter-lot')?.value || ''}`);
-    if(!filterFrom && !filterTo && !searchLabels.length){
+    if(!exactDate && !filterFrom && !filterTo && !searchLabels.length){
       statusEl.textContent = `전체 ${entries.length}건`;
     } else {
-      const label = filterFrom===filterTo && filterFrom
+      const label = exactDate || (filterFrom===filterTo && filterFrom
         ? filterFrom
-        : `${filterFrom||'~'} ~ ${filterTo||'~'}`;
-      statusEl.textContent = `${filterFrom || filterTo ? label + ' · ' : ''}${searchLabels.join(' · ')}${searchLabels.length ? ' · ' : ''}${entries.length}건`;
+        : `${filterFrom||'~'} ~ ${filterTo||'~'}`);
+      statusEl.textContent = `${exactDate || filterFrom || filterTo ? label + ' · ' : ''}${searchLabels.join(' · ')}${searchLabels.length ? ' · ' : ''}${entries.length}건`;
     }
   }
 
-  b.innerHTML = html || `<tr><td colspan="15" style="text-align:center;padding:24px;color:#999;">${(filterFrom||filterTo)?'해당 기간의 생산일보가 없습니다':'데이터가 없습니다'}</td></tr>`;
+  b.innerHTML = html || `<tr><td colspan="15" style="text-align:center;padding:24px;color:#999;">${(exactDate||filterFrom||filterTo)?'해당 기간의 생산일보가 없습니다':'데이터가 없습니다'}</td></tr>`;
 }
 
 function productionLossFmtKg(value){
@@ -13028,13 +13106,18 @@ function printFilteredTransactions(){
 }
 
 function printFilteredProduction(){
-  const {entries, filterFrom, filterTo, productQ, lotQ}=getFilteredProductionEntries('desc');
+  if(!productionListQueryActive){
+    toast('생산일보 목록을 먼저 조회하세요.');
+    return;
+  }
+  const {entries, exactDate, filterFrom, filterTo, productQ, lotQ}=getFilteredProductionEntries('desc');
   if(!entries.length){
     toast('현재 검색 조건에 맞는 생산일보가 없습니다.');
     return;
   }
   const filters=[];
-  if(filterFrom || filterTo) filters.push(`기간: ${filterFrom || '~'} ~ ${filterTo || '~'}`);
+  if(exactDate) filters.push(`특정일: ${exactDate}`);
+  else if(filterFrom || filterTo) filters.push(`기간: ${filterFrom || '~'} ~ ${filterTo || '~'}`);
   if(productQ) filters.push(`품목명: ${document.getElementById('prod-filter-product')?.value || ''}`);
   if(lotQ) filters.push(`이력번호: ${document.getElementById('prod-filter-lot')?.value || ''}`);
   const groups=entries.map(e=>{
@@ -13098,7 +13181,11 @@ function printFilteredProduction(){
 }
 
 function exportProductionCSV(){
-  const { entries: filtered, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('asc');
+  if(!productionListQueryActive){
+    toast('생산일보 목록을 먼저 조회하세요.');
+    return;
+  }
+  const { entries: filtered, exactDate, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('asc');
 
   const header=['작업일','작업번호','작업유형','작업비고','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호'];
   const rows=[header];
@@ -13134,8 +13221,9 @@ function exportProductionCSV(){
   });
 
   const searchLabel = [productQ ? '품목검색' : '', lotQ ? '이력검색' : ''].filter(Boolean).join('_');
-  const fname = (filterFrom||filterTo||searchLabel)
-    ? `생산일보_${filterFrom||''}~${filterTo||''}${searchLabel ? '_' + searchLabel : ''}.csv`
+  const dateLabel = exactDate || (filterFrom || filterTo ? `${filterFrom||''}~${filterTo||''}` : '');
+  const fname = (dateLabel||searchLabel)
+    ? `생산일보_${dateLabel}${searchLabel ? '_' + searchLabel : ''}.csv`
     : '생산일보_전체.csv';
   downloadCSV(rows, fname);
 }
