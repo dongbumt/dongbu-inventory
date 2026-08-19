@@ -853,23 +853,34 @@
         <div class="ct-bar" style="background:var(--blue);"></div>
         거래 목록 <span id="t-count" style="font-size:12px;font-weight:400;color:#888;"></span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <select id="t-filter-type" style="width:110px;font-size:12px;padding:6px 8px;" onchange="renderTransactions()">
-          <option value="">전체</option>
-          <option value="입고">입고</option>
-          <option value="출고">출고</option>
-          <option value="사용">사용(구 데이터)</option>
-          <option value="재고조정">재고조정</option>
-          <option value="재고이동">재고이동</option>
-        </select>
-        <span style="font-size:12px;color:#666;white-space:nowrap;">기간</span>
-        <input type="date" id="t-search-from" aria-label="거래 시작일" title="거래 시작일" style="width:135px;font-size:12px;" onchange="renderTransactions()">
-        <span style="font-size:12px;color:#888;">~</span>
-        <input type="date" id="t-search-to" aria-label="거래 종료일" title="거래 종료일" style="width:135px;font-size:12px;" onchange="renderTransactions()">
-        <input placeholder="품목명 검색..." id="t-search-product" style="width:150px;" oninput="renderTransactions()">
-        <input placeholder="이력번호 검색..." id="t-search-lot" style="width:150px;" oninput="renderTransactions()">
-        <button class="btn btn-primary btn-sm" onclick="printFilteredTransactions()">인쇄</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportTransactionsCSV()">CSV 저장</button>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;max-width:100%;">
+        <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
+          <span style="font-size:12px;color:#666;white-space:nowrap;">특정일</span>
+          <input type="date" id="t-search-date" aria-label="거래 특정일" title="거래 특정일" style="width:135px;font-size:12px;" onchange="markTransactionSearchPending('exact')" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionExactDateSearch();}">
+          <button class="btn btn-primary btn-sm" onclick="runTransactionExactDateSearch()">특정일 조회</button>
+          <button class="btn btn-secondary btn-sm" onclick="runTransactionRecentSearch(15)">최근 15일</button>
+          <button class="btn btn-secondary btn-sm" onclick="runTransactionRecentSearch(30)">최근 30일</button>
+          <span style="font-size:12px;color:#666;white-space:nowrap;margin-left:4px;">기간</span>
+          <input type="date" id="t-search-from" aria-label="거래 시작일" title="거래 시작일" style="width:135px;font-size:12px;" onchange="markTransactionSearchPending('range')" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionRangeSearch();}">
+          <span style="font-size:12px;color:#888;">~</span>
+          <input type="date" id="t-search-to" aria-label="거래 종료일" title="거래 종료일" style="width:135px;font-size:12px;" onchange="markTransactionSearchPending('range')" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionRangeSearch();}">
+          <button class="btn btn-primary btn-sm" onclick="runTransactionRangeSearch()">기간 조회</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
+          <select id="t-filter-type" aria-label="거래 구분" style="width:110px;font-size:12px;padding:6px 8px;" onchange="markTransactionSearchPending()">
+            <option value="">전체</option>
+            <option value="입고">입고</option>
+            <option value="출고">출고</option>
+            <option value="사용">사용(구 데이터)</option>
+            <option value="재고조정">재고조정</option>
+            <option value="재고이동">재고이동</option>
+          </select>
+          <input placeholder="품목명 검색..." id="t-search-product" style="width:150px;" autocomplete="off" oninput="markTransactionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
+          <input placeholder="이력번호 검색..." id="t-search-lot" style="width:150px;" autocomplete="off" oninput="markTransactionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
+          <button class="btn btn-primary btn-sm" onclick="runTransactionSearch()">조건 조회</button>
+          <button class="btn btn-primary btn-sm" onclick="printFilteredTransactions()">인쇄</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportTransactionsCSV()">CSV 저장</button>
+        </div>
       </div>
     </div>
     <div class="tbl-wrap">
@@ -4538,7 +4549,8 @@ function renderPageById(id, reason='menu'){
         initSamsung();
         break;
       case 'p-transactions':
-        renderTransactions();
+        if(reason === 'menu') prepareTransactionList();
+        else renderTransactions();
         updateProductList();
         updateOriginList();
         updateTraderList();
@@ -8662,7 +8674,97 @@ function initBulkOutbound(){
   if(tbody && !tbody.children.length) addBulkOutboundRows(5);
 }
 
+let transactionListQueryActive = false;
+
+function setTransactionListIdle(){
+  const count = document.getElementById('t-count');
+  const body = document.getElementById('t-body');
+  if(count) count.textContent = '(조회 전)';
+  if(body) body.innerHTML = '';
+}
+
+function prepareTransactionList(){
+  const exactDate = document.getElementById('t-search-date');
+  const dateFrom = document.getElementById('t-search-from');
+  const dateTo = document.getElementById('t-search-to');
+  if(exactDate && !exactDate.value && !dateFrom?.value && !dateTo?.value) exactDate.value = today;
+  transactionListQueryActive = false;
+  setTransactionListIdle();
+}
+
+function markTransactionSearchPending(dateMode=''){
+  if(dateMode === 'exact'){
+    const dateFrom = document.getElementById('t-search-from');
+    const dateTo = document.getElementById('t-search-to');
+    if(dateFrom) dateFrom.value = '';
+    if(dateTo) dateTo.value = '';
+  }else if(dateMode === 'range'){
+    const exactDate = document.getElementById('t-search-date');
+    if(exactDate) exactDate.value = '';
+  }
+  transactionListQueryActive = false;
+  setTransactionListIdle();
+}
+
+function validateTransactionDateRange(){
+  const dateFrom = document.getElementById('t-search-from')?.value || '';
+  const dateTo = document.getElementById('t-search-to')?.value || '';
+  if(dateFrom && dateTo && dateFrom > dateTo){
+    toast('거래 시작일은 종료일보다 늦을 수 없습니다.');
+    return false;
+  }
+  return true;
+}
+
+function runTransactionSearch(){
+  if(!validateTransactionDateRange()) return;
+  transactionListQueryActive = true;
+  renderTransactions();
+}
+
+function runTransactionExactDateSearch(){
+  const exactDate = document.getElementById('t-search-date');
+  if(!exactDate?.value){
+    toast('조회할 특정 날짜를 선택하세요.');
+    exactDate?.focus();
+    return;
+  }
+  const dateFrom = document.getElementById('t-search-from');
+  const dateTo = document.getElementById('t-search-to');
+  if(dateFrom) dateFrom.value = '';
+  if(dateTo) dateTo.value = '';
+  runTransactionSearch();
+}
+
+function runTransactionRangeSearch(){
+  const dateFrom = document.getElementById('t-search-from');
+  const dateTo = document.getElementById('t-search-to');
+  if(!dateFrom?.value && !dateTo?.value){
+    toast('조회할 시작일 또는 종료일을 선택하세요.');
+    dateFrom?.focus();
+    return;
+  }
+  const exactDate = document.getElementById('t-search-date');
+  if(exactDate) exactDate.value = '';
+  runTransactionSearch();
+}
+
+function runTransactionRecentSearch(days){
+  const rangeDays = Number(days) === 30 ? 30 : 15;
+  const endDate = new Date(`${today}T00:00:00`);
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - (rangeDays - 1));
+  const exactDate = document.getElementById('t-search-date');
+  const dateFrom = document.getElementById('t-search-from');
+  const dateTo = document.getElementById('t-search-to');
+  if(exactDate) exactDate.value = '';
+  if(dateFrom) dateFrom.value = localDateString(startDate);
+  if(dateTo) dateTo.value = localDateString(endDate);
+  runTransactionSearch();
+}
+
 function getFilteredTransactions(sortDirection='desc'){
+  const exactDate=(document.getElementById('t-search-date')?.value||'').trim();
   const dateFrom=(document.getElementById('t-search-from')?.value||'').trim();
   const dateTo=(document.getElementById('t-search-to')?.value||'').trim();
   const productQ=(document.getElementById('t-search-product')?.value||'').toLowerCase().trim();
@@ -8671,6 +8773,7 @@ function getFilteredTransactions(sortDirection='desc'){
   const rows=transactions.filter(t=>{
     const txnDate=String(t.date||'');
     return (!ft||t.type===ft)&&
+      (!exactDate||txnDate===exactDate)&&
       (!dateFrom||txnDate>=dateFrom)&&
       (!dateTo||txnDate<=dateTo)&&
       (!productQ||String(t.product||'').toLowerCase().includes(productQ))&&
@@ -8681,13 +8784,21 @@ function getFilteredTransactions(sortDirection='desc'){
     const idCmp = String(a.id||'').localeCompare(String(b.id||''), 'ko', {numeric:true});
     return sortDirection === 'asc' ? idCmp : -idCmp;
   });
-  return {rows, dateFrom, dateTo, productQ, lotQ, ft};
+  return {rows, exactDate, dateFrom, dateTo, productQ, lotQ, ft};
 }
 
 function renderTransactions(){
+  if(!transactionListQueryActive){
+    setTransactionListIdle();
+    return;
+  }
   const {rows} = getFilteredTransactions('desc');
   document.getElementById('t-count').textContent=`(${rows.length}건)`;
   const b=document.getElementById('t-body');
+  if(!rows.length){
+    b.innerHTML='<tr><td colspan="11" style="text-align:center;color:#888;padding:24px;">조회 결과가 없습니다.</td></tr>';
+    return;
+  }
   b.innerHTML=rows.map(t=>{
     const id = t.id;
     const domId = String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -12159,14 +12270,19 @@ function openA4ListPrint(title, filterText, count, tableHtml){
 }
 
 function printFilteredTransactions(){
-  const {rows, dateFrom, dateTo, productQ, lotQ, ft}=getFilteredTransactions('desc');
+  if(!transactionListQueryActive){
+    toast('거래목록을 먼저 조회하세요.');
+    return;
+  }
+  const {rows, exactDate, dateFrom, dateTo, productQ, lotQ, ft}=getFilteredTransactions('desc');
   if(!rows.length){
     toast('현재 검색 조건에 맞는 거래내역이 없습니다.');
     return;
   }
   const filters=[];
   if(ft) filters.push(`구분: ${ft}`);
-  if(dateFrom || dateTo) filters.push(`기간: ${dateFrom || '~'} ~ ${dateTo || '~'}`);
+  if(exactDate) filters.push(`특정일: ${exactDate}`);
+  else if(dateFrom || dateTo) filters.push(`기간: ${dateFrom || '~'} ~ ${dateTo || '~'}`);
   if(productQ) filters.push(`품목명: ${document.getElementById('t-search-product')?.value || ''}`);
   if(lotQ) filters.push(`이력번호: ${document.getElementById('t-search-lot')?.value || ''}`);
   const body=rows.map(t=>{
