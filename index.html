@@ -3238,7 +3238,7 @@
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#6b7280;"></div>사용자·역할·메뉴 권한</div>
       <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTAuth.refreshAdmin()">서버 새로고침</button>
     </div>
-    <div class="m02-note">M02는 안전한 병행 운영 단계입니다. 개인 로그인을 하면 역할별 메뉴 제한과 사용자 변경이력이 적용되며, 로그인하지 않은 기존 직원은 당분간 공용 연동 방식으로 계속 사용할 수 있습니다.</div>
+    <div class="m02-note">개인 로그인 사용자는 역할별 권한이 적용됩니다. 로그인 전 공용 화면은 <b>공용운영</b> 역할의 조회 체크 메뉴만 표시되며, 공용운영 역할은 사용자에게 배정되지 않습니다.</div>
     <div id="m02-admin-status" class="m02-status">권한 정보를 준비하는 중입니다.</div>
     <div id="m02-bootstrap-note" class="m02-note m02-bootstrap">아직 개인 사용자가 없습니다. 아래 사용자 등록에서 첫 관리자를 만들면 바로 개인 로그인을 시험할 수 있습니다.</div>
 
@@ -3282,7 +3282,7 @@
               <tbody id="m02-permission-body"></tbody>
             </table>
           </div>
-          <div class="m02-actions"><button class="btn btn-secondary btn-sm" onclick="DBMTAuth.newRole()">초기화</button><button class="btn btn-primary btn-sm" onclick="DBMTAuth.saveRole()">역할 저장</button></div>
+          <div class="m02-actions"><button class="btn btn-secondary btn-sm" onclick="DBMTAuth.newRole()">초기화</button><button id="m02-role-delete-btn" class="btn btn-danger btn-sm" style="display:none;" onclick="DBMTAuth.deleteRole()">역할 삭제</button><button class="btn btn-primary btn-sm" onclick="DBMTAuth.saveRole()">역할 저장</button></div>
         </section>
       </div>
     </div>
@@ -20137,6 +20137,6 @@ function initSamsung(){
 <script src="quotation.js?v=20260819quote3"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
 <script src="meatwatch-lookup.js?v=20260819bulkinlookup1"></script>
-<script src="m02-auth.js?v=20260814m02permissions4"></script>
+<script src="m02-auth.js?v=20260820rolepermissions1"></script>
 </body>
 </html>

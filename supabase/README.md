@@ -72,6 +72,7 @@ Editor query for each file:
 50. `schema-rpc-28-erp-submaterial-usage-permissions.sql`
 51. `schema-rpc-29-business-partner-master.sql`
 52. `schema-rpc-30-product-codes.sql`
+53. `schema-rpc-31-erp-role-public-permissions.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -106,7 +107,9 @@ This creates:
 - `dbmt_erp_logout(token)`
 - `dbmt_m02_get_admin(password)`
 - `dbmt_m02_save_role(password, ..., permissions, expected_revision)`
+- `dbmt_m02_delete_role(password, role_id, expected_revision)`
 - `dbmt_m02_save_user(password, ..., login_password, expected_revision)`
+- `dbmt_erp_public_permissions()`
 - `dbmt_erp_save_schedule(token, id, date, text)`
 - `dbmt_erp_delete_schedule(token, id)`
 - `dbmt_erp_save_stock_adjust(token, record)`
@@ -229,6 +232,14 @@ the same permanent `3xxxxx` code sequence for all three.
 Apply `20260818091000_product_species_immutability.sql` after it so an issued
 product cannot be changed from one species to another; register a new product
 instead.
+
+Apply `20260820100000_erp_role_public_permissions.sql` after it. It adds the
+editable `관리자` and `대표` roles and a protected `공용운영` pseudo-role. The
+public role controls only which menus are shown before personal login, permits
+view access only, and cannot be assigned to a user. Role deletion is allowed
+only for non-protected roles that have no users assigned, including inactive
+users. The initial public menu is limited to schedule, stock, and change-log
+viewing; administrators can change those view checkboxes in M02.
 
 ## 3. Document request delivery
 

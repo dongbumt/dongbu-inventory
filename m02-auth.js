@@ -52,6 +52,7 @@
     'DBMTAuth.saveUser':['access_control','admin','uiOnly'],
     'DBMTAuth.newRole':['access_control','admin','uiOnly'],
     'DBMTAuth.saveRole':['access_control','admin','uiOnly'],
+    'DBMTAuth.deleteRole':['access_control','admin','uiOnly'],
 
     newCompanyBusinessSite:['company_master','create','uiOnly'],
     saveCompanyMasterRecord:['company_master','update'],
@@ -187,7 +188,13 @@
     ['[data-identifier-key]','company_master','update']
   ]);
 
-  let state = {user:null, permissions:new Map(), authMode:'optional'};
+  const DEFAULT_PUBLIC_MENUS = new Set(['schedule','stock','change_log']);
+  let state = {
+    user:null,
+    permissions:new Map(),
+    publicPermissions:new Map([...DEFAULT_PUBLIC_MENUS].map(menuCode=>[menuCode, {menuCode, canView:true}])),
+    authMode:'optional'
+  };
   let adminData = null;
   let selectedUserId = '';
   let selectedRoleId = '';
@@ -225,6 +232,21 @@
     notifyPermissionSurfaces();
   }
 
+  async function loadPublicPermissions(){
+    try{
+      const rows = await rpc('dbmt_erp_public_permissions', {});
+      if(Array.isArray(rows)){
+        state.publicPermissions = new Map(rows.map(row=>[row.menuCode, row]));
+      }
+    }catch(err){
+      console.warn('공용운영 메뉴 권한을 불러오지 못해 기본 축소 구성을 사용합니다:', err);
+    }
+    if(!state.user){
+      applyNavigation();
+      notifyPermissionSurfaces();
+    }
+  }
+
   function clearSession(){
     storeSessionToken('');
     setSession({user:null, permissions:[], authMode:'optional'});
@@ -248,7 +270,10 @@
   }
 
   function can(menuCode, action='view'){
-    if(!state.user) return action === 'view';
+    if(!state.user){
+      const row = state.publicPermissions.get(menuCode);
+      return action === 'view' && Boolean(row?.canView);
+    }
     const row = state.permissions.get(menuCode);
     return Boolean(row && row[ACTION_FIELDS[action] || action]);
   }
@@ -347,7 +372,6 @@
       el.dataset.permissionMenu = menuCode;
       el.style.display = can(menuCode, 'view') ? '' : 'none';
     });
-    if(!state.user) return;
     const active = document.querySelector('.tab-panel.active');
     if(active && !canOpenPage(active.id)){
       const first = Object.keys(NAV_MENU).map(id=>document.getElementById(id))
@@ -484,7 +508,7 @@
   function renderRoleSelect(){
     const el = document.getElementById('m02-user-role');
     if(!el) return;
-    el.innerHTML = (adminData.roles || []).filter(r=>r.active).map(r=>
+    el.innerHTML = (adminData.roles || []).filter(r=>r.active && r.code!=='public_operator').map(r=>
       `<option value="${esc(r.id)}">${esc(r.name)}${r.systemRole?' (관리자)':''}</option>`
     ).join('');
   }
@@ -504,11 +528,13 @@
   function renderRoleList(){
     const el = document.getElementById('m02-role-list');
     if(!el) return;
-    el.innerHTML = (adminData.roles || []).map(row=>
-      `<button type="button" class="m02-list-row ${row.id===selectedRoleId?'active':''} ${row.active?'':'m02-disabled'}" data-role-id="${esc(row.id)}">
-        <strong>${esc(row.name)}${row.systemRole?' · 기본 관리자':''}</strong>
+    el.innerHTML = (adminData.roles || []).map(row=>{
+      const badge = row.systemRole ? ' · 기본 시스템' : row.code==='public_operator' ? ' · 공용 화면' : '';
+      return `<button type="button" class="m02-list-row ${row.id===selectedRoleId?'active':''} ${row.active?'':'m02-disabled'}" data-role-id="${esc(row.id)}">
+        <strong>${esc(row.name)}${badge}</strong>
         <small>${esc(row.code)} · 사용 중 ${Number(row.userCount || 0)}명 · ${row.active?'사용':'중지'}</small>
-      </button>`).join('');
+      </button>`;
+    }).join('');
     el.querySelectorAll('[data-role-id]').forEach(btn=>btn.addEventListener('click',()=>editRole(btn.dataset.roleId)));
   }
 
@@ -545,13 +571,17 @@
     }));
   }
 
-  function renderPermissionTable(rows, locked=false){
+  function renderPermissionTable(rows, options={}){
     const body=document.getElementById('m02-permission-body'); if(!body) return;
+    const locked=Boolean(options.locked);
+    const viewOnly=Boolean(options.viewOnly);
     const allRow=`<tr class="m02-all-row"><td>전체 선택</td>${ACTION_KEYS.map(action=>
-      `<td><input type="checkbox" data-all-action="${action}" ${locked?'disabled':''}></td>`).join('')}</tr>`;
+      `<td><input type="checkbox" data-all-action="${action}" ${(locked || (viewOnly && action!=='view'))?'disabled':''}></td>`).join('')}</tr>`;
     body.innerHTML=allRow+rows.map(row=>`<tr data-menu-code="${esc(row.menuCode)}"><td>${esc(row.menuName)}</td>${ACTION_KEYS.map(action=>{
       const field=ACTION_FIELDS[action];
-      return `<td><input type="checkbox" data-action="${action}" ${row[field]?'checked':''} ${locked?'disabled':''}></td>`;
+      const disabled=locked || (viewOnly && action!=='view');
+      const checked=viewOnly && action!=='view' ? false : Boolean(row[field]);
+      return `<td><input type="checkbox" data-action="${action}" ${checked?'checked':''} ${disabled?'disabled':''}></td>`;
     }).join('')}</tr>`).join('');
     body.querySelectorAll('[data-all-action]').forEach(box=>{
       const action=box.dataset.allAction;
@@ -569,7 +599,8 @@
     const code=document.getElementById('m02-role-code'); if(code) code.readOnly=false;
     const active=document.getElementById('m02-role-active'); if(active) active.disabled=false;
     const title=document.getElementById('m02-role-form-title'); if(title) title.textContent='역할 등록';
-    renderPermissionTable(permissionRowsForRole(''), false);
+    const deleteButton=document.getElementById('m02-role-delete-btn'); if(deleteButton) deleteButton.style.display='none';
+    renderPermissionTable(permissionRowsForRole(''));
     if(render) renderRoleList();
   }
 
@@ -580,9 +611,19 @@
     setValue('m02-role-code',row.code); setValue('m02-role-name',row.name);
     setValue('m02-role-description',row.description || ''); setValue('m02-role-active',row.active?'1':'0');
     const code=document.getElementById('m02-role-code'); if(code) code.readOnly=true;
-    const active=document.getElementById('m02-role-active'); if(active) active.disabled=Boolean(row.systemRole);
-    const title=document.getElementById('m02-role-form-title'); if(title) title.textContent='역할 수정';
-    renderPermissionTable(permissionRowsForRole(id), Boolean(row.systemRole));
+    const active=document.getElementById('m02-role-active'); if(active) active.disabled=Boolean(row.protectedRole);
+    const title=document.getElementById('m02-role-form-title');
+    if(title) title.textContent=row.code==='public_operator' ? '공용운영 메뉴 설정' : '역할 수정';
+    const deleteButton=document.getElementById('m02-role-delete-btn');
+    if(deleteButton){
+      deleteButton.style.display=row.protectedRole?'none':'';
+      deleteButton.disabled=Number(row.totalUserCount || 0)>0;
+      deleteButton.title=deleteButton.disabled?'먼저 이 역할의 사용자를 다른 역할로 변경해주세요.':'선택한 역할을 삭제합니다.';
+    }
+    renderPermissionTable(permissionRowsForRole(id), {
+      locked:Boolean(row.systemRole),
+      viewOnly:row.code==='public_operator'
+    });
     renderRoleList();
   }
 
@@ -615,6 +656,26 @@
     }catch(err){status('역할 저장 실패: '+friendly(err),true);}
   }
 
+  async function deleteRole(){
+    try{
+      ensureAdminAction();
+      const id=value('m02-role-id');
+      const row=(adminData?.roles || []).find(role=>role.id===id);
+      if(!row) throw new Error('삭제할 역할을 선택해주세요.');
+      if(row.protectedRole) throw new Error('시스템관리자와 공용운영 역할은 삭제할 수 없습니다.');
+      if(Number(row.totalUserCount || 0)>0) throw new Error('이 역할에 연결된 사용자를 먼저 다른 역할로 변경해주세요.');
+      if(!window.confirm(`역할 '${row.name}'을 삭제할까요?\n저장된 메뉴 권한도 함께 삭제됩니다.`)) return;
+      await rpc('dbmt_m02_delete_role', {
+        p_password:adminPassword(),
+        p_id:id,
+        p_expected_revision:Number(value('m02-role-revision'))
+      });
+      if(typeof window.toast==='function') window.toast('역할을 삭제했습니다.');
+      selectedRoleId='';
+      await refreshAdmin();
+    }catch(err){status('역할 삭제 실패: '+friendly(err),true);}
+  }
+
   async function saveUser(){
     try{
       ensureAdminAction();
@@ -644,6 +705,9 @@
     if(/stale .* revision/i.test(msg)) return '다른 화면에서 먼저 수정되었습니다. 서버 새로고침 후 다시 시도해주세요.';
     if(/at least one active system administrator/i.test(msg)) return '활성 시스템 관리자는 최소 1명 유지해야 합니다.';
     if(/active users are assigned/i.test(msg)) return '사용 중인 사용자가 연결된 역할은 중지할 수 없습니다.';
+    if(/users are assigned to this role/i.test(msg)) return '사용자가 연결된 역할은 삭제할 수 없습니다. 먼저 사용자의 역할을 변경해주세요.';
+    if(/protected role cannot be deleted/i.test(msg)) return '시스템관리자와 공용운영 역할은 삭제할 수 없습니다.';
+    if(/protected role cannot be disabled/i.test(msg)) return '시스템관리자와 공용운영 역할은 중지할 수 없습니다.';
     if(/invalid app password/i.test(msg)) return '공용 ERP 연동 비밀번호가 맞지 않습니다.';
     return msg || '알 수 없는 오류입니다.';
   }
@@ -655,7 +719,7 @@
     initializeSession, openLogin, closeLogin, loginFromModal, logoutConfirm,
     can, canAction, requireAction, canOpenPage, isPersonal, getSessionToken, auditIdentity, applyNavigation,
     applyActionPermissions,
-    initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole, saveUser, saveRole
+    initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole, saveUser, saveRole, deleteRole
   };
   window.DBMTAuth=api;
 
@@ -670,6 +734,7 @@
       })));
       observer.observe(document.body, {childList:true, subtree:true});
     }
+    loadPublicPermissions();
     initializeSession();
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bootstrap);
