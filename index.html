@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260818m04b">
+<link rel="stylesheet" href="styles/main.css?v=20260819productpicker1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -58,6 +58,58 @@
     <div class="em-btns">
       <button class="btn btn-secondary" onclick="closeEditTxnModal()">취소</button>
       <button class="btn btn-primary" onclick="saveEditTxn()">✓ 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 입고 품목 검색 모달 -->
+<div id="txn-product-picker-modal" class="edit-modal-bg hidden" role="dialog" aria-modal="true" aria-labelledby="txn-product-picker-title" onclick="if(event.target===this)closeTxnProductPicker()">
+  <div class="edit-modal txn-product-picker" onkeydown="handleTxnProductPickerKeydown(event)">
+    <div class="txn-product-picker-head">
+      <h3 id="txn-product-picker-title">입고 품목 선택</h3>
+      <button type="button" class="txn-product-picker-close" onclick="closeTxnProductPicker()" aria-label="닫기" title="닫기">×</button>
+    </div>
+    <div class="txn-product-kind" role="group" aria-label="품목 유형">
+      <button type="button" id="tpp-kind-raw" data-tpp-kind="원료육" aria-pressed="true" onclick="setTxnProductPickerKind('원료육')">원료육</button>
+      <button type="button" id="tpp-kind-product" data-tpp-kind="제품" aria-pressed="false" onclick="setTxnProductPickerKind('제품')">제품</button>
+    </div>
+    <div class="txn-product-picker-filters">
+      <div class="form-group txn-product-picker-filter-all">
+        <label for="tpp-search-all">통합검색</label>
+        <input id="tpp-search-all" autocomplete="off" placeholder="제품코드·품목명·브랜드·공장번호" oninput="renderTxnProductPicker(true)">
+      </div>
+      <div class="form-group">
+        <label for="tpp-search-name">품목명</label>
+        <input id="tpp-search-name" autocomplete="off" placeholder="품목명" oninput="renderTxnProductPicker(true)">
+      </div>
+      <div class="form-group">
+        <label for="tpp-search-brand">브랜드</label>
+        <select id="tpp-search-brand" onchange="renderTxnProductPicker(true)"><option value="">전체</option></select>
+      </div>
+      <div class="form-group">
+        <label for="tpp-search-origin">원산지</label>
+        <select id="tpp-search-origin" onchange="renderTxnProductPicker(true)"><option value="">전체</option></select>
+      </div>
+      <div class="form-group">
+        <label for="tpp-search-storage">보관</label>
+        <select id="tpp-search-storage" onchange="renderTxnProductPicker(true)"><option value="">전체</option></select>
+      </div>
+    </div>
+    <div class="txn-product-picker-status"><span id="tpp-result-count">0건</span></div>
+    <div class="txn-product-picker-table-wrap">
+      <table class="txn-product-picker-table">
+        <thead><tr>
+          <th>품목명</th><th>브랜드</th><th>공장번호</th><th>등급</th><th>원산지</th><th>보관</th><th>포장단위</th>
+        </tr></thead>
+        <tbody id="tpp-result-body"></tbody>
+      </table>
+    </div>
+    <div class="txn-product-picker-footer">
+      <div id="tpp-selected-summary">선택된 품목 없음</div>
+      <div class="em-btns">
+        <button type="button" class="btn btn-secondary" onclick="closeTxnProductPicker()">취소</button>
+        <button type="button" class="btn btn-primary" id="tpp-confirm" onclick="confirmTxnProductPicker()" disabled>선택</button>
+      </div>
     </div>
   </div>
 </div>
@@ -607,9 +659,12 @@
         <input id="t-product-input" list="product-list" placeholder="품목명" oninput="onOutProductChange();autoFillTxnPrice()" style="display:block;">
         <!-- 입고: 품목관리 기준 선택 -->
         <div id="t-product-managed-wrap" style="display:none;position:relative;">
-          <input id="t-product-managed" placeholder="품목명 검색" oninput="onManagedProductSearch()" onfocus="showManagedProductSuggestions()" onblur="hideManagedProductSuggestionsSoon()" autocomplete="off">
+          <div class="txn-managed-product-field">
+            <input id="t-product-managed" placeholder="품목명 검색" oninput="onManagedProductSearch()" onkeydown="handleManagedProductInputKeydown(event)" autocomplete="off">
+            <button type="button" class="btn btn-secondary" onclick="openTxnProductPicker()">검색</button>
+          </div>
+          <div id="t-product-managed-meta" class="txn-managed-product-meta"></div>
           <input type="hidden" id="t-label-product-id">
-          <div id="t-product-managed-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);max-height:220px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.12);z-index:1500;"></div>
         </div>
         <!-- 출고: 재고품목 검색 -->
         <div id="t-stock-search-wrap" style="display:none;position:relative;">
@@ -6712,6 +6767,7 @@ function refreshTxnManagedProductControls(preferredProduct, preferredOrigin, pre
     productIdEl.value = '';
     selectedVariant = null;
   }
+  updateTxnManagedProductMeta(selectedVariant);
   const products = [...new Set(labelProducts.map(p => p.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
   prodInput.placeholder = products.length ? '품목명·브랜드·공장넘버 검색' : '품목관리에서 먼저 품목을 등록하세요';
   if(selectedVariant) prodInput.value = selectedVariant.name || '';
@@ -6750,50 +6806,234 @@ function getManagedProductNames(){
     .sort((a,b)=>a.localeCompare(b,'ko'));
 }
 
-function showManagedProductSuggestions(){
-  renderManagedProductSuggestions();
+let txnProductPickerKind = '원료육';
+let txnProductPickerRows = [];
+let txnProductPickerIndex = -1;
+let txnProductPickerReturnFocus = null;
+let txnProductPickerBodyOverflow = '';
+
+function txnProductKindValue(product){
+  return String(product?.kind || '').trim() === '제품' ? '제품' : '원료육';
 }
 
-function hideManagedProductSuggestionsSoon(){
-  setTimeout(()=>{
-    const box = document.getElementById('t-product-managed-results');
-    if(box) box.style.display = 'none';
-  }, 180);
+function txnProductSelectionText(product){
+  if(!product) return '';
+  return [product.brand, product.factoryNo && `공장 ${product.factoryNo}`, product.grade, normalizeOriginName(product.origin), product.storage || '냉동', product.packunit]
+    .filter(Boolean).join(' · ');
 }
+
+function updateTxnManagedProductMeta(product){
+  const meta = document.getElementById('t-product-managed-meta');
+  if(meta) meta.textContent = product ? txnProductSelectionText(product) : '';
+}
+
+function syncTxnProductKindButtons(){
+  document.querySelectorAll('[data-tpp-kind]').forEach(button=>{
+    const active = button.dataset.tppKind === txnProductPickerKind;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+function refreshTxnProductPickerFilterOptions(){
+  const rows = (labelProducts || []).filter(product => txnProductKindValue(product) === txnProductPickerKind);
+  const setOptions = (id, values) => {
+    const select = document.getElementById(id);
+    if(!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">전체</option>' + values.map(value=>`<option value="${htmlEscape(value)}">${htmlEscape(value)}</option>`).join('');
+    if(values.includes(current)) select.value = current;
+  };
+  setOptions('tpp-search-brand', [...new Set(rows.map(product=>String(product.brand || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')));
+  setOptions('tpp-search-origin', [...new Set(rows.map(product=>normalizeOriginName(product.origin)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')));
+  setOptions('tpp-search-storage', [...new Set(rows.map(product=>String(product.storage || '냉동').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')));
+}
+
+function setTxnProductPickerKind(kind){
+  const nextKind = kind === '제품' ? '제품' : '원료육';
+  const changed = txnProductPickerKind !== nextKind;
+  txnProductPickerKind = nextKind;
+  syncTxnProductKindButtons();
+  if(changed){
+    ['tpp-search-brand','tpp-search-origin','tpp-search-storage'].forEach(id=>{
+      const element = document.getElementById(id);
+      if(element) element.value = '';
+    });
+  }
+  refreshTxnProductPickerFilterOptions();
+  renderTxnProductPicker(true);
+}
+
+function openTxnProductPicker(initialQuery){
+  const modal = document.getElementById('txn-product-picker-modal');
+  if(!modal) return;
+  txnProductPickerReturnFocus = document.activeElement;
+  txnProductPickerKind = '원료육';
+  syncTxnProductKindButtons();
+  const allSearch = document.getElementById('tpp-search-all');
+  const nameSearch = document.getElementById('tpp-search-name');
+  const sourceInput = document.getElementById('t-product-managed');
+  if(allSearch) allSearch.value = initialQuery !== undefined ? String(initialQuery || '') : String(sourceInput?.value || '');
+  if(nameSearch) nameSearch.value = '';
+  ['tpp-search-brand','tpp-search-origin','tpp-search-storage'].forEach(id=>{
+    const element = document.getElementById(id);
+    if(element) element.value = '';
+  });
+  refreshTxnProductPickerFilterOptions();
+  modal.classList.remove('hidden');
+  txnProductPickerBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  renderTxnProductPicker(true);
+  requestAnimationFrame(()=>{
+    allSearch?.focus();
+    allSearch?.select();
+  });
+}
+
+function closeTxnProductPicker(restoreFocus=true){
+  const modal = document.getElementById('txn-product-picker-modal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  modal.classList.add('hidden');
+  document.body.style.overflow = txnProductPickerBodyOverflow;
+  if(restoreFocus){
+    const target = txnProductPickerReturnFocus?.isConnected ? txnProductPickerReturnFocus : document.getElementById('t-product-managed');
+    requestAnimationFrame(()=>target?.focus());
+  }
+}
+
+function renderTxnProductPicker(resetSelection=false){
+  const modal = document.getElementById('txn-product-picker-modal');
+  const body = document.getElementById('tpp-result-body');
+  const count = document.getElementById('tpp-result-count');
+  if(!modal || modal.classList.contains('hidden') || !body) return;
+  const allQ = priceKey(document.getElementById('tpp-search-all')?.value || '');
+  const nameQ = priceKey(document.getElementById('tpp-search-name')?.value || '');
+  const brand = document.getElementById('tpp-search-brand')?.value || '';
+  const origin = document.getElementById('tpp-search-origin')?.value || '';
+  const storage = document.getElementById('tpp-search-storage')?.value || '';
+  const filtered = (labelProducts || [])
+    .filter(product => txnProductKindValue(product) === txnProductPickerKind)
+    .filter(product => !allQ || priceKey(labelProductSearchText(product)).includes(allQ))
+    .filter(product => !nameQ || priceKey(product.name || '').includes(nameQ))
+    .filter(product => !brand || samePriceText(product.brand, brand))
+    .filter(product => !origin || sameOriginText(product.origin, origin))
+    .filter(product => !storage || String(product.storage || '냉동') === storage)
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko') || String(a.brand||'').localeCompare(String(b.brand||''),'ko') || String(a.origin||'').localeCompare(String(b.origin||''),'ko'));
+  const previousId = !resetSelection && txnProductPickerRows[txnProductPickerIndex]?.id;
+  txnProductPickerRows = filtered.slice(0, 160);
+  txnProductPickerIndex = previousId === undefined ? (txnProductPickerRows.length ? 0 : -1) : txnProductPickerRows.findIndex(product=>String(product.id)===String(previousId));
+  if(txnProductPickerIndex < 0 && txnProductPickerRows.length) txnProductPickerIndex = 0;
+  if(count) count.textContent = filtered.length > txnProductPickerRows.length ? `${txnProductPickerRows.length} / ${filtered.length}건` : `${filtered.length}건`;
+  if(!txnProductPickerRows.length){
+    body.innerHTML = '<tr><td colspan="7" class="txn-product-picker-empty">검색 결과가 없습니다.</td></tr>';
+    syncTxnProductPickerSelection(false);
+    return;
+  }
+  body.innerHTML = txnProductPickerRows.map((product,index)=>`<tr data-tpp-index="${index}" aria-selected="${index===txnProductPickerIndex?'true':'false'}" class="${index===txnProductPickerIndex?'selected':''}" onclick="setTxnProductPickerIndex(${index})" ondblclick="confirmTxnProductPicker()">
+    <td><strong>${htmlEscape(product.name || '-')}</strong>${product.productCode?`<span class="txn-product-code">${htmlEscape(product.productCode)}</span>`:''}</td>
+    <td>${htmlEscape(product.brand || '-')}</td>
+    <td>${htmlEscape(product.factoryNo || '-')}</td>
+    <td>${htmlEscape(product.grade || '-')}</td>
+    <td>${htmlEscape(normalizeOriginName(product.origin) || '-')}</td>
+    <td>${htmlEscape(product.storage || '냉동')}</td>
+    <td>${htmlEscape(product.packunit || '-')}</td>
+  </tr>`).join('');
+  syncTxnProductPickerSelection(false);
+}
+
+function syncTxnProductPickerSelection(scrollIntoView=true){
+  const rows = document.querySelectorAll('#tpp-result-body tr[data-tpp-index]');
+  rows.forEach(row=>{
+    const selected = Number(row.dataset.tppIndex) === txnProductPickerIndex;
+    row.classList.toggle('selected', selected);
+    row.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  const selectedProduct = txnProductPickerRows[txnProductPickerIndex] || null;
+  const summary = document.getElementById('tpp-selected-summary');
+  const confirmButton = document.getElementById('tpp-confirm');
+  if(summary) summary.textContent = selectedProduct ? `${selectedProduct.name || '-'} · ${txnProductSelectionText(selectedProduct) || '등록 품목'}` : '선택된 품목 없음';
+  if(confirmButton) confirmButton.disabled = !selectedProduct;
+  if(scrollIntoView && txnProductPickerIndex >= 0){
+    document.querySelector(`#tpp-result-body tr[data-tpp-index="${txnProductPickerIndex}"]`)?.scrollIntoView({block:'nearest'});
+  }
+}
+
+function setTxnProductPickerIndex(index){
+  if(!txnProductPickerRows.length) return;
+  const nextIndex = Math.max(0, Math.min(Number(index) || 0, txnProductPickerRows.length - 1));
+  txnProductPickerIndex = nextIndex;
+  syncTxnProductPickerSelection();
+}
+
+function moveTxnProductPickerSelection(delta){
+  if(!txnProductPickerRows.length) return;
+  const current = txnProductPickerIndex < 0 ? 0 : txnProductPickerIndex;
+  setTxnProductPickerIndex(Math.max(0, Math.min(current + delta, txnProductPickerRows.length - 1)));
+}
+
+function confirmTxnProductPicker(){
+  const selectedProduct = txnProductPickerRows[txnProductPickerIndex];
+  if(!selectedProduct) return;
+  selectManagedProduct(selectedProduct.id);
+}
+
+function handleTxnProductPickerKeydown(event){
+  const modal = document.getElementById('txn-product-picker-modal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  if(event.key === 'Escape'){
+    event.preventDefault();
+    closeTxnProductPicker();
+    return;
+  }
+  const kindButton = event.target.closest?.('[data-tpp-kind]');
+  if(kindButton && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')){
+    event.preventDefault();
+    const nextKind = kindButton.dataset.tppKind === '원료육' ? '제품' : '원료육';
+    setTxnProductPickerKind(nextKind);
+    document.querySelector(`[data-tpp-kind="${nextKind}"]`)?.focus();
+    return;
+  }
+  if(event.key === 'Tab'){
+    const focusable = [...modal.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')].filter(element=>element.offsetParent !== null);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if(event.shiftKey && document.activeElement === first){ event.preventDefault(); last?.focus(); }
+    else if(!event.shiftKey && document.activeElement === last){ event.preventDefault(); first?.focus(); }
+    return;
+  }
+  if(event.target.tagName === 'SELECT') return;
+  if(event.key === 'ArrowDown' || event.key === 'ArrowUp'){
+    event.preventDefault();
+    moveTxnProductPickerSelection(event.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+  if(event.key === 'Enter' && event.target.tagName !== 'BUTTON'){
+    event.preventDefault();
+    confirmTxnProductPicker();
+  }
+}
+
+function handleManagedProductInputKeydown(event){
+  if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
+    event.preventDefault();
+    openTxnProductPicker(event.currentTarget?.value || '');
+  }
+}
+
+function showManagedProductSuggestions(){ openTxnProductPicker(); }
+function hideManagedProductSuggestionsSoon(){}
+function renderManagedProductSuggestions(){ renderTxnProductPicker(true); }
 
 function onManagedProductSearch(){
   if(typeof clearMeatwatchLookupResult === 'function') clearMeatwatchLookupResult({removeNote:true});
   const input = document.getElementById('t-product-managed');
   const hidden = document.getElementById('t-label-product-id');
   if(hidden?.value){
-    const selected = labelProducts.find(p => String(p.id || '') === String(hidden.value));
+    const selected = labelProducts.find(product => String(product.id || '') === String(hidden.value));
     if(!selected || !samePriceText(selected.name, input?.value || '')) hidden.value = '';
   }
-  renderManagedProductSuggestions();
+  if(!hidden?.value) updateTxnManagedProductMeta(null);
   onManagedProductChange();
-}
-
-function renderManagedProductSuggestions(){
-  const input = document.getElementById('t-product-managed');
-  const box = document.getElementById('t-product-managed-results');
-  if(!input || !box) return;
-  const q = priceKey(input.value);
-  const rows = (labelProducts || [])
-    .filter(p => !q || priceKey(labelProductSearchText(p)).includes(q))
-    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko') || String(a.brand||'').localeCompare(String(b.brand||''),'ko'));
-  if(!rows.length){
-    box.innerHTML = '<div style="padding:9px 11px;font-size:12px;color:#888;">검색 결과 없음</div>';
-    box.style.display = 'block';
-    return;
-  }
-  box.innerHTML = rows.slice(0, 80).map(p => {
-    const sub = [p.brand, p.factoryNo, p.grade, normalizeOriginName(p.origin), p.storage || '냉동', p.packunit].filter(Boolean).join(' · ');
-    return `<button type="button" onclick="selectManagedProduct(${jsArg(p.id)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
-      <div style="font-size:13px;font-weight:700;color:#2c3e50;">${htmlEscape(p.name || '')}</div>
-      <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(sub || '등록 품목')}</div>
-    </button>`;
-  }).join('');
-  box.style.display = 'block';
 }
 
 function selectManagedProduct(productId){
@@ -6802,13 +7042,14 @@ function selectManagedProduct(productId){
   if(!product) return;
   const input = document.getElementById('t-product-managed');
   const hidden = document.getElementById('t-label-product-id');
-  const box = document.getElementById('t-product-managed-results');
   if(input) input.value = product.name || '';
   if(hidden) hidden.value = product.id || '';
-  if(box) box.style.display = 'none';
+  updateTxnManagedProductMeta(product);
   refreshTxnManagedProductControls(product.name, product.origin, product.storage, product.id);
   autoFillTxnPrice();
   if(typeof updateMeatwatchLookupState === 'function') updateMeatwatchLookupState();
+  closeTxnProductPicker(false);
+  requestAnimationFrame(()=>document.getElementById('t-trader')?.focus());
 }
 
 function onManagedProductChange(){
@@ -7930,7 +8171,7 @@ function clearTransactionForm(options={}){
     const el=document.getElementById(id); if(el) el.value='';
   });
   const stockResults=document.getElementById('t-stock-search-results'); if(stockResults){ stockResults.style.display='none'; stockResults.innerHTML=''; }
-  const managedResults=document.getElementById('t-product-managed-results'); if(managedResults){ managedResults.style.display='none'; managedResults.innerHTML=''; }
+  updateTxnManagedProductMeta(null);
   const lotArea=document.getElementById('lot-match-area'); if(lotArea) lotArea.style.display='none';
   const lotList=document.getElementById('lot-match-list'); if(lotList) lotList.innerHTML='';
   const sel=document.getElementById('t-product-select'); if(sel) sel.value='';
