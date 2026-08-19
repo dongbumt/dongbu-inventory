@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819productpicker1">
+<link rel="stylesheet" href="styles/main.css?v=20260819productpicker2">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -663,7 +663,7 @@
             <input id="t-product-managed" placeholder="품목명 검색" oninput="onManagedProductSearch()" onkeydown="handleManagedProductInputKeydown(event)" autocomplete="off">
             <button type="button" class="btn btn-secondary" onclick="openTxnProductPicker()">검색</button>
           </div>
-          <div id="t-product-managed-meta" class="txn-managed-product-meta"></div>
+          <div id="t-product-managed-meta" class="txn-managed-product-meta" aria-live="polite"></div>
           <input type="hidden" id="t-label-product-id">
         </div>
         <!-- 출고: 재고품목 검색 -->
@@ -679,7 +679,7 @@
         <input type="hidden" id="t-stock-key">
         <input type="hidden" id="t-stock-price">
       </div>
-      <div class="form-group">
+      <div class="form-group" id="t-origin-wrap">
         <label>원산지</label>
         <!-- 입고: 자유입력 + datalist -->
         <input id="t-origin-input" list="origin-list" placeholder="국내산 / 덴마크..." oninput="onOutProductChange();autoFillTxnPrice()" style="display:block;">
@@ -6656,11 +6656,13 @@ function updateTransactionForm(){
   const inpProd  = document.getElementById('t-product-input');
   const prodLabel = document.getElementById('t-product-label');
   const managedWrap = document.getElementById('t-product-managed-wrap');
+  const productWrap = document.getElementById('t-product-wrap');
   const managedProd = document.getElementById('t-product-managed');
   const stockSearchWrap = document.getElementById('t-stock-search-wrap');
   const stockSearchResults = document.getElementById('t-stock-search-results');
   const selProd  = document.getElementById('t-product-select');
   const inpOrig  = document.getElementById('t-origin-input');
+  const originWrap = document.getElementById('t-origin-wrap');
   const managedOrig = document.getElementById('t-origin-managed');
   const dispOrig = document.getElementById('t-origin-display');
   const storageWrap = document.getElementById('t-storage-managed-wrap');
@@ -6674,6 +6676,7 @@ function updateTransactionForm(){
   if(locationLabel) locationLabel.textContent = t === '출고' ? '출고지' : (t === '사용' ? '사용지' : '지점');
   if(moveWrap) moveWrap.style.display = (t === '재고이동') ? 'flex' : 'none';
   if(prodLabel) prodLabel.textContent = isStockPick ? '재고 품목' : '품목명';
+  if(productWrap) productWrap.classList.toggle('txn-product-managed-active', t === '입고');
   if(stockSearchResults) stockSearchResults.style.display = 'none';
 
   if(isStockPick){
@@ -6684,6 +6687,7 @@ function updateTransactionForm(){
     if(stockSearchWrap) stockSearchWrap.style.display = 'block';
     selProd.style.display  = 'none';
     inpOrig.style.display  = 'none';
+    if(originWrap) originWrap.style.display = 'flex';
     managedOrig.style.display = 'none';
     dispOrig.style.display = 'block';
     storageWrap.style.display = 'none';
@@ -6703,9 +6707,10 @@ function updateTransactionForm(){
     if(stockSearchWrap) stockSearchWrap.style.display = 'none';
     selProd.style.display  = 'none';
     inpOrig.style.display  = 'none';
-    managedOrig.style.display = 'block';
+    if(originWrap) originWrap.style.display = 'none';
+    managedOrig.style.display = 'none';
     dispOrig.style.display = 'none';
-    storageWrap.style.display = 'flex';
+    storageWrap.style.display = 'none';
     document.getElementById('lot-match-area').style.display = 'none';
     clearTxnSamsungControls();
     refreshTxnManagedProductControls();
@@ -6717,6 +6722,7 @@ function updateTransactionForm(){
     if(stockSearchWrap) stockSearchWrap.style.display = 'none';
     selProd.style.display  = 'none';
     inpOrig.style.display  = 'block';
+    if(originWrap) originWrap.style.display = 'flex';
     managedOrig.style.display = 'none';
     dispOrig.style.display = 'none';
     storageWrap.style.display = 'none';
@@ -6824,7 +6830,26 @@ function txnProductSelectionText(product){
 
 function updateTxnManagedProductMeta(product){
   const meta = document.getElementById('t-product-managed-meta');
-  if(meta) meta.textContent = product ? txnProductSelectionText(product) : '';
+  if(!meta) return;
+  if(!product){
+    meta.innerHTML = '';
+    meta.classList.remove('visible');
+    return;
+  }
+  const details = [
+    ['브랜드', product.brand || '-'],
+    ['공장번호', product.factoryNo || '-'],
+    ['원산지', normalizeOriginName(product.origin) || '-'],
+    ['보관', product.storage || '냉동']
+  ];
+  meta.innerHTML = details.map(([label,value])=>`<span class="txn-managed-product-detail"><strong>${label}</strong><span>${htmlEscape(value)}</span></span>`).join('');
+  meta.classList.add('visible');
+}
+
+function txnProductStorageBadge(storageValue){
+  const storage = String(storageValue || '냉동').trim() || '냉동';
+  const tone = storage === '냉장' ? 'chilled' : (storage === '냉동' ? 'frozen' : 'other');
+  return `<span class="txn-storage-badge ${tone}">${htmlEscape(storage)}</span>`;
 }
 
 function syncTxnProductKindButtons(){
@@ -6935,7 +6960,7 @@ function renderTxnProductPicker(resetSelection=false){
     <td>${htmlEscape(product.factoryNo || '-')}</td>
     <td>${htmlEscape(product.grade || '-')}</td>
     <td>${htmlEscape(normalizeOriginName(product.origin) || '-')}</td>
-    <td>${htmlEscape(product.storage || '냉동')}</td>
+    <td>${txnProductStorageBadge(product.storage)}</td>
     <td>${htmlEscape(product.packunit || '-')}</td>
   </tr>`).join('');
   syncTxnProductPickerSelection(false);
@@ -7832,14 +7857,18 @@ function getTProduct(){
 }
 // 현재 거래내역 폼의 원산지 값 읽기
 function getTOrigin(){
+  const type = document.getElementById('t-type')?.value || '';
   const managed = document.getElementById('t-origin-managed');
+  if(type === '입고' && managed) return managed.value.trim();
   if(managed && managed.style.display!=='none') return managed.value.trim();
   const disp = document.getElementById('t-origin-display');
   if(disp && disp.style.display!=='none') return disp.value.trim();
   return normalizeOriginName(document.getElementById('t-origin-input')?.value||'');
 }
 function getTStorage(){
+  const type = document.getElementById('t-type')?.value || '';
   const managed = document.getElementById('t-storage-managed');
+  if(type === '입고' && managed) return managed.value;
   if(managed && managed.closest('#t-storage-managed-wrap')?.style.display!=='none') return managed.value;
   return '';
 }
