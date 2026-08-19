@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819bulkinlookup1">
+<link rel="stylesheet" href="styles/main.css?v=20260819bulkincompact2">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -839,9 +839,10 @@
             <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundPrice()" title="비어있는 모든 행에 단가 채우기" style="white-space:nowrap;">↓ 적용</button>
           </div>
         </div>
-      </div>
-      <div class="bulk-in-lookup-toolbar">
-        <button type="button" id="bulk-in-meatwatch-lookup-all-btn" class="btn btn-secondary btn-sm" onclick="lookupAllBulkInboundMeatExpiry()">이력번호 일괄조회</button>
+        <div class="form-group bulk-in-common-lookup">
+          <label aria-hidden="true">&nbsp;</label>
+          <button type="button" id="bulk-in-meatwatch-lookup-all-btn" class="btn btn-secondary btn-sm" onclick="lookupAllBulkInboundMeatExpiry()">이력번호 일괄조회</button>
+        </div>
       </div>
       <div class="tbl-wrap" style="max-height:none;overflow:visible;">
         <table class="bulk-inbound-table" style="font-size:12px;">
