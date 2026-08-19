@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819bulkincompact2">
+<link rel="stylesheet" href="styles/main.css?v=20260819stockpicker2">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -109,6 +109,54 @@
       <div class="em-btns">
         <button type="button" class="btn btn-secondary" onclick="closeTxnProductPicker()">취소</button>
         <button type="button" class="btn btn-primary" id="tpp-confirm" onclick="confirmTxnProductPicker()" disabled>선택</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 출고 재고 검색 모달 -->
+<div id="txn-stock-picker-modal" class="edit-modal-bg hidden" role="dialog" aria-modal="true" aria-labelledby="txn-stock-picker-title" onclick="if(event.target===this)closeTxnStockPicker()">
+  <div class="edit-modal txn-product-picker txn-stock-picker" onkeydown="handleTxnStockPickerKeydown(event)">
+    <div class="txn-product-picker-head">
+      <h3 id="txn-stock-picker-title">출고 재고 선택</h3>
+      <button type="button" class="txn-product-picker-close" onclick="closeTxnStockPicker()" aria-label="닫기" title="닫기">×</button>
+    </div>
+    <div class="txn-product-picker-filters txn-stock-picker-filters">
+      <div class="form-group txn-product-picker-filter-all">
+        <label for="tsp-search-all">통합검색</label>
+        <input id="tsp-search-all" autocomplete="off" placeholder="품목·이력번호·원산지·생산일·지점" oninput="renderTxnStockPicker(true)">
+      </div>
+      <div class="form-group">
+        <label for="tsp-search-name">품목명</label>
+        <input id="tsp-search-name" autocomplete="off" placeholder="품목명" oninput="renderTxnStockPicker(true)">
+      </div>
+      <div class="form-group">
+        <label for="tsp-search-lot">이력번호</label>
+        <input id="tsp-search-lot" autocomplete="off" placeholder="LOT번호" oninput="renderTxnStockPicker(true)">
+      </div>
+      <div class="form-group">
+        <label for="tsp-search-origin">원산지</label>
+        <select id="tsp-search-origin" onchange="renderTxnStockPicker(true)"><option value="">전체</option></select>
+      </div>
+      <div class="form-group">
+        <label for="tsp-search-location">지점</label>
+        <select id="tsp-search-location" onchange="renderTxnStockPicker(true)"><option value="">전체</option></select>
+      </div>
+    </div>
+    <div class="txn-product-picker-status"><span id="tsp-result-count">0건</span></div>
+    <div class="txn-product-picker-table-wrap txn-stock-picker-table-wrap">
+      <table class="txn-product-picker-table txn-stock-picker-table">
+        <thead><tr>
+          <th>품목명</th><th>포장단위</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th>
+        </tr></thead>
+        <tbody id="tsp-result-body"></tbody>
+      </table>
+    </div>
+    <div class="txn-product-picker-footer">
+      <div id="tsp-selected-summary">선택된 재고 없음</div>
+      <div class="em-btns">
+        <button type="button" class="btn btn-secondary" onclick="closeTxnStockPicker()">취소</button>
+        <button type="button" class="btn btn-primary" id="tsp-confirm" onclick="confirmTxnStockPicker()" disabled>선택</button>
       </div>
     </div>
   </div>
@@ -668,8 +716,10 @@
         </div>
         <!-- 출고: 재고품목 검색 -->
         <div id="t-stock-search-wrap" style="display:none;position:relative;">
-          <input id="t-stock-search" placeholder="재고 품목 검색..." oninput="onTxnStockSearch(true)" onfocus="onTxnStockSearch(false)" onblur="hideTxnStockResults()" onkeydown="if(event.key==='Enter'){event.preventDefault();autoSelectTxnStockFromSearch(true);}" autocomplete="off">
-          <div id="t-stock-search-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 3px);max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
+          <div class="txn-managed-product-field">
+            <input id="t-stock-search" placeholder="재고 품목 검색" oninput="onTxnStockPickerInput()" onkeydown="handleTxnStockInputKeydown(event)" autocomplete="off">
+            <button type="button" class="btn btn-secondary" onclick="openTxnStockPicker()">검색</button>
+          </div>
         </div>
         <!-- 출고: 저장 호환용 숨은 선택값 -->
         <select id="t-product-select" onchange="onOutProductSelectChange()" style="display:none;">
@@ -6680,7 +6730,6 @@ function updateTransactionForm(){
   const primaryRow = document.getElementById('t-primary-row');
   const managedProd = document.getElementById('t-product-managed');
   const stockSearchWrap = document.getElementById('t-stock-search-wrap');
-  const stockSearchResults = document.getElementById('t-stock-search-results');
   const selProd  = document.getElementById('t-product-select');
   const inpOrig  = document.getElementById('t-origin-input');
   const originWrap = document.getElementById('t-origin-wrap');
@@ -6699,7 +6748,7 @@ function updateTransactionForm(){
   if(prodLabel) prodLabel.textContent = isStockPick ? '재고 품목' : '품목명';
   if(productWrap) productWrap.classList.toggle('txn-product-managed-active', t === '입고');
   if(primaryRow) primaryRow.classList.toggle('txn-inbound-primary-row', t === '입고');
-  if(stockSearchResults) stockSearchResults.style.display = 'none';
+  if(typeof closeTxnStockPicker === 'function') closeTxnStockPicker(false);
 
   if(isStockPick){
     // 출고/재고이동 모드: 검색형 재고 선택 + 원산지 자동채움
@@ -7192,90 +7241,199 @@ function getTxnStockSearchOptions(){
   );
 }
 
-function onTxnStockSearch(isInput=false){
-  const input = document.getElementById('t-stock-search');
-  const box = document.getElementById('t-stock-search-results');
-  if(!input || !box) return;
-  if(isInput){
-    clearTxnStockSelection(false, true);
-    refreshTxnSamsungProducts();
-    autoFillTxnPrice();
-  }
+let txnStockPickerRows = [];
+let txnStockPickerIndex = -1;
+let txnStockPickerReturnFocus = null;
+let txnStockPickerBodyOverflow = '';
+let txnStockPickerTargetInput = null;
 
-  const q = (input.value || '').toLowerCase().trim();
-  const qCompact = bulkOutboundSearchKey(q);
-  let list = getTxnStockSearchOptions();
-  if(q){
-    list = list.filter(s=>{
-      const text = bulkOutboundSearchText(s).toLowerCase();
-      return text.includes(q) || bulkOutboundSearchKey(text).includes(qCompact);
-    });
-  }
-  list = list.slice(0, 300);
-
-  if(!list.length){
-    box.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:#999;">선택 가능한 재고가 없습니다.</div>';
-  } else {
-    box.innerHTML = list.map(s=>{
-      const priceText = s.price ? ` · 원가 ${Number(s.price).toLocaleString('ko-KR')}원` : '';
-      const prodText = s.proddate ? ` · 생산일 ${htmlEscape(s.proddate)}` : '';
-      const locText = s.stockLocation ? ` · ${htmlEscape(s.stockLocation)}` : '';
-      return `<div class="txn-stock-opt" data-key="${htmlEscape(s.key)}" style="padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
-        <strong>${htmlEscape(s.product||'')}</strong>${s.packunit ? '<span style="color:#666;"> / '+htmlEscape(s.packunit)+'</span>' : ''}
-        <div style="color:#666;font-size:11px;">${s.lot ? 'LOT ' + htmlEscape(s.lot) : 'LOT 없음'} · ${htmlEscape(s.origin||'-')}${locText}${prodText} · 현재 ${Number(s.stock||0).toFixed(2)} KG${priceText}</div>
-      </div>`;
-    }).join('');
-    box.querySelectorAll('.txn-stock-opt').forEach(opt=>{
-      opt.addEventListener('mousedown', function(e){
-        e.preventDefault();
-        selectTxnStock(this.dataset.key);
-      });
-    });
-  }
-  box.style.display = 'block';
+function getTxnStockPickerOptions(){
+  return txnStockPickerTargetInput ? bulkOutboundStockOptions() : getTxnStockSearchOptions();
 }
 
-function getFilteredTxnStockSearchOptions(){
-  const input = document.getElementById('t-stock-search');
-  const q = (input?.value || '').toLowerCase().trim();
-  const qCompact = bulkOutboundSearchKey(q);
-  let list = getTxnStockSearchOptions();
-  if(q){
-    list = list.filter(s=>{
-      const text = bulkOutboundSearchText(s).toLowerCase();
-      return text.includes(q) || bulkOutboundSearchKey(text).includes(qCompact);
-    });
-  }
-  return list;
+function refreshTxnStockPickerFilterOptions(){
+  const rows = getTxnStockPickerOptions();
+  const setOptions = (id, values)=>{
+    const select = document.getElementById(id);
+    if(!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">전체</option>' + values.map(value=>`<option value="${htmlEscape(value)}">${htmlEscape(value)}</option>`).join('');
+    if(values.includes(current)) select.value = current;
+  };
+  setOptions('tsp-search-origin', [...new Set(rows.map(stock=>normalizeOriginName(stock.origin)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')));
+  setOptions('tsp-search-location', [...new Set(rows.map(stock=>normalizeStockLocation(stock.stockLocation)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko')));
 }
 
-function autoSelectTxnStockFromSearch(showToast=false){
-  const keyEl = document.getElementById('t-stock-key');
-  if(keyEl?.value){
-    return getTxnStockSearchOptions().find(s=>s.key === keyEl.value) || null;
-  }
-  const input = document.getElementById('t-stock-search');
-  const text = (input?.value || '').trim();
-  if(!text) return null;
-  const allOptions = getTxnStockSearchOptions();
-  const normalizedText = bulkOutboundSearchKey(text);
-  const exact = allOptions.filter(s =>
-    s.key === text ||
-    bulkOutboundSearchKey(bulkOutboundStockLabel(s)) === normalizedText
-  );
-  const list = exact.length ? exact : getFilteredTxnStockSearchOptions();
-  const picked = exact.length === 1 ? exact[0] : (list.length === 1 ? list[0] : null);
-  if(!picked) return null;
-  selectTxnStock(picked.key);
-  if(showToast) toast('재고 선택: ' + (picked.product || ''));
-  return picked;
+function onTxnStockPickerInput(){
+  clearTxnStockSelection(false, true);
+  refreshTxnSamsungProducts();
+  autoFillTxnPrice();
 }
 
-function hideTxnStockResults(){
-  setTimeout(()=>{
-    const box = document.getElementById('t-stock-search-results');
-    if(box) box.style.display = 'none';
-  }, 180);
+function handleTxnStockInputKeydown(event){
+  if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
+    event.preventDefault();
+    openTxnStockPicker();
+  }
+}
+
+function openTxnStockPicker(initialQuery, targetInput=null){
+  const modal = document.getElementById('txn-stock-picker-modal');
+  if(!modal) return;
+  txnStockPickerTargetInput = targetInput;
+  txnStockPickerReturnFocus = targetInput || document.activeElement;
+  const allSearch = document.getElementById('tsp-search-all');
+  const selectedKey = targetInput
+    ? (targetInput.closest('tr')?.querySelector('.bulk-out-key')?.value || '')
+    : (document.getElementById('t-stock-key')?.value || '');
+  const sourceValue = targetInput?.value || document.getElementById('t-stock-search')?.value || '';
+  if(allSearch) allSearch.value = initialQuery !== undefined ? String(initialQuery || '') : (selectedKey ? '' : sourceValue);
+  const title = document.getElementById('txn-stock-picker-title');
+  if(title) title.textContent = targetInput ? '출고일괄 재고 선택' : '출고 재고 선택';
+  const nameSearch = document.getElementById('tsp-search-name');
+  const lotSearch = document.getElementById('tsp-search-lot');
+  if(nameSearch) nameSearch.value = '';
+  if(lotSearch) lotSearch.value = '';
+  ['tsp-search-origin','tsp-search-location'].forEach(id=>{
+    const element = document.getElementById(id);
+    if(element) element.value = '';
+  });
+  refreshTxnStockPickerFilterOptions();
+  modal.classList.remove('hidden');
+  txnStockPickerBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  renderTxnStockPicker(true);
+  requestAnimationFrame(()=>{
+    allSearch?.focus();
+    allSearch?.select();
+  });
+}
+
+function closeTxnStockPicker(restoreFocus=true){
+  const modal = document.getElementById('txn-stock-picker-modal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  const returnFocus = txnStockPickerReturnFocus;
+  modal.classList.add('hidden');
+  document.body.style.overflow = txnStockPickerBodyOverflow;
+  txnStockPickerTargetInput = null;
+  if(restoreFocus){
+    const target = returnFocus?.isConnected ? returnFocus : document.getElementById('t-stock-search');
+    requestAnimationFrame(()=>target?.focus());
+  }
+}
+
+function renderTxnStockPicker(resetSelection=false){
+  const modal = document.getElementById('txn-stock-picker-modal');
+  const body = document.getElementById('tsp-result-body');
+  const count = document.getElementById('tsp-result-count');
+  if(!modal || modal.classList.contains('hidden') || !body) return;
+  const allQ = bulkOutboundSearchKey(document.getElementById('tsp-search-all')?.value || '');
+  const nameQ = bulkOutboundSearchKey(document.getElementById('tsp-search-name')?.value || '');
+  const lotQ = bulkOutboundSearchKey(document.getElementById('tsp-search-lot')?.value || '');
+  const origin = document.getElementById('tsp-search-origin')?.value || '';
+  const location = document.getElementById('tsp-search-location')?.value || '';
+  const filtered = getTxnStockPickerOptions()
+    .filter(stock=>!allQ || bulkOutboundSearchKey(bulkOutboundSearchText(stock)).includes(allQ))
+    .filter(stock=>!nameQ || bulkOutboundSearchKey(stock.product || '').includes(nameQ))
+    .filter(stock=>!lotQ || bulkOutboundSearchKey(stock.lot || '').includes(lotQ))
+    .filter(stock=>!origin || sameOriginText(stock.origin, origin))
+    .filter(stock=>!location || stockLocationKey(stock.stockLocation) === stockLocationKey(location))
+    .sort((a,b)=>String(a.product||'').localeCompare(String(b.product||''),'ko') || String(a.lot||'').localeCompare(String(b.lot||''),'ko') || String(a.proddate||'').localeCompare(String(b.proddate||'')) || (Number(a.price)||0) - (Number(b.price)||0));
+  const previousKey = !resetSelection && txnStockPickerRows[txnStockPickerIndex]?.key;
+  txnStockPickerRows = filtered;
+  txnStockPickerIndex = previousKey === undefined ? (filtered.length ? 0 : -1) : filtered.findIndex(stock=>stock.key === previousKey);
+  if(txnStockPickerIndex < 0 && filtered.length) txnStockPickerIndex = 0;
+  if(count) count.textContent = `${filtered.length}건`;
+  if(!filtered.length){
+    body.innerHTML = '<tr><td colspan="8" class="txn-product-picker-empty">선택 가능한 재고가 없습니다.</td></tr>';
+    syncTxnStockPickerSelection(false);
+    return;
+  }
+  body.innerHTML = filtered.map((stock,index)=>`<tr data-tsp-index="${index}" aria-selected="${index===txnStockPickerIndex?'true':'false'}" class="${index===txnStockPickerIndex?'selected':''}" onclick="setTxnStockPickerIndex(${index})" ondblclick="confirmTxnStockPicker()">
+    <td><strong>${htmlEscape(stock.product || '-')}</strong></td>
+    <td>${htmlEscape(stock.packunit || '-')}</td>
+    <td class="txn-stock-picker-lot">${htmlEscape(stock.lot || 'LOT 없음')}</td>
+    <td>${htmlEscape(normalizeOriginName(stock.origin) || '-')}</td>
+    <td>${htmlEscape(stock.proddate || '-')}</td>
+    <td class="txn-stock-picker-number">${stock.price ? `${Number(stock.price).toLocaleString('ko-KR')}원` : '-'}</td>
+    <td>${htmlEscape(normalizeStockLocation(stock.stockLocation))}</td>
+    <td class="txn-stock-picker-number"><strong>${Number(stock.stock || 0).toFixed(2)} KG</strong></td>
+  </tr>`).join('');
+  syncTxnStockPickerSelection(false);
+}
+
+function syncTxnStockPickerSelection(scrollIntoView=true){
+  document.querySelectorAll('#tsp-result-body tr[data-tsp-index]').forEach(row=>{
+    const selected = Number(row.dataset.tspIndex) === txnStockPickerIndex;
+    row.classList.toggle('selected', selected);
+    row.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  const stock = txnStockPickerRows[txnStockPickerIndex] || null;
+  const summary = document.getElementById('tsp-selected-summary');
+  const confirmButton = document.getElementById('tsp-confirm');
+  if(summary) summary.textContent = stock
+    ? `${stock.product || '-'} · ${stock.lot ? 'LOT ' + stock.lot : 'LOT 없음'} · ${normalizeStockLocation(stock.stockLocation)} · ${Number(stock.stock || 0).toFixed(2)} KG`
+    : '선택된 재고 없음';
+  if(confirmButton) confirmButton.disabled = !stock;
+  if(scrollIntoView && txnStockPickerIndex >= 0){
+    document.querySelector(`#tsp-result-body tr[data-tsp-index="${txnStockPickerIndex}"]`)?.scrollIntoView({block:'nearest'});
+  }
+}
+
+function setTxnStockPickerIndex(index){
+  if(!txnStockPickerRows.length) return;
+  txnStockPickerIndex = Math.max(0,Math.min(Number(index) || 0,txnStockPickerRows.length - 1));
+  syncTxnStockPickerSelection();
+}
+
+function moveTxnStockPickerSelection(delta){
+  if(!txnStockPickerRows.length) return;
+  const current = txnStockPickerIndex < 0 ? 0 : txnStockPickerIndex;
+  setTxnStockPickerIndex(current + delta);
+}
+
+function confirmTxnStockPicker(){
+  const stock = txnStockPickerRows[txnStockPickerIndex];
+  if(!stock) return;
+  const targetInput = txnStockPickerTargetInput;
+  if(targetInput){
+    const row = targetInput.closest('tr');
+    selectBulkOutboundStock(targetInput, stock.key);
+    closeTxnStockPicker(false);
+    requestAnimationFrame(()=>row?.querySelector('.bulk-out-trader')?.focus());
+    return;
+  }
+  selectTxnStock(stock.key);
+  closeTxnStockPicker(false);
+  requestAnimationFrame(()=>document.getElementById('t-trader')?.focus());
+}
+
+function handleTxnStockPickerKeydown(event){
+  const modal = document.getElementById('txn-stock-picker-modal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  if(event.key === 'Escape'){
+    event.preventDefault();
+    closeTxnStockPicker();
+    return;
+  }
+  if(event.key === 'Tab'){
+    const focusable = [...modal.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')].filter(element=>element.offsetParent !== null);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if(event.shiftKey && document.activeElement === first){ event.preventDefault(); last?.focus(); }
+    else if(!event.shiftKey && document.activeElement === last){ event.preventDefault(); first?.focus(); }
+    return;
+  }
+  if(event.target.tagName === 'SELECT') return;
+  if(event.key === 'ArrowDown' || event.key === 'ArrowUp'){
+    event.preventDefault();
+    moveTxnStockPickerSelection(event.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+  if(event.key === 'Enter' && event.target.tagName !== 'BUTTON'){
+    event.preventDefault();
+    confirmTxnStockPicker();
+  }
 }
 
 function selectTxnStock(key){
@@ -7332,8 +7490,6 @@ function selectTxnStock(key){
 
   const area = document.getElementById('lot-match-area');
   if(area) area.style.display = 'none';
-  const box = document.getElementById('t-stock-search-results');
-  if(box) box.style.display = 'none';
   const samsungVendorId = document.getElementById('t-samsung-vendor')?.value || '';
   const samsungRowId = document.getElementById('t-samsung-product')?.value || '';
   const samsungMeta = samsungRowId ? getSamsungProductMeta(samsungVendorId, samsungRowId) : null;
@@ -7430,9 +7586,7 @@ function clearTxnStockSelection(clearSearch=false, clearProduct=false){
   }
   if(clearSearch){
     const stockInput = document.getElementById('t-stock-search');
-    const box = document.getElementById('t-stock-search-results');
     if(stockInput) stockInput.value = '';
-    if(box) box.style.display = 'none';
   }
 }
 
@@ -8185,7 +8339,6 @@ function getTxnSamsungMeta(){
 async function addTransaction(){
   const date=document.getElementById('t-date').value;
   const type=document.getElementById('t-type').value;
-  if(type === '출고' || type === '재고이동') autoSelectTxnStockFromSearch(false);
   const product=getTProduct();
   const origin=getTOrigin();
   const storage=getTStorage();
@@ -8362,7 +8515,6 @@ function clearTransactionForm(options={}){
   ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
-  const stockResults=document.getElementById('t-stock-search-results'); if(stockResults){ stockResults.style.display='none'; stockResults.innerHTML=''; }
   updateTxnManagedProductMeta(null);
   const lotArea=document.getElementById('lot-match-area'); if(lotArea) lotArea.style.display='none';
   const lotList=document.getElementById('lot-match-list'); if(lotList) lotList.innerHTML='';
@@ -8928,10 +9080,6 @@ function bulkOutboundSearchText(s){
   return `${s.product} ${s.packunit||''} ${s.stockLocation||''} ${s.origin||''} ${s.lot||''} ${s.proddate||''} ${s.price||''} ${s.lot ? '' : 'LOT없음 이력번호없음'} ${s.source||''} ${Number(s.stock||0).toFixed(2)}`;
 }
 
-function bulkOutboundWrap(inp){
-  return inp.closest('td') || inp.closest('.form-group') || inp.parentElement;
-}
-
 function clearBulkOutboundStockSelection(tr){
   if(!tr) return;
   ['key','product','origin','lot','packunit','proddate','stock','stock-price','location'].forEach(name=>{
@@ -8952,41 +9100,20 @@ function clearBulkOutboundStockSelection(tr){
   updateBulkOutboundAmount(tr);
 }
 
-function onBulkOutboundStockSearch(inp, isInput){
-  const wrap = bulkOutboundWrap(inp);
-  if(!wrap) return;
-  const box = wrap.querySelector('.bulk-out-stock-results');
-  if(!box) return;
-  const tr = inp.closest('tr');
-  if(isInput) clearBulkOutboundStockSelection(tr);
-  const q = (inp.value||'').toLowerCase().trim();
-  const qCompact = bulkOutboundSearchKey(q);
-  let list = bulkOutboundStockOptions();
-  if(q) list = list.filter(s=>{
-    const text = bulkOutboundSearchText(s).toLowerCase();
-    return text.includes(q) || bulkOutboundSearchKey(text).includes(qCompact);
-  });
-  list = list.slice(0, 300);
-  if(!list.length){
-    box.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:#999;">선택 가능한 재고가 없습니다.</div>';
-  } else {
-    box.innerHTML = list.map(s=>{
-      const priceText = s.price ? ` · 원가 ${Number(s.price).toLocaleString('ko-KR')}` : '';
-      const prodText = s.proddate ? ` · 생산일 ${htmlEscape(s.proddate)}` : '';
-      const locText = s.stockLocation ? ` · ${htmlEscape(s.stockLocation)}` : '';
-      return `<div class="bulk-out-stock-opt" data-key="${htmlEscape(s.key)}" style="padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;">
-        <strong>${htmlEscape(s.product||'')}</strong>${s.packunit ? '<span style="color:#666;"> / '+htmlEscape(s.packunit)+'</span>' : ''}
-        <div style="color:#666;font-size:11px;">${s.lot ? 'LOT ' + htmlEscape(s.lot) : 'LOT 없음'} · ${htmlEscape(s.origin||'-')}${locText}${prodText} · 현재 ${Number(s.stock||0).toFixed(2)} KG${priceText}</div>
-      </div>`;
-    }).join('');
-    box.querySelectorAll('.bulk-out-stock-opt').forEach(opt=>{
-      opt.addEventListener('mousedown', function(e){
-        e.preventDefault();
-        selectBulkOutboundStock(inp, this.dataset.key);
-      });
-    });
+function onBulkOutboundStockPickerInput(inp){
+  clearBulkOutboundStockSelection(inp.closest('tr'));
+}
+
+function handleBulkOutboundStockInputKeydown(event, inp){
+  if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
+    event.preventDefault();
+    openBulkOutboundStockPicker(inp);
   }
-  box.style.display = 'block';
+}
+
+function openBulkOutboundStockPicker(inp){
+  if(!inp) return;
+  openTxnStockPicker(undefined, inp);
 }
 
 function selectBulkOutboundStock(inp, key){
@@ -9019,17 +9146,6 @@ function selectBulkOutboundStock(inp, key){
   refreshBulkOutboundSamsungProducts(tr);
   refreshBulkOutboundPrice(tr);
   updateBulkOutboundAmount(tr);
-  const box = bulkOutboundWrap(inp)?.querySelector('.bulk-out-stock-results');
-  if(box) box.style.display = 'none';
-}
-
-function hideBulkOutboundStockResults(inp){
-  const wrap = bulkOutboundWrap(inp);
-  if(!wrap) return;
-  setTimeout(()=>{
-    const box = wrap.querySelector('.bulk-out-stock-results');
-    if(box) box.style.display = 'none';
-  }, 180);
 }
 
 function addBulkOutboundRow(){
@@ -9037,10 +9153,12 @@ function addBulkOutboundRow(){
   if(!tbody) return;
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td style="position:relative;">
-      <input class="bulk-out-stock-input" oninput="onBulkOutboundStockSearch(this,true)" onfocus="onBulkOutboundStockSearch(this,false)" onblur="hideBulkOutboundStockResults(this)" placeholder="재고 품목 검색..." autocomplete="off" style="width:100%;font-size:12px;padding:5px 6px;">
+    <td>
+      <div class="bulk-out-stock-search">
+        <input class="bulk-out-stock-input" oninput="onBulkOutboundStockPickerInput(this)" onkeydown="handleBulkOutboundStockInputKeydown(event,this)" placeholder="재고 품목 검색" autocomplete="off">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="openBulkOutboundStockPicker(this.parentElement.querySelector('.bulk-out-stock-input'))" title="재고 검색 팝업 열기">검색</button>
+      </div>
       <input type="hidden" class="bulk-out-key"><input type="hidden" class="bulk-out-product"><input type="hidden" class="bulk-out-origin"><input type="hidden" class="bulk-out-lot"><input type="hidden" class="bulk-out-packunit"><input type="hidden" class="bulk-out-proddate"><input type="hidden" class="bulk-out-stock"><input type="hidden" class="bulk-out-stock-price"><input type="hidden" class="bulk-out-location">
-      <div class="bulk-out-stock-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
     </td>
     <td class="bulk-out-origin-cell" style="font-size:11px;color:#666;text-align:center;">-</td>
     <td class="bulk-out-lot-cell" style="font-size:11px;color:#666;text-align:center;font-family:monospace;">-</td>

@@ -368,6 +368,9 @@
   .bulk-in-row-product-content .bulk-in-product-meta{flex:1 1 340px;grid-template-columns:minmax(90px,1.25fr) minmax(70px,.9fr) minmax(70px,.9fr) minmax(60px,.75fr);}
   .bulk-in-trader-search-wrap{min-width:0;}
   .bulk-in-trader-search-wrap .bulk-in-trader-results{width:max(100%,280px);}
+  .bulk-out-stock-search{display:flex;align-items:center;gap:4px;min-width:210px;}
+  .bulk-out-stock-search .bulk-out-stock-input{flex:1;min-width:0;width:100%;padding:5px 6px;font-size:12px;}
+  .bulk-out-stock-search .btn{flex:0 0 auto;padding:5px 8px;white-space:nowrap;}
   .bulk-in-lot-cell .bulk-in-lot{width:100%;padding:5px 6px;font-size:12px;}
   .bulk-in-meatwatch-status{display:none;margin-top:4px;font-size:10px;line-height:1.35;color:#667085;}
   .txn-product-picker{width:min(1120px,96vw);max-width:1120px;padding:20px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;}
@@ -409,7 +412,21 @@
   .txn-product-picker-empty{text-align:center!important;color:#98a2b3;padding:40px 12px!important;}
   .txn-product-picker-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:58px;}
   .txn-product-picker-footer>#tpp-selected-summary{min-width:0;color:#475467;font-size:11px;line-height:1.4;overflow-wrap:anywhere;}
+  .txn-product-picker-footer>#tsp-selected-summary{min-width:0;color:#475467;font-size:11px;line-height:1.4;overflow-wrap:anywhere;}
   .txn-product-picker-footer .em-btns{margin-top:10px;flex:0 0 auto;}
+  .txn-stock-picker{width:min(1240px,96vw);max-width:1240px;}
+  .txn-stock-picker-filters{grid-template-columns:minmax(240px,1.7fr) minmax(160px,1.1fr) minmax(160px,1.1fr) minmax(120px,.8fr) minmax(120px,.8fr);}
+  .txn-stock-picker-table{min-width:1040px;}
+  .txn-stock-picker-table th:nth-child(1){width:20%;}
+  .txn-stock-picker-table th:nth-child(2){width:10%;}
+  .txn-stock-picker-table th:nth-child(3){width:17%;}
+  .txn-stock-picker-table th:nth-child(4){width:11%;}
+  .txn-stock-picker-table th:nth-child(5){width:12%;}
+  .txn-stock-picker-table th:nth-child(6){width:10%;text-align:right;}
+  .txn-stock-picker-table th:nth-child(7){width:10%;}
+  .txn-stock-picker-table th:nth-child(8){width:10%;text-align:right;}
+  .txn-stock-picker-lot{font-family:var(--font-mono);}
+  .txn-stock-picker-number{text-align:right!important;white-space:nowrap;}
 
   /* R2 화면 정리 */
   .app-header{height:64px;padding:0 28px;}
