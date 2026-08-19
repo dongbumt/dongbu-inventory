@@ -50,6 +50,7 @@
   const ACTION_POLICIES = Object.freeze({
     'DBMTAuth.newUser':['access_control','admin','uiOnly'],
     'DBMTAuth.saveUser':['access_control','admin','uiOnly'],
+    'DBMTAuth.deleteUser':['access_control','admin','uiOnly'],
     'DBMTAuth.newRole':['access_control','admin','uiOnly'],
     'DBMTAuth.saveRole':['access_control','admin','uiOnly'],
     'DBMTAuth.deleteRole':['access_control','admin','uiOnly'],
@@ -548,6 +549,7 @@
     setValue('m02-user-role',firstRole?.id || '');
     const title=document.getElementById('m02-user-form-title'); if(title) title.textContent='사용자 등록';
     const hint=document.getElementById('m02-user-password-hint'); if(hint) hint.textContent='* 숫자 4자리';
+    const deleteButton=document.getElementById('m02-user-delete-btn'); if(deleteButton) deleteButton.style.display='none';
     if(render) renderUserList();
   }
 
@@ -560,6 +562,19 @@
     setValue('m02-user-password','');
     const title=document.getElementById('m02-user-form-title'); if(title) title.textContent='사용자 수정';
     const hint=document.getElementById('m02-user-password-hint'); if(hint) hint.textContent='(변경할 때만 입력, 숫자 4자리)';
+    const role=(adminData?.roles || []).find(x=>x.id===row.roleId);
+    const currentUser=state.user?.id===row.id;
+    const lastSystemAdmin=Boolean(row.active && role?.systemRole && Number(role.userCount || 0)<=1);
+    const deleteButton=document.getElementById('m02-user-delete-btn');
+    if(deleteButton){
+      deleteButton.style.display='';
+      deleteButton.disabled=currentUser || lastSystemAdmin;
+      deleteButton.title=currentUser
+        ? '현재 로그인한 계정은 다른 관리자로 로그인한 뒤 삭제할 수 있습니다.'
+        : lastSystemAdmin
+          ? '마지막 활성 시스템관리자는 삭제할 수 없습니다.'
+          : '선택한 사용자를 삭제합니다.';
+    }
     renderUserList();
   }
 
@@ -699,6 +714,29 @@
     }catch(err){status('사용자 저장 실패: '+friendly(err),true);}
   }
 
+  async function deleteUser(){
+    try{
+      ensureAdminAction();
+      const id=value('m02-user-id');
+      const row=(adminData?.users || []).find(user=>user.id===id);
+      if(!row) throw new Error('삭제할 사용자를 선택해주세요.');
+      if(state.user?.id===row.id) throw new Error('현재 로그인한 계정은 다른 관리자로 로그인한 뒤 삭제해주세요.');
+      const role=(adminData?.roles || []).find(item=>item.id===row.roleId);
+      if(row.active && role?.systemRole && Number(role.userCount || 0)<=1){
+        throw new Error('마지막 활성 시스템관리자는 삭제할 수 없습니다.');
+      }
+      if(!window.confirm(`사용자 '${row.displayName} · ${row.loginId}'을 삭제할까요?\n해당 사용자의 로그인 세션도 종료됩니다.`)) return;
+      await rpc('dbmt_m02_delete_user', {
+        p_password:adminPassword(),
+        p_id:id,
+        p_expected_revision:Number(value('m02-user-revision'))
+      });
+      if(typeof window.toast==='function') window.toast('사용자를 삭제했습니다.');
+      selectedUserId='';
+      await refreshAdmin();
+    }catch(err){status('사용자 삭제 실패: '+friendly(err),true);}
+  }
+
   function friendly(err){
     const msg=String(err?.message || err || '');
     if(/duplicate key|unique constraint/i.test(msg)) return '이미 사용 중인 코드 또는 아이디입니다.';
@@ -719,7 +757,8 @@
     initializeSession, openLogin, closeLogin, loginFromModal, logoutConfirm,
     can, canAction, requireAction, canOpenPage, isPersonal, getSessionToken, auditIdentity, applyNavigation,
     applyActionPermissions,
-    initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole, saveUser, saveRole, deleteRole
+    initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole,
+    saveUser, deleteUser, saveRole, deleteRole
   };
   window.DBMTAuth=api;
 

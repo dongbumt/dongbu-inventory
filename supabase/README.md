@@ -73,6 +73,7 @@ Editor query for each file:
 51. `schema-rpc-29-business-partner-master.sql`
 52. `schema-rpc-30-product-codes.sql`
 53. `schema-rpc-31-erp-role-public-permissions.sql`
+54. `schema-rpc-32-erp-user-delete.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -109,6 +110,7 @@ This creates:
 - `dbmt_m02_save_role(password, ..., permissions, expected_revision)`
 - `dbmt_m02_delete_role(password, role_id, expected_revision)`
 - `dbmt_m02_save_user(password, ..., login_password, expected_revision)`
+- `dbmt_m02_delete_user(password, user_id, expected_revision)`
 - `dbmt_erp_public_permissions()`
 - `dbmt_erp_save_schedule(token, id, date, text)`
 - `dbmt_erp_delete_schedule(token, id)`
@@ -240,6 +242,11 @@ view access only, and cannot be assigned to a user. Role deletion is allowed
 only for non-protected roles that have no users assigned, including inactive
 users. The initial public menu is limited to schedule, stock, and change-log
 viewing; administrators can change those view checkboxes in M02.
+
+Apply `20260820110000_erp_user_delete.sql` after it. It allows an administrator
+to delete a personal user while retaining historical business records and
+change logs. The user's short-lived sessions are removed by cascade, and the
+last active system administrator cannot be deleted.
 
 ## 3. Document request delivery
 
