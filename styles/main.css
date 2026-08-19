@@ -360,6 +360,8 @@
   .bulk-in-row-product-search .btn{flex:0 0 auto;padding:5px 8px;white-space:nowrap;}
   .bulk-in-row-product-content .bulk-in-product{width:100%;padding:6px 7px;font-size:12px;}
   .bulk-in-row-product-content .bulk-in-product-meta{flex:1 1 250px;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .bulk-in-trader-search-wrap{min-width:0;}
+  .bulk-in-trader-search-wrap .bulk-in-trader-results{width:max(100%,280px);}
   .txn-product-picker{width:min(1120px,96vw);max-width:1120px;padding:20px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;}
   .txn-product-picker-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
   .txn-product-picker-head h3{margin:0;font-size:17px;}

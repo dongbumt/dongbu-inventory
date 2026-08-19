@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819bulkinpopup2">
+<link rel="stylesheet" href="styles/main.css?v=20260819bulkintrader1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -825,7 +825,10 @@
         <div class="form-group bulk-in-common-trader">
           <label>거래처 일괄 채우기</label>
           <div style="display:flex;gap:4px;">
-            <input id="bulk-in-trader-common" list="purchase-trader-list" placeholder="거래처명" style="flex:1;">
+            <div class="txn-trader-search-wrap bulk-in-trader-search-wrap" style="flex:1;min-width:0;">
+              <input id="bulk-in-trader-common" class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkInboundTraderSearch(this,true)" onfocus="onBulkInboundTraderSearch(this,false)" onblur="hideBulkInboundTraderResults(this)" onkeydown="handleBulkInboundTraderSearchKeydown(event,this)" style="width:100%;">
+              <div class="txn-trader-results bulk-in-trader-results" role="listbox" style="display:none;"></div>
+            </div>
             <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
           </div>
         </div>
@@ -8503,13 +8506,131 @@ function hideBulkProductResults(inp){
     if(box) box.style.display = 'none';
   }, 180);
 }
+
+let bulkInboundTraderSearchRows = [];
+let bulkInboundTraderSearchIndex = -1;
+let bulkInboundTraderSearchInput = null;
+let bulkInboundTraderSearchHideTimer = null;
+
+function getBulkInboundTraderSearchRows(){
+  return Object.keys(traderInfoMap || {})
+    .filter(name=>{
+      const info = traderInfoMap?.[name] || {};
+      if(!name || info.alias === true || info.active === false) return false;
+      const tradeType = String(info.tradeType || '').trim();
+      return tradeType === '매입' || tradeType === '매입/매출';
+    })
+    .map(name=>({name, info:traderInfoMap[name] || {}}))
+    .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+}
+
+function bulkInboundTraderSearchBox(inp){
+  return inp?.closest('.bulk-in-trader-search-wrap')?.querySelector('.bulk-in-trader-results') || null;
+}
+
+function onBulkInboundTraderSearch(inp){
+  if(!inp) return;
+  if(bulkInboundTraderSearchHideTimer){
+    clearTimeout(bulkInboundTraderSearchHideTimer);
+    bulkInboundTraderSearchHideTimer = null;
+  }
+  document.querySelectorAll('#bulk-inbound-body .bulk-in-trader-results').forEach(box=>{
+    if(box !== bulkInboundTraderSearchBox(inp)) box.style.display = 'none';
+  });
+  bulkInboundTraderSearchInput = inp;
+  const box = bulkInboundTraderSearchBox(inp);
+  if(!box) return;
+  const query = String(inp.value || '').trim().toLowerCase();
+  bulkInboundTraderSearchRows = getBulkInboundTraderSearchRows()
+    .filter(row=>!query || txnTraderSearchText(row).includes(query))
+    .slice(0,80);
+  const exactIndex = bulkInboundTraderSearchRows.findIndex(row=>samePriceText(row.name, inp.value));
+  bulkInboundTraderSearchIndex = exactIndex >= 0 ? exactIndex : (bulkInboundTraderSearchRows.length ? 0 : -1);
+  if(!bulkInboundTraderSearchRows.length){
+    box.innerHTML = '<div class="txn-trader-empty">검색 결과 없음</div>';
+  }else{
+    box.innerHTML = bulkInboundTraderSearchRows.map((row,index)=>`<div class="txn-trader-option${index===bulkInboundTraderSearchIndex?' active':''}" role="option" aria-selected="${index===bulkInboundTraderSearchIndex?'true':'false'}" data-index="${index}">
+      <strong>${htmlEscape(row.name)}</strong>
+      <span>${htmlEscape(txnTraderOptionDetail(row.info))}</span>
+    </div>`).join('');
+    box.querySelectorAll('.txn-trader-option').forEach(option=>{
+      option.addEventListener('mousedown', event=>{
+        event.preventDefault();
+        selectBulkInboundTraderSearchResult(Number(option.dataset.index));
+      });
+    });
+  }
+  box.style.display = 'block';
+  inp.setAttribute('aria-expanded','true');
+}
+
+function syncBulkInboundTraderSearchSelection(){
+  const box = bulkInboundTraderSearchBox(bulkInboundTraderSearchInput);
+  if(!box) return;
+  box.querySelectorAll('.txn-trader-option').forEach(option=>{
+    const selected = Number(option.dataset.index) === bulkInboundTraderSearchIndex;
+    option.classList.toggle('active', selected);
+    option.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+  box.querySelector(`.txn-trader-option[data-index="${bulkInboundTraderSearchIndex}"]`)?.scrollIntoView({block:'nearest'});
+}
+
+function selectBulkInboundTraderSearchResult(index){
+  const row = bulkInboundTraderSearchRows[index];
+  const inp = bulkInboundTraderSearchInput;
+  if(!row || !inp) return;
+  inp.value = row.name;
+  hideBulkInboundTraderResults(inp, true);
+}
+
+function handleBulkInboundTraderSearchKeydown(event, inp){
+  const box = bulkInboundTraderSearchBox(inp);
+  const isOpen = box && box.style.display !== 'none';
+  if(event.key === 'Escape'){
+    event.preventDefault();
+    hideBulkInboundTraderResults(inp, true);
+    return;
+  }
+  if(event.key === 'ArrowDown' || event.key === 'ArrowUp'){
+    event.preventDefault();
+    if(!isOpen) onBulkInboundTraderSearch(inp, false);
+    if(!bulkInboundTraderSearchRows.length) return;
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    bulkInboundTraderSearchIndex = Math.max(0, Math.min((bulkInboundTraderSearchIndex < 0 ? 0 : bulkInboundTraderSearchIndex) + delta, bulkInboundTraderSearchRows.length - 1));
+    syncBulkInboundTraderSearchSelection();
+    return;
+  }
+  if(event.key === 'Enter' && isOpen && bulkInboundTraderSearchIndex >= 0){
+    event.preventDefault();
+    selectBulkInboundTraderSearchResult(bulkInboundTraderSearchIndex);
+  }
+}
+
+function hideBulkInboundTraderResults(inp, immediate=false){
+  const hide = ()=>{
+    const box = bulkInboundTraderSearchBox(inp);
+    if(box) box.style.display = 'none';
+    if(inp) inp.setAttribute('aria-expanded','false');
+  };
+  if(bulkInboundTraderSearchHideTimer) clearTimeout(bulkInboundTraderSearchHideTimer);
+  if(immediate){
+    bulkInboundTraderSearchHideTimer = null;
+    hide();
+  }else{
+    bulkInboundTraderSearchHideTimer = setTimeout(()=>{
+      bulkInboundTraderSearchHideTimer = null;
+      hide();
+    },180);
+  }
+}
+
 function addBulkInboundRow(){
   const tbody = document.getElementById('bulk-inbound-tbody');
   if(!tbody) return;
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td class="bulk-in-product-cell"><div class="bulk-in-row-product-content"><div class="bulk-in-product-search-shell"><div class="bulk-in-row-product-search"><input class="bulk-in-product" placeholder="품목명 검색" autocomplete="off" oninput="onBulkInboundProductInput(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)"><button type="button" class="btn btn-sm btn-secondary" onclick="openBulkInboundProductPicker(this.parentElement.querySelector('.bulk-in-product'))" title="품목 검색 팝업 열기">검색</button></div><input type="hidden" class="bulk-in-product-id"></div><div class="bulk-in-product-meta" aria-live="polite"></div></div></td>
-    <td><input class="bulk-in-trader" list="purchase-trader-list" placeholder="거래처" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><div class="txn-trader-search-wrap bulk-in-trader-search-wrap"><input class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkInboundTraderSearch(this,true)" onfocus="onBulkInboundTraderSearch(this,false)" onblur="hideBulkInboundTraderResults(this)" onkeydown="handleBulkInboundTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-in-trader-results" role="listbox" style="display:none;"></div></div></td>
     <td><input class="bulk-in-lot" placeholder="LOT번호" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-price" type="number" step="1" placeholder="자동" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
