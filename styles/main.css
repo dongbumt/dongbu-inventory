@@ -353,13 +353,13 @@
   .bulk-in-product-detail strong{color:#667085;font-size:10px;line-height:1;}
   .bulk-in-product-detail span{min-width:0;font-size:12px;font-weight:800;overflow-wrap:anywhere;}
   .bulk-in-product-cell{position:relative;padding:6px 8px!important;}
-  .bulk-in-row-product-content{display:flex;align-items:center;gap:8px;min-width:460px;}
+  .bulk-in-row-product-content{display:flex;align-items:center;gap:8px;min-width:520px;}
   .bulk-in-row-product-content .bulk-in-product-search-shell{flex:0 0 190px;}
   .bulk-in-row-product-search{display:flex;align-items:center;gap:4px;}
   .bulk-in-row-product-search .bulk-in-product{flex:1;min-width:0;}
   .bulk-in-row-product-search .btn{flex:0 0 auto;padding:5px 8px;white-space:nowrap;}
   .bulk-in-row-product-content .bulk-in-product{width:100%;padding:6px 7px;font-size:12px;}
-  .bulk-in-row-product-content .bulk-in-product-meta{flex:1 1 250px;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .bulk-in-row-product-content .bulk-in-product-meta{flex:1 1 340px;grid-template-columns:minmax(90px,1.25fr) minmax(70px,.9fr) minmax(70px,.9fr) minmax(60px,.75fr);}
   .bulk-in-trader-search-wrap{min-width:0;}
   .bulk-in-trader-search-wrap .bulk-in-trader-results{width:max(100%,280px);}
   .txn-product-picker{width:min(1120px,96vw);max-width:1120px;padding:20px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;}
