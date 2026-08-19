@@ -23,7 +23,7 @@ function quotationCompany(record={}){
   const allowLegacyFallback = profile.isLegacyDraft === true || profile.source === 'legacy' || (!snapshot && masterSource === 'legacy');
   return {
     name:profile.legalName || profile.name || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.name : ''),
-    ceo:profile.representativeName || profile.representative || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.ceo : ''),
+    ceo:profile.representativeName || profile.representative || profile.ceo || QUOTATION_COMPANY_FALLBACK.ceo,
     registrationNo:profile.registrationNo || profile.businessRegistrationNo || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.registrationNo : ''),
     address:profile.address || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.address : ''),
     phoneFax:profile.phoneFax || [profile.phone,profile.fax].filter(Boolean).join(' / ') || (allowLegacyFallback ? QUOTATION_COMPANY_FALLBACK.phoneFax : '')
@@ -555,17 +555,19 @@ async function qDrawExternalQuotation(ctx,record){
 
   qDrawPublicTable(ctx,record,rows,700);
 
-  const footerY=2800;
-  ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.strokeRect(140,footerY,2200,430);
-  qDrawText(ctx,'[ 비 고 ]',175,footerY+50,{size:38,weight:700});
+  const footerY=2890;
+  const footerH=340;
+  ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.strokeRect(140,footerY,2200,footerH);
+  ctx.beginPath();ctx.moveTo(1320,footerY+24);ctx.lineTo(1320,footerY+footerH-24);ctx.stroke();
+  qDrawText(ctx,'[ 비 고 ]',175,footerY+48,{size:38,weight:700});
   qSetFont(ctx,34,400);
-  const noteLines=qWrapLines(ctx,record.note||'',1980,4);
-  noteLines.forEach((line,index)=>qDrawText(ctx,line,175,footerY+112+index*50,{size:34}));
-  qDrawText(ctx,`담당자 : ${record.managerName||'-'} (${record.managerPhone||'-'})`,175,footerY+245,{size:34,weight:600});
-  qDrawText(ctx,company.name,1530,footerY+295,{size:40,weight:700,align:'center'});
-  qDrawText(ctx,`대표  ${company.ceo}`,1530,footerY+360,{size:34,weight:600,align:'center'});
+  const noteLines=qWrapLines(ctx,record.note||'',1080,4);
+  noteLines.forEach((line,index)=>qDrawText(ctx,line,175,footerY+104+index*42,{size:34}));
+  qDrawText(ctx,`담당자 : ${record.managerName||'-'} (${record.managerPhone||'-'})`,175,footerY+285,{size:34,weight:600,maxWidth:1080});
+  qDrawText(ctx,company.name,1580,footerY+118,{size:44,weight:700,align:'center',maxWidth:430});
+  qDrawText(ctx,`대표이사  ${company.ceo||QUOTATION_COMPANY_FALLBACK.ceo}`,1580,footerY+205,{size:38,weight:600,align:'center',maxWidth:430});
   const seal=await quotationSealImage();
-  if(seal){ ctx.save();ctx.globalAlpha=.9;ctx.drawImage(seal,1740,footerY+225,190,190);ctx.restore(); }
+  if(seal){ ctx.save();ctx.globalAlpha=.9;ctx.drawImage(seal,1815,footerY+72,205,205);ctx.restore(); }
 }
 
 function qDrawInternalQuotation(ctx,record){
