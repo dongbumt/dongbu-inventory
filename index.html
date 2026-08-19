@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819txntrader1">
+<link rel="stylesheet" href="styles/main.css?v=20260819txntop1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -642,7 +642,7 @@
       <div class="ct-bar" style="background:var(--blue);"></div>
       새 거래내역 입력
     </div>
-    <div class="form-row">
+    <div class="form-row" id="t-primary-row">
       <div class="form-group"><label>날짜</label><input type="date" id="t-date"></div>
       <div class="form-group"><label>구분</label>
         <select id="t-type" onchange="clearMeatwatchLookupResult({removeNote:true});updateTransactionForm()">
@@ -6667,6 +6667,7 @@ function updateTransactionForm(){
   const prodLabel = document.getElementById('t-product-label');
   const managedWrap = document.getElementById('t-product-managed-wrap');
   const productWrap = document.getElementById('t-product-wrap');
+  const primaryRow = document.getElementById('t-primary-row');
   const managedProd = document.getElementById('t-product-managed');
   const stockSearchWrap = document.getElementById('t-stock-search-wrap');
   const stockSearchResults = document.getElementById('t-stock-search-results');
@@ -6687,6 +6688,7 @@ function updateTransactionForm(){
   if(moveWrap) moveWrap.style.display = (t === '재고이동') ? 'flex' : 'none';
   if(prodLabel) prodLabel.textContent = isStockPick ? '재고 품목' : '품목명';
   if(productWrap) productWrap.classList.toggle('txn-product-managed-active', t === '입고');
+  if(primaryRow) primaryRow.classList.toggle('txn-inbound-primary-row', t === '입고');
   if(stockSearchResults) stockSearchResults.style.display = 'none';
 
   if(isStockPick){
@@ -6712,7 +6714,7 @@ function updateTransactionForm(){
   } else if(t === '입고'){
     // 입고 모드: 품목관리 기준값만 선택
     inpProd.style.display  = 'none';
-    managedWrap.style.display = 'block';
+    managedWrap.style.display = 'flex';
     managedProd.style.display = 'block';
     if(stockSearchWrap) stockSearchWrap.style.display = 'none';
     selProd.style.display  = 'none';

@@ -322,15 +322,17 @@
   .em-btns{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;}
 
   /* 입고 품목 검색 */
-  .form-group.txn-product-managed-active{grid-column:span 2;}
-  .txn-managed-product-field{display:flex;align-items:center;gap:6px;}
+  .form-row.txn-inbound-primary-row{grid-template-columns:minmax(150px,180px) minmax(110px,140px) minmax(520px,1fr) minmax(120px,150px);align-items:start;}
+  .txn-inbound-primary-row .form-group.txn-product-managed-active{grid-column:auto;min-width:0;}
+  #t-product-managed-wrap{align-items:flex-end;gap:8px;flex-wrap:wrap;}
+  .txn-managed-product-field{display:flex;flex:0 1 310px;min-width:240px;align-items:center;gap:6px;}
   .txn-managed-product-field input{flex:1;min-width:0;}
   .txn-managed-product-field .btn{flex:0 0 auto;white-space:nowrap;padding-left:12px;padding-right:12px;}
-  .txn-managed-product-meta{display:none;margin-top:5px;padding:7px 9px;border-top:1px solid #d0d5dd;border-bottom:1px solid #d0d5dd;background:#f8f9fa;color:#344054;font-size:11px;line-height:1.4;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 12px;}
+  .txn-managed-product-meta{display:none;flex:1 1 420px;min-height:39px;padding:6px 10px;border:1px solid #d0d5dd;border-radius:6px;background:#f8f9fa;color:#344054;line-height:1.25;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 14px;}
   .txn-managed-product-meta.visible{display:grid;}
-  .txn-managed-product-detail{display:flex;min-width:0;gap:5px;align-items:baseline;}
-  .txn-managed-product-detail strong{flex:0 0 auto;color:#667085;font-size:10px;}
-  .txn-managed-product-detail span{min-width:0;font-weight:700;overflow-wrap:anywhere;}
+  .txn-managed-product-detail{display:flex;min-width:0;flex-direction:column;gap:2px;justify-content:center;}
+  .txn-managed-product-detail strong{color:#667085;font-size:11px;line-height:1;}
+  .txn-managed-product-detail span{min-width:0;font-size:13px;font-weight:800;overflow-wrap:anywhere;}
   .txn-trader-search-wrap{position:relative;}
   .txn-trader-results{position:absolute;left:0;top:calc(100% + 3px);z-index:1500;width:max(100%,300px);max-height:250px;overflow:auto;border:1px solid var(--border);border-radius:7px;background:#fff;box-shadow:0 8px 20px rgba(0,0,0,.15);}
   .txn-trader-option{padding:7px 10px;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-size:12px;line-height:1.35;}
@@ -450,7 +452,9 @@
     .quote-toolbar .btn{flex:1;justify-content:center;white-space:nowrap;}
     .quote-preview-shell{padding:6px;}
     .txn-product-picker{width:100%;height:100%;max-height:100vh;border-radius:0;padding:14px;}
+    .form-row.txn-inbound-primary-row{grid-template-columns:1fr 1fr;}
     .form-group.txn-product-managed-active{grid-column:1 / -1;}
+    .txn-managed-product-field{flex:1 1 100%;min-width:0;}
     .txn-managed-product-meta{grid-template-columns:1fr 1fr;}
     .txn-product-picker-filters{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
     .txn-product-picker-filter-all{grid-column:1 / -1;}
