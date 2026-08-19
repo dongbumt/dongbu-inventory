@@ -527,8 +527,8 @@ function qDrawPublicTable(ctx,record,rows,startY,{compact=false}={}){
       x+=widths[index];
     });
     y+=mainH;
-    qDrawCell(ctx,{x:x0,y,w:widths[0],h:specH,text:'스펙',size:compact?20:28,weight:700,fill:'#f7f7f7'});
-    qDrawCell(ctx,{x:x0+widths[0],y,w:widths.slice(1).reduce((sum,n)=>sum+n,0),h:specH,text:row.spec||'',size:compact?20:29,align:'left',padding:20,maxLines:2,fill:'#fafafa'});
+    qDrawCell(ctx,{x:x0,y,w:widths[0],h:specH,text:'스펙',size:compact?20:32,weight:700,fill:'#f7f7f7'});
+    qDrawCell(ctx,{x:x0+widths[0],y,w:widths.slice(1).reduce((sum,n)=>sum+n,0),h:specH,text:row.spec||'',size:compact?20:32,align:'left',padding:20,maxLines:2,fill:'#fafafa'});
     y+=specH;
   });
   return y;
