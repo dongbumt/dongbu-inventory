@@ -1134,13 +1134,14 @@
         전체 재고현황
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" oninput="scheduleRenderStock()">
-        <select id="stock-location-filter" style="font-size:12px;padding:7px 10px;width:auto;" onchange="renderStock()">
+        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" oninput="markStockSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runStockSearch();}">
+        <button id="stock-search-btn" class="btn btn-primary btn-sm" onclick="runStockSearch()">조회</button>
+        <select id="stock-location-filter" style="font-size:12px;padding:7px 10px;width:auto;" onchange="markStockSearchPending()">
           <option value="">전체 지점</option>
           <option value="가공장">가공장</option>
           <option value="물류창고">물류창고</option>
         </select>
-        <select id="stock-filter-status" style="font-size:12px;padding:7px 10px;width:auto;" onchange="renderStock()">
+        <select id="stock-filter-status" style="font-size:12px;padding:7px 10px;width:auto;" onchange="markStockSearchPending()">
           <option value="재고">재고있음</option>
           <option value="소진">소진</option>
           <option value="">전체(소진포함)</option>
@@ -4552,7 +4553,7 @@ function renderPageById(id, reason='menu'){
         renderProductionLoss();
         break;
       case 'p-stock':
-        renderStock();
+        prepareStockPage();
         break;
       case 'p-cold-storage-request':
         if(typeof initColdStorageRequestPage === 'function') asyncTask = initColdStorageRequestPage();
@@ -7167,7 +7168,12 @@ function selectLot(lot, origin, proddate, stock, price=0, packunit='', stockKey=
 
 // ─── 재고 맵 캐시 — 거래 변경 시 save()/gsInit()/localInit()에서 무효화 ───
 let _stockMapCache = null;
-function invalidateStockMap(){ _stockMapCache = null; }
+let stockSearchActivated = false;
+let stockSearchDirty = true;
+function invalidateStockMap(){
+  _stockMapCache = null;
+  stockSearchDirty = true;
+}
 
 let localCoreRevision = 0;
 function markLocalCoreChanged(){
@@ -10046,12 +10052,64 @@ function exportProductionLossCSV(){
 const EXCEL_STOCK = [];
 let stockRenderTimer = null;
 
-function scheduleRenderStock(delay=180){
+function stockTableColspan(){
+  return stockPersonalCan('update') ? 16 : 15;
+}
+
+function showStockQueryState(message){
+  const statsEl = document.getElementById('stock-stats');
+  if(statsEl) statsEl.innerHTML = '';
+  const body = document.getElementById('stock-body');
+  if(body) body.innerHTML = `<tr><td colspan="${stockTableColspan()}" style="text-align:center;padding:28px;color:#888;">${htmlEscape(message || '조회 전')}</td></tr>`;
+}
+
+function refreshStockLocationFilter(){
+  const locationEl = document.getElementById('stock-location-filter');
+  if(!locationEl) return;
+  const current = locationEl.value;
+  locationEl.innerHTML = stockLocationOptionsHtml(current, true, '전체 지점');
+  locationEl.value = current;
+}
+
+function prepareStockPage(){
+  applyStockPermissionState();
+  refreshStockLocationFilter();
+  if(!stockSearchActivated) showStockQueryState('조회 전');
+  else if(stockSearchDirty) showStockQueryState('재조회 필요');
+}
+
+function markStockSearchPending(){
+  stockSearchDirty = true;
+  if(stockSearchActivated) showStockQueryState('재조회 필요');
+}
+
+function runStockSearch(){
   if(stockRenderTimer) clearTimeout(stockRenderTimer);
+  stockSearchActivated = true;
+  showStockQueryState('조회 중...');
+  const button = document.getElementById('stock-search-btn');
+  if(button) button.disabled = true;
   stockRenderTimer = setTimeout(()=>{
     stockRenderTimer = null;
-    renderStock();
-  }, delay);
+    if(activePageId() !== 'p-stock'){
+      if(button) button.disabled = false;
+      return;
+    }
+    const startedAt = performance.now();
+    try{
+      renderStock();
+      DBMT_PERF.record('search:p-stock', startedAt, {
+        query:(document.getElementById('stock-search')?.value || '').trim()
+      });
+    }catch(error){
+      stockSearchDirty = true;
+      showStockQueryState('조회 실패');
+      console.error('재고현황 조회 실패:', error);
+      toast('재고현황 조회에 실패했습니다.');
+    }finally{
+      if(button) button.disabled = false;
+    }
+  }, 0);
 }
 
 function renderStock(){
@@ -10062,12 +10120,9 @@ function renderStock(){
   const locationFilter = document.getElementById('stock-location-filter')?.value || '';
 
   const stockMap=getStockMap();
-  const locFilterEl = document.getElementById('stock-location-filter');
-  if(locFilterEl){
-    const cur = locFilterEl.value;
-    locFilterEl.innerHTML = stockLocationOptionsHtml(cur, true, '전체 지점');
-    locFilterEl.value = cur;
-  }
+  refreshStockLocationFilter();
+  stockSearchActivated = true;
+  stockSearchDirty = false;
 
   // 부동소수점 오차 보정: ±0.01 미만은 0으로 처리 (-0.00 소진 분류)
   Object.values(stockMap).forEach(s=>{
@@ -13522,7 +13577,7 @@ function stockSort(key){
     stockSortKey = key;
     stockSortDir = 'asc';
   }
-  renderStock();
+  if(stockSearchActivated && !stockSearchDirty) renderStock();
 }
 
 function saveDocChecks(changeLog=null){
