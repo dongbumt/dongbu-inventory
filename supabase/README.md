@@ -324,7 +324,43 @@ npx supabase functions deploy meatwatch-lookup --no-verify-jwt
 session token. The function validates that token and the transaction permission
 on the server before calling MeatWatch.
 
-## 5. Project values
+## 5. Domestic cattle and pig trace lookup
+
+The `livestock-trace-lookup` Edge Function queries the Korea Institute for
+Animal Products Quality Evaluation integrated trace API for domestic cattle and
+pig trace or bundle numbers. It returns only a normalized summary needed by the
+ERP: animal type, slaughter date/place, grade, inspection result, and packing
+date/company. The upstream XML response and service key are never sent to or
+stored by the browser. A personally logged-in user also needs transaction
+create/update permission.
+
+Apply for the public-data service `축산물품질평가원_축산물통합이력정보` and set
+its key as a server-only Edge Function secret:
+
+```text
+EKAPE_TRACE_SERVICE_KEY
+```
+
+The repository helper prompts twice without echoing the key and removes its
+temporary secret file immediately after the Supabase update:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\set-ekape-trace-service-key.ps1
+```
+
+The provider's current published endpoint is HTTP-only. The secret is therefore
+kept out of browser code and is sent only by the Edge Function to the official
+provider endpoint. Deploy with:
+
+```powershell
+npx supabase functions deploy livestock-trace-lookup --no-verify-jwt
+```
+
+`verify_jwt` is disabled because the function validates the ERP's own
+short-lived personal session token and transaction permission before querying
+the provider.
+
+## 6. Project values
 
 Current project URL:
 

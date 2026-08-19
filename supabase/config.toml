@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.meatwatch-lookup]
 verify_jwt = false
+
+[functions.livestock-trace-lookup]
+verify_jwt = false

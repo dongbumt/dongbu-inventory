@@ -788,6 +788,17 @@
         <input type="hidden" id="t-meatwatch-process-end">
         <input type="hidden" id="t-meatwatch-expiry">
         <input type="hidden" id="t-meatwatch-queried-at">
+        <input type="hidden" id="t-livestock-species">
+        <input type="hidden" id="t-livestock-trace-type">
+        <input type="hidden" id="t-livestock-slaughter-date">
+        <input type="hidden" id="t-livestock-slaughter-end-date">
+        <input type="hidden" id="t-livestock-slaughter-houses">
+        <input type="hidden" id="t-livestock-grades">
+        <input type="hidden" id="t-livestock-inspection-results">
+        <input type="hidden" id="t-livestock-process-date">
+        <input type="hidden" id="t-livestock-process-end-date">
+        <input type="hidden" id="t-livestock-process-companies">
+        <input type="hidden" id="t-livestock-queried-at">
         <div id="t-meatwatch-status" style="display:none;margin-top:4px;font-size:10px;line-height:1.35;color:#666;"></div>
       </div>
       <div class="form-group t-proddate" style="display:none"><label>생산일</label><input type="date" id="t-proddate" oninput="clearTxnStockSelection()"></div>
@@ -8442,6 +8453,17 @@ async function addTransaction(){
       t.meatwatchProcessEndDate=document.getElementById('t-meatwatch-process-end')?.value || '';
       t.meatwatchExpiryDate=document.getElementById('t-meatwatch-expiry')?.value || '';
       t.meatwatchQueriedAt=document.getElementById('t-meatwatch-queried-at')?.value || '';
+      t.livestockSpecies=document.getElementById('t-livestock-species')?.value || '';
+      t.livestockTraceType=document.getElementById('t-livestock-trace-type')?.value || '';
+      t.livestockSlaughterDate=document.getElementById('t-livestock-slaughter-date')?.value || '';
+      t.livestockSlaughterEndDate=document.getElementById('t-livestock-slaughter-end-date')?.value || '';
+      t.livestockSlaughterHouses=document.getElementById('t-livestock-slaughter-houses')?.value || '';
+      t.livestockGrades=document.getElementById('t-livestock-grades')?.value || '';
+      t.livestockInspectionResults=document.getElementById('t-livestock-inspection-results')?.value || '';
+      t.livestockProcessDate=document.getElementById('t-livestock-process-date')?.value || '';
+      t.livestockProcessEndDate=document.getElementById('t-livestock-process-end-date')?.value || '';
+      t.livestockProcessCompanies=document.getElementById('t-livestock-process-companies')?.value || '';
+      t.livestockQueriedAt=document.getElementById('t-livestock-queried-at')?.value || '';
       t.stockUnitPrice = selectedStock ? parseAppNumber(selectedStock.price) : '';
       t.stockProddate = selectedStock ? (selectedStock.proddate || proddateForSave || '') : '';
       t.stockLocation = selectedStock ? (selectedStock.stockLocation || stockLocation) : stockLocation;
@@ -8467,6 +8489,17 @@ async function addTransaction(){
       meatwatchProcessEndDate:document.getElementById('t-meatwatch-process-end')?.value || '',
       meatwatchExpiryDate:document.getElementById('t-meatwatch-expiry')?.value || '',
       meatwatchQueriedAt:document.getElementById('t-meatwatch-queried-at')?.value || '',
+      livestockSpecies:document.getElementById('t-livestock-species')?.value || '',
+      livestockTraceType:document.getElementById('t-livestock-trace-type')?.value || '',
+      livestockSlaughterDate:document.getElementById('t-livestock-slaughter-date')?.value || '',
+      livestockSlaughterEndDate:document.getElementById('t-livestock-slaughter-end-date')?.value || '',
+      livestockSlaughterHouses:document.getElementById('t-livestock-slaughter-houses')?.value || '',
+      livestockGrades:document.getElementById('t-livestock-grades')?.value || '',
+      livestockInspectionResults:document.getElementById('t-livestock-inspection-results')?.value || '',
+      livestockProcessDate:document.getElementById('t-livestock-process-date')?.value || '',
+      livestockProcessEndDate:document.getElementById('t-livestock-process-end-date')?.value || '',
+      livestockProcessCompanies:document.getElementById('t-livestock-process-companies')?.value || '',
+      livestockQueriedAt:document.getElementById('t-livestock-queried-at')?.value || '',
       stockUnitPrice: selectedStock ? parseAppNumber(selectedStock.price) : '',
       stockProddate: selectedStock ? (selectedStock.proddate || proddateForSave || '') : '',
       stockLocation: selectedStock ? (selectedStock.stockLocation || stockLocation) : stockLocation,
@@ -8511,7 +8544,7 @@ function showTransactionSaveStatus(message){
 function clearTransactionForm(options={}){
   const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
   showTransactionSaveStatus('');
-  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at'].forEach(id=>{
+  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at','t-livestock-species','t-livestock-trace-type','t-livestock-slaughter-date','t-livestock-slaughter-end-date','t-livestock-slaughter-houses','t-livestock-grades','t-livestock-inspection-results','t-livestock-process-date','t-livestock-process-end-date','t-livestock-process-companies','t-livestock-queried-at'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   updateTxnManagedProductMeta(null);
@@ -20137,6 +20170,7 @@ function initSamsung(){
 <script src="quotation.js?v=20260819quote3"></script>
 <script src="cold-storage-request.js?v=20260813m01"></script>
 <script src="meatwatch-lookup.js?v=20260819bulkinlookup1"></script>
+<script src="livestock-trace-lookup.js?v=20260820domestictrace1"></script>
 <script src="m02-auth.js?v=20260820rolepermissions2"></script>
 </body>
 </html>
