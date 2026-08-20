@@ -62,7 +62,7 @@ function quotationBlankRow(){
   return {
     id: quotationId('qtr'), category:'우육', product:'', grade:'', origin:'', unit:'KG',
     price1:'', price2:'', note:'', spec:'', monthlyUsage:'', targetPrice:'', rawPrice:'',
-    yieldRate:95, processCost:1500, overheadCost:'', salePrice:''
+    yieldRate:95, overheadCost:'', salePrice:''
   };
 }
 
@@ -77,7 +77,9 @@ function quotationBlankDraft(){
 }
 
 function quotationNormalizeRow(row={}){
-  return {...quotationBlankRow(), ...row, id:row.id || quotationId('qtr')};
+  const normalized={...quotationBlankRow(), ...row, id:row.id || quotationId('qtr')};
+  delete normalized.processCost;
+  return normalized;
 }
 
 function quotationNormalize(record={}){
@@ -105,8 +107,7 @@ function quotationCalc(row){
   const rawPrice = qNumber(row.rawPrice);
   const yieldRate = Math.min(100, Math.max(0.01, qNumber(row.yieldRate) || 95));
   const lossAdjusted = rawPrice ? rawPrice / (yieldRate / 100) : 0;
-  const processCost = qNumber(row.processCost);
-  const productionCost = lossAdjusted + processCost;
+  const productionCost = lossAdjusted;
   const overheadCost = qNumber(row.overheadCost);
   const allInCost = productionCost + overheadCost;
   const targetPrice = qNumber(row.targetPrice);
@@ -114,7 +115,7 @@ function quotationCalc(row){
   const suggestedPrice = salePrice || (Math.ceil(Math.max(targetPrice, allInCost) / 10) * 10);
   const margin = suggestedPrice - allInCost;
   const marginRate = suggestedPrice ? margin / suggestedPrice * 100 : 0;
-  return {rawPrice,yieldRate,lossAdjusted,processCost,productionCost,overheadCost,allInCost,targetPrice,salePrice,suggestedPrice,margin,marginRate};
+  return {rawPrice,yieldRate,lossAdjusted,productionCost,overheadCost,allInCost,targetPrice,salePrice,suggestedPrice,margin,marginRate};
 }
 
 function quotationRowsForOutput(record){
@@ -174,7 +175,6 @@ function renderQuotationRows(){
       <td>${quotationInput(row,'targetPrice','number','min="0" step="1"')}</td>
       <td>${quotationInput(row,'rawPrice','number','min="0" step="1"')}</td>
       <td>${quotationInput(row,'yieldRate','number','min="0.01" max="100" step="0.1"')}</td>
-      <td>${quotationInput(row,'processCost','number','min="0" step="1"')}</td>
       <td style="text-align:right;font-weight:700;" id="qt-production-${row.id}">${qMoney(calc.productionCost)}</td>
       <td>${quotationInput(row,'overheadCost','number','min="0" step="1"')}</td>
       <td style="text-align:right;font-weight:700;" id="qt-allin-${row.id}">${qMoney(calc.allInCost)}</td>
@@ -184,7 +184,7 @@ function renderQuotationRows(){
     </tr>
     <tr class="quote-spec-row">
       <td colspan="8"><div style="display:grid;grid-template-columns:52px 1fr;gap:6px;align-items:center;"><strong>스펙</strong>${quotationInput(row,'spec','text','class="quote-spec-input" placeholder="예) 냉동, 1.3 × 30 × 60MM 세절, 5KG 실링포장"')}</div></td>
-      <td colspan="10"><div class="quote-calc-summary">
+      <td colspan="9"><div class="quote-calc-summary">
         <span>로스반영 <strong id="qt-loss-${row.id}">${qMoney(calc.lossAdjusted)}</strong></span>
         <span>생산원가 <strong id="qt-production-summary-${row.id}">${qMoney(calc.productionCost)}</strong></span>
         <span>판관비포함 <strong id="qt-allin-summary-${row.id}">${qMoney(calc.allInCost)}</strong></span>
@@ -227,7 +227,7 @@ function quotationRowChanged(id, field, value){
   const row = quotationDraft?.rows.find(item=>item.id===id);
   if(!row) return;
   row[field] = value;
-  if(['monthlyUsage','targetPrice','rawPrice','yieldRate','processCost','overheadCost','salePrice'].includes(field)) renderQuotationComputedRow(row);
+  if(['monthlyUsage','targetPrice','rawPrice','yieldRate','overheadCost','salePrice'].includes(field)) renderQuotationComputedRow(row);
   scheduleQuotationPreview();
 }
 
@@ -257,7 +257,7 @@ function applyQuotationSuggested(id){
   const row = quotationDraft?.rows.find(item=>item.id===id);
   if(!row) return;
   const suggested = quotationCalc(row).suggestedPrice;
-  if(!suggested){ toast('원물시세, 비용 또는 판매가를 먼저 입력하세요.'); return; }
+  if(!suggested){ toast('원물시세, 타겟단가 또는 판매가를 먼저 입력하세요.'); return; }
   row.price1 = suggested;
   renderQuotationRows();
   scheduleQuotationPreview();
@@ -584,8 +584,8 @@ function qDrawInternalQuotation(ctx,record){
   const publicEnd=qDrawPublicTable(ctx,record,rows,450,{compact:true});
   const tableY=publicEnd+70;
   const x0=140;
-  const widths=[340,190,190,190,140,180,210,180,210,370];
-  const headers=['품목','월 사용량','타겟단가','원물시세','수율','생산비','생산원가','판관비','판관비포함','판매가 / 권장견적가'];
+  const widths=[380,200,200,210,150,230,200,230,400];
+  const headers=['품목','월 사용량','타겟단가','원물시세','수율','생산원가','판관비','판관비포함','판매가 / 권장견적가'];
   let x=x0;
   headers.forEach((header,index)=>{qDrawCell(ctx,{x,y:tableY,w:widths[index],h:94,text:header,size:23,weight:700,fill:'#dedede',maxLines:2});x+=widths[index];});
   let y=tableY+94;
@@ -593,11 +593,11 @@ function qDrawInternalQuotation(ctx,record){
     const calc=quotationCalc(row);
     const values=[
       row.product||'-',`${qAmount(row.monthlyUsage,2)} KG`,qMoney(row.targetPrice),qMoney(row.rawPrice),`${calc.yieldRate.toFixed(1)}%`,
-      qMoney(row.processCost),qMoney(calc.productionCost),qMoney(row.overheadCost),qMoney(calc.allInCost),
+      qMoney(calc.productionCost),qMoney(row.overheadCost),qMoney(calc.allInCost),
       `판매 ${qMoney(row.salePrice)}\n견적 ${qMoney(qNumber(row.price1)||calc.suggestedPrice)}`
     ];
     x=x0;
-    values.forEach((value,index)=>{qDrawCell(ctx,{x,y,w:widths[index],h:108,text:value,size:22,weight:[0,8,9].includes(index)?700:400,align:index===0?'left':'right',maxLines:2,padding:12});x+=widths[index];});
+    values.forEach((value,index)=>{qDrawCell(ctx,{x,y,w:widths[index],h:108,text:value,size:22,weight:[0,7,8].includes(index)?700:400,align:index===0?'left':'right',maxLines:2,padding:12});x+=widths[index];});
     y+=108;
   });
 
