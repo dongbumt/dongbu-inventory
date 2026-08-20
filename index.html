@@ -4691,6 +4691,7 @@ function renderPageById(id, reason='menu'){
         updateOriginList();
         if(reason === 'menu') prepareProductionList();
         else renderProduction();
+        scheduleProductionPickerWarmup();
         break;
       case 'p-prod-loss':
         renderProductionLoss();
@@ -9021,9 +9022,16 @@ function bulkOutboundSearchKey(value){
   return String(value || '').toLowerCase().replace(/\s+/g, '');
 }
 
+let bulkOutboundStockOptionsCacheMap = null;
+let bulkOutboundStockOptionsCacheRows = null;
+
 function bulkOutboundStockOptions(){
+  const stockMap = getStockMap();
+  if(bulkOutboundStockOptionsCacheMap === stockMap && bulkOutboundStockOptionsCacheRows){
+    return bulkOutboundStockOptionsCacheRows;
+  }
   const grouped = {};
-  Object.values(getStockMap()).forEach(s=>{
+  Object.values(stockMap).forEach(s=>{
     const product = String(s.product||'').trim();
     const lot = String(s.lot||'').trim();
     const stock = parseAppNumber(s.stock);
@@ -9055,7 +9063,7 @@ function bulkOutboundStockOptions(){
       if(!grouped[key].prices.includes(price)) grouped[key].prices.push(price);
     }
   });
-  return Object.values(grouped).sort((a,b)=>
+  const rows = Object.values(grouped).sort((a,b)=>
     String(a.product).localeCompare(String(b.product),'ko') ||
     String(a.lot).localeCompare(String(b.lot),'ko') ||
     String(a.origin).localeCompare(String(b.origin),'ko') ||
@@ -9063,6 +9071,27 @@ function bulkOutboundStockOptions(){
     String(a.proddate||'').localeCompare(String(b.proddate||'')) ||
     (a.price||0) - (b.price||0)
   );
+  bulkOutboundStockOptionsCacheMap = stockMap;
+  bulkOutboundStockOptionsCacheRows = rows;
+  return rows;
+}
+
+let productionPickerWarmupScheduled = false;
+function scheduleProductionPickerWarmup(){
+  if(productionPickerWarmupScheduled) return;
+  productionPickerWarmupScheduled = true;
+  const warmup = ()=>{
+    productionPickerWarmupScheduled = false;
+    const startedAt = performance.now();
+    try{
+      const rows = bulkOutboundStockOptions();
+      DBMT_PERF.record('warmup:production-stock-picker', startedAt, {rows:rows.length});
+    }catch(error){
+      console.warn('생산 투입품목 캐시 준비 실패:', error);
+    }
+  };
+  if(typeof requestIdleCallback === 'function') requestIdleCallback(warmup, {timeout:800});
+  else setTimeout(warmup, 80);
 }
 
 function bulkOutboundProductOptions(){
@@ -14223,6 +14252,7 @@ function applySupabasePayload(data){
     }
   });
   invalidateStockMap();
+  scheduleProductionPickerWarmup();
   if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
 }
 
