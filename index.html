@@ -6685,21 +6685,22 @@ function getKnownStockLocations(){
   return [...set];
 }
 
-function stockLocationOptionsHtml(selected='', includeAll=false, allLabel='전체 지점'){
+function stockLocationOptionsHtml(selected='', includeAll=false, allLabel='전체 지점', knownLocations=null){
   const cur = includeAll ? String(selected || '') : normalizeStockLocation(selected);
-  const opts = getKnownStockLocations();
+  const opts = Array.isArray(knownLocations) ? [...knownLocations] : getKnownStockLocations();
   if(cur && !opts.includes(cur)) opts.push(cur);
   return (includeAll ? `<option value="" ${cur===''?'selected':''}>${htmlEscape(allLabel)}</option>` : '') +
     opts.map(loc=>`<option value="${htmlEscape(loc)}" ${loc===cur?'selected':''}>${htmlEscape(loc)}</option>`).join('');
 }
 
 function refreshLocationSelectOptions(){
+  const knownLocations = getKnownStockLocations();
   const loc = document.getElementById('t-stock-location');
-  if(loc) loc.innerHTML = stockLocationOptionsHtml(loc.value || STOCK_LOCATION_DEFAULT);
+  if(loc) loc.innerHTML = stockLocationOptionsHtml(loc.value || STOCK_LOCATION_DEFAULT, false, '전체 지점', knownLocations);
   const from = document.getElementById('t-move-from');
-  if(from) from.innerHTML = stockLocationOptionsHtml(from.value || STOCK_LOCATION_DEFAULT);
+  if(from) from.innerHTML = stockLocationOptionsHtml(from.value || STOCK_LOCATION_DEFAULT, false, '전체 지점', knownLocations);
   const to = document.getElementById('t-move-to');
-  if(to) to.innerHTML = stockLocationOptionsHtml(to.value || STOCK_LOCATION_SECONDARY);
+  if(to) to.innerHTML = stockLocationOptionsHtml(to.value || STOCK_LOCATION_SECONDARY, false, '전체 지점', knownLocations);
   if(to && from && to.value === from.value){
     const alt = getKnownStockLocations().find(x=>x !== from.value) || STOCK_LOCATION_SECONDARY;
     to.value = alt;
@@ -7216,24 +7217,25 @@ function onManagedOriginChange(){
 }
 
 function updateOutProductList(){
-  // 출고: 재고 있는 품목 목록으로 select 갱신
+  // 출고 UI는 재고 팝업을 사용한다. 숨은 select에는 현재 선택값만 유지한다.
   const type = document.getElementById('t-type')?.value || '';
   const locFilter = type === '재고이동' ? getTMoveFromLocation() : '';
-  const products = bulkOutboundProductOptions().filter(p => {
-    if(!locFilter) return true;
-    return bulkOutboundStockOptions().some(s =>
-      bulkOutboundIdentityKey(s.product) === bulkOutboundIdentityKey(p.product) &&
-      bulkOutboundIdentityKey(s.packunit || '') === bulkOutboundIdentityKey(p.packunit || '') &&
-      stockLocationKey(s.stockLocation || '') === stockLocationKey(locFilter)
-    );
-  });
+  const stockRows = bulkOutboundStockOptions().filter(stock =>
+    !locFilter || stockLocationKey(stock.stockLocation || '') === stockLocationKey(locFilter)
+  );
   const sel = document.getElementById('t-product-select');
   const packEl = document.getElementById('t-packunit');
   const cur = sel.value;
   const curPack = packEl?.value || '';
-  sel.innerHTML = '<option value="">-- 재고품목 선택 --</option>' +
-    products.map(p=>`<option value="${htmlEscape(p.product)}" data-packunit="${htmlEscape(p.packunit)}" ${p.product===cur && p.packunit===curPack?'selected':''}>${htmlEscape(p.product)}${p.packunit ? ' / ' + htmlEscape(p.packunit) : ''}</option>`).join('');
-  if(cur && !products.some(p=>p.product===cur && p.packunit===curPack)){
+  const currentAvailable = cur && stockRows.some(stock =>
+    bulkOutboundIdentityKey(stock.product) === bulkOutboundIdentityKey(cur) &&
+    bulkOutboundIdentityKey(stock.packunit || '') === bulkOutboundIdentityKey(curPack)
+  );
+  sel.innerHTML = '<option value="">-- 재고품목 선택 --</option>';
+  if(currentAvailable){
+    ensureOutProductOption(cur, curPack);
+    sel.value = cur;
+  } else if(cur){
     sel.value = '';
     if(packEl) packEl.value = '';
     const dispOrig = document.getElementById('t-origin-display');
@@ -7243,7 +7245,11 @@ function updateOutProductList(){
   }
   // datalist도 동기화 (fallback)
   const dl = document.getElementById('product-list');
-  if(dl) dl.innerHTML = products.map(p=>`<option value="${htmlEscape(p.product)}">`).join('');
+  if(dl){
+    const productNames = [...new Set(stockRows.map(stock=>String(stock.product || '').trim()).filter(Boolean))]
+      .sort((a,b)=>a.localeCompare(b,'ko'));
+    dl.innerHTML = productNames.map(product=>`<option value="${htmlEscape(product)}">`).join('');
+  }
 }
 
 // 출고 select에서 품목 선택 시 원산지 자동표시
