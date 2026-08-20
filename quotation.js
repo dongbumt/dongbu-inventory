@@ -70,7 +70,7 @@ function quotationBlankDraft(){
   return {
     id:'', date:typeof localDateString === 'function' ? localDateString() : new Date().toISOString().slice(0,10),
     customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가',
-    managerName:'김상영 과장', managerPhone:'010-2414-5406',
+    managerName:'김상영 본부장', managerPhone:'010-2414-5406',
     note:'위 품목은 시세에 따라 단가가 변동됩니다.', rows:[quotationBlankRow()],
     companyProfile:null, createdAt:'', updatedAt:''
   };
