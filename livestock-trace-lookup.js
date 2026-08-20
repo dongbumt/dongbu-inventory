@@ -64,6 +64,20 @@
     return end && end!==start ? `${start}~${end}` : start;
   }
 
+  function removeGeneratedTraceDateNote(existing){
+    return String(existing || '').trim()
+      .replace(/(^|\s*\/\s*)(?:도축일|포장일)\s*[:：]\s*\d{4}[-./]\d{2}[-./]\d{2}/g, '')
+      .replace(/^\s*\/\s*|\s*\/\s*$/g, '')
+      .replace(/\s*\/\s*\/\s*/g, ' / ')
+      .trim();
+  }
+
+  function traceDateNote(existing, label, date){
+    const text=removeGeneratedTraceDateNote(existing);
+    const next=`${label}: ${date}`;
+    return text ? `${text} / ${next}` : next;
+  }
+
   function domesticSummary(row, prefix=''){
     const parts=[];
     const animal=row.animalType || (row.species==='cattle' ? '소' : row.species==='pig' ? '돼지' : '');
@@ -110,6 +124,13 @@
   }
 
   function clearTransactionTraceLookupResult(options={}){
+    if(options?.removeNote){
+      const noteEl=byId('t-note');
+      const hasGeneratedDate=Boolean(
+        byId('t-livestock-slaughter-date')?.value || byId('t-livestock-process-date')?.value
+      );
+      if(noteEl && hasGeneratedDate) noteEl.value=removeGeneratedTraceDateNote(noteEl.value);
+    }
     if(typeof originalClear==='function') originalClear(options);
     DOMESTIC_FIELDS.forEach(id=>{ const el=byId(id); if(el) el.value=''; });
   }
@@ -186,8 +207,17 @@
         't-livestock-process-companies':result.processCompanies,
         't-livestock-queried-at':result.queriedAt
       });
+      const productKind=String(context.product?.kind || '원료육').trim()==='제품' ? '제품' : '원료육';
+      const noteLabel=productKind==='제품' ? '포장일' : '도축일';
+      const noteDate=productKind==='제품' ? result.processDate : result.slaughterDate;
+      const noteEl=byId('t-note');
+      if(noteEl && noteDate) noteEl.value=traceDateNote(noteEl.value,noteLabel,noteDate);
       setStatus(domesticSummary(result),'success');
-      if(typeof toast==='function') toast('국내산 축산물 이력정보를 확인했습니다.');
+      if(typeof toast==='function'){
+        toast(noteDate
+          ? `${noteLabel}을 비고에 입력했습니다.`
+          : `조회정보에 ${noteLabel}이 없어 비고는 변경하지 않았습니다.`);
+      }
     }catch(error){
       setStatus(`조회 실패: ${String(error?.message || error)}`,'error');
     }finally{
