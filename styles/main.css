@@ -326,6 +326,7 @@
   .txn-inbound-primary-row .form-group.txn-product-managed-active{grid-column:auto;min-width:0;}
   #t-product-managed-wrap{align-items:flex-end;gap:8px;flex-wrap:wrap;}
   .txn-managed-product-field{display:flex;flex:0 1 310px;min-width:240px;align-items:center;gap:6px;}
+  .txn-managed-product-field.production-picker-field{flex:none;width:100%;min-width:0;}
   .txn-managed-product-field input{flex:1;min-width:0;}
   .txn-managed-product-field .btn{flex:0 0 auto;white-space:nowrap;padding-left:12px;padding-right:12px;}
   .txn-managed-product-meta{display:none;flex:1 1 420px;min-height:39px;padding:6px 10px;border:1px solid #d0d5dd;border-radius:6px;background:#f8f9fa;color:#344054;line-height:1.25;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 14px;}

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260819stockpicker2">
+<link rel="stylesheet" href="styles/main.css?v=20260820prodpopup1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -9948,7 +9948,7 @@ function addProdInputRow(){
   row.innerHTML = `
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:var(--orange);">재고품목 선택 #${id}</label>
-      <div class="txn-managed-product-field">
+      <div class="txn-managed-product-field production-picker-field">
         <input id="prod-in-sel-${id}" data-picker-context="production-input" data-production-row-id="${id}" placeholder="재고품목 검색" autocomplete="off" oninput="clearProdInputStockSelection(${id})" onkeydown="handleProdInputStockPickerKeydown(event,${id})" style="font-size:12px;">
         <button type="button" class="btn btn-secondary" onclick="openProdInputStockPicker(${id})">검색</button>
       </div>
@@ -10081,7 +10081,7 @@ function addProdOutputRow(){
   row.innerHTML = `
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:var(--green);">생산품목 #${id}</label>
-      <div class="txn-managed-product-field">
+      <div class="txn-managed-product-field production-picker-field">
         <input id="prod-out-product-${id}" data-picker-context="production-output" data-production-row-id="${id}" placeholder="생산 품목명 검색" autocomplete="off" oninput="onProdOutProductSearch(${id})" onkeydown="handleProdOutputProductPickerKeydown(event,${id})" style="font-size:12px;">
         <button type="button" class="btn btn-secondary" onclick="openProdOutputProductPicker(${id})">검색</button>
       </div>
