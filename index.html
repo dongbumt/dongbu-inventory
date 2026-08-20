@@ -6627,16 +6627,20 @@ function renderScheduleCalendar(){
   cal.innerHTML = head + cells.join('');
 }
 
-function openProductionByDate(date){
+async function openProductionByDate(date){
+  const opened = await showPage('p-production', document.getElementById('nav-production'));
+  if(!opened) return;
+  const exact = document.getElementById('prod-filter-date');
   const from = document.getElementById('prod-filter-from');
   const to = document.getElementById('prod-filter-to');
   const product = document.getElementById('prod-filter-product');
   const lot = document.getElementById('prod-filter-lot');
-  if(from) from.value = date;
-  if(to) to.value = date;
+  if(exact) exact.value = date;
+  if(from) from.value = '';
+  if(to) to.value = '';
   if(product) product.value = '';
   if(lot) lot.value = '';
-  showPage('p-production', document.getElementById('nav-production'));
+  runProductionSearch();
 }
 
 // ─── 거래내역 ───────────────────────────────────────────
