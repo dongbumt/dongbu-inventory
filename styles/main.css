@@ -306,7 +306,7 @@
     .sw-product-form{grid-template-columns:1fr;}
     .sw-prod-spec-field{grid-column:auto;}
   }
-  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar{width:20px;height:20px;}
   ::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px;}
 
   /* ── 수정 모달 ── */
