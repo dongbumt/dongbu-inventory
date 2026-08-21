@@ -363,21 +363,25 @@ function renderQuotationHistory(){
   if(!body) return;
   const query = String(document.getElementById('qt-history-search')?.value || '').trim().toLocaleLowerCase('ko-KR');
   const rows = quotationList.slice().sort((a,b)=>String(b.updatedAt||b.date||'').localeCompare(String(a.updatedAt||a.date||'')))
-    .filter(row=>!query || [row.customer,row.subject,row.date].join(' ').toLocaleLowerCase('ko-KR').includes(query));
+    .filter(row=>!query || [row.customer,row.subject,row.date,...quotationRowsForOutput(row).map(item=>item.product)].join(' ').toLocaleLowerCase('ko-KR').includes(query));
   if(!rows.length){
     body.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:#888;">저장된 견적이 없습니다.</td></tr>';
     return;
   }
-  body.innerHTML = rows.map(row=>`<tr>
+  body.innerHTML = rows.map(row=>{
+    const productNames = quotationRowsForOutput(row).map(item=>String(item.product||'').trim()).filter(Boolean);
+    const productList = productNames.length ? productNames.map(name=>`<div>${htmlEscape(name)}</div>`).join('') : '-';
+    return `<tr>
     <td>${htmlEscape(row.date || '-')}</td><td style="font-weight:700;">${htmlEscape(row.customer || '-')}</td>
-    <td>${htmlEscape(row.subject || '-')}</td><td style="text-align:right;">${quotationRowsForOutput(row).length}개</td>
+    <td>${htmlEscape(row.subject || '-')}</td><td style="min-width:160px;white-space:normal;line-height:1.5;">${productList}</td>
     <td style="font-size:11px;color:#667085;">${htmlEscape(quotationFormatDateTime(row.updatedAt))}</td>
     <td style="text-align:center;white-space:nowrap;">
       <button class="btn btn-secondary btn-sm" onclick="loadQuotation('${row.id}')">불러오기</button>
       <button class="btn btn-secondary btn-sm" onclick="duplicateQuotation('${row.id}')">복사</button>
       <button class="btn btn-danger btn-sm" onclick="deleteQuotation('${row.id}')">삭제</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 function initQuotationPage(){
@@ -544,7 +548,7 @@ async function qDrawExternalQuotation(ctx,record){
   const leftX=140,leftW=1040,rightX=1210,rightW=1130,top=330;
   qDrawCell(ctx,{x:leftX,y:top,w:leftW,h:86,text:`작성일자 : ${qKoreanDate(record.date)}`,size:34,weight:700});
   qDrawCell(ctx,{x:leftX,y:top+86,w:leftW,h:104,text:`${record.customer||''} ${record.recipient||'귀하'}`,size:42,weight:700});
-  qDrawCell(ctx,{x:leftX,y:top+190,w:leftW,h:104,text:record.subject||'아래와 같이 견적합니다',size:36,weight:600,maxLines:2});
+  qDrawCell(ctx,{x:leftX,y:top+190,w:leftW,h:104,text:'아래와 같이 견적합니다',size:36,weight:600,maxLines:2});
 
   qDrawCell(ctx,{x:rightX,y:top,w:rightW,h:294,text:'',fill:'#fff'});
   qDrawText(ctx,'공 급 자',rightX+34,top+46,{size:29,weight:700,color:'#4b4b4b'});
@@ -578,8 +582,7 @@ function qDrawInternalQuotation(ctx,record){
   ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.strokeRect(140,220,2200,170);
   qDrawText(ctx,`작성일  ${qKoreanDate(record.date)}`,180,270,{size:28,weight:600});
   qDrawText(ctx,`고객사  ${record.customer||'-'} ${record.recipient||''}`,180,340,{size:32,weight:700,maxWidth:900});
-  qDrawText(ctx,`견적 제목  ${record.subject||'-'}`,1210,270,{size:28,weight:600,maxWidth:1080});
-  qDrawText(ctx,`표시 단가  ${record.priceHeader1||'단가 1'} / ${record.priceHeader2||'단가 2'}`,1210,340,{size:26,maxWidth:1080});
+  qDrawText(ctx,`표시 단가  ${record.priceHeader1||'단가 1'} / ${record.priceHeader2||'단가 2'}`,1210,310,{size:26,maxWidth:1080});
 
   const publicEnd=qDrawPublicTable(ctx,record,rows,450,{compact:true});
   const tableY=publicEnd+70;
