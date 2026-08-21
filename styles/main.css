@@ -426,6 +426,17 @@
   .txn-stock-picker-table th:nth-child(6){width:10%;text-align:right;}
   .txn-stock-picker-table th:nth-child(7){width:10%;}
   .txn-stock-picker-table th:nth-child(8){width:10%;text-align:right;}
+  .txn-stock-picker-table.production-input{min-width:1320px;}
+  .txn-stock-picker-table.production-input th:nth-child(1){width:17%;}
+  .txn-stock-picker-table.production-input th:nth-child(2){width:10%;}
+  .txn-stock-picker-table.production-input th:nth-child(3){width:8%;}
+  .txn-stock-picker-table.production-input th:nth-child(4){width:10%;}
+  .txn-stock-picker-table.production-input th:nth-child(5){width:8%;}
+  .txn-stock-picker-table.production-input th:nth-child(6){width:15%;text-align:left;}
+  .txn-stock-picker-table.production-input th:nth-child(7){width:8%;}
+  .txn-stock-picker-table.production-input th:nth-child(8){width:10%;}
+  .txn-stock-picker-table.production-input th:nth-child(9){width:7%;text-align:right;}
+  .txn-stock-picker-table.production-input th:nth-child(10){width:9%;text-align:right;}
   .txn-stock-picker-lot{font-family:var(--font-mono);}
   .txn-stock-picker-number{text-align:right!important;white-space:nowrap;}
 
