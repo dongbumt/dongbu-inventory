@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260820prodpopup1">
+<link rel="stylesheet" href="styles/main.css?v=20260821factorysim1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -2806,27 +2806,35 @@
      확장공장 시뮬레이터
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-factorysim">
-  <div class="card">
+  <div class="card fs-hero-card">
     <div class="section-header">
-      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#0f766e;"></div>확장공장 시뮬레이터</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div>
+        <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#4b5563;"></div>확장공장 시뮬레이터</div>
+        <div class="fs-hero-copy">현 공장을 기준으로 공간·장비·물류 동선을 재배치하고 확장안을 비교합니다.</div>
+      </div>
+      <div class="fs-scenario-actions">
         <select id="fs-scenario-select" onchange="loadFactorySimScenario(this.value)" style="min-width:220px;font-size:12px;"></select>
+        <button class="btn btn-secondary btn-sm" onclick="loadFactorySimCurrentBaseline()">현 공장 기준안</button>
+        <button class="btn btn-secondary btn-sm" onclick="duplicateFactorySimBaseline()">기준안 복제</button>
         <button class="btn btn-secondary btn-sm" onclick="newFactorySimScenario()">새 시나리오</button>
         <button class="btn btn-primary btn-sm" onclick="saveFactorySimScenario()">저장</button>
         <button class="btn btn-danger btn-sm" onclick="deleteFactorySimScenario()">삭제</button>
       </div>
     </div>
-    <div style="font-size:12px;color:#667085;line-height:1.65;">
-      현재 공장 자료를 기준으로 이전 후보지의 면적, 설비 배치, 작업 동선, 작업 인원별 예상 생산성을 비교하는 메뉴입니다.
-    </div>
+  </div>
+
+  <div class="card fs-baseline-card" id="fs-baseline-card" style="display:none;">
+    <div class="card-title"><div class="ct-bar" style="background:#6b7280;"></div>현 공장 도면 기준</div>
+    <div id="fs-baseline-summary" class="fs-baseline-grid"></div>
   </div>
 
   <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#2980b9;"></div>기본 조건</div>
+    <div class="card-title"><div class="ct-bar" style="background:#6b7280;"></div>기본 조건</div>
     <div class="fs-grid">
       <div class="form-group"><label>시나리오명</label><input id="fs-name" placeholder="예) 2차 가공장 확장안 A" oninput="calculateFactorySim()"></div>
-      <div class="form-group"><label>공장 폭 (m)</label><input type="number" id="fs-width" min="1" step="0.1" placeholder="예) 24" oninput="calculateFactorySim()"></div>
-      <div class="form-group"><label>공장 깊이 (m)</label><input type="number" id="fs-depth" min="1" step="0.1" placeholder="예) 36" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>전체 폭 (m)</label><input type="number" id="fs-width" min="1" step="0.01" placeholder="예) 18.72" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>전체 깊이 (m)</label><input type="number" id="fs-depth" min="1" step="0.01" placeholder="예) 14.37" oninput="calculateFactorySim()"></div>
+      <div class="form-group"><label>외곽 산출 면적 (㎡)</label><input type="number" id="fs-actual-area" min="0" step="0.1" placeholder="폭 × 깊이" readonly title="전체 폭과 깊이로 자동 계산됩니다."></div>
       <div class="form-group"><label>작업 인원 (명)</label><input type="number" id="fs-workers" min="1" step="1" placeholder="예) 6" oninput="calculateFactorySim()"></div>
       <div class="form-group"><label>작업 시간 (시간/일)</label><input type="number" id="fs-shift-hours" min="1" step="0.5" placeholder="예) 8" oninput="calculateFactorySim()"></div>
       <div class="form-group"><label>목표 생산량 (KG/일)</label><input type="number" id="fs-target-kg" min="0" step="1" placeholder="예) 3000" oninput="calculateFactorySim()"></div>
@@ -2845,20 +2853,68 @@
     </div>
   </div>
 
+  <div class="card fs-layout-card">
+    <div class="section-header fs-layout-head">
+      <div>
+        <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#4b5563;"></div>가공장 전체 배치</div>
+        <div class="fs-layout-help">공간 또는 장비를 선택해 확인하고, 잠금 해제 후 끌어서 위치를 변경하세요.</div>
+      </div>
+      <div class="fs-layout-controls">
+        <div class="fs-segment" aria-label="보기 방식">
+          <button id="fs-view-3d" type="button" onclick="setFactorySimView('3d')">입체</button>
+          <button id="fs-view-2d" type="button" onclick="setFactorySimView('2d')">평면</button>
+        </div>
+        <button id="fs-zone-lock-btn" class="btn btn-secondary btn-sm" type="button" onclick="toggleFactorySimZoneLock()">공간 이동 잠금</button>
+        <button id="fs-route-toggle-btn" class="btn btn-secondary btn-sm" type="button" onclick="toggleFactorySimRoutes()">동선 표시</button>
+        <button class="btn btn-secondary btn-sm" type="button" onclick="resetFactorySimWholeLayout()">PPT 배치 복원</button>
+      </div>
+    </div>
+    <div class="fs-layout-shell">
+      <div class="fs-layout-frame">
+        <div id="fs-layout-canvas" class="fs-layout is-3d" aria-label="가공장 전체 배치 시뮬레이션"></div>
+        <div class="fs-layout-caption"><span>0.5m 보조 격자</span><span>방향키 0.1m · Shift+방향키 0.5m</span></div>
+      </div>
+      <aside class="fs-layout-side">
+        <div id="fs-selection-panel" class="fs-selection-panel"></div>
+        <div class="fs-legend">
+          <strong>공간 구분</strong>
+          <div><i data-kind="process"></i>가공·청결구역</div>
+          <div><i data-kind="cold"></i>냉장·냉동·보관</div>
+          <div><i data-kind="support"></i>사무·위생·지원</div>
+          <div><i data-kind="packing"></i>포장·물류</div>
+          <div><i data-kind="corridor"></i>복도·이동구역</div>
+          <div><i data-kind="equipment"></i>장비·설비</div>
+          <strong class="fs-legend-subtitle">동선 구분</strong>
+          <div><i class="fs-route-swatch" data-route="worker"></i>작업자</div>
+          <div><i class="fs-route-swatch" data-route="raw"></i>원료육</div>
+          <div><i class="fs-route-swatch" data-route="finished"></i>완제품</div>
+        </div>
+        <div class="fs-source-note">도면상 면적·치수를 우선 적용했습니다. 표기되지 않은 세부 경계·장비 크기와 문을 경유하는 동선점은 도형 비율에 따른 임시값입니다.</div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="ct-bar" style="background:#6b7280;"></div>분석 결과</div>
+    <div id="fs-analysis-metrics" class="fs-metric-grid"></div>
+    <div id="fs-analysis-notes" style="display:grid;gap:8px;font-size:12px;line-height:1.6;"></div>
+  </div>
+
   <div class="card">
     <div class="section-header">
-      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#16a085;"></div>배치 구획</div>
-      <button class="btn btn-secondary btn-sm" onclick="addFactorySimZone()">+ 구획 추가</button>
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#6b7280;"></div>공간 상세</div>
+      <button class="btn btn-secondary btn-sm" onclick="addFactorySimZone()">+ 공간 추가</button>
     </div>
     <div class="tbl-wrap" style="max-height:none;">
       <table class="fs-row-table">
         <thead><tr>
-          <th style="min-width:120px;">구획명</th>
+          <th style="min-width:130px;">공간명</th>
           <th style="min-width:100px;">유형</th>
           <th style="min-width:70px;text-align:right;">X</th>
           <th style="min-width:70px;text-align:right;">Y</th>
           <th style="min-width:80px;text-align:right;">폭</th>
           <th style="min-width:80px;text-align:right;">깊이</th>
+          <th style="min-width:80px;text-align:right;">면적 ㎡</th>
           <th style="min-width:160px;">비고</th>
           <th style="width:60px;text-align:center;">삭제</th>
         </tr></thead>
@@ -2869,7 +2925,7 @@
 
   <div class="card">
     <div class="section-header">
-      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#e67e22;"></div>설비 & 장비</div>
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#6b7280;"></div>설비 & 장비</div>
       <button class="btn btn-secondary btn-sm" onclick="addFactorySimEquipment()">+ 장비 추가</button>
     </div>
     <div class="tbl-wrap" style="max-height:none;">
@@ -2898,6 +2954,7 @@
     <div class="tbl-wrap" style="max-height:none;">
       <table class="fs-row-table">
         <thead><tr>
+          <th style="min-width:120px;">구분</th>
           <th style="min-width:130px;">출발</th>
           <th style="min-width:130px;">도착</th>
           <th style="min-width:100px;text-align:right;">거리 (m)</th>
@@ -2908,17 +2965,6 @@
         <tbody id="fs-route-tbody"></tbody>
       </table>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>분석 결과</div>
-    <div id="fs-analysis-metrics" class="fs-metric-grid"></div>
-    <div id="fs-analysis-notes" style="display:grid;gap:8px;font-size:12px;line-height:1.6;"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>배치 미리보기</div>
-    <div id="fs-layout-canvas" class="fs-layout"></div>
   </div>
 </div>
 
@@ -4896,7 +4942,7 @@ const APP_DATA_REGISTRY = {
   subMaterialItems: { get:()=>subMaterialItems, set:v=>{ subMaterialItems=v; }, ls:'dbmt_submaterial_items' },
   subMaterialLots:  { get:()=>subMaterialLots,  set:v=>{ subMaterialLots=v; },  ls:'dbmt_submaterial_lots'  },
   subMaterialCounts:{ get:()=>subMaterialCounts,set:v=>{ subMaterialCounts=v; },ls:'dbmt_submaterial_counts'},
-  factorySimScenarios:{ get:()=>factorySimScenarios,set:v=>{ factorySimScenarios=v; },ls:'dbmt_factory_sim_scenarios'},
+  factorySimScenarios:{ get:()=>factorySimScenarios,set:v=>{ factorySimScenarios=Array.isArray(v)?v:[]; },ls:'dbmt_factory_sim_scenarios'},
   samsungVendors:   { get:()=>samsungVendors,   set:v=>{ samsungVendors=v; },   ls:'dbmt_samsung_vendors'  },
   dataChangeLogs:   { get:()=>dataChangeLogs,   set:v=>{ dataChangeLogs=Array.isArray(v)?v:[]; }, ls:'dbmt_change_logs' },
 };
@@ -17084,8 +17130,102 @@ function resetCostCompare(){
 // 확장공장 시뮬레이터
 // ══════════════════════════════════════════
 
-let factorySimScenarios = JSON.parse(localStorage.getItem('dbmt_factory_sim_scenarios') || '[]');
+let factorySimScenarios = (() => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('dbmt_factory_sim_scenarios') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(error) {
+    console.warn('공장 시뮬레이션 로컬 데이터 복구:', error);
+    return [];
+  }
+})();
 let factorySimActiveId = localStorage.getItem('dbmt_factory_sim_active') || '';
+let factorySimNewDraftRequested = false;
+let factorySimWorkingDraft = null;
+let factorySimZonesLocked = true;
+let factorySimViewMode = localStorage.getItem('dbmt_factory_sim_view') === '2d' ? '2d' : '3d';
+let factorySimRoutesVisible = localStorage.getItem('dbmt_factory_sim_routes') !== '0';
+let factorySimSelection = {type:'', id:''};
+
+const FACTORY_SIM_CURRENT_BASELINE_ID = 'fs-current-factory-whole-v1';
+const FACTORY_SIM_BASELINE_DATE = '2026-08-21';
+
+function cloneFactorySimValue(value){
+  return JSON.parse(JSON.stringify(value));
+}
+
+function factorySimCurrentPlantBaseline(){
+  return {
+    id: FACTORY_SIM_CURRENT_BASELINE_ID,
+    name: '현 공장 기준안 · 전체 가공장',
+    width:18.72,
+    depth:14.37,
+    workers:'',
+    shiftHours:8,
+    targetKg:'',
+    baseWorkers:'',
+    baseDailyKg:'',
+    note:'가공장 배치도.pptx의 평면도·장비·환기·급배수·작업자/물류 동선·전기 배치도를 기준으로 수립했습니다. 외곽은 18.72m×14.37m이며, 가공실2 표기면적은 72.2㎡입니다. 표기되지 않은 세부 경계와 장비 크기는 도형 비율을 따른 임시값입니다. 공정 순서와 생산성 수치는 추후 협의합니다.',
+    updatedAt:FACTORY_SIM_BASELINE_DATE,
+    zones:[
+      {id:'zone-hygiene',name:'위생전실',type:'위생/탈의',kind:'support',area:7,x:0,y:0,w:3,h:2.6,note:'도면 표기 7㎡'},
+      {id:'zone-change-m',name:'탈의실(남)',type:'위생/탈의',kind:'support',area:5,x:0.8,y:4.6,w:2.5,h:2,note:'1페이지 수치도면 하단 표기 5㎡ · 운영도면과 남녀 표기 상충'},
+      {id:'zone-change-w',name:'탈의실(여)',type:'위생/탈의',kind:'support',area:5,x:0.8,y:2.6,w:2.5,h:2,note:'1페이지 수치도면 상단 표기 5㎡ · 운영도면과 남녀 표기 상충'},
+      {id:'zone-west-hall',name:'좌측 작업자 통로',type:'통로',kind:'corridor',area:4.2,x:0,y:2.6,w:0.8,h:5.2,note:'도면 비례 추정 · 면적 미표기'},
+      {id:'zone-wc-w',name:'화장실(여)',type:'사무/지원',kind:'support',area:3,x:0,y:7.8,w:1.94,h:1.77,note:'도면 표기 3㎡'},
+      {id:'zone-wc-m',name:'화장실(남)',type:'사무/지원',kind:'support',area:3,x:1.94,y:7.8,w:1.94,h:1.77,note:'도면 표기 3㎡'},
+      {id:'zone-office',name:'사무실',type:'사무/지원',kind:'support',area:18,x:0,y:9.57,w:3.92,h:4.8,note:'도면 표기 18㎡'},
+      {id:'zone-left-service',name:'좌측 서비스 통로',type:'통로',kind:'corridor',area:7,x:3.92,y:6.6,w:2,h:7.77,note:'도면 표기 7㎡ · 하단 폭 2.00m, 문·사무실 홈이 있는 비정형 통로'},
+      {id:'zone-top-service',name:'상부 서비스 통로',type:'통로',kind:'corridor',area:11,x:3,y:0,w:9.4,h:1.2,note:'도면 표기 11㎡ · 북측 외부 출입 연결'},
+      {id:'zone-process-1',name:'가공실1',type:'가공',kind:'process',area:19,x:3,y:1.2,w:6.9,h:2.67,note:'염지·식육가공실 19㎡ · 도면 비례 경계'},
+      {id:'zone-thaw',name:'해동실·원료처리실',type:'가공',kind:'process',area:6,x:9.9,y:1.2,w:2.5,h:2.67,note:'도면 표기 6㎡'},
+      {id:'zone-process-2',name:'가공실2',type:'가공',kind:'process',shape:'l-top-left',notchW:1.52,extensionDepth:2.74,area:72.2,x:4.4,y:3.87,w:8,h:10.5,note:'식육포장실 72.2㎡ · 하단 폭 6.48m와 표기면적을 우선한 L자 기준'},
+      {id:'zone-main-hall',name:'주 복도',type:'통로',kind:'corridor',area:22,x:12.4,y:0,w:2.2,h:10.17,note:'도면 표기 22㎡'},
+      {id:'zone-supply',name:'부자재실',type:'보관',kind:'cold',area:7,x:14.6,y:0,w:4.12,h:1.79,note:'도면 표기 7㎡'},
+      {id:'zone-freezer',name:'냉동고',type:'냉장/냉동',kind:'cold',area:17,x:14.6,y:1.79,w:4.12,h:4.3,note:'도면 표기 17㎡'},
+      {id:'zone-finished-cold',name:'완제품 냉장실',type:'냉장/냉동',kind:'cold',area:8,x:14.6,y:6.09,w:4.12,h:2.04,note:'냉장고 16㎡의 상부 구획 · 면적 8㎡ 근사'},
+      {id:'zone-raw-cold',name:'원료육 냉장실',type:'냉장/냉동',kind:'cold',area:8,x:14.6,y:8.13,w:4.12,h:2.04,note:'냉장고 16㎡의 하부 구획 · 면적 8㎡ 근사'},
+      {id:'zone-outer-pack',name:'외포장실',type:'포장',kind:'packing',area:16,x:12.4,y:10.17,w:4,h:4.2,note:'도면 표기 16㎡'},
+      {id:'zone-elevator',name:'화물 엘리베이터',type:'물류',kind:'logistics',area:4,x:16.4,y:12.37,w:2,h:2,note:'면적 미표기 · 도면 비례 추정'}
+    ],
+    equipment:[
+      {id:'eq-slicer-flat',name:'편육기',type:'공정 미확정',zoneId:'zone-process-2',x:4.65,y:4.42,w:0.45,h:1.25,rotation:270,capacity:'',workers:''},
+      {id:'eq-slicer',name:'육절기',type:'공정 미확정',zoneId:'zone-process-2',x:6.95,y:4.32,w:1.15,h:0.55,rotation:0,capacity:'',workers:''},
+      {id:'eq-bone-saw',name:'골절기',type:'공정 미확정',zoneId:'zone-process-2',x:8.45,y:4.32,w:1.2,h:0.55,rotation:0,capacity:'',workers:''},
+      {id:'eq-high-speed',name:'고속육절기',type:'공정 미확정',zoneId:'zone-process-2',x:7.1,y:5.57,w:0.8,h:2.1,rotation:270,capacity:'',workers:''},
+      {id:'eq-vacuum',name:'진공기',type:'공정 미확정',zoneId:'zone-process-2',x:11.15,y:7.12,w:0.65,h:2,rotation:90,capacity:'',workers:''},
+      {id:'eq-metal',name:'금속검출기',type:'CCP · 공정 미확정',zoneId:'zone-process-2',x:10.05,y:9.52,w:1.85,h:0.6,rotation:0,capacity:'',workers:''},
+      {id:'eq-table',name:'도마',type:'공정 미확정',zoneId:'zone-process-2',x:8.55,y:9.87,w:1.35,h:1.3,rotation:270,capacity:'',workers:''},
+      {id:'eq-mincer',name:'민서기',type:'공정 미확정',zoneId:'zone-process-2',x:6.45,y:11.17,w:0.6,h:1.45,rotation:270,capacity:'',workers:''}
+    ],
+    routes:[
+      {id:'route-worker-general',kind:'worker-general',from:'사무실',fromId:'zone-office',to:'위생전실',toId:'zone-hygiene',points:[[0.1,12],[-0.25,12],[-0.25,1.3],[0.1,1.3]],distance:0,trips:0,note:'PPT 일반구역 작업자 동선 참고 · 외부 서측 경유 개략선'},
+      {id:'route-worker-clean',kind:'worker-clean',from:'위생전실',fromId:'zone-hygiene',to:'가공실2',toId:'zone-process-2',points:[[3,1.3],[3.45,1.3],[4.05,3.1],[4.4,4.5]],distance:0,trips:0,note:'PPT 청결구역 작업자 동선 참고 · 문 위치 개략선'},
+      {id:'route-raw',kind:'raw',from:'원료육 냉장실',fromId:'zone-raw-cold',to:'가공실2',toId:'zone-process-2',points:[[14.6,9.15],[13.5,9.15],[12.4,8.6]],distance:0,trips:0,note:'PPT 원료육 이동동선 참고 · 우측 물류통로 경유'},
+      {id:'route-metal',kind:'finished',from:'가공실2',fromId:'zone-process-2',to:'금속검출기',toId:'eq-metal',points:[],distance:0,trips:0,note:'PPT CCP 위치 참고 · 공정 순서 추후 확정'},
+      {id:'route-pack',kind:'finished',from:'금속검출기',fromId:'eq-metal',to:'외포장실',toId:'zone-outer-pack',points:[[11.8,12.4],[12.4,12.7]],distance:0,trips:0,note:'PPT 완제품 이동동선 참고 · 패스창 경유 개략선'},
+      {id:'route-finished',kind:'finished',from:'외포장실',fromId:'zone-outer-pack',to:'완제품 냉장실',toId:'zone-finished-cold',points:[[13.5,10.17],[13.5,7.1],[14.6,7.1]],distance:0,trips:0,note:'PPT 완제품 이동동선 참고 · 우측 물류통로 경유'}
+    ]
+  };
+}
+
+function factorySimStoredBaseline(){
+  return Array.isArray(factorySimScenarios)
+    ? factorySimScenarios.find(s => s && s.id === FACTORY_SIM_CURRENT_BASELINE_ID)
+    : null;
+}
+
+function factorySimBaselineScenario(){
+  return factorySimStoredBaseline() || factorySimCurrentPlantBaseline();
+}
+
+function ensureFactorySimCurrentBaseline(){
+  if(!Array.isArray(factorySimScenarios)) factorySimScenarios = [];
+  if(!factorySimActiveId && !factorySimNewDraftRequested){
+    factorySimActiveId = FACTORY_SIM_CURRENT_BASELINE_ID;
+    localStorage.setItem('dbmt_factory_sim_active', factorySimActiveId);
+  }
+}
 
 function factorySimId(){
   return 'fs-' + Date.now() + '-' + Math.random().toString(16).slice(2);
@@ -17125,26 +17265,39 @@ function factorySimDraft(){
 function factorySimScenarioOptions(){
   const sel = document.getElementById('fs-scenario-select');
   if(!sel) return;
-  const sorted = factorySimScenarios.slice().sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  const hasBaseline = factorySimScenarios.some(s => s?.id === FACTORY_SIM_CURRENT_BASELINE_ID);
+  const sorted = (hasBaseline ? factorySimScenarios.slice() : [factorySimCurrentPlantBaseline(), ...factorySimScenarios])
+    .filter(Boolean)
+    .sort((a,b)=>{
+      if(a.id === FACTORY_SIM_CURRENT_BASELINE_ID) return -1;
+      if(b.id === FACTORY_SIM_CURRENT_BASELINE_ID) return 1;
+      return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));
+    });
   sel.innerHTML =
     '<option value="">새 시나리오 작성 중</option>' +
-    sorted.map(s => `<option value="${htmlEscape(s.id)}">${htmlEscape(s.name || '이름 없는 시나리오')}</option>`).join('');
-  sel.value = factorySimScenarios.some(s => s.id === factorySimActiveId) ? factorySimActiveId : '';
+    sorted.map(s => `<option value="${htmlEscape(s.id)}">${s.id === FACTORY_SIM_CURRENT_BASELINE_ID ? '기준 · ' : ''}${htmlEscape(s.name || '이름 없는 시나리오')}</option>`).join('');
+  sel.value = sorted.some(s => s.id === factorySimActiveId) ? factorySimActiveId : '';
 }
 
 function loadFactorySimScenario(id){
+  factorySimNewDraftRequested = !id;
+  factorySimWorkingDraft = null;
   factorySimActiveId = id || '';
   localStorage.setItem('dbmt_factory_sim_active', factorySimActiveId);
+  factorySimSelection = {type:'',id:''};
   renderFactorySim();
 }
 
 function renderFactorySim(){
   if(!document.getElementById('p-factorysim')) return;
-  if(factorySimActiveId && !factorySimScenarios.some(s => s.id === factorySimActiveId)){
+  ensureFactorySimCurrentBaseline();
+  if(factorySimActiveId && factorySimActiveId !== FACTORY_SIM_CURRENT_BASELINE_ID && !factorySimScenarios.some(s => s?.id === factorySimActiveId)){
     factorySimActiveId = '';
   }
   factorySimScenarioOptions();
-  const scenario = factorySimScenarios.find(s => s.id === factorySimActiveId) || factorySimDraft();
+  const scenario = factorySimActiveId === FACTORY_SIM_CURRENT_BASELINE_ID
+    ? factorySimBaselineScenario()
+    : (factorySimScenarios.find(s => s?.id === factorySimActiveId) || factorySimWorkingDraft || factorySimDraft());
   const set = (id, value) => {
     const el = document.getElementById(id);
     if(el) el.value = value ?? '';
@@ -17152,6 +17305,7 @@ function renderFactorySim(){
   set('fs-name', scenario.name);
   set('fs-width', scenario.width);
   set('fs-depth', scenario.depth);
+  set('fs-actual-area', scenario.width && scenario.depth ? (scenario.width * scenario.depth).toFixed(1) : '');
   set('fs-workers', scenario.workers);
   set('fs-shift-hours', scenario.shiftHours || 8);
   set('fs-target-kg', scenario.targetKg);
@@ -17162,11 +17316,116 @@ function renderFactorySim(){
   renderFactorySimRows('zone', scenario.zones || []);
   renderFactorySimRows('equipment', scenario.equipment || []);
   renderFactorySimRows('route', scenario.routes || []);
+  renderFactorySimBaselineSummary(scenario);
+  updateFactorySimViewControls();
+  applyFactorySimPermissionState();
   calculateFactorySim();
+}
+
+function renderFactorySimBaselineSummary(scenario){
+  const card = document.getElementById('fs-baseline-card');
+  const summary = document.getElementById('fs-baseline-summary');
+  if(!card || !summary) return;
+  const drawingBased = scenario.id === FACTORY_SIM_CURRENT_BASELINE_ID || (scenario.zones || []).some(z => z?.id === 'zone-process-2');
+  card.style.display = drawingBased ? '' : 'none';
+  if(!drawingBased){ summary.innerHTML=''; return; }
+  const process2 = (scenario.zones || []).find(z => z.id === 'zone-process-2' || z.name === '가공실2');
+  const items = [
+    ['기준 자료','가공장 배치도 PPT 7장'],
+    ['전체 외곽',`${fmtD(scenario.width)}m × ${fmtD(scenario.depth)}m`],
+    ['외곽 산출면적',`${fmtD((scenario.width||0)*(scenario.depth||0))}㎡`],
+    ['등록 공간',`${(scenario.zones || []).length}개`],
+    ['가공실2',`${fmtD(process2?.area || 72.2)}㎡`],
+    ['등록 장비',`${(scenario.equipment || []).length}종`],
+    ['참고 도면','평면·장비·환기·급배수·동선·전기'],
+    ['생산성 조건','공정·처리량·인원·이동횟수 협의 예정']
+  ];
+  summary.innerHTML = items.map(([label,value]) => `<div class="fs-baseline-item"><small>${htmlEscape(label)}</small><strong>${htmlEscape(value)}</strong></div>`).join('');
+}
+
+function loadFactorySimCurrentBaseline(){
+  factorySimNewDraftRequested = false;
+  factorySimWorkingDraft = null;
+  factorySimActiveId = FACTORY_SIM_CURRENT_BASELINE_ID;
+  factorySimSelection = {type:'',id:''};
+  localStorage.setItem('dbmt_factory_sim_active', factorySimActiveId);
+  renderFactorySim();
+}
+
+function duplicateFactorySimBaseline(){
+  if(!factorySimRequireAction('create', '기준안을 복제할 권한이 없습니다.')) return;
+  const copy = cloneFactorySimValue(factorySimBaselineScenario());
+  copy.id = '';
+  copy.name = `현 공장 기준 복제 · ${localDateString()}`;
+  copy.updatedAt = localDateString();
+  factorySimWorkingDraft = copy;
+  factorySimNewDraftRequested = true;
+  factorySimActiveId = '';
+  localStorage.setItem('dbmt_factory_sim_active', '');
+  renderFactorySim();
+  toast('기준안 복제본을 만들었습니다. 조정 후 저장 버튼을 눌러 확정하세요.');
 }
 
 function factorySimOptions(options, selected){
   return options.map(opt => `<option value="${htmlEscape(opt)}"${opt === selected ? ' selected' : ''}>${htmlEscape(opt)}</option>`).join('');
+}
+
+function factorySimZoneKind(type){
+  if(['가공','해체/절단'].includes(type)) return 'process';
+  if(['냉장/냉동','보관','창고'].includes(type)) return 'cold';
+  if(['포장','입고','출고'].includes(type)) return 'packing';
+  if(['통로'].includes(type)) return 'corridor';
+  if(['물류'].includes(type)) return 'logistics';
+  return 'support';
+}
+
+function factorySimRouteOptions(selected){
+  const options = [
+    ['worker-clean','작업자(청결)'],['worker-general','작업자(일반)'],
+    ['raw','원료육'],['finished','완제품'],['other','기타']
+  ];
+  return options.map(([value,label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
+}
+
+function factorySimCan(action){
+  if(typeof DBMTAuth !== 'object') return true;
+  return Boolean(DBMTAuth.isPersonal?.() && DBMTAuth.can?.('factory_sim', action));
+}
+
+function factorySimEditAction(){
+  if(factorySimActiveId === FACTORY_SIM_CURRENT_BASELINE_ID) return 'update';
+  const exists = Boolean(factorySimActiveId && factorySimScenarios.some(s => s?.id === factorySimActiveId));
+  return exists ? 'update' : 'create';
+}
+
+function factorySimRequireAction(action, message){
+  if(factorySimCan(action)) return true;
+  toast(message || '이 배치안을 변경할 권한이 없습니다.');
+  return false;
+}
+
+function factorySimRequireCurrentEdit(){
+  const action = factorySimEditAction();
+  return factorySimRequireAction(action, action === 'create' ? '배치안을 만들 권한이 없습니다.' : '배치안을 수정할 권한이 없습니다.');
+}
+
+function applyFactorySimPermissionState(){
+  const panel = document.getElementById('p-factorysim');
+  if(!panel) return;
+  const canEdit = factorySimCan(factorySimEditAction());
+  const editIds = ['fs-name','fs-width','fs-depth','fs-workers','fs-shift-hours','fs-target-kg','fs-base-workers','fs-base-daily-kg','fs-note'];
+  editIds.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.disabled = !canEdit;
+  });
+  panel.querySelectorAll('.fs-row-table input,.fs-row-table select,.fs-row-table button').forEach(el => {
+    el.disabled = !canEdit;
+  });
+  ['saveFactorySimScenario','addFactorySimZone','addFactorySimEquipment','addFactorySimRoute','resetFactorySimWholeLayout','applyFactorySimProductionAverage'].forEach(name => {
+    panel.querySelectorAll(`button[onclick^="${name}("]`).forEach(button => { button.disabled = !canEdit; });
+  });
+  if(!canEdit) factorySimZonesLocked = true;
+  updateFactorySimViewControls();
 }
 
 function renderFactorySimRows(type, rows){
@@ -17175,32 +17434,43 @@ function renderFactorySimRows(type, rows){
   tbody.innerHTML = '';
   if(rows.length){
     rows.forEach(row => {
-      if(type === 'zone') addFactorySimZone(row);
-      if(type === 'equipment') addFactorySimEquipment(row);
-      if(type === 'route') addFactorySimRoute(row);
+      if(type === 'zone') addFactorySimZone(row, true);
+      if(type === 'equipment') addFactorySimEquipment(row, true);
+      if(type === 'route') addFactorySimRoute(row, true);
     });
   }
 }
 
-function addFactorySimZone(row={}){
+function addFactorySimZone(row={}, fromRender=false){
+  if(!fromRender && !factorySimRequireCurrentEdit()) return;
   const tbody = document.getElementById('fs-zone-tbody'); if(!tbody) return;
   const tr = document.createElement('tr');
+  tr.dataset.itemId = row.id || factorySimId();
+  tr.dataset.shape = row.shape || '';
+  tr.dataset.kind = row.kind || factorySimZoneKind(row.type);
+  tr.dataset.notchW = row.notchW ?? '';
+  tr.dataset.extensionDepth = row.extensionDepth ?? '';
   tr.innerHTML = `
-    <td><input class="fs-zone-name" value="${htmlEscape(row.name || '')}" placeholder="예) 원료 입고" oninput="calculateFactorySim()"></td>
-    <td><select class="fs-zone-type" onchange="calculateFactorySim()">${factorySimOptions(['입고','해체/절단','가공','포장','냉장/냉동','출고','세척','보관','기타'], row.type || '가공')}</select></td>
+    <td><input class="fs-zone-name" value="${htmlEscape(row.name || '')}" placeholder="예) 가공실" oninput="calculateFactorySim()"></td>
+    <td><select class="fs-zone-type" onchange="this.closest('tr').dataset.kind=factorySimZoneKind(this.value);calculateFactorySim()">${factorySimOptions(['가공','포장','냉장/냉동','보관','창고','사무/지원','위생/탈의','통로','물류','세척','입고','출고','기타'], row.type || '가공')}</select></td>
     <td><input class="fs-zone-x" type="number" step="0.1" value="${htmlEscape(row.x ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
     <td><input class="fs-zone-y" type="number" step="0.1" value="${htmlEscape(row.y ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
     <td><input class="fs-zone-w" type="number" min="0" step="0.1" value="${htmlEscape(row.w ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
     <td><input class="fs-zone-h" type="number" min="0" step="0.1" value="${htmlEscape(row.h ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
-    <td><input class="fs-zone-note" value="${htmlEscape(row.note || '')}" placeholder="온도, HACCP 구역 등" oninput="calculateFactorySim()"></td>
+    <td><input class="fs-zone-area" type="number" min="0" step="0.1" value="${htmlEscape(row.area ?? ((row.w || 0) * (row.h || 0) || ''))}" oninput="calculateFactorySim()" style="text-align:right;"></td>
+    <td><input class="fs-zone-note" value="${htmlEscape(row.note || '')}" placeholder="도면 면적, 온도, HACCP 구역 등" oninput="calculateFactorySim()"></td>
     <td style="text-align:center;"><button class="btn btn-sm btn-danger" onclick="removeFactorySimRow(this)">삭제</button></td>
   `;
   tbody.appendChild(tr);
 }
 
-function addFactorySimEquipment(row={}){
+function addFactorySimEquipment(row={}, fromRender=false){
+  if(!fromRender && !factorySimRequireCurrentEdit()) return;
   const tbody = document.getElementById('fs-equipment-tbody'); if(!tbody) return;
   const tr = document.createElement('tr');
+  tr.dataset.itemId = row.id || factorySimId();
+  tr.dataset.zoneId = row.zoneId || '';
+  tr.dataset.rotation = row.rotation ?? '';
   tr.innerHTML = `
     <td><input class="fs-equipment-name" value="${htmlEscape(row.name || '')}" placeholder="예) 슬라이서 1호" oninput="calculateFactorySim()"></td>
     <td><input class="fs-equipment-type" value="${htmlEscape(row.type || '')}" placeholder="예) 절단" oninput="calculateFactorySim()"></td>
@@ -17215,10 +17485,18 @@ function addFactorySimEquipment(row={}){
   tbody.appendChild(tr);
 }
 
-function addFactorySimRoute(row={}){
+function addFactorySimRoute(row={}, fromRender=false){
+  if(!fromRender && !factorySimRequireCurrentEdit()) return;
   const tbody = document.getElementById('fs-route-tbody'); if(!tbody) return;
   const tr = document.createElement('tr');
+  tr.dataset.itemId = row.id || factorySimId();
+  tr.dataset.fromId = row.fromId || '';
+  tr.dataset.toId = row.toId || '';
+  tr.dataset.fromName = row.from || '';
+  tr.dataset.toName = row.to || '';
+  tr.dataset.points = JSON.stringify(Array.isArray(row.points) ? row.points : []);
   tr.innerHTML = `
+    <td><select class="fs-route-kind" onchange="calculateFactorySim()">${factorySimRouteOptions(row.kind || 'other')}</select></td>
     <td><input class="fs-route-from" value="${htmlEscape(row.from || '')}" placeholder="예) 원료냉장고" oninput="calculateFactorySim()"></td>
     <td><input class="fs-route-to" value="${htmlEscape(row.to || '')}" placeholder="예) 절단대" oninput="calculateFactorySim()"></td>
     <td><input class="fs-route-distance" type="number" min="0" step="0.1" value="${htmlEscape(row.distance ?? '')}" oninput="calculateFactorySim()" style="text-align:right;"></td>
@@ -17230,6 +17508,7 @@ function addFactorySimRoute(row={}){
 }
 
 function removeFactorySimRow(btn){
+  if(!factorySimRequireCurrentEdit()) return;
   btn.closest('tr')?.remove();
   calculateFactorySim();
 }
@@ -17241,23 +17520,35 @@ function collectFactorySimRows(type){
     const num = cls => parseAppNumber(tr.querySelector(`.${cls}`)?.value);
     if(type === 'zone'){
       const row = {
-        name:val('fs-zone-name'), type:val('fs-zone-type'), x:num('fs-zone-x'), y:num('fs-zone-y'),
+        id:tr.dataset.itemId || factorySimId(),
+        name:val('fs-zone-name'), type:val('fs-zone-type'),
+        kind:tr.dataset.kind || factorySimZoneKind(val('fs-zone-type')),
+        area:num('fs-zone-area'), x:num('fs-zone-x'), y:num('fs-zone-y'),
         w:num('fs-zone-w'), h:num('fs-zone-h'), note:val('fs-zone-note')
       };
+      if(tr.dataset.shape) row.shape = tr.dataset.shape;
+      if(tr.dataset.notchW !== '') row.notchW = parseAppNumber(tr.dataset.notchW);
+      if(tr.dataset.extensionDepth !== '') row.extensionDepth = parseAppNumber(tr.dataset.extensionDepth);
       if(row.name || row.w || row.h || row.note) rows.push(row);
     }
     if(type === 'equipment'){
       const row = {
+        id:tr.dataset.itemId || factorySimId(), zoneId:tr.dataset.zoneId || '',
         name:val('fs-equipment-name'), type:val('fs-equipment-type'), x:num('fs-equipment-x'), y:num('fs-equipment-y'),
         w:num('fs-equipment-w'), h:num('fs-equipment-h'), capacity:num('fs-equipment-capacity'), workers:num('fs-equipment-workers')
       };
+      if(tr.dataset.rotation !== '') row.rotation = parseAppNumber(tr.dataset.rotation);
       if(row.name || row.capacity || row.w || row.h) rows.push(row);
     }
     if(type === 'route'){
       const row = {
+        id:tr.dataset.itemId || factorySimId(), kind:val('fs-route-kind') || 'other',
+        fromId:tr.dataset.fromId || '', toId:tr.dataset.toId || '',
         from:val('fs-route-from'), to:val('fs-route-to'), distance:num('fs-route-distance'),
         trips:num('fs-route-trips'), note:val('fs-route-note')
       };
+      try { row.points = JSON.parse(tr.dataset.points || '[]'); }
+      catch(error) { row.points = []; }
       if(row.from || row.to || row.distance || row.trips || row.note) rows.push(row);
     }
   });
@@ -17267,6 +17558,36 @@ function collectFactorySimRows(type){
 function collectFactorySimForm(){
   const val = id => document.getElementById(id)?.value?.trim() || '';
   const num = id => parseAppNumber(document.getElementById(id)?.value);
+  const zones = collectFactorySimRows('zone');
+  const equipment = collectFactorySimRows('equipment');
+  equipment.forEach(item => {
+    const currentZone = zones.find(zone => zone.id === item.zoneId && factorySimItemInsideZone(item, zone));
+    const containingZone = currentZone || zones.find(zone => factorySimItemInsideZone(item, zone));
+    item.zoneId = containingZone?.id || '';
+    const row = factorySimRowById('equipment', item.id);
+    if(row) row.dataset.zoneId = item.zoneId;
+  });
+  const routes = collectFactorySimRows('route');
+  const layoutItems = [...zones, ...equipment];
+  routes.forEach(route => {
+    const row = factorySimRowById('route', route.id);
+    if(!row) return;
+    if(route.from !== row.dataset.fromName){
+      route.fromId = layoutItems.find(item => item.name === route.from)?.id || '';
+      route.points = [];
+    }
+    if(route.to !== row.dataset.toName){
+      route.toId = layoutItems.find(item => item.name === route.to)?.id || '';
+      route.points = [];
+    }
+    if(!route.fromId) route.fromId = layoutItems.find(item => item.name === route.from)?.id || '';
+    if(!route.toId) route.toId = layoutItems.find(item => item.name === route.to)?.id || '';
+    row.dataset.fromId = route.fromId || '';
+    row.dataset.toId = route.toId || '';
+    row.dataset.fromName = route.from;
+    row.dataset.toName = route.to;
+    row.dataset.points = JSON.stringify(route.points || []);
+  });
   return {
     id: factorySimActiveId || '',
     name: val('fs-name'),
@@ -17278,9 +17599,9 @@ function collectFactorySimForm(){
     baseWorkers: num('fs-base-workers'),
     baseDailyKg: num('fs-base-daily-kg'),
     note: val('fs-note'),
-    zones: collectFactorySimRows('zone'),
-    equipment: collectFactorySimRows('equipment'),
-    routes: collectFactorySimRows('route')
+    zones,
+    equipment,
+    routes
   };
 }
 
@@ -17297,18 +17618,26 @@ function saveFactorySimScenario(){
     document.getElementById('fs-name')?.focus();
     return;
   }
+  const existing = Boolean(scenario.id && factorySimScenarios.some(s => s?.id === scenario.id));
+  const action = scenario.id === FACTORY_SIM_CURRENT_BASELINE_ID || existing ? 'update' : 'create';
+  if(!factorySimRequireAction(action, action === 'create' ? '시나리오를 저장할 생성 권한이 없습니다.' : '시나리오를 저장할 수정 권한이 없습니다.')) return;
   scenario.id = scenario.id || factorySimId();
   scenario.updatedAt = localDateString();
   const idx = factorySimScenarios.findIndex(s => s.id === scenario.id);
   if(idx >= 0) factorySimScenarios[idx] = scenario;
   else factorySimScenarios.push(scenario);
   factorySimActiveId = scenario.id;
+  factorySimWorkingDraft = null;
+  factorySimNewDraftRequested = false;
   saveFactorySimData();
   renderFactorySim();
   toast('확장공장 시나리오가 저장됐습니다.');
 }
 
 function newFactorySimScenario(){
+  if(!factorySimRequireAction('create', '새 시나리오를 만들 권한이 없습니다.')) return;
+  factorySimNewDraftRequested = true;
+  factorySimWorkingDraft = factorySimDraft();
   factorySimActiveId = '';
   localStorage.setItem('dbmt_factory_sim_active', '');
   renderFactorySim();
@@ -17317,16 +17646,24 @@ function newFactorySimScenario(){
 
 function deleteFactorySimScenario(){
   if(!factorySimActiveId){ alert('삭제할 저장 시나리오를 선택하세요.'); return; }
+  if(factorySimActiveId === FACTORY_SIM_CURRENT_BASELINE_ID){
+    alert('현 공장 기준안은 삭제할 수 없습니다. 비교안은 기준안을 복제해 관리하세요.');
+    return;
+  }
+  if(!factorySimRequireAction('delete', '시나리오를 삭제할 권한이 없습니다.')) return;
   const scenario = factorySimScenarios.find(s => s.id === factorySimActiveId);
   if(!confirm(`"${scenario?.name || '선택한 시나리오'}"을 삭제할까요?`)) return;
   factorySimScenarios = factorySimScenarios.filter(s => s.id !== factorySimActiveId);
   factorySimActiveId = '';
+  factorySimWorkingDraft = null;
+  factorySimNewDraftRequested = true;
   saveFactorySimData();
   renderFactorySim();
   toast('시나리오가 삭제됐습니다.');
 }
 
 function applyFactorySimProductionAverage(){
+  if(!factorySimRequireCurrentEdit()) return;
   const avg = Math.round(factorySimProductionAverage());
   const baseEl = document.getElementById('fs-base-daily-kg');
   if(baseEl) baseEl.value = avg || '';
@@ -17344,14 +17681,183 @@ function factorySimMinPositive(values){
   return positives.length ? Math.min(...positives) : 0;
 }
 
+function factorySimZoneArea(zone){
+  return parseAppNumber(zone?.area) || (parseAppNumber(zone?.w) * parseAppNumber(zone?.h));
+}
+
+function factorySimPointInsideZone(zone, x, y){
+  const epsilon = 0.002;
+  const zx = parseAppNumber(zone?.x);
+  const zy = parseAppNumber(zone?.y);
+  const zw = parseAppNumber(zone?.w);
+  const zh = parseAppNumber(zone?.h);
+  if(x < zx - epsilon || y < zy - epsilon || x > zx + zw + epsilon || y > zy + zh + epsilon) return false;
+  if(zone?.shape === 'l-top-left'){
+    const relativeX = x - zx;
+    const relativeY = y - zy;
+    return relativeX >= parseAppNumber(zone.notchW) - epsilon || relativeY <= parseAppNumber(zone.extensionDepth) + epsilon;
+  }
+  return true;
+}
+
+function factorySimItemInsideZone(item, zone){
+  const x = parseAppNumber(item?.x);
+  const y = parseAppNumber(item?.y);
+  const w = parseAppNumber(item?.w);
+  const h = parseAppNumber(item?.h);
+  const insetX = Math.min(0.005, w / 4);
+  const insetY = Math.min(0.005, h / 4);
+  return [
+    [x + insetX, y + insetY], [x + w - insetX, y + insetY],
+    [x + insetX, y + h - insetY], [x + w - insetX, y + h - insetY]
+  ].every(([px,py]) => factorySimPointInsideZone(zone, px, py));
+}
+
+function factorySimItemInsideBuilding(item, scenario){
+  const x = parseAppNumber(item?.x);
+  const y = parseAppNumber(item?.y);
+  const w = parseAppNumber(item?.w);
+  const h = parseAppNumber(item?.h);
+  const epsilon = 0.002;
+  const insideEnvelope = w > 0 && h > 0 && x >= -epsilon && y >= -epsilon &&
+    x + w <= parseAppNumber(scenario?.width) + epsilon &&
+    y + h <= parseAppNumber(scenario?.depth) + epsilon;
+  if(!insideEnvelope) return false;
+  const usesCurrentFootprint = (scenario?.zones || []).some(zone => zone?.id === 'zone-elevator') &&
+    Math.abs(parseAppNumber(scenario?.width) - 18.72) < 0.02 && Math.abs(parseAppNumber(scenario?.depth) - 14.37) < 0.02;
+  if(!usesCurrentFootprint) return true;
+  const insideFootprint = (px, py) => px <= 16.402 || py <= 10.172 || (px <= 18.402 && py >= 12.368);
+  return [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].every(([px,py]) => insideFootprint(px,py));
+}
+
+function factorySimRectsOverlap(a, b){
+  const ax = parseAppNumber(a?.x), ay = parseAppNumber(a?.y);
+  const aw = parseAppNumber(a?.w), ah = parseAppNumber(a?.h);
+  const bx = parseAppNumber(b?.x), by = parseAppNumber(b?.y);
+  const bw = parseAppNumber(b?.w), bh = parseAppNumber(b?.h);
+  return ax < bx + bw - 0.002 && ax + aw > bx + 0.002 && ay < by + bh - 0.002 && ay + ah > by + 0.002;
+}
+
+function factorySimDiagnostics(scenario){
+  const zones = scenario.zones || [];
+  const equipment = scenario.equipment || [];
+  const outsideZones = zones.filter(zone => !factorySimItemInsideBuilding(zone, scenario));
+  const outsideEquipment = equipment.filter(item => !factorySimItemInsideBuilding(item, scenario));
+  const equipmentOutsideZone = equipment.filter(item => {
+    const assigned = zones.find(zone => zone.id === item.zoneId);
+    if(assigned) return !factorySimItemInsideZone(item, assigned);
+    return !zones.some(zone => factorySimItemInsideZone(item, zone));
+  });
+  const overlaps = [];
+  equipment.forEach((item, index) => {
+    equipment.slice(index + 1).forEach(other => {
+      if(factorySimRectsOverlap(item, other)) overlaps.push([item, other]);
+    });
+  });
+  const unresolvedRoutes = (scenario.routes || []).filter(route =>
+    !factorySimFindLayoutItem(scenario, route.from, route.fromId) || !factorySimFindLayoutItem(scenario, route.to, route.toId)
+  );
+  return {outsideZones, outsideEquipment, equipmentOutsideZone, overlaps, unresolvedRoutes};
+}
+
+function factorySimFindLayoutItem(scenario, name, id=''){
+  const items = [...(scenario.equipment || []), ...(scenario.zones || [])];
+  if(id){
+    const byId = items.find(item => item.id === id);
+    if(byId) return byId;
+  }
+  const target = String(name || '').trim();
+  if(!target) return null;
+  return items.find(item => String(item.name || '').trim() === target) || null;
+}
+
+function factorySimItemCenter(item){
+  return {
+    x:parseAppNumber(item?.x) + parseAppNumber(item?.w) / 2,
+    y:parseAppNumber(item?.y) + parseAppNumber(item?.h) / 2
+  };
+}
+
+function updateFactorySimViewControls(){
+  ['3d','2d'].forEach(mode => {
+    const button = document.getElementById(`fs-view-${mode}`);
+    if(!button) return;
+    const active = factorySimViewMode === mode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  const lockButton = document.getElementById('fs-zone-lock-btn');
+  if(lockButton){
+    lockButton.textContent = factorySimZonesLocked ? '공간 이동 잠금' : '공간 이동 가능';
+    lockButton.classList.toggle('fs-control-active', !factorySimZonesLocked);
+    lockButton.setAttribute('aria-pressed', factorySimZonesLocked ? 'false' : 'true');
+  }
+  const routeButton = document.getElementById('fs-route-toggle-btn');
+  if(routeButton){
+    routeButton.textContent = factorySimRoutesVisible ? '동선 숨기기' : '동선 표시';
+    routeButton.classList.toggle('fs-control-active', factorySimRoutesVisible);
+    routeButton.setAttribute('aria-pressed', factorySimRoutesVisible ? 'true' : 'false');
+  }
+}
+
+function setFactorySimView(mode){
+  factorySimViewMode = mode === '2d' ? '2d' : '3d';
+  localStorage.setItem('dbmt_factory_sim_view', factorySimViewMode);
+  updateFactorySimViewControls();
+  calculateFactorySim();
+}
+
+function toggleFactorySimZoneLock(){
+  if(factorySimZonesLocked && !factorySimRequireCurrentEdit()) return;
+  factorySimZonesLocked = !factorySimZonesLocked;
+  updateFactorySimViewControls();
+  calculateFactorySim();
+}
+
+function toggleFactorySimRoutes(){
+  factorySimRoutesVisible = !factorySimRoutesVisible;
+  localStorage.setItem('dbmt_factory_sim_routes', factorySimRoutesVisible ? '1' : '0');
+  updateFactorySimViewControls();
+  calculateFactorySim();
+}
+
+function resetFactorySimWholeLayout(){
+  if(!factorySimRequireCurrentEdit()) return;
+  if(!confirm('공간·장비·동선을 PPT 기준 배치로 되돌릴까요? 생산 조건과 시나리오명은 유지됩니다.')) return;
+  const baseline = factorySimCurrentPlantBaseline();
+  const width = document.getElementById('fs-width');
+  const depth = document.getElementById('fs-depth');
+  if(width) width.value = baseline.width;
+  if(depth) depth.value = baseline.depth;
+  renderFactorySimRows('zone', cloneFactorySimValue(baseline.zones));
+  renderFactorySimRows('equipment', cloneFactorySimValue(baseline.equipment));
+  renderFactorySimRows('route', cloneFactorySimValue(baseline.routes));
+  factorySimSelection = {type:'',id:''};
+  factorySimZonesLocked = true;
+  applyFactorySimPermissionState();
+  calculateFactorySim();
+  toast('PPT 기준 배치를 복원했습니다. 저장 전까지는 임시 변경입니다.');
+}
+
 function calculateFactorySim(){
   const metricsEl = document.getElementById('fs-analysis-metrics');
   if(!metricsEl) return;
   const s = collectFactorySimForm();
   const floorArea = s.width * s.depth;
-  const zoneArea = s.zones.reduce((sum,z)=>sum + (z.w * z.h), 0);
-  const equipmentArea = s.equipment.reduce((sum,e)=>sum + (e.w * e.h), 0);
-  const totalOccupiedArea = zoneArea || equipmentArea;
+  const actualArea = document.getElementById('fs-actual-area');
+  if(actualArea) actualArea.value = floorArea ? floorArea.toFixed(1) : '';
+  renderFactorySimBaselineSummary(s);
+  const zoneArea = s.zones.reduce((sum,z)=>sum + factorySimZoneArea(z), 0);
+  const processingArea = s.zones.filter(z => ['process','packing'].includes(z.kind)).reduce((sum,z)=>sum + factorySimZoneArea(z), 0);
+  const process2 = s.zones.find(z => z.id === 'zone-process-2' || z.name === '가공실2');
+  const process2EquipmentArea = s.equipment
+    .filter(e => process2 && factorySimItemInsideZone(e, process2))
+    .reduce((sum,e)=>sum + e.w * e.h, 0);
+  const diagnostics = factorySimDiagnostics(s);
+  const boundaryProblemIds = new Set([
+    ...diagnostics.outsideEquipment.map(item => item.id),
+    ...diagnostics.equipmentOutsideZone.map(item => item.id)
+  ]);
   const areaPerWorker = s.workers ? floorArea / s.workers : 0;
   const workerDaily = (s.baseDailyKg && s.baseWorkers && s.workers)
     ? s.baseDailyKg / s.baseWorkers * s.workers
@@ -17372,14 +17878,16 @@ function calculateFactorySim(){
   const fmtKg = v => v ? `${fmtD(v)} KG` : '-';
   const fmtSqm = v => v ? `${fmtD(v)} ㎡` : '-';
   const metrics = [
-    {label:'총 면적', value:fmtSqm(floorArea)},
-    {label:'점유율', value:floorArea && totalOccupiedArea ? `${(totalOccupiedArea / floorArea * 100).toFixed(1)} %` : '-'},
-    {label:'1인당 면적', value:fmtSqm(areaPerWorker)},
-    {label:'인원 기준 생산량', value:fmtKg(workerDaily)},
-    {label:'병목 설비 처리량', value:fmtKg(equipmentDaily)},
+    {label:'외곽 산출 면적', value:fmtSqm(floorArea)},
+    {label:'등록 공간', value:`${s.zones.length}개`},
+    {label:'도면 면적 반영률', value:floorArea && zoneArea ? `${(zoneArea / floorArea * 100).toFixed(1)} %` : '-'},
+    {label:'가공·포장 면적', value:fmtSqm(processingArea)},
+    {label:'가공실2 기준 면적', value:fmtSqm(factorySimZoneArea(process2))},
+    {label:'등록 장비', value:`${s.equipment.length}종`},
+    {label:'가공실2 장비 점유', value:process2 && process2EquipmentArea ? `${(process2EquipmentArea / factorySimZoneArea(process2) * 100).toFixed(1)} %` : '-'},
+    {label:'배치 충돌·이탈', value:`${diagnostics.overlaps.length + boundaryProblemIds.size}건`},
     {label:'예상 가능 생산량', value:fmtKg(projectedDaily)},
-    {label:'목표 대비', value:s.targetKg ? `${targetGap >= 0 ? '+' : ''}${fmtD(targetGap)} KG` : '-'},
-    {label:'일 이동거리', value:totalRouteM ? `${fmtD(totalRouteM)} m` : '-'}
+    {label:'작업·물류 동선', value:`${s.routes.length}개${totalRouteM ? ` · ${fmtD(totalRouteM)}m/일` : ''}`}
   ];
   metricsEl.innerHTML = metrics.map(m => `
     <div class="fs-metric">
@@ -17391,6 +17899,30 @@ function calculateFactorySim(){
   const notes = [];
   const note = (kind, title, body) => notes.push({kind, title, body});
   if(!floorArea) note('info', '면적 입력 대기', '공장 폭과 깊이를 입력하면 면적, 작업자 밀도, 배치 점유율이 계산됩니다.');
+  if(s.id === FACTORY_SIM_CURRENT_BASELINE_ID || process2){
+    note('info', '현 공장 도면 기준안', 'PPT의 공간·장비 위치를 기준으로 구성했습니다. 문 위치와 표기되지 않은 경계·장비 크기는 도형 비율에 따른 개략값입니다.');
+  }
+  if(diagnostics.outsideZones.length){
+    note('warn', '외곽을 벗어난 공간', `${diagnostics.outsideZones.map(z => z.name || '이름 없는 공간').join(', ')}의 위치 또는 크기를 확인하세요.`);
+  }
+  if(diagnostics.outsideEquipment.length || diagnostics.equipmentOutsideZone.length){
+    const names = [...new Set([...diagnostics.outsideEquipment, ...diagnostics.equipmentOutsideZone].map(e => e.name || '이름 없는 장비'))];
+    note('warn', '장비 배치 범위 확인', `${names.join(', ')}가 공장 외곽 또는 지정 공간을 벗어났습니다.`);
+  }
+  if(diagnostics.overlaps.length){
+    note('warn', '장비 간 겹침 확인', diagnostics.overlaps.map(([a,b]) => `${a.name || '장비'} ↔ ${b.name || '장비'}`).join(', '));
+  }else if(s.equipment.length && !diagnostics.outsideEquipment.length && !diagnostics.equipmentOutsideZone.length){
+    note('success', '기준 장비 배치 이상 없음', '등록 장비끼리 겹치지 않고 지정 공간 안에 배치되어 있습니다. 안전거리와 작업 여유폭은 공정 협의 후 추가합니다.');
+  }
+  if(diagnostics.unresolvedRoutes.length){
+    note('warn', '동선 연결 대상 확인', `${diagnostics.unresolvedRoutes.length}개 동선의 출발·도착 공간 또는 장비명을 찾지 못했습니다.`);
+  }
+  if(zoneArea > floorArea + 0.1){
+    note('warn', '공간 면적 합계 확인', '등록 공간의 면적 합계가 외곽 산출 면적보다 큽니다. 중복 구획이나 도면 표기면적을 확인하세요.');
+  }
+  if(!s.baseDailyKg || !s.baseWorkers || !equipmentCaps.length){
+    note('info', '생산성 계산 조건 대기', '공정 순서, 장비별 처리량, 작업 인원, 동선별 이동횟수를 확정하면 생산량·병목·이동부하를 계산할 수 있습니다.');
+  }
   if(s.targetKg && projectedDaily){
     if(projectedDaily >= s.targetKg) note('success', '목표 생산량 가능권', `현재 조건상 목표보다 약 ${fmtD(projectedDaily - s.targetKg)}KG 여유가 있습니다.`);
     else note('warn', '목표 생산량 부족', `현재 조건상 목표보다 약 ${fmtD(s.targetKg - projectedDaily)}KG 부족합니다. 인원, 설비 처리량, 작업 시간을 다시 조정해보세요.`);
@@ -17422,13 +17954,135 @@ function calculateFactorySim(){
       return `<div class="alert ${cls}" style="margin:0;"><strong>${htmlEscape(n.title)}</strong><br>${htmlEscape(n.body)}</div>`;
     }).join('');
   }
-  renderFactorySimLayout(s);
+  renderFactorySimLayout(s, diagnostics);
 }
 
-function renderFactorySimLayout(s){
+function factorySimRowById(type, id){
+  return [...document.querySelectorAll(`#fs-${type}-tbody tr`)].find(row => row.dataset.itemId === id) || null;
+}
+
+function selectFactorySimItem(event, type, id){
+  event?.stopPropagation?.();
+  factorySimSelection = {type, id};
+  calculateFactorySim();
+}
+
+function clearFactorySimSelection(event){
+  if(event?.target !== event?.currentTarget) return;
+  factorySimSelection = {type:'',id:''};
+  calculateFactorySim();
+}
+
+function factorySimMoveRow(type, id, nextX, nextY){
+  const row = factorySimRowById(type, id);
+  if(!row) return;
+  const xInput = row.querySelector(`.fs-${type}-x`);
+  const yInput = row.querySelector(`.fs-${type}-y`);
+  if(xInput) xInput.value = Math.max(0, nextX).toFixed(2).replace(/\.00$/, '');
+  if(yInput) yInput.value = Math.max(0, nextY).toFixed(2).replace(/\.00$/, '');
+}
+
+function startFactorySimItemDrag(event, type, id){
+  selectFactorySimItem(event, type, id);
+  if(event.button !== undefined && event.button !== 0) return;
+  if(type === 'zone' && factorySimZonesLocked) return;
+  if(!factorySimRequireCurrentEdit()) return;
+  const row = factorySimRowById(type, id);
+  const canvas = document.getElementById('fs-layout-canvas');
+  if(!row || !canvas) return;
+  event.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const startClientX = event.clientX;
+  const startClientY = event.clientY;
+  const startX = parseAppNumber(row.querySelector(`.fs-${type}-x`)?.value);
+  const startY = parseAppNumber(row.querySelector(`.fs-${type}-y`)?.value);
+  const itemW = parseAppNumber(row.querySelector(`.fs-${type}-w`)?.value);
+  const itemH = parseAppNumber(row.querySelector(`.fs-${type}-h`)?.value);
+  const plantW = parseAppNumber(document.getElementById('fs-width')?.value);
+  const plantH = parseAppNumber(document.getElementById('fs-depth')?.value);
+  event.currentTarget?.classList?.add('fs-dragging');
+  const move = moveEvent => {
+    const dx = (moveEvent.clientX - startClientX) / Math.max(1, rect.width) * plantW;
+    const dy = (moveEvent.clientY - startClientY) / Math.max(1, rect.height) * plantH;
+    const nextX = Math.min(Math.max(0, plantW - itemW), Math.max(0, Math.round((startX + dx) * 10) / 10));
+    const nextY = Math.min(Math.max(0, plantH - itemH), Math.max(0, Math.round((startY + dy) * 10) / 10));
+    factorySimMoveRow(type, id, nextX, nextY);
+    calculateFactorySim();
+  };
+  const finish = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', finish);
+    calculateFactorySim();
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', finish, {once:true});
+  window.addEventListener('pointercancel', finish, {once:true});
+}
+
+function nudgeFactorySimItem(event, type, id){
+  if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
+  selectFactorySimItem(event, type, id);
+  if(type === 'zone' && factorySimZonesLocked) return;
+  if(!factorySimRequireCurrentEdit()) return;
+  event.preventDefault();
+  const row = factorySimRowById(type, id);
+  if(!row) return;
+  const step = event.shiftKey ? 0.5 : 0.1;
+  const x = parseAppNumber(row.querySelector(`.fs-${type}-x`)?.value);
+  const y = parseAppNumber(row.querySelector(`.fs-${type}-y`)?.value);
+  const w = parseAppNumber(row.querySelector(`.fs-${type}-w`)?.value);
+  const h = parseAppNumber(row.querySelector(`.fs-${type}-h`)?.value);
+  const plantW = parseAppNumber(document.getElementById('fs-width')?.value);
+  const plantH = parseAppNumber(document.getElementById('fs-depth')?.value);
+  const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+  const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+  factorySimMoveRow(type, id, Math.min(Math.max(0, plantW - w), Math.max(0, x + dx)), Math.min(Math.max(0, plantH - h), Math.max(0, y + dy)));
+  calculateFactorySim();
+}
+
+function renderFactorySimInspector(scenario, diagnostics){
+  const panel = document.getElementById('fs-selection-panel');
+  if(!panel) return;
+  const list = factorySimSelection.type === 'zone' ? scenario.zones : scenario.equipment;
+  const item = (list || []).find(entry => entry.id === factorySimSelection.id);
+  if(!item){
+    panel.innerHTML = `
+      <div class="fs-selection-kicker">CURRENT LAYOUT</div>
+      <h3>공간 또는 장비를 선택하세요</h3>
+      <div class="fs-selection-grid">
+        <div><small>전체 외곽</small><strong>${fmtD(scenario.width)} × ${fmtD(scenario.depth)}m</strong></div>
+        <div><small>등록 공간</small><strong>${scenario.zones.length}개</strong></div>
+        <div><small>가공실2</small><strong>${fmtD(factorySimZoneArea(scenario.zones.find(z => z.id === 'zone-process-2')))}㎡</strong></div>
+        <div><small>장비</small><strong>${scenario.equipment.length}종</strong></div>
+      </div>
+      <div class="fs-selection-note">회색 공간을 누르면 면적과 좌표를 확인할 수 있습니다. 장비는 끌어서 이동하고, 공간은 이동 잠금을 푼 뒤 조정하세요.</div>`;
+    return;
+  }
+  const isZone = factorySimSelection.type === 'zone';
+  const warning = isZone
+    ? diagnostics.outsideZones.includes(item)
+    : diagnostics.outsideEquipment.includes(item) || diagnostics.equipmentOutsideZone.includes(item) || diagnostics.overlaps.some(pair => pair.includes(item));
+  const zone = !isZone ? scenario.zones.find(z => z.id === item.zoneId) : null;
+  const area = isZone ? factorySimZoneArea(item) : parseAppNumber(item.w) * parseAppNumber(item.h);
+  panel.innerHTML = `
+    <div class="fs-selection-kicker">${isZone ? 'SPACE' : 'EQUIPMENT'}</div>
+    <h3>${htmlEscape(item.name || (isZone ? '이름 없는 공간' : '이름 없는 장비'))}</h3>
+    <div class="fs-selection-grid">
+      <div><small>구분</small><strong>${htmlEscape(item.type || '-')}</strong></div>
+      <div><small>면적</small><strong>${fmtD(area)}㎡</strong></div>
+      <div><small>좌표 X · Y</small><strong>${fmtD(item.x)} · ${fmtD(item.y)}m</strong></div>
+      <div><small>폭 · 깊이</small><strong>${fmtD(item.w)} · ${fmtD(item.h)}m</strong></div>
+      ${!isZone ? `<div><small>소속 공간</small><strong>${htmlEscape(zone?.name || '자동 판정')}</strong></div><div><small>처리량</small><strong>${item.capacity ? `${fmtD(item.capacity)}KG/h` : '추후 입력'}</strong></div>` : ''}
+    </div>
+    <div class="fs-selection-note">${warning ? '현재 배치에 겹침 또는 범위 이탈이 있습니다. 상세 수치와 위치를 확인하세요.' : htmlEscape(item.note || (isZone ? '도면 기준 공간입니다.' : '가공실2 내 임시 장비 배치입니다.'))}</div>`;
+}
+
+function renderFactorySimLayout(s, diagnostics=factorySimDiagnostics(s)){
   const canvas = document.getElementById('fs-layout-canvas'); if(!canvas) return;
   if(!s.width || !s.depth){
     canvas.innerHTML = '<div class="fs-layout-empty">공장 폭과 깊이를 입력하면 배치 미리보기가 표시됩니다.</div>';
+    renderFactorySimInspector(s, diagnostics);
     return;
   }
   const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
@@ -17439,19 +18093,60 @@ function renderFactorySimLayout(s){
     const height = clamp((item.h || 1) / s.depth * 100, 2, 100 - top);
     return `left:${left}%;top:${top}%;width:${width}%;height:${height}%;`;
   };
+  canvas.className = `fs-layout ${factorySimViewMode === '3d' ? 'is-3d' : 'is-2d'}`;
+  canvas.style.backgroundSize = `${0.5 / s.width * 100}% ${0.5 / s.depth * 100}%`;
+  canvas.onclick = clearFactorySimSelection;
+  const outsideZoneIds = new Set(diagnostics.outsideZones.map(item => item.id));
+  const warningEquipmentIds = new Set([
+    ...diagnostics.outsideEquipment.map(item => item.id),
+    ...diagnostics.equipmentOutsideZone.map(item => item.id),
+    ...diagnostics.overlaps.flat().map(item => item.id)
+  ]);
   const zones = s.zones.map(z => `
-    <div class="fs-zone" style="${blockStyle(z)}">
-      <strong>${htmlEscape(z.name || z.type || '구획')}</strong><br>
-      ${htmlEscape(z.type || '')}${z.w && z.h ? ` · ${fmtD(z.w * z.h)}㎡` : ''}
+    <div class="fs-zone${z.shape ? ` fs-shape-${htmlEscape(z.shape)}` : ''}${factorySimSelection.type === 'zone' && factorySimSelection.id === z.id ? ' fs-selected' : ''}${outsideZoneIds.has(z.id) ? ' fs-outside' : ''}"
+      data-kind="${htmlEscape(z.kind || factorySimZoneKind(z.type))}" style="${blockStyle(z)}${z.shape === 'l-top-left' ? `clip-path:polygon(0 0,100% 0,100% 100%,${clamp(parseAppNumber(z.notchW) / Math.max(parseAppNumber(z.w),.01) * 100,0,100)}% 100%,${clamp(parseAppNumber(z.notchW) / Math.max(parseAppNumber(z.w),.01) * 100,0,100)}% ${clamp(parseAppNumber(z.extensionDepth) / Math.max(parseAppNumber(z.h),.01) * 100,0,100)}%,0 ${clamp(parseAppNumber(z.extensionDepth) / Math.max(parseAppNumber(z.h),.01) * 100,0,100)}%);` : ''}"
+      role="button" tabindex="0" aria-label="${htmlEscape(z.name || z.type || '공간')}"
+      onclick="selectFactorySimItem(event,'zone',${jsArg(z.id)})"
+      onpointerdown="startFactorySimItemDrag(event,'zone',${jsArg(z.id)})"
+      onkeydown="nudgeFactorySimItem(event,'zone',${jsArg(z.id)})">
+      <strong>${htmlEscape(z.name || z.type || '공간')}</strong>
+      <small>${fmtD(factorySimZoneArea(z))}㎡${z.w && z.h ? ` · ${fmtD(z.w)}×${fmtD(z.h)}m` : ''}</small>
     </div>
   `).join('');
   const equipment = s.equipment.map(e => `
-    <div class="fs-equipment" style="${blockStyle(e)}z-index:2;">
-      <strong>${htmlEscape(e.name || '장비')}</strong><br>
-      ${htmlEscape(e.type || '')}${e.capacity ? ` · ${fmtD(e.capacity)}KG/h` : ''}
+    <div class="fs-equipment${factorySimSelection.type === 'equipment' && factorySimSelection.id === e.id ? ' fs-selected' : ''}${warningEquipmentIds.has(e.id) ? ' fs-warning' : ''}" style="${blockStyle(e)}"
+      role="button" tabindex="0" aria-label="${htmlEscape(e.name || '장비')}"
+      onclick="selectFactorySimItem(event,'equipment',${jsArg(e.id)})"
+      onpointerdown="startFactorySimItemDrag(event,'equipment',${jsArg(e.id)})"
+      onkeydown="nudgeFactorySimItem(event,'equipment',${jsArg(e.id)})">
+      <strong>${htmlEscape(e.name || '장비')}</strong>
+      <small>${e.capacity ? `${fmtD(e.capacity)}KG/h` : htmlEscape(e.type || '처리량 미입력')}</small>
     </div>
   `).join('');
-  canvas.innerHTML = zones + equipment || '<div class="fs-layout-empty">구획이나 장비를 추가하면 이곳에 배치가 표시됩니다.</div>';
+  const routeLines = factorySimRoutesVisible ? (s.routes || []).map(route => {
+    const from = factorySimFindLayoutItem(s, route.from, route.fromId);
+    const to = factorySimFindLayoutItem(s, route.to, route.toId);
+    if(!from || !to) return '';
+    const start = factorySimItemCenter(from);
+    const end = factorySimItemCenter(to);
+    const waypoints = (Array.isArray(route.points) ? route.points : [])
+      .filter(point => Array.isArray(point) && point.length >= 2)
+      .map(point => [parseAppNumber(point[0]), parseAppNumber(point[1])]);
+    const points = [[start.x,start.y], ...waypoints, [end.x,end.y]]
+      .map(point => `${point[0]},${point[1]}`).join(' ');
+    return `<polyline class="fs-route-line" data-kind="${htmlEscape(route.kind || 'other')}" points="${points}" marker-end="url(#fs-route-arrow)"><title>${htmlEscape(`${route.from} → ${route.to}`)}</title></polyline>`;
+  }).join('') : '';
+  const routeLayer = routeLines ? `<svg class="fs-route-layer" viewBox="0 0 ${s.width} ${s.depth}" preserveAspectRatio="none" aria-label="작업자와 물류 동선">
+    <defs><marker id="fs-route-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 Z"></path></marker></defs>
+    ${routeLines}
+  </svg>` : '';
+  const hasCurrentFootprint = s.zones.some(zone => zone.id === 'zone-elevator') && Math.abs(s.width - 18.72) < 0.02 && Math.abs(s.depth - 14.37) < 0.02;
+  const exteriorCutouts = hasCurrentFootprint ? `
+    <div class="fs-exterior-cutout" style="left:${16.4 / s.width * 100}%;top:${10.17 / s.depth * 100}%;width:${2.32 / s.width * 100}%;height:${2.2 / s.depth * 100}%;"><span>옥외 접근</span></div>
+    <div class="fs-exterior-cutout" style="left:${18.4 / s.width * 100}%;top:${12.37 / s.depth * 100}%;width:${0.32 / s.width * 100}%;height:${2 / s.depth * 100}%;"></div>` : '';
+  const scale = `<div class="fs-layout-scale">전체 ${fmtD(s.width)}m × ${fmtD(s.depth)}m · 0.5m 격자</div>`;
+  canvas.innerHTML = exteriorCutouts + zones + equipment + routeLayer + scale || '<div class="fs-layout-empty">공간이나 장비를 추가하면 이곳에 배치가 표시됩니다.</div>';
+  renderFactorySimInspector(s, diagnostics);
 }
 
 
@@ -20311,6 +21006,6 @@ function initSamsung(){
 <script src="cold-storage-request.js?v=20260813m01"></script>
 <script src="meatwatch-lookup.js?v=20260819bulkinlookup1"></script>
 <script src="livestock-trace-lookup.js?v=20260820domestictrace1"></script>
-<script src="m02-auth.js?v=20260820rolepermissions2"></script>
+<script src="m02-auth.js?v=20260821factorysim1"></script>
 </body>
 </html>

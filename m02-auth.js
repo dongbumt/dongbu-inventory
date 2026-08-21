@@ -154,11 +154,14 @@
     deleteQuotation:['quotation','delete'],
 
     newFactorySimScenario:['factory_sim','create','uiOnly'],
+    duplicateFactorySimBaseline:['factory_sim','create','uiOnly'],
     saveFactorySimScenario:['factory_sim','write'],
     deleteFactorySimScenario:['factory_sim','delete'],
-    addFactorySimZone:['factory_sim','create','uiOnly'],
-    addFactorySimEquipment:['factory_sim','create','uiOnly'],
-    addFactorySimRoute:['factory_sim','create','uiOnly'],
+    addFactorySimZone:['factory_sim','write','uiOnly'],
+    addFactorySimEquipment:['factory_sim','write','uiOnly'],
+    addFactorySimRoute:['factory_sim','write','uiOnly'],
+    resetFactorySimWholeLayout:['factory_sim','write','uiOnly'],
+    applyFactorySimProductionAverage:['factory_sim','write','uiOnly'],
 
     applySalaryToExpense:['expense_settings','update'],
     savePangwanbi:['expense_settings','write'],
@@ -304,6 +307,7 @@
     if(typeof window.renderStock === 'function' && document.getElementById('p-stock')?.classList.contains('active')){
       window.renderStock();
     }
+    if(typeof window.applyFactorySimPermissionState === 'function') window.applyFactorySimPermissionState();
     applyActionPermissions();
     if(typeof window.updateMeatwatchLookupState === 'function') window.updateMeatwatchLookupState();
   }
