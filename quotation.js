@@ -370,10 +370,10 @@ function renderQuotationHistory(){
   }
   body.innerHTML = rows.map(row=>{
     const productNames = quotationRowsForOutput(row).map(item=>String(item.product||'').trim()).filter(Boolean);
-    const productList = productNames.length ? productNames.map(name=>`<div>${htmlEscape(name)}</div>`).join('') : '-';
+    const productList = productNames.length ? productNames.map(name=>htmlEscape(name)).join(', ') : '-';
     return `<tr>
     <td>${htmlEscape(row.date || '-')}</td><td style="font-weight:700;">${htmlEscape(row.customer || '-')}</td>
-    <td>${htmlEscape(row.subject || '-')}</td><td style="min-width:160px;white-space:normal;line-height:1.5;">${productList}</td>
+    <td>${htmlEscape(row.subject || '-')}</td><td style="min-width:160px;white-space:nowrap;">${productList}</td>
     <td style="font-size:11px;color:#667085;">${htmlEscape(quotationFormatDateTime(row.updatedAt))}</td>
     <td style="text-align:center;white-space:nowrap;">
       <button class="btn btn-secondary btn-sm" onclick="loadQuotation('${row.id}')">불러오기</button>
