@@ -80,6 +80,18 @@
     white-space:normal;word-break:keep-all;line-height:1.3;}
   .nav-tab:hover{color:var(--text);background:#f8f9fa;}
   .nav-tab.active{color:var(--blue);border-left-color:var(--blue);background:var(--blue-lt);}
+  .nav-home{font-weight:700;color:#34495e;border-bottom:1px solid var(--border);}
+  .nav-group{border-bottom:1px solid #edf0f3;}
+  .nav-group-title{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;border:0;border-radius:0;background:#fff;
+    padding:11px 14px;color:#4b5563;font-size:12px;font-weight:700;cursor:pointer;
+    font-family:inherit;text-align:left;user-select:none;transition:background .2s,color .2s;}
+  .nav-group-title::after{content:'›';color:#98a2b3;font-size:16px;line-height:1;transform:rotate(0deg);transition:transform .18s;}
+  .nav-group.open>.nav-group-title::after{transform:rotate(90deg);}
+  .nav-group-title:hover{background:#f8f9fa;color:#1f2937;}
+  .nav-group.active-group>.nav-group-title{background:#f3f5f7;color:#1f4e79;}
+  .nav-group-items{display:none;padding:2px 0 5px;background:#fafbfc;}
+  .nav-group.open>.nav-group-items{display:block;}
+  .nav-group-items .nav-tab{padding:8px 10px 8px 24px;font-size:11.5px;font-weight:600;color:#667085;}
 
   /* ── 메인 영역 ── */
   .main{padding:24px;max-width:1280px;margin:0 auto;flex:1;min-width:0;}
@@ -300,6 +312,12 @@
       border-right:none;border-bottom:2px solid var(--border);}
     .nav-tab{border-left:none;border-bottom:3px solid transparent;white-space:nowrap;padding:10px 12px;}
     .nav-tab.active{border-left-color:transparent;border-bottom-color:var(--blue);}
+    .nav-home{flex:0 0 auto;border-bottom:3px solid transparent;}
+    .nav-group{display:block;flex:0 0 auto;border-bottom:none;border-right:1px solid #edf0f3;}
+    .nav-group-title{height:100%;padding:10px 12px;white-space:nowrap;}
+    .nav-group.open{display:flex;align-items:stretch;}
+    .nav-group.open>.nav-group-items{display:flex;padding:0;background:#fafbfc;}
+    .nav-group-items .nav-tab{padding:10px 12px;font-size:12px;}
     .main{padding:12px;}
     .app-header h1{font-size:14px;}
     .form-row{grid-template-columns:1fr 1fr;}

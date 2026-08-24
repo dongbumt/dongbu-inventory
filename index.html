@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<link rel="stylesheet" href="styles/main.css?v=20260821productionpicker2">
+<link rel="stylesheet" href="styles/main.css?v=20260824navgroups1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
@@ -345,101 +345,81 @@
 <div class="app-body">
 <!-- 사이드바 탭 -->
 <nav class="nav-tabs">
-  <div class="nav-tab active" onclick="showPage('p-schedule',this)" id="nav-schedule" style="color:#34495e;font-weight:700;">
+  <div class="nav-tab nav-home active" onclick="showPage('p-schedule',this)" id="nav-schedule">
     🗓️ 일정관리
   </div>
-  <div class="nav-tab" onclick="showPage('p-company-master',this)" id="nav-company-master" style="color:#4b5563;font-weight:700;">
-    🏢 법인·사업장·창고
+
+  <div class="nav-group" data-nav-group="master">
+    <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">기준정보</button>
+    <div class="nav-group-items">
+      <div class="nav-tab" onclick="showPage('p-company-master',this)" id="nav-company-master">🏢 법인·사업장·창고</div>
+      <div class="nav-tab" onclick="showPage('p-labelproducts',this)" id="nav-labelproducts">📦 품목관리</div>
+      <div class="nav-tab" onclick="showPage('p-traders',this)" id="nav-traders">🏢 거래처 관리</div>
+      <div class="nav-tab" onclick="showPage('p-prices',this)" id="nav-prices">💰 단가표</div>
+    </div>
   </div>
-  <div class="nav-tab" onclick="showPage('p-access-control',this)" id="nav-access-control" style="color:#4b5563;font-weight:700;">
-    🔐 사용자·권한
+
+  <div class="nav-group" data-nav-group="inventory">
+    <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">거래·재고</button>
+    <div class="nav-group-items">
+      <div class="nav-tab" onclick="showPage('p-transactions',this)" id="nav-transactions">📋 거래내역</div>
+      <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">📊 재고현황</div>
+      <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">🧾 거래명세서</div>
+      <div class="nav-tab" onclick="showPage('p-submaterials',this);" id="nav-submaterials">📦 부자재 관리</div>
+      <div class="nav-tab" onclick="showPage('p-cold-storage-request',this)" id="nav-cold-storage-request">📠 냉동창고 요청</div>
+      <div class="nav-tab" onclick="showPage('p-samsung',this)" id="nav-samsung">🏬 삼성웰스토리</div>
+    </div>
   </div>
-  <div class="nav-tab" onclick="showPage('p-labelproducts',this)" id="nav-labelproducts" style="color:#e67e22;font-weight:700;">
-    📦 품목관리
+
+  <div class="nav-group" data-nav-group="production">
+    <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">생산관리</button>
+    <div class="nav-group-items">
+      <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">🏭 생산일보</div>
+      <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산 로스율</div>
+      <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders">📝 작업지시</div>
+      <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label">🏷️ 라벨출력</div>
+      <div class="nav-tab" onclick="window.open('label-print.html','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
+    </div>
   </div>
-  <div class="nav-tab" onclick="showPage('p-traders',this)" id="nav-traders" style="color:#16a085;font-weight:700;">
-    🏢 거래처 관리
+
+  <div class="nav-group" data-nav-group="sales">
+    <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">영업·원가</button>
+    <div class="nav-group-items">
+      <div class="nav-tab" onclick="showPage('p-pangwanbi',this)" id="nav-pangwanbi">⚙️ 경비 설정</div>
+      <div class="nav-tab" onclick="showPage('p-costcalc',this)" id="nav-costcalc">🧮 원가계산기</div>
+      <div class="nav-tab" onclick="showPage('p-costcompare',this)" id="nav-costcompare">📊 생산원가비교</div>
+      <div class="nav-tab" onclick="showPage('p-quotation',this)" id="nav-quotation">📄 견적서 작성</div>
+    </div>
   </div>
-  <div class="nav-tab" onclick="showPage('p-samsung',this)" id="nav-samsung" style="color:#1428a0;font-weight:700;">
-    🏬 삼성웰스토리
+
+  <div class="nav-group" data-nav-group="quality">
+    <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">품질·이력관리</button>
+    <div class="nav-group-items">
+      <div class="nav-tab" onclick="showPage('p-incheck',this)" id="nav-incheck">🧾 입고검사일지</div>
+      <div class="nav-tab" onclick="showPage('p-shiplog',this)" id="nav-shiplog">🚚 출고검사일지</div>
+      <div class="nav-tab" onclick="showPage('p-doccheck',this)" id="nav-doccheck">📋 서류체크</div>
+    </div>
   </div>
-  <div class="nav-tab" onclick="showPage('p-transactions',this)" id="nav-transactions">
-    📋 거래내역
+
+  <div class="nav-group" data-nav-group="people">
+    <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">인사·경비</button>
+    <div class="nav-group-items">
+      <div class="nav-tab" onclick="showPage('p-employees',this)" id="nav-employees">👥 직원정보</div>
+      <div class="nav-tab" onclick="showPage('p-leaves',this)" id="nav-leaves">📅 근태관리</div>
+      <div class="nav-tab" onclick="showPage('p-driver-attendance',this)" id="nav-driver-attendance">🚚 배송기사근태</div>
+      <div class="nav-tab" onclick="showPage('p-expense',this)" id="nav-expense">💳 지출관리</div>
+    </div>
   </div>
-  <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">
-    🏭 생산일보
-  </div>
-  <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss" style="color:#c0392b;font-weight:700;">
-    📉 생산 로스율
-  </div>
-  <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">
-    📊 재고현황
-  </div>
-  <div class="nav-tab" onclick="showPage('p-cold-storage-request',this)" id="nav-cold-storage-request" style="color:#3f4b5b;font-weight:700;">
-    📠 냉동창고 요청
-  </div>
-  <div class="nav-tab" onclick="showPage('p-submaterials',this);" id="nav-submaterials" style="color:#7f8c8d;font-weight:700;">
-    📦 부자재 관리
-  </div>
-  <div class="nav-tab" onclick="showPage('p-prices',this)" id="nav-prices">
-    💰 단가표
-  </div>
-  <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders" style="color:#6c3483;font-weight:700;">
-    📝 작업지시
-  </div>
-  <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label" style="color:#8e44ad;font-weight:700;">
-    🏷️ 라벨출력
-  </div>
-  <div class="nav-tab" onclick="window.open('label-print.html','_blank');" id="nav-label-print-standalone" style="color:#1d4ed8;font-weight:700;">
-    🧾 라벨전용
-  </div>
-  <div class="nav-tab" onclick="showPage('p-pangwanbi',this)" id="nav-pangwanbi" style="color:#d35400;font-weight:700;">
-    ⚙️ 경비 설정
-  </div>
-  <div class="nav-tab" onclick="showPage('p-costcalc',this)" id="nav-costcalc" style="color:#8e44ad;font-weight:700;">
-    🧮 원가계산기
-  </div>
-  <div class="nav-tab" onclick="showPage('p-costcompare',this)" id="nav-costcompare" style="color:#9b59b6;font-weight:700;">
-    📊 생산원가비교
-  </div>
-  <div class="nav-tab" onclick="showPage('p-quotation',this)" id="nav-quotation" style="color:#4b5563;font-weight:700;">
-    📄 견적서 작성
-  </div>
-  <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">
-    🧾 거래명세서
-  </div>
-  <div class="nav-tab" onclick="showPage('p-incheck',this)" id="nav-incheck" style="color:#2c7a7b;font-weight:700;">
-    🧾 입고검사일지
-  </div>
-  <div class="nav-tab" onclick="showPage('p-shiplog',this)" id="nav-shiplog">
-    🚚 출고일지
-  </div>
-  <div class="nav-tab" onclick="showPage('p-doccheck',this)" id="nav-doccheck" style="color:#8e44ad;font-weight:700;">
-    📋 서류체크
-  </div>
-  <div class="nav-tab" onclick="showPage('p-employees',this)" id="nav-employees" style="color:#c0392b;font-weight:700;">
-    👥 직원정보
-  </div>
-  <div class="nav-tab" onclick="showPage('p-leaves',this)" id="nav-leaves" style="color:#27ae60;font-weight:700;">
-    📅 근태관리
-  </div>
-  <div class="nav-tab" onclick="showPage('p-driver-attendance',this)" id="nav-driver-attendance" style="color:#0f766e;font-weight:700;">
-    🚚 배송기사근태
-  </div>
-  <div class="nav-tab" onclick="showPage('p-mobile-admin',this)" id="nav-mobile-admin" style="color:#374151;font-weight:700;">
-    📱 모바일 관리자
-  </div>
-  <div class="nav-tab" onclick="showPage('p-expense',this)" id="nav-expense" style="color:#1a7ab5;font-weight:700;">
-    💳 지출관리
-  </div>
-  <div class="nav-tab" onclick="showPage('p-import',this)" id="nav-import" style="color:var(--green);font-weight:700;">
-    📥 엑셀 가져오기
-  </div>
-  <div class="nav-tab" onclick="showPage('p-factorysim',this)" id="nav-factorysim" style="color:#0f766e;font-weight:700;">
-    🏗 확장공장 시뮬레이터
-  </div>
-  <div class="nav-tab" onclick="showPage('p-change-log',this)" id="nav-change-log" style="color:#475467;font-weight:700;">
-    🧾 변경이력
+
+  <div class="nav-group" data-nav-group="system">
+    <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">시스템·도구</button>
+    <div class="nav-group-items">
+      <div class="nav-tab" onclick="showPage('p-access-control',this)" id="nav-access-control">🔐 사용자·권한</div>
+      <div class="nav-tab" onclick="showPage('p-mobile-admin',this)" id="nav-mobile-admin">📱 모바일 관리자</div>
+      <div class="nav-tab" onclick="showPage('p-import',this)" id="nav-import">📥 엑셀 가져오기</div>
+      <div class="nav-tab" onclick="showPage('p-factorysim',this)" id="nav-factorysim">🏗 확장공장 시뮬레이터</div>
+      <div class="nav-tab" onclick="showPage('p-change-log',this)" id="nav-change-log">🧾 변경이력</div>
+    </div>
   </div>
 </nav>
 
@@ -6318,6 +6298,28 @@ function openMobileAdmin(){
   window.open(mobileAdminUrl(),'_blank','noopener');
 }
 
+// ─── 단계형 왼쪽 메뉴 ───────────────────────────────────
+function setNavGroupOpen(group, open){
+  if(!group) return;
+  group.classList.toggle('open', Boolean(open));
+  group.querySelector('.nav-group-title')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function toggleNavGroup(button){
+  const group = button?.closest?.('.nav-group');
+  if(!group) return;
+  const shouldOpen = !group.classList.contains('open');
+  document.querySelectorAll('.nav-group').forEach(other=>setNavGroupOpen(other, shouldOpen && other === group));
+}
+
+function activateNavGroup(btn){
+  document.querySelectorAll('.nav-group').forEach(group=>group.classList.remove('active-group'));
+  const group = btn?.closest?.('.nav-group');
+  if(!group) return;
+  document.querySelectorAll('.nav-group').forEach(other=>setNavGroupOpen(other, other === group));
+  group.classList.add('active-group');
+}
+
 // ─── 탭 전환 ───────────────────────────────────────────
 async function showPage(id, btn){
   if(typeof DBMTAuth === 'object' && !DBMTAuth.canOpenPage(id)){
@@ -6328,6 +6330,7 @@ async function showPage(id, btn){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(btn) btn.classList.add('active');
+  activateNavGroup(btn);
   renderPageById(id, 'menu');
   return true;
 }
@@ -20973,6 +20976,6 @@ function initSamsung(){
 <script src="cold-storage-request.js?v=20260813m01"></script>
 <script src="meatwatch-lookup.js?v=20260819bulkinlookup1"></script>
 <script src="livestock-trace-lookup.js?v=20260820domestictrace1"></script>
-<script src="m02-auth.js?v=20260821factorysim1"></script>
+<script src="m02-auth.js?v=20260824navgroups1"></script>
 </body>
 </html>

@@ -377,6 +377,15 @@
       el.dataset.permissionMenu = menuCode;
       el.style.display = can(menuCode, 'view') ? '' : 'none';
     });
+    document.querySelectorAll('.nav-group').forEach(group=>{
+      const hasVisibleMenu = [...group.querySelectorAll('.nav-tab')]
+        .some(el=>el.style.display !== 'none');
+      group.style.display = hasVisibleMenu ? '' : 'none';
+      if(!hasVisibleMenu){
+        group.classList.remove('open');
+        group.querySelector('.nav-group-title')?.setAttribute('aria-expanded', 'false');
+      }
+    });
     const active = document.querySelector('.tab-panel.active');
     if(active && !canOpenPage(active.id)){
       const first = Object.keys(NAV_MENU).map(id=>document.getElementById(id))
