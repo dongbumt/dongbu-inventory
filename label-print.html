@@ -1232,8 +1232,13 @@
     }
 
     function inferMeatType(product='', ingredients=''){
-      const text = `${product} ${ingredients}`;
-      if(/소|우|한우|갈비|사태|차돌|양지|목심|우둔|설도|등심|안심/.test(text)) return '소고기';
+      const ingredientText = String(ingredients || '');
+      if(/돼지고기|돈육/.test(ingredientText)) return '돼지고기';
+      if(/소고기|쇠고기|한우|육우/.test(ingredientText)) return '소고기';
+
+      const productText = String(product || '');
+      if(/돼지고기|돈육|돈|삼겹|목살|전지|후지/.test(productText)) return '돼지고기';
+      if(/소고기|쇠고기|한우|육우|우[^유]?|알목심|설도|차돌|토시/.test(productText)) return '소고기';
       return '돼지고기';
     }
 
