@@ -988,8 +988,8 @@
             <option value="재고조정">재고조정</option>
             <option value="재고이동">재고이동</option>
           </select>
-          <input placeholder="품목명 검색..." id="t-search-product" style="width:150px;" autocomplete="off" oninput="markTransactionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
-          <input placeholder="이력번호 검색..." id="t-search-lot" style="width:150px;" autocomplete="off" oninput="markTransactionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
+          <input placeholder="품목명 검색..." id="t-search-product" style="width:150px;" autocomplete="off" oninput="markTransactionKeywordSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
+          <input placeholder="이력번호 검색..." id="t-search-lot" style="width:150px;" autocomplete="off" oninput="markTransactionKeywordSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
           <button class="btn btn-primary btn-sm" onclick="runTransactionSearch()">조건 조회</button>
           <button class="btn btn-primary btn-sm" onclick="printFilteredTransactions()">인쇄</button>
           <button class="btn btn-secondary btn-sm" onclick="exportTransactionsCSV()">CSV 저장</button>
@@ -9535,6 +9535,18 @@ function markTransactionSearchPending(dateMode=''){
   }
   transactionListQueryActive = false;
   setTransactionListIdle();
+}
+
+function markTransactionKeywordSearchPending(){
+  const productQ = (document.getElementById('t-search-product')?.value || '').trim();
+  const lotQ = (document.getElementById('t-search-lot')?.value || '').trim();
+  if(productQ || lotQ){
+    ['t-search-date','t-search-from','t-search-to'].forEach(id=>{
+      const element = document.getElementById(id);
+      if(element) element.value = '';
+    });
+  }
+  markTransactionSearchPending();
 }
 
 function validateTransactionDateRange(){
