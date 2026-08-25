@@ -6309,14 +6309,14 @@ function toggleNavGroup(button){
   const group = button?.closest?.('.nav-group');
   if(!group) return;
   const shouldOpen = !group.classList.contains('open');
-  document.querySelectorAll('.nav-group').forEach(other=>setNavGroupOpen(other, shouldOpen && other === group));
+  setNavGroupOpen(group, shouldOpen);
 }
 
 function activateNavGroup(btn){
   document.querySelectorAll('.nav-group').forEach(group=>group.classList.remove('active-group'));
   const group = btn?.closest?.('.nav-group');
   if(!group) return;
-  document.querySelectorAll('.nav-group').forEach(other=>setNavGroupOpen(other, other === group));
+  setNavGroupOpen(group, true);
   group.classList.add('active-group');
 }
 
