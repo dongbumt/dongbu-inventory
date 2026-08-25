@@ -518,21 +518,9 @@
       allDates: false,
     };
 
-    const CODE39 = {
-      '0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw',
-      '5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn',
-      'A':'wnnnnwnnw','B':'nnwnnwnnw','C':'wnwnnwnnn','D':'nnnnwwnnw','E':'wnnnwwnnn',
-      'F':'nnwnwwnnn','G':'nnnnnwwnw','H':'wnnnnwwnn','I':'nnwnnwwnn','J':'nnnnwwwnn',
-      'K':'wnnnnnnww','L':'nnwnnnnww','M':'wnwnnnnwn','N':'nnnnwnnww','O':'wnnnwnnwn',
-      'P':'nnwnwnnwn','Q':'nnnnnnwww','R':'wnnnnnwwn','S':'nnwnnnwwn','T':'nnnnwnwwn',
-      'U':'wwnnnnnnw','V':'nwwnnnnnw','W':'wwwnnnnnn','X':'nwnnwnnnw','Y':'wwnnwnnnn',
-      'Z':'nwwnwnnnn','-':'nwnnnnwnw','.':'wwnnnnwnn',' ':'nwwnnnwnn','$':'nwnwnwnnn',
-      '/':'nwnwnnnwn','+':'nwnnnwnwn','%':'nnnwnwnwn','*':'nwnnwnwnn'
-    };
-
     const DEFAULTS = {
       licenseno: '제2025-0293093호',
-      prodtype: '식품의유형',
+      prodtype: '포장육(비가열제품)',
       packaging: '내포장(PE), 외포장(종이)',
       storage: '-18℃이하 냉동보관',
       manufacturer: '주식회사 동부엠티',
@@ -1060,7 +1048,7 @@
       const size = sizeConfig(sizeKey);
       const labels = logs.map(log => {
         const data = labelDataFromLog(log);
-        return `<section class="print-label">${buildLabelBody(data, log.code, preview)}</section>`;
+        return `<section class="print-label">${buildLabelBody(data)}</section>`;
       }).join('');
       const doc = `<!DOCTYPE html>
         <html lang="ko">
@@ -1069,11 +1057,12 @@
           <title>라벨 출력</title>
           <style>
             @page { size: ${size.widthCm}cm ${size.heightCm}cm; margin: 0; }
-            * { box-sizing: border-box; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             html, body { margin: 0; padding: 0; background: #fff; }
             body {
               width: ${size.widthCm}cm;
-              font-family: "Malgun Gothic", Arial, sans-serif;
+              font-family: "Malgun Gothic", "맑은 고딕", Arial, sans-serif;
+              font-size: 7pt;
               color: #000;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
@@ -1084,109 +1073,15 @@
               page-break-after: always;
               break-after: page;
               border: 2px solid #000;
-              padding: 3mm 3mm 2.5mm;
-              display: grid;
-              grid-template-rows: auto 1fr auto;
-              gap: 1.8mm;
+              padding: 1.5pt 2pt 4pt;
+              display: flex;
+              flex-direction: column;
+              line-height: 1.2;
+              font-weight: bold;
               overflow: hidden;
               background: #fff;
             }
             .print-label:last-child { page-break-after: auto; break-after: auto; }
-            .top {
-              display: grid;
-              grid-template-columns: 1fr auto;
-              gap: 2mm;
-              align-items: start;
-              border-bottom: 1px solid #000;
-              padding-bottom: 1.5mm;
-            }
-            .product {
-              font-size: 13pt;
-              font-weight: 900;
-              line-height: 1.15;
-              word-break: keep-all;
-            }
-            .temp {
-              min-width: 14mm;
-              border: 2px solid #000;
-              padding: 1mm 1.5mm;
-              text-align: center;
-              font-size: 12pt;
-              font-weight: 900;
-              line-height: 1.1;
-            }
-            .grid {
-              display: grid;
-              grid-template-columns: 22mm 1fr;
-              column-gap: 2mm;
-              row-gap: 1mm;
-              align-content: start;
-              font-size: 7.6pt;
-              line-height: 1.24;
-            }
-            .k { font-weight: 900; }
-            .v { font-weight: 700; min-width: 0; word-break: keep-all; }
-            .weight { font-size: 12pt; font-weight: 900; }
-            .ingredient-chip {
-              display: inline-block;
-              background: #000;
-              color: #fff;
-              padding: 0.2mm 1.2mm 0.35mm;
-              border-radius: 0.5mm;
-              margin-right: 0.8mm;
-              font-weight: 900;
-            }
-            .bottom {
-              display: grid;
-              grid-template-columns: 1fr 20mm;
-              gap: 2mm;
-              align-items: end;
-              border-top: 1px solid #000;
-              padding-top: 1.5mm;
-            }
-            .notice {
-              font-size: 6.4pt;
-              line-height: 1.28;
-              font-weight: 700;
-            }
-            .marks {
-              display: grid;
-              gap: 1mm;
-            }
-            .mark-img {
-              width: 10mm;
-              height: 10mm;
-              display: block;
-              object-fit: contain;
-            }
-            .mark {
-              border: 1.5px solid #000;
-              border-radius: 50%;
-              height: 10mm;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 6pt;
-              font-weight: 900;
-            }
-            .barcode {
-              grid-column: 1 / -1;
-              display: grid;
-              justify-items: center;
-              gap: 0.5mm;
-              margin-top: 0.5mm;
-            }
-            .barcode svg {
-              display: block;
-              width: 100%;
-              max-width: ${size.widthCm === 7 ? '58mm' : '82mm'};
-              height: 12mm;
-            }
-            .barcode-code {
-              font-size: 6.5pt;
-              font-weight: 900;
-              letter-spacing: 0;
-            }
             .preview-watermark {
               position: fixed;
               inset: 0;
@@ -1226,7 +1121,7 @@
         itemno: row.itemno || '',
         lot: row.lot || log.lot || '',
         ingredients: row.ingredients || `${inferMeatType(row.product || log.product || '', '')} 100%`,
-        storage: row.temptype === '냉장' ? '0~10℃ 냉장보관' : DEFAULTS.storage,
+        storage: row.temptype === '냉장' ? '-2℃ ~ 5℃이하 냉장보관' : DEFAULTS.storage,
         temptype: row.temptype || '냉동',
         licenseno: DEFAULTS.licenseno,
         prodtype: DEFAULTS.prodtype,
@@ -1238,42 +1133,98 @@
       };
     }
 
-    function buildLabelBody(d, code, preview){
-      return `
-        <div class="top">
-          <div class="product">${html(d.product || '-')}</div>
-          <div class="temp">${html(d.temptype || '냉동')}</div>
-        </div>
-        <div class="grid">
-          <div class="k">제품명:</div><div class="v">${html(d.product || '-')}</div>
-          <div class="k">성별및등급:</div><div class="v">${html(d.grade || '-')}</div>
-          <div class="k">원산지:</div><div class="v">${html(d.origin || '-')}</div>
-          <div class="k">제조 및 소비기한:</div><div class="v">${html(d.mfgdate || '-')} / ${html(d.expdate || '-')}</div>
-          <div class="k">중량:</div><div class="v weight">${html(d.weight || '-')} kg</div>
-          <div class="k">품목보고번호</div><div class="v">${html(d.itemno || '-')}</div>
-          <div class="k">이력번호</div><div class="v">${html(d.lot || '-')}</div>
-          <div class="k">원료 및 함량</div><div class="v">${formatIngredients(d.ingredients, d.product)}</div>
-          <div class="k">보관방법:</div><div class="v">${html(d.storage || '-')}</div>
-          <div class="k">허가번호:</div><div class="v">${html(d.licenseno)}</div>
-        </div>
-        <div class="bottom">
-          <div class="notice">
-            ${html(d.prodtype)} / ${html(d.packaging)}<br>
-            제조판매원&nbsp;&nbsp;${html(d.manufacturer)} / ${html(d.phone)}<br>
-            ${html(d.address)}<br>
-            부정,불량 축산물 신고는 국번없이 1399<br>
-            이 제품은 공정거래위원회 고시 소비자 분쟁해결기준에 의거 교환 또는 보상받을 수 있습니다<br>
-            ${html(d.crossNotice)}
-          </div>
-          <div class="marks">
-            <div class="mark">OTHER</div>
-            <img class="mark-img" src="${html(haccpMarkSrc())}" alt="HACCP">
-          </div>
-          <div class="barcode">
-            ${code39Svg(code)}
-            <div class="barcode-code">${html(code)}${preview ? ' / SAMPLE' : ''}</div>
-          </div>
-        </div>`;
+    function buildLabelBody(d){
+      const bb = 'border-bottom:1pt solid #000;';
+      const br = 'border-right:1pt solid #000;';
+      const pad = 'padding:1.8pt 2.2pt;';
+      const sh = 'flex-shrink:0;';
+      const manufacturerName = html(d.manufacturer || DEFAULTS.manufacturer)
+        .replace(/주식회사\s*동부엠티/g, '주식회사 동부엠티');
+      const storageText = d.temptype === '냉장' ? '-2℃ ~ 5℃이하 냉장보관' : '-18℃이하 냉동보관';
+      const frozenNote = d.temptype === '냉장'
+        ? ''
+        : '<div style="font-size:6pt;text-align:center;">이미 냉동된바 있으니 해동후 재냉동 시키지 마십시오</div>';
+      let rows = '';
+
+      rows += '<div style="'+bb+pad+sh+'min-height:22pt;display:flex;align-items:center;">'
+        + '<span style="font-size:6pt;font-weight:900;margin-right:5pt;">제품명: </span>'
+        + '<strong style="font-size:'+((d.product||'').length>8?'11':'13')+'pt;">'+html(d.product||'　')+'</strong>'
+        + '</div>';
+
+      rows += '<div style="display:flex;'+bb+sh+'min-height:17pt;">'
+        + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">성별및등급:</span><span style="flex:1;text-align:center;font-size:9.1pt;">'+html(d.grade||'')+'</span></div>'
+        + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;">원산지:</span> <strong style="font-size:10.4pt;margin-left:6pt;">'+html(d.origin||'')+'</strong></div>'
+        + '</div>';
+
+      rows += '<div style="'+bb+pad+sh+'min-height:20pt;display:flex;align-items:center;">'
+        + '<span style="font-size:6pt;font-weight:900;">제조 및 소비기한: </span>'
+        + '<strong style="font-size:10pt;margin-left:8pt;">'+html(d.mfgdate||'')+'～ '+html(d.expdate||'')+'</strong>'
+        + '</div>';
+
+      rows += '<div style="display:flex;align-items:stretch;'+bb+sh+'min-height:30pt;">'
+        + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;">'
+        +   '<span style="font-size:6pt;font-weight:900;margin-right:3pt;">중량:</span>'
+        +   '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;padding-left:5pt;">'
+        +     '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+html(d.weight||'0.00')+'</span>'
+        +     '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="flex:9;'+pad+'font-size:6pt;">'
+        +   '<div style="font-weight:900;">품목보고번호</div>'
+        +   '<div style="font-size:9.1pt;font-weight:700;margin-top:5pt;text-align:center;">'+html(d.itemno||'')+'</div>'
+        + '</div>'
+        + '</div>';
+
+      rows += '<div style="'+bb+pad+sh+'min-height:15pt;display:flex;align-items:center;gap:4pt;">'
+        + '<span style="font-size:6pt;font-weight:900;flex-shrink:0;">이력번호</span>'
+        + '<strong style="font-size:9.1pt;line-height:1.1;word-break:break-all;">'+html(d.lot||'')+'</strong>'
+        + '</div>';
+
+      rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:15pt;display:flex;align-items:center;"><span style="font-weight:900;">원료 및 함량</span> <strong style="margin-left:8pt;font-size:8pt;">'+formatIngredients(d.ingredients, d.product)+'</strong></div>';
+
+      rows += '<div style="'+bb+pad+sh+'min-height:22pt;">'
+        + '<div style="font-size:6pt;"><span style="font-weight:900;">보관방법:</span> &nbsp; '+storageText+'</div>'
+        + frozenNote
+        + '</div>';
+
+      rows += '<div style="padding:2pt 2pt 0;font-size:6.5pt;flex:1 1 0;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+        +   '<div style="flex:1;line-height:1.42;display:flex;flex-direction:column;gap:0.5pt;padding-right:2pt;">'
+        +     '<div>· 허가번호: '+html(d.licenseno||'')+'</div>'
+        +     '<div>· 식품의유형: '+html(d.prodtype||'')+'</div>'
+        +     '<div>· 포장재질: '+html(d.packaging||'')+'</div>'
+        +     '<div>· 반품및교환: 제조원및판매원 하단 표시</div>'
+        +     '<div>· 부정,불량 축산물 신고는 국번없이 1399</div>'
+        +     '<div>· 이 제품은 공정거래위원회 고시 소비자 분쟁해결기준에 의거 교환 또는 보상받을 수 있습니다</div>'
+        +     '<div>· 동봉되는 흡습제는 먹어서는 아니됩니다</div>'
+        +     '<div>· '+html(d.crossNotice||crossFacilityNotice(d.product,d.ingredients))+'</div>'
+        +   '</div>'
+        +   '<div style="display:flex;flex-direction:column;align-items:center;margin-left:2pt;flex-shrink:0;">'
+        +     '<div style="font-size:13pt;font-weight:900;border:1.5pt solid #000;padding:1pt 3pt;">'+html(d.temptype||'냉동')+'</div>'
+        +     '<div style="margin-top:20pt;text-align:center;">'
+        +       otherMarkHtml()
+        +       '<img src="'+html(haccpMarkSrc())+'" alt="HACCP" style="height:33pt;width:33pt;object-fit:contain;display:block;">'
+        +     '</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="display:flex;align-items:flex-start;margin-top:-18pt;padding-bottom:3pt;line-height:1.12;">'
+        +   '<div style="max-width:100%;">'
+        +     '<div style="display:flex;align-items:baseline;gap:8pt;margin-bottom:1pt;"><span style="font-size:6.5pt;">제조판매원</span><strong style="font-size:11pt;">'+manufacturerName+'</strong></div>'
+        +     '<div style="margin-top:1pt;font-size:6.2pt;">'+html(d.phone||'')+'</div>'
+        +     '<div style="font-size:6.2pt;">'+html(d.address||'')+'</div>'
+        +   '</div>'
+        + '</div>'
+        + '</div>';
+
+      return rows;
+    }
+
+    function otherMarkHtml(){
+      return '<img src="'+html(otherMarkSrc())+'" alt="OTHER 재활용 표시" style="height:33pt;width:auto;display:block;margin:0 auto 1pt;">';
+    }
+
+    function otherMarkSrc(){
+      return new URL('assets/other-recycle.svg', document.baseURI).href;
     }
 
     function haccpMarkSrc(){
@@ -1288,13 +1239,9 @@
 
     function formatIngredients(value, product=''){
       const meat = inferMeatType(product, value);
-      const raw = String(value || `${meat} 100%`);
-      const escaped = html(raw);
-      const meatEsc = html(meat);
-      if(escaped.includes(meatEsc)){
-        return escaped.replace(meatEsc, `<span class="ingredient-chip">${meatEsc}</span>`);
-      }
-      return `<span class="ingredient-chip">${meatEsc}</span>${escaped}`;
+      const escaped = html(String(value || `${meat} 100%`).trim());
+      const badgeStyle = 'display:inline-block;background:#000;color:#fff;padding:0.7pt 2.2pt;margin-right:2pt;line-height:1.1;-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:inset 0 0 0 9999px #000;';
+      return escaped.replace(/(돼지고기|소고기)\s*/g, `<span style="${badgeStyle}">$1</span> `);
     }
 
     function crossFacilityNotice(product='', ingredients=''){
@@ -1308,31 +1255,6 @@
       return {widthCm: 7, heightCm: 10};
     }
 
-    function code39Svg(value){
-      const text = sanitizeCode39(value || 'EMPTY');
-      const encoded = `*${text}*`;
-      const narrow = 2;
-      const wide = 5;
-      const height = 52;
-      let x = 0;
-      const rects = [];
-      for(const ch of encoded){
-        const pattern = CODE39[ch] || CODE39['-'];
-        for(let i = 0; i < pattern.length; i++){
-          const w = pattern[i] === 'w' ? wide : narrow;
-          if(i % 2 === 0) rects.push(`<rect x="${x}" y="0" width="${w}" height="${height}"></rect>`);
-          x += w;
-        }
-        x += narrow;
-      }
-      return `<svg viewBox="0 0 ${x} ${height}" role="img" aria-label="${html(text)}" xmlns="http://www.w3.org/2000/svg">${rects.join('')}</svg>`;
-    }
-
-    function sanitizeCode39(value){
-      const allowed = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%';
-      const clean = String(value).toUpperCase().split('').map(ch => allowed.includes(ch) ? ch : '-').join('');
-      return clean.slice(0, 32) || 'EMPTY';
-    }
   </script>
 </body>
 </html>
