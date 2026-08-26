@@ -1104,8 +1104,8 @@
           <button class="btn btn-primary btn-sm" onclick="runProductionRangeSearch()">기간 조회</button>
         </div>
         <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
-          <input id="prod-filter-product" placeholder="품목명 검색..." style="width:160px;font-size:12px;" autocomplete="off" oninput="markProductionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionSearch();}">
-          <input id="prod-filter-lot" placeholder="이력번호 검색..." style="width:150px;font-size:12px;" autocomplete="off" oninput="markProductionSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionSearch();}">
+          <input id="prod-filter-product" placeholder="품목명 검색..." style="width:160px;font-size:12px;" autocomplete="off" oninput="markProductionKeywordSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionSearch();}">
+          <input id="prod-filter-lot" placeholder="이력번호 검색..." style="width:150px;font-size:12px;" autocomplete="off" oninput="markProductionKeywordSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runProductionSearch();}">
           <button class="btn btn-primary btn-sm" onclick="runProductionSearch()">조건 조회</button>
           <button class="btn btn-primary btn-sm" onclick="printFilteredProduction()">인쇄</button>
           <button class="btn btn-secondary btn-sm" onclick="exportProductionCSV()">CSV 저장</button>
@@ -10699,6 +10699,18 @@ function markProductionSearchPending(dateMode=''){
   }
   productionListQueryActive = false;
   setProductionListIdle();
+}
+
+function markProductionKeywordSearchPending(){
+  const productQ = (document.getElementById('prod-filter-product')?.value || '').trim();
+  const lotQ = (document.getElementById('prod-filter-lot')?.value || '').trim();
+  if(productQ || lotQ){
+    ['prod-filter-date','prod-filter-from','prod-filter-to'].forEach(id=>{
+      const element = document.getElementById(id);
+      if(element) element.value = '';
+    });
+  }
+  markProductionSearchPending();
 }
 
 function validateProductionDateRange(){
