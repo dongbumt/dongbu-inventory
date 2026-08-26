@@ -11,6 +11,12 @@
     't-livestock-inspection-results','t-livestock-process-date','t-livestock-process-end-date',
     't-livestock-process-companies','t-livestock-queried-at'
   ];
+  const BULK_DOMESTIC_FIELDS = [
+    'bulk-in-livestock-species','bulk-in-livestock-trace-type','bulk-in-livestock-slaughter-date',
+    'bulk-in-livestock-slaughter-end-date','bulk-in-livestock-slaughter-houses','bulk-in-livestock-grades',
+    'bulk-in-livestock-inspection-results','bulk-in-livestock-process-date','bulk-in-livestock-process-end-date',
+    'bulk-in-livestock-process-companies','bulk-in-livestock-queried-at'
+  ];
 
   function byId(id){ return document.getElementById(id); }
 
@@ -91,6 +97,84 @@
     if(process) parts.push(`포장 ${process}`);
     if(row.processCompanies?.length) parts.push(`포장처 ${row.processCompanies.join(', ')}`);
     return `${prefix}${parts.join(' · ')}`;
+  }
+
+  function bulkDomesticContext(baseContext){
+    const product=baseContext?.product || null;
+    const origin=normalizedOrigin(product?.origin || '');
+    const meatType=String(product?.meattype || '').trim();
+    const species=meatType==='소고기' ? 'cattle' : meatType==='돼지고기' ? 'pig' : '';
+    return {
+      ...(baseContext || {}),
+      product,
+      origin,
+      species,
+      isDomestic:origin==='국내산',
+      applicable:Boolean(product && origin==='국내산' && species)
+    };
+  }
+
+  function setBulkDomesticStatus(row, message, kind='normal'){
+    const el=row?.querySelector('.bulk-in-meatwatch-status');
+    if(!el) return;
+    el.textContent=message || '';
+    el.style.display=message ? 'block' : 'none';
+    el.style.color=kind==='success' ? '#16794c' : kind==='error' ? '#c0392b' : '#666';
+  }
+
+  function setBulkDomesticValues(row, values){
+    Object.entries(values).forEach(([className,value])=>{
+      const el=row?.querySelector(`.${className}`);
+      if(el) el.value=Array.isArray(value) ? value.join(' / ') : String(value || '');
+    });
+  }
+
+  function clearBulkDomesticResult(row, options={}){
+    if(!row) return;
+    const hasGeneratedDate=Boolean(
+      row.querySelector('.bulk-in-livestock-slaughter-date')?.value ||
+      row.querySelector('.bulk-in-livestock-process-date')?.value
+    );
+    if(options?.removeNote && hasGeneratedDate){
+      const noteEl=row.querySelector('.bulk-in-note');
+      if(noteEl) noteEl.value=removeGeneratedTraceDateNote(noteEl.value);
+    }
+    BULK_DOMESTIC_FIELDS.forEach(className=>{
+      const el=row.querySelector(`.${className}`);
+      if(el) el.value='';
+    });
+  }
+
+  async function lookupBulkDomesticTrace(context, sessionToken){
+    const row=context?.row;
+    const traceNo=String(context?.traceNo || '').trim();
+    if(!row || !context?.applicable || !traceNo) throw new Error('국내산 품목 또는 이력번호를 확인하세요.');
+    setBulkDomesticStatus(row,'축산물이력제에서 도축·포장 정보를 조회하고 있습니다.');
+    const result=await sbFunctionRequest('livestock-trace-lookup',{
+      sessionToken,
+      traceNo,
+      speciesHint:context.species,
+      permissionAction:'create'
+    });
+    setBulkDomesticValues(row,{
+      'bulk-in-livestock-species':result.species,
+      'bulk-in-livestock-trace-type':result.traceType || (result.isBundle ? `${String(result.species || '').toUpperCase()}/LOT_NO` : ''),
+      'bulk-in-livestock-slaughter-date':result.slaughterDate,
+      'bulk-in-livestock-slaughter-end-date':result.slaughterEndDate,
+      'bulk-in-livestock-slaughter-houses':result.slaughterHouses,
+      'bulk-in-livestock-grades':result.grades,
+      'bulk-in-livestock-inspection-results':result.inspectionResults,
+      'bulk-in-livestock-process-date':result.processDate,
+      'bulk-in-livestock-process-end-date':result.processEndDate,
+      'bulk-in-livestock-process-companies':result.processCompanies,
+      'bulk-in-livestock-queried-at':result.queriedAt
+    });
+    const productKind=String(context.product?.kind || '원료육').trim()==='제품' ? '제품' : '원료육';
+    const noteLabel=productKind==='제품' ? '포장일' : '도축일';
+    const noteDate=productKind==='제품' ? result.processDate : result.slaughterDate;
+    const noteEl=row.querySelector('.bulk-in-note');
+    if(noteEl && noteDate) noteEl.value=traceDateNote(noteEl.value,noteLabel,noteDate);
+    setBulkDomesticStatus(row,domesticSummary(result),'success');
   }
 
   function updateTransactionTraceLookupState(){
@@ -235,5 +319,10 @@
   window.clearMeatwatchLookupResult=clearTransactionTraceLookupResult;
   window.restoreMeatwatchLookupFromTransaction=restoreTransactionTraceLookup;
   window.lookupDomesticLivestockTrace=lookupDomesticLivestockTrace;
+  window.DBMTLivestockBulkLookup={
+    context:bulkDomesticContext,
+    lookup:lookupBulkDomesticTrace,
+    clear:clearBulkDomesticResult
+  };
   document.addEventListener('DOMContentLoaded',updateTransactionTraceLookupState);
 })();

@@ -205,6 +205,9 @@
         const el = row.querySelector(`.${className}`);
         if(el) el.value = '';
       });
+    if(typeof window.DBMTLivestockBulkLookup?.clear === 'function'){
+      window.DBMTLivestockBulkLookup.clear(row, options);
+    }
     setBulkRowStatus(row, '');
   }
 
@@ -262,6 +265,7 @@
     let invalidCount = 0;
     rows.forEach((row,index)=>{
       const context = bulkRowLookupContext(row);
+      const domesticHandler = window.DBMTLivestockBulkLookup;
       const hasRowData = context.traceNo || context.weight > 0 || context.trader || context.note;
       if(!hasRowData){
         setBulkRowStatus(row,'');
@@ -274,8 +278,16 @@
         }
         return;
       }
-      if(!isImportedOrigin(context.product.origin)){
-        setBulkRowStatus(row,'');
+      const imported = isImportedOrigin(context.product.origin);
+      const domesticContext = !imported && typeof domesticHandler?.context === 'function'
+        ? domesticHandler.context(context) : null;
+      if(!imported && !domesticContext?.applicable){
+        if(context.traceNo && domesticContext?.isDomestic){
+          setBulkRowStatus(row, `${index+1}행: 국내산 소고기·돼지고기만 이력조회할 수 있습니다.`, 'error');
+          invalidCount++;
+        }else{
+          setBulkRowStatus(row,'');
+        }
         return;
       }
       if(!context.traceNo){
@@ -283,15 +295,15 @@
         invalidCount++;
         return;
       }
-      if(!Number.isInteger(context.shelfDays) || context.shelfDays < 1){
+      if(imported && (!Number.isInteger(context.shelfDays) || context.shelfDays < 1)){
         setBulkRowStatus(row, `${index+1}행: 품목관리의 소비기한(일)을 확인하세요.`, 'error');
         invalidCount++;
         return;
       }
-      targets.push(context);
+      targets.push({...context, lookupType:imported ? 'imported' : 'domestic', domesticContext});
     });
     if(!targets.length){
-      if(typeof toast === 'function') toast(invalidCount ? '조회 조건을 확인하세요.' : '조회할 수입 원료육 행이 없습니다.');
+      if(typeof toast === 'function') toast(invalidCount ? '조회 조건을 확인하세요.' : '조회할 수 있는 수입·국내산 소/돼지 행이 없습니다.');
       return;
     }
 
@@ -304,7 +316,13 @@
       const context = targets[index];
       if(button) button.textContent = `조회 중 ${index+1}/${targets.length}`;
       try{
-        await lookupBulkInboundRow(context, sessionToken);
+        if(context.lookupType === 'domestic'){
+          const domesticHandler = window.DBMTLivestockBulkLookup;
+          if(typeof domesticHandler?.lookup !== 'function') throw new Error('국내산 이력조회 기능을 불러오지 못했습니다.');
+          await domesticHandler.lookup(context.domesticContext, sessionToken);
+        }else{
+          await lookupBulkInboundRow(context, sessionToken);
+        }
         successCount++;
       }catch(error){
         failedCount++;
