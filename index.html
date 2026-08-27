@@ -4,26 +4,40 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
+<script>
+// The main ERP is server-only. Remove browser data caches before application
+// variables are created so no prior business data exists behind the login wall.
+[
+  'dbmt_user_transactions','dbmt_user_prod','dbmt_prices','dbmt_submaterial_usages',
+  'dbmt_schedule_events','dbmt_employees','dbmt_leaves','dbmt_weekend_work',
+  'dbmt_leave_deductions','dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
+  'dbmt_expenses','dbmt_costcalc','dbmt_quotations','dbmt_label_templates',
+  'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs',
+  'dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts',
+  'dbmt_change_logs','dbmt_cold_storage_requests','dbmt_samsung_vendors'
+].forEach(key=>{try{localStorage.removeItem(key);}catch(_){}});
+try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
+try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
+</script>
 <link rel="stylesheet" href="styles/main.css?v=20260824navgroups1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
-<link rel="stylesheet" href="styles/m02-access-control.css?v=20260814m02">
+<link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('xlsx CDN 로드 실패 — Excel 내보내기 기능만 비활성화')"></script>
 </head>
-<body>
+<body class="erp-auth-locked">
 
 <!-- M02 개인 사용자 로그인 -->
-<div id="m02-login-modal" class="edit-modal-bg hidden">
+<div id="m02-login-modal" class="edit-modal-bg m02-login-required">
   <div class="edit-modal m02-login-box">
     <h3>ERP 사용자 로그인</h3>
-    <div class="m02-login-help">개인 계정으로 로그인하면 역할에 지정된 메뉴만 표시되고 변경이력에 사용자 이름이 함께 기록됩니다. 공용 연동 비밀번호와는 별개의 계정입니다.</div>
+    <div class="m02-login-help">등록된 ERP 사용자만 접속할 수 있습니다. 로그인하면 역할에 지정된 메뉴와 기능만 표시됩니다.</div>
     <div class="m02-login-fields">
       <div class="form-group"><label>아이디</label><input id="m02-login-id" autocomplete="username" maxlength="30"></div>
       <div class="form-group"><label>비밀번호 (숫자 4자리)</label><input id="m02-login-password" type="password" inputmode="numeric" pattern="[0-9]{4}" autocomplete="current-password" maxlength="4" onkeydown="if(event.key==='Enter') DBMTAuth.loginFromModal()"></div>
     </div>
     <div id="m02-login-error" class="m02-login-error"></div>
     <div class="em-btns">
-      <button class="btn btn-secondary" onclick="DBMTAuth.closeLogin()">나중에</button>
       <button class="btn btn-primary" id="m02-login-submit" onclick="DBMTAuth.loginFromModal()">로그인</button>
     </div>
   </div>
@@ -289,7 +303,6 @@
 <div id="gs-overlay" class="hidden">
   <div class="gs-spinner"></div>
   <div id="gs-overlay-msg" style="font-size:14px;font-weight:600;">서버에서 데이터 불러오는 중...</div>
-  <button onclick="(function(){var o=document.getElementById('gs-overlay');if(o)o.classList.add('hidden');if(typeof gsSkipToLocal==='function')gsSkipToLocal();else if(typeof localInit==='function'){localInit();renderAll();}})()" style="margin-top:16px;padding:8px 20px;background:#fff;color:#1a252f;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">로컬 모드로 실행</button>
 </div>
 
 <!-- ── 데이터 연동 초기 설정 화면 ── -->
@@ -329,7 +342,7 @@
   <div class="header-right">
   <div class="m02-user-status" id="m02-user-status">
     <button type="button" id="m02-user-button" onclick="DBMTAuth.openLogin()">사용자 로그인</button>
-    <span class="m02-auth-mode" id="m02-auth-mode-label">공용 운영</span>
+    <span class="m02-auth-mode" id="m02-auth-mode-label">로그인 필요</span>
   </div>
   <div class="gs-status" id="gs-status-badge">
     <span class="gs-dot off" id="gs-dot"></span>
@@ -1873,7 +1886,6 @@
       아래 버튼으로 서버 데이터 건수 확인과 현재 화면 데이터 비교만 수행합니다.
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-      <input id="sb-migration-password" type="password" placeholder="연동 비밀번호" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" spellcheck="false" style="max-width:220px;">
       <button class="btn btn-secondary" onclick="checkSupabaseMigrationData()">Supabase 데이터 확인</button>
       <button class="btn btn-primary" onclick="compareSupabaseWithCurrentData()">현재 데이터와 비교</button>
     </div>
@@ -3272,7 +3284,7 @@
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#6b7280;"></div>사용자·역할·메뉴 권한</div>
       <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTAuth.refreshAdmin()">서버 새로고침</button>
     </div>
-    <div class="m02-note">개인 로그인 사용자는 역할별 권한이 적용됩니다. 로그인 전 공용 화면은 <b>공용운영</b> 역할의 조회 체크 메뉴만 표시되며, 공용운영 역할은 사용자에게 배정되지 않습니다.</div>
+    <div class="m02-note">ERP는 등록된 개인 사용자만 접속할 수 있습니다. 각 사용자는 배정된 역할의 메뉴권한에 따라 조회·등록·수정·삭제 기능이 표시됩니다.</div>
     <div id="m02-admin-status" class="m02-status">권한 정보를 준비하는 중입니다.</div>
     <div id="m02-bootstrap-note" class="m02-note m02-bootstrap">아직 개인 사용자가 없습니다. 아래 사용자 등록에서 첫 관리자를 만들면 바로 개인 로그인을 시험할 수 있습니다.</div>
 
@@ -3686,8 +3698,9 @@ const SUPABASE_SERVER_MANAGED_LOCAL_KEYS = new Set([
   'dbmt_user_prod',
   'dbmt_submaterial_usages'
 ]);
-let GS_TOKEN = readSupabaseSessionPassword();
+let GS_TOKEN = '';
 try { localStorage.removeItem('dbmt_gs_token'); } catch(e) {}
+try { sessionStorage.removeItem(SUPABASE_SESSION_TOKEN_KEY); } catch(e) {}
 
 function readSupabaseSessionPassword(){
   try { return (sessionStorage.getItem(SUPABASE_SESSION_TOKEN_KEY) || '').trim(); }
@@ -3707,16 +3720,13 @@ function clearSupabaseSessionPassword(){
 }
 
 function getSupabasePassword(){
-  return (GS_TOKEN || readSupabaseSessionPassword()).trim();
+  return (typeof DBMTAuth === 'object' ? DBMTAuth.getSessionToken() : '').trim();
 }
 
 function requireSupabasePassword(){
-  const password = getSupabasePassword();
-  if(!password){
-    gsShowSetup();
-    throw new Error('Supabase 연동 비밀번호가 없습니다. 연결 화면에서 비밀번호를 입력해주세요.');
-  }
-  return password;
+  const token = getSupabasePassword();
+  if(!token) throw new Error('ERP 사용자 로그인이 필요합니다.');
+  return token;
 }
 
 function isStorageQuotaError(err){
@@ -3771,8 +3781,8 @@ function cacheAppDataValue(key, reg, value){
 
 function supabaseFriendlyError(err){
   const detail = String(err?.message || err || '').trim();
-  if(/invalid app password/i.test(detail)){
-    return '비밀번호가 맞지 않습니다. 관리자에게 현재 연동 비밀번호를 확인해주세요.';
+  if(/로그인이 만료|session_expired|invalid app password/i.test(detail)){
+    return 'ERP 사용자 로그인이 만료되었습니다. 다시 로그인해주세요.';
   }
   if(/Storage|setItem|quota|exceeded/i.test(detail)){
     return '브라우저 임시 저장공간이 가득 찼습니다. 연결 상태 초기화 후 다시 시도해주세요.';
@@ -3887,6 +3897,10 @@ function gsSetupSkip(){
 }
 
 function gsShowSetup(){
+  document.getElementById('gs-setup')?.classList.add('hidden');
+  document.body?.classList.add('erp-auth-locked');
+  if(typeof DBMTAuth === 'object') DBMTAuth.openLogin();
+  return;
   const input = document.getElementById('gs-url-input');
   if(input && GS_URL) input.value = GS_URL;
   const tokenInput = document.getElementById('gs-token-input');
@@ -4900,7 +4914,7 @@ function jsArg(value){
 let dataChangeLogs = JSON.parse(localStorage.getItem('dbmt_change_logs') || '[]');
 
 const APP_DATA_REGISTRY = {
-  scheduleEvents:{ get:()=>scheduleEvents,set:v=>{ scheduleEvents=v; },ls:'dbmt_schedule_events' },
+  scheduleEvents:{ get:()=>scheduleEvents,set:v=>{ scheduleEvents=v; },ls:'dbmt_schedule_events',readOnly:true },
   employees:     { get:()=>employees,     set:v=>{ employees=v; },     ls:'dbmt_employees'   },
   leaveRecs:     { get:()=>leaveRecs,     set:v=>{ leaveRecs=v; },     ls:'dbmt_leaves'      },
   weekendWorkRecs:{ get:()=>weekendWorkRecs,set:v=>{ weekendWorkRecs=v; },ls:'dbmt_weekend_work' },
@@ -4919,7 +4933,7 @@ const APP_DATA_REGISTRY = {
   subMaterialCounts:{ get:()=>subMaterialCounts,set:v=>{ subMaterialCounts=v; },ls:'dbmt_submaterial_counts'},
   factorySimScenarios:{ get:()=>factorySimScenarios,set:v=>{ factorySimScenarios=Array.isArray(v)?v:[]; },ls:'dbmt_factory_sim_scenarios'},
   samsungVendors:   { get:()=>samsungVendors,   set:v=>{ samsungVendors=v; },   ls:'dbmt_samsung_vendors'  },
-  dataChangeLogs:   { get:()=>dataChangeLogs,   set:v=>{ dataChangeLogs=Array.isArray(v)?v:[]; }, ls:'dbmt_change_logs' },
+  dataChangeLogs:   { get:()=>dataChangeLogs,   set:v=>{ dataChangeLogs=Array.isArray(v)?v:[]; }, ls:'dbmt_change_logs',readOnly:true },
 };
 
 const APP_DATA_LABELS = {
@@ -5015,7 +5029,7 @@ function syncDataChangeLogsSoon(){
   if(!getSupabasePassword()) return;
   clearTimeout(dataChangeLogSyncTimer);
   dataChangeLogSyncTimer = setTimeout(() => {
-    sbRpc('dbmt_import_app_data', {p_password: getSupabasePassword(), p_payload: {dataChangeLogs}})
+    sbRpc('dbmt_erp_append_change_logs', {p_token:getSupabasePassword(), p_logs:dataChangeLogs.slice(0,100)})
       .catch(err => console.warn('변경이력 Supabase 저장 실패:', err));
   }, 800);
 }
@@ -5442,9 +5456,9 @@ function assertPersonalServerResult(result, fallbackMessage){
 async function refreshProtectedCoreAfterFailure(){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return;
   try{
-    const password = requireSupabasePassword();
-    const data = await sbRpc('dbmt_get_all', {p_password:password});
-    try{ data.subMaterialUsages = await supabaseLoadSubMaterialUsages(password); }catch(_){ }
+    const token = requireSupabasePassword();
+    const data = await sbRpc('dbmt_erp_get_all', {p_token:token});
+    try{ data.subMaterialUsages = await supabaseLoadSubMaterialUsages(token); }catch(_){ }
     applySupabasePayload(data);
     renderAll('server-recovery');
   }catch(refreshErr){
@@ -5524,8 +5538,8 @@ async function saveProductionRows(entry, transactionRows, deletedProdId, deleted
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') save();
 }
 
-async function supabaseLoadSubMaterialUsages(password=requireSupabasePassword()){
-  const rows = await sbRpc('dbmt_get_submaterial_usages', {p_password: password});
+async function supabaseLoadSubMaterialUsages(token=requireSupabasePassword()){
+  const rows = await sbRpc('dbmt_erp_get_submaterial_usages', {p_token:token});
   subMaterialUsageRpcInstalled = true;
   return Array.isArray(rows) ? rows : [];
 }
@@ -5614,24 +5628,15 @@ function ensurePriceId(row){
 }
 
 async function supabaseSavePriceRows(rows, deletedIds, forceFull=false){
-  const password = requireSupabasePassword();
+  const token = requireSupabasePassword();
   try{
-    if(forceFull){
-      await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
-      return;
-    }
     const upsertRows = asArray(rows).map(ensurePriceId);
-    if(upsertRows.length){
-      await sbRpc('dbmt_upsert_prices', {p_password: password, p_rows: upsertRows});
-    }
     const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
-    for(const id of deleteIds){
-      await sbRpc('dbmt_delete_price', {p_password: password, p_id: id});
-    }
+    await sbRpc('dbmt_erp_save_prices', {p_token:token,p_rows:upsertRows,p_delete_ids:deleteIds});
     gsShowSync('Supabase price save complete');
   } catch(err){
-    console.warn('Supabase price row save failed; falling back to full core sync:', err);
-    await supabaseSaveCore({transactions:userTransactions, prod:userProdEntries, prices});
+    console.warn('Supabase price row save failed:', err);
+    throw err;
   }
 }
 
@@ -5656,7 +5661,7 @@ async function supabaseSaveAppData(keys=[]){
 }
 
 async function supabaseSaveAppDataKeys(keys){
-  const password = requireSupabasePassword();
+  const token = requireSupabasePassword();
   const payload = {};
   asArray(keys).forEach(key => {
     const reg = APP_DATA_REGISTRY[key];
@@ -5664,11 +5669,9 @@ async function supabaseSaveAppDataKeys(keys){
     try{ payload[key] = reg.get(); }
     catch(e){ console.warn('Supabase appData collect failed:', key, e); }
   });
-  if(keys && !payload.dataChangeLogs && APP_DATA_REGISTRY.dataChangeLogs){
-    payload.dataChangeLogs = dataChangeLogs;
-  }
   if(!Object.keys(payload).length) return;
-  await sbRpc('dbmt_import_app_data', {p_password: password, p_payload: payload});
+  await sbRpc('dbmt_erp_save_app_data', {p_token:token,p_payload:payload});
+  syncDataChangeLogsSoon();
 }
 
 function gsSaveAppDataKeys(keys, label='보조데이터'){
@@ -5851,12 +5854,12 @@ async function loadDriverAdminData(){
   driverAdminLoading = true;
   setDriverAdminStatus('배송기사 근태 데이터를 불러오는 중입니다...');
   try{
-    const password = requireSupabasePassword();
+    const token = requireSupabasePassword();
     const weekEl = document.getElementById('da-week-start');
     const week = driverMondayValue(driverWeekDate(weekEl?.value || driverMondayValue()));
     if(weekEl) weekEl.value = week;
-    const data = await sbRpc('dbmt_driver_admin_data', {
-      p_password:password, p_week_start:week
+    const data = await sbRpc('dbmt_erp_driver_admin_data', {
+      p_token:token,p_week_start:week
     });
     if(loadToken !== driverAdminLoadToken) return;
     driverAdminData = {
@@ -5961,8 +5964,8 @@ async function saveDriverAccount(){
   if(!existing && loginPassword.length < 8){ toast('신규 비밀번호는 8자 이상 입력해주세요.'); return; }
   try{
     setDriverAdminStatus('기사 계정을 저장하는 중입니다...');
-    await sbRpc('dbmt_driver_admin_save_account', {
-      p_password:requireSupabasePassword(), p_employee_id:String(employee.id),
+    await sbRpc('dbmt_erp_driver_admin_save_account', {
+      p_token:requireSupabasePassword(),p_employee_id:String(employee.id),
       p_employee_name:employee.name, p_login_id:loginId,
       p_login_password:loginPassword || null, p_active:active
     });
@@ -5978,8 +5981,8 @@ async function setDriverAccountActive(employeeId, active){
   const account = driverAdminData.accounts.find(a=>String(a.employee_id)===String(employeeId));
   if(!account) return;
   try{
-    await sbRpc('dbmt_driver_admin_save_account', {
-      p_password:requireSupabasePassword(), p_employee_id:account.employee_id,
+    await sbRpc('dbmt_erp_driver_admin_save_account', {
+      p_token:requireSupabasePassword(),p_employee_id:account.employee_id,
       p_employee_name:account.employee_name, p_login_id:account.login_id,
       p_login_password:null, p_active:active
     });
@@ -6035,8 +6038,8 @@ async function saveDriverAttendanceAdmin(){
   if(!reason){ toast('수기입력 또는 수정 사유를 입력해주세요.'); return; }
   try{
     setDriverAdminStatus(id?'출퇴근 기록을 수정하는 중입니다...':'출퇴근 기록을 수기 입력하는 중입니다...');
-    await sbRpc('dbmt_driver_admin_save_attendance', {
-      p_password:requireSupabasePassword(), p_id:id, p_account_id:accountId,
+    await sbRpc('dbmt_erp_driver_admin_save_attendance', {
+      p_token:requireSupabasePassword(),p_id:id,p_account_id:accountId,
       p_start_at:startAt, p_end_at:endAt,
       p_start_region:document.getElementById('da-attendance-start-region')?.value || '기타',
       p_end_region:document.getElementById('da-attendance-end-region')?.value || '기타',
@@ -6059,7 +6062,7 @@ async function deleteDriverAttendance(id){
   const reason=prompt('삭제 사유를 입력해주세요.','오입력 삭제'); if(reason===null) return;
   if(!reason.trim()){ toast('삭제 사유를 입력해주세요.'); return; }
   try{
-    await sbRpc('dbmt_driver_admin_delete_attendance',{p_password:requireSupabasePassword(),p_id:id,p_reason:reason.trim()});
+    await sbRpc('dbmt_erp_driver_admin_delete_attendance',{p_token:requireSupabasePassword(),p_id:id,p_reason:reason.trim()});
     recordDataChange({menu:'배송기사근태',action:'삭제',target:row.employee_name,summary:reason.trim(),refId:id});
     resetDriverAttendanceForm(); await loadDriverAdminData(); toast('출퇴근 기록을 삭제했습니다.');
   }catch(err){ setDriverAdminStatus('출퇴근 기록 삭제 실패: '+(err?.message||err),true); }
@@ -6111,8 +6114,8 @@ async function saveDriverLocation(){
   if(!Number.isFinite(latitude) || !Number.isFinite(longitude)){ toast('GPS 위도와 경도를 입력해주세요.'); return; }
   try{
     setDriverAdminStatus('GPS 근무장소를 저장하는 중입니다...');
-    await sbRpc('dbmt_driver_admin_save_location', {
-      p_password:requireSupabasePassword(), p_id:id, p_name:name,
+    await sbRpc('dbmt_erp_driver_admin_save_location', {
+      p_token:requireSupabasePassword(),p_id:id,p_name:name,
       p_address:document.getElementById('da-location-address')?.value.trim() || '',
       p_region:document.getElementById('da-location-region')?.value || '기타',
       p_latitude:latitude, p_longitude:longitude, p_radius_m:radius,
@@ -6239,7 +6242,7 @@ async function loadMobileAdminAccounts(){
   mobileAdminLoading=true;
   setMobileAdminStatus('계정 목록을 불러오는 중입니다.');
   try{
-    mobileAdminAccounts=await sbRpc('dbmt_mobile_admin_accounts',{p_password:requireSupabasePassword()}) || [];
+    mobileAdminAccounts=await sbRpc('dbmt_erp_mobile_admin_accounts',{p_token:requireSupabasePassword()}) || [];
     renderMobileAdminAccounts();
     setMobileAdminStatus(`${mobileAdminAccounts.length}개 계정`);
   }catch(err){
@@ -6274,8 +6277,8 @@ async function saveMobileAdminAccount(){
   if(!/^[A-Za-z0-9._-]{4,30}$/.test(loginId)){ toast('접속 아이디는 영문·숫자 4~30자로 입력해주세요.'); return; }
   if((!id || pin) && !/^\d{4}$/.test(pin)){ toast('숫자 비밀번호는 4자리로 입력해주세요.'); return; }
   try{
-    await sbRpc('dbmt_mobile_admin_save_account',{
-      p_password:requireSupabasePassword(), p_id:id||null, p_display_name:displayName,
+    await sbRpc('dbmt_erp_mobile_admin_save_account',{
+      p_token:requireSupabasePassword(),p_id:id||null,p_display_name:displayName,
       p_login_id:loginId, p_pin:pin||null, p_active:active
     });
     recordDataChange({menu:'모바일관리자',action:id?'수정':'저장',target:displayName,
@@ -14096,7 +14099,7 @@ function sbMigrationStatus(message, isError=false){
 }
 
 function sbMigrationPassword(){
-  return (document.getElementById('sb-migration-password')?.value || getSupabasePassword() || '').trim();
+  return (getSupabasePassword() || '').trim();
 }
 
 async function sbRpc(fnName, body){
@@ -14200,11 +14203,11 @@ async function migrateCurrentDataToSupabase(){
 }
 
 async function checkSupabaseMigrationData(){
-  const password = sbMigrationPassword();
-  if(!password){ alert('Supabase 확인에 사용할 연동 비밀번호를 입력해주세요.'); return; }
+  const token = sbMigrationPassword();
+  if(!token){ alert('ERP 사용자 로그인이 필요합니다.'); return; }
   try{
     sbMigrationStatus('Supabase 데이터를 확인 중입니다...');
-    const data = await sbRpc('dbmt_get_all', {p_password: password});
+    const data = await sbRpc('dbmt_erp_get_all', {p_token:token});
     const summary =
       `Supabase 현재 데이터\n` +
       `거래내역: ${(data.transactions || []).length}건\n` +
@@ -14219,11 +14222,11 @@ async function checkSupabaseMigrationData(){
 }
 
 async function compareSupabaseWithCurrentData(){
-  const password = sbMigrationPassword();
-  if(!password){ alert('Supabase 비교에 사용할 연동 비밀번호를 입력해주세요.'); return; }
+  const token = sbMigrationPassword();
+  if(!token){ alert('ERP 사용자 로그인이 필요합니다.'); return; }
   try{
     sbMigrationStatus('Supabase와 현재 데이터를 비교 중입니다...');
-    const data = await sbRpc('dbmt_get_all', {p_password: password});
+    const data = await sbRpc('dbmt_erp_get_all', {p_token:token});
     const localAppData = sbCollectAppData();
     const remoteAppData = data.appData || {};
     const localAppKeys = Object.keys(localAppData).sort();
@@ -14304,6 +14307,11 @@ function applySupabasePayload(data){
     if(app[k] !== undefined){
       r.set(app[k]);
       cacheAppDataValue(k, r, app[k]);
+    }else{
+      let current;
+      try{ current = r.get(); }catch(_){ current = []; }
+      r.set(Array.isArray(current) ? [] : {});
+      if(r.ls){ try{ localStorage.removeItem(r.ls); }catch(_){} }
     }
   });
   invalidateStockMap();
@@ -14313,22 +14321,22 @@ function applySupabasePayload(data){
 
 async function supabaseInit(){
   const supabaseStartedAt = performance.now();
-  const password = requireSupabasePassword();
+  const token = requireSupabasePassword();
   const startRevision = localCoreRevision;
   gsShowSync('Supabase에서 데이터 불러오는 중...');
   const companyMasterPromise = typeof DBMTCompanyMaster === 'object'
-    ? DBMTCompanyMaster.loadRemote(password).catch(err=>{
+    ? DBMTCompanyMaster.loadRemote(token).catch(err=>{
         console.warn('회사·사업장 기준정보 RPC가 아직 설치되지 않았거나 로드에 실패했습니다:', err);
         return null;
       })
     : Promise.resolve(null);
   const fetchStartedAt = performance.now();
   const [data] = await Promise.all([
-    sbRpc('dbmt_get_all', {p_password: password}),
+    sbRpc('dbmt_erp_get_all', {p_token:token}),
     companyMasterPromise
   ]);
   try{
-    data.subMaterialUsages = await supabaseLoadSubMaterialUsages(password);
+    data.subMaterialUsages = await supabaseLoadSubMaterialUsages(token);
   } catch(err){
     subMaterialUsageRpcInstalled = false;
     console.warn('부자재 사용이력 RPC가 아직 설치되지 않았습니다:', err);
@@ -14363,10 +14371,46 @@ async function supabaseInit(){
     return data;
   }
   gsShowSync('✅ Supabase 데이터 로드 완료');
-  if(typeof DBMTAuth === 'object') await DBMTAuth.initializeSession();
   DBMT_PERF.record('supabase:total', supabaseStartedAt, {page:activePageId()});
   return data;
 }
+
+let authenticatedErpStartPromise = null;
+window.startAuthenticatedErp = function(){
+  if(authenticatedErpStartPromise) return authenticatedErpStartPromise;
+  authenticatedErpStartPromise = (async()=>{
+    if(typeof DBMTAuth !== 'object' || !DBMTAuth.isPersonal()) throw new Error('ERP 사용자 로그인이 필요합니다.');
+    localStorage.setItem(SUPABASE_ENABLED_KEY, '1');
+    localStorage.removeItem('dbmt_gs_skip');
+    const data = await supabaseInit();
+    document.body.classList.remove('erp-auth-locked');
+    document.getElementById('gs-setup')?.classList.add('hidden');
+    document.getElementById('gs-overlay')?.classList.add('hidden');
+    return data;
+  })();
+  return authenticatedErpStartPromise.catch(err=>{
+    authenticatedErpStartPromise = null;
+    document.body.classList.add('erp-auth-locked');
+    throw err;
+  });
+};
+
+window.lockErpForLogin = function(reload=false){
+  document.body.classList.add('erp-auth-locked');
+  clearSupabaseSessionPassword();
+  [
+    'dbmt_user_transactions','dbmt_user_prod','dbmt_prices','dbmt_submaterial_usages',
+    'dbmt_schedule_events','dbmt_employees','dbmt_leaves','dbmt_weekend_work',
+    'dbmt_leave_deductions','dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
+    'dbmt_expenses','dbmt_costcalc','dbmt_quotations','dbmt_label_templates',
+    'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs',
+    'dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts',
+    'dbmt_change_logs','dbmt_cold_storage_requests','dbmt_samsung_vendors'
+  ].forEach(key=>{try{localStorage.removeItem(key);}catch(_){}});
+  try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
+  if(reload){ location.reload(); return; }
+  document.getElementById('m02-login-modal')?.classList.remove('hidden');
+};
 
 function resetImport(){
   importParsed=[];
@@ -14728,15 +14772,15 @@ function saveDocChecks(changeLog=null){
 
 async function refreshDocChecksFromSupabase(force=false){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return false;
-  const password = getSupabasePassword();
-  if(!password) return false;
+  const token = getSupabasePassword();
+  if(!token) return false;
   const now = Date.now();
   if(!force && now - docChecksLastRefreshAt < 5000) return false;
   if(docChecksRefreshPromise) return docChecksRefreshPromise;
 
   const startRevision = docChecksRevision;
   docChecksRefreshPromise = (async () => {
-    const data = await sbRpc('dbmt_get_all', {p_password: password});
+    const data = await sbRpc('dbmt_erp_get_all', {p_token:token});
     const remote = data?.appData?.docChecks;
     docChecksLastRefreshAt = Date.now();
     if(docChecksRevision !== startRevision) return false;
@@ -14892,7 +14936,7 @@ async function loadDocumentRequestCapabilities(senderProfileId=''){
   }
   try{
     const data = await sbFunctionRequest('send-document-request', {
-      action:'capabilities', appPassword:password, senderProfileId
+      action:'capabilities',erpSessionToken:password,senderProfileId
     });
     if(Array.isArray(data?.senderProfiles)){
       docRequestSenderProfiles = data.senderProfiles;
@@ -15058,7 +15102,7 @@ async function sendDocumentRequests(){
   if(!docRequestPendingGroups.length || !docRequestPendingChannel) return;
   const password = getSupabasePassword();
   if(!password){
-    gsShowSetup();
+    toast('ERP 사용자 로그인이 필요합니다.');
     return;
   }
   const senderProfileId = document.getElementById('doc-request-sender-profile')?.value || '';
@@ -15088,7 +15132,7 @@ async function sendDocumentRequests(){
     try{
       const result = await sbFunctionRequest('send-document-request', {
         action:'send',
-        appPassword:password,
+        erpSessionToken:password,
         senderProfileId,
         companyCode:senderProfileId, // 이전 배포된 Edge 함수와의 호환 별칭
         channel:docRequestPendingChannel,
@@ -15187,13 +15231,13 @@ async function loadDocumentRequestLogs(force=false){
     renderDocumentRequestLogs();
     return;
   }
-  const password = getSupabasePassword();
-  if(!password){
-    renderDocumentRequestLogs('Supabase 연결 후 요청 이력을 확인할 수 있습니다.');
+  const token = getSupabasePassword();
+  if(!token){
+    renderDocumentRequestLogs('ERP 사용자 로그인 후 요청 이력을 확인할 수 있습니다.');
     return;
   }
   try{
-    const rows = await sbRpc('dbmt_get_document_request_logs', {p_password:password, p_limit:100});
+    const rows = await sbRpc('dbmt_erp_get_document_request_logs', {p_token:token,p_limit:100});
     documentRequestLogs = Array.isArray(rows) ? rows : [];
     documentRequestLogsLoaded = true;
     renderDocumentRequestLogs();
@@ -16440,37 +16484,10 @@ window.addEventListener('beforeunload', (e)=>{
 });
 
 document.addEventListener('DOMContentLoaded', ()=>{
-  // DOM 초기화 (날짜 세팅, 헤더 표시)
   initDOM();
-
-  // 1) 즉시 로컬 데이터로 앱 시작 (오버레이 즉시 닫기)
-  const overlay = document.getElementById('gs-overlay');
-  if(overlay) overlay.classList.add('hidden');
-  const localStartedAt = performance.now();
-  localInit();
-  DBMT_PERF.record('startup:local-data', localStartedAt, {
-    transactions:userTransactions.length,
-    production:userProdEntries.length,
-    prices:prices.length
-  });
-  renderAll('local-startup');
-  DBMT_PERF.record('startup:interactive', DBMT_PERF.startedAt, {page:activePageId()});
-
-  // 2) Supabase 우선 로드
-  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
-    supabaseInit().catch(err=>{
-      console.error('Supabase 초기 로드 실패:', err);
-      gsSetStatus(false);
-      const detail = supabaseFriendlyError(err);
-      safeLocalStorageSet('dbmt_gs_last_error', detail, true);
-      gsShowSetup();
-      gsShowSync('⚠ Supabase 자동 연결 실패 — ' + detail, true);
-      safeLocalStorageSet('dbmt_gs_last_error', detail, true);
-    });
-  } else {
-    gsShowSetup();
-    gsShowSync('Supabase 연결을 시작하면 서버 데이터와 동기화됩니다.');
-  }
+  document.getElementById('gs-overlay')?.classList.add('hidden');
+  document.getElementById('gs-setup')?.classList.add('hidden');
+  gsSetStatus(false);
 });
 
 // ══════════════════════════════════════════
@@ -21004,11 +21021,11 @@ function initSamsung(){
 }
 
 </script>
-<script src="company-master.js?v=20260813m01"></script>
+<script src="company-master.js?v=20260827requiredlogin1"></script>
 <script src="quotation.js?v=20260821subject2"></script>
-<script src="cold-storage-request.js?v=20260813m01"></script>
+<script src="cold-storage-request.js?v=20260827requiredlogin1"></script>
 <script src="meatwatch-lookup.js?v=20260826bulktrace1"></script>
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
-<script src="m02-auth.js?v=20260827autorole1"></script>
+<script src="m02-auth.js?v=20260827requiredlogin1"></script>
 </body>
 </html>

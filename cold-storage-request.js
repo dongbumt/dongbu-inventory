@@ -570,7 +570,7 @@ async function refreshColdStorageRequestsFromSupabase(){
   if(localStorage.getItem('dbmt_supabase_enabled') !== '1' || typeof getSupabasePassword !== 'function' || !getSupabasePassword()) return false;
   if(coldStorageRefreshPromise) return coldStorageRefreshPromise;
   coldStorageRefreshPromise = (async()=>{
-    const data = await sbRpc('dbmt_get_all',{p_password:getSupabasePassword()});
+    const data = await sbRpc('dbmt_erp_get_all',{p_token:getSupabasePassword()});
     const remote = data?.appData?.coldStorageRequests;
     if(!Array.isArray(remote)) return false;
     const before = JSON.stringify(coldStorageRequests);
@@ -848,7 +848,7 @@ function recordColdStorageFaxTransition(before,after){
 async function requestColdStorageFaxStatus(record,password){
   const result = await sbFunctionRequest('send-document-request',{
     action:COLD_STORAGE_PUBLIC_MODE ? 'cold_storage_public_fax_status' : 'cold_storage_fax_status',
-    appPassword:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
+    erpSessionToken:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
     senderProfileId:record.requesterId,
     requesterId:record.requesterId,
     messageId:record.providerMessageId
@@ -858,7 +858,7 @@ async function requestColdStorageFaxStatus(record,password){
 
 async function refreshColdStorageFaxStatus(id,options={}){
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
-  if(!COLD_STORAGE_PUBLIC_MODE && !password){ if(!options.quiet) toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return null; }
+  if(!COLD_STORAGE_PUBLIC_MODE && !password){ if(!options.quiet) toast('ERP 사용자 로그인이 필요합니다.'); return null; }
   const record = coldStorageRequests.find(row=>row.id === id);
   if(!record?.providerMessageId){ if(!options.quiet) toast('팩스 접수번호가 없는 요청입니다.'); return null; }
   try{
@@ -878,7 +878,7 @@ async function refreshColdStorageFaxStatus(id,options={}){
 
 async function refreshColdStorageFaxStatuses(options={}){
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
-  if(!COLD_STORAGE_PUBLIC_MODE && !password){ if(!options.quiet) toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return; }
+  if(!COLD_STORAGE_PUBLIC_MODE && !password){ if(!options.quiet) toast('ERP 사용자 로그인이 필요합니다.'); return; }
   if(options.refreshRemote !== false){
     try{ await refreshColdStorageRequestsFromSupabase(); }catch(err){ console.warn('팩스 상태 확인 전 이력 갱신 실패:',err); }
   }
@@ -1132,7 +1132,7 @@ async function loadColdStorageFaxCapabilities(){
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
   if(!COLD_STORAGE_PUBLIC_MODE && !password){
     coldStorageFaxCapabilities = {fax:false,faxProvider:'바로빌',faxMode:'테스트'};
-    if(message){ message.style.display='';message.textContent='팩스 발송에는 Supabase 연결 비밀번호가 필요합니다.'; }
+    if(message){ message.style.display='';message.textContent='팩스 발송에는 ERP 사용자 로그인이 필요합니다.'; }
     updateColdStorageFaxButton();
     return;
   }
@@ -1146,7 +1146,7 @@ async function loadColdStorageFaxCapabilities(){
   try{
     const result = await sbFunctionRequest('send-document-request',{
       action:COLD_STORAGE_PUBLIC_MODE ? 'cold_storage_public_capabilities' : 'capabilities',
-      appPassword:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
+      erpSessionToken:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
       senderProfileId,
       requesterId:senderProfileId
     });
@@ -1170,7 +1170,7 @@ async function sendColdStorageRequestFax(){
   const validated = validateColdStorageRequest(true);
   if(!validated) return;
   const password = typeof getSupabasePassword === 'function' ? getSupabasePassword() : '';
-  if(!COLD_STORAGE_PUBLIC_MODE && !password){ toast('Supabase 연결 비밀번호를 먼저 설정하세요.'); return; }
+  if(!COLD_STORAGE_PUBLIC_MODE && !password){ toast('ERP 사용자 로그인이 필요합니다.'); return; }
   if(!coldStorageFaxCapabilities.fax){
     await loadColdStorageFaxCapabilities();
     if(!coldStorageFaxCapabilities.fax){ toast('바로빌 팩스 연결 상태를 확인하세요.'); return; }
@@ -1187,7 +1187,7 @@ async function sendColdStorageRequestFax(){
     const imageDataUrl = canvas.toDataURL('image/jpeg',.9);
     const result = await sbFunctionRequest('send-document-request',{
       action:COLD_STORAGE_PUBLIC_MODE ? 'cold_storage_public_fax' : 'cold_storage_fax',
-      appPassword:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
+      erpSessionToken:COLD_STORAGE_PUBLIC_MODE ? undefined : password,
       requestId:saved.id, requestType:saved.requestType,
       senderProfileId:saved.requesterId,
       requesterId:saved.requesterId,

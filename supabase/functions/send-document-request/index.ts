@@ -26,6 +26,7 @@ interface DeliveryRequest {
     | "cold_storage_public_fax"
     | "cold_storage_public_fax_status";
   appPassword?: string;
+  erpSessionToken?: string;
   publicAccessKey?: string;
   senderProfileId?: string;
   // Legacy aliases retained while deployed clients migrate to senderProfileId.
@@ -1064,12 +1065,21 @@ Deno.serve(async (req) => {
   }
 
   if (!isPublicColdStorageAction) {
-    const appPassword = clean(payload.appPassword, 200);
-    const { data: passwordOk, error: passwordError } = await supabase.rpc("dbmt_check_password", {
-      p_password: appPassword,
+    const sessionToken = clean(payload.erpSessionToken, 200);
+    const permission = requestedAction === "send"
+      ? { menu: "document_check", action: "api_send" }
+      : requestedAction === "cold_storage_fax"
+        ? { menu: "cold_storage_request", action: "api_send" }
+        : requestedAction === "cold_storage_fax_status"
+          ? { menu: "cold_storage_request", action: "view" }
+          : { menu: null, action: "view" };
+    const { data: sessionOk, error: sessionError } = await supabase.rpc("dbmt_erp_edge_authorized", {
+      p_token: sessionToken,
+      p_menu_code: permission.menu,
+      p_action: permission.action,
     });
-    if (passwordError || passwordOk !== true) {
-      return jsonResponse(req, { error: "ERP 연동 비밀번호가 올바르지 않습니다." }, 401);
+    if (sessionError || sessionOk !== true) {
+      return jsonResponse(req, { error: "ERP 사용자 로그인 또는 기능 권한을 확인해주세요." }, 401);
     }
   }
 

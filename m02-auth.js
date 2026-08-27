@@ -192,12 +192,10 @@
     ['[data-identifier-key]','company_master','update']
   ]);
 
-  const DEFAULT_PUBLIC_MENUS = new Set(['schedule','stock','change_log']);
   let state = {
     user:null,
     permissions:new Map(),
-    publicPermissions:new Map([...DEFAULT_PUBLIC_MENUS].map(menuCode=>[menuCode, {menuCode, canView:true}])),
-    authMode:'optional'
+    authMode:'required'
   };
   let adminData = null;
   let selectedUserId = '';
@@ -229,31 +227,16 @@
 
   function setSession(payload){
     state.user = payload?.user || null;
-    state.authMode = payload?.authMode || 'optional';
+    state.authMode = payload?.authMode || 'required';
     state.permissions = new Map((payload?.permissions || []).map(row=>[row.menuCode, row]));
     renderHeader();
     applyNavigation();
     notifyPermissionSurfaces();
   }
 
-  async function loadPublicPermissions(){
-    try{
-      const rows = await rpc('dbmt_erp_public_permissions', {});
-      if(Array.isArray(rows)){
-        state.publicPermissions = new Map(rows.map(row=>[row.menuCode, row]));
-      }
-    }catch(err){
-      console.warn('공용운영 메뉴 권한을 불러오지 못해 기본 축소 구성을 사용합니다:', err);
-    }
-    if(!state.user){
-      applyNavigation();
-      notifyPermissionSurfaces();
-    }
-  }
-
   function clearSession(){
     storeSessionToken('');
-    setSession({user:null, permissions:[], authMode:'optional'});
+    setSession({user:null, permissions:[], authMode:'required'});
   }
 
   function renderHeader(){
@@ -269,15 +252,12 @@
       button.textContent = '사용자 로그인';
       button.title = '개인 계정으로 로그인';
       button.onclick = openLogin;
-      label.textContent = '공용 운영';
+      label.textContent = '로그인 필요';
     }
   }
 
   function can(menuCode, action='view'){
-    if(!state.user){
-      const row = state.publicPermissions.get(menuCode);
-      return action === 'view' && Boolean(row?.canView);
-    }
+    if(!state.user) return false;
     const row = state.permissions.get(menuCode);
     return Boolean(row && row[ACTION_FIELDS[action] || action]);
   }
@@ -398,7 +378,7 @@
     if(sessionPromise && !force) return sessionPromise;
     sessionPromise = (async()=>{
       const token = sessionToken();
-      if(!token){ setSession({user:null, permissions:[], authMode:'optional'}); return null; }
+      if(!token){ setSession({user:null, permissions:[], authMode:'required'}); return null; }
       try{
         const result = await rpc('dbmt_erp_session', {p_token:token});
         if(!result?.ok){ clearSession(); return null; }
@@ -406,7 +386,7 @@
         return result;
       }catch(err){
         console.warn('M02 사용자 세션을 확인하지 못했습니다:', err);
-        setSession({user:null, permissions:[], authMode:'optional'});
+        setSession({user:null, permissions:[], authMode:'required'});
         return null;
       }
     })();
@@ -422,6 +402,7 @@
   }
 
   function closeLogin(){
+    if(!state.user) return;
     document.getElementById('m02-login-modal')?.classList.add('hidden');
     const pw = document.getElementById('m02-login-password');
     if(pw) pw.value = '';
@@ -442,6 +423,7 @@
       if(!result?.ok) throw new Error(result?.message || '로그인에 실패했습니다.');
       storeSessionToken(result.token);
       setSession(result);
+      if(typeof window.startAuthenticatedErp === 'function') await window.startAuthenticatedErp();
       closeLogin();
       if(typeof window.toast === 'function') window.toast(`${result.user?.displayName || loginId}님으로 로그인했습니다.`);
     }catch(err){
@@ -453,15 +435,15 @@
 
   async function logoutConfirm(){
     if(!state.user){openLogin();return;}
-    if(!confirm(`${state.user.displayName} 사용자 로그아웃을 할까요?\n공용 ERP 연결은 유지됩니다.`)) return;
+    if(!confirm(`${state.user.displayName} 사용자 로그아웃을 할까요?\nERP 화면이 잠기고 다시 로그인해야 합니다.`)) return;
     const token = sessionToken();
     clearSession();
     try{if(token) await rpc('dbmt_erp_logout', {p_token:token});}catch(err){console.warn('로그아웃 서버 정리 실패:', err);}
-    if(typeof window.toast === 'function') window.toast('개인 사용자 로그아웃을 완료했습니다.');
+    if(typeof window.lockErpForLogin === 'function') window.lockErpForLogin(true);
   }
 
   function auditIdentity(){
-    if(!state.user) return {authMode:'legacy_app_password'};
+    if(!state.user) return {authMode:'required_personal_login'};
     return {
       authMode:'personal_session',
       userId:state.user.id || '',
@@ -479,11 +461,6 @@
     el.classList.toggle('error', error);
   }
 
-  function adminPassword(){
-    if(typeof window.requireSupabasePassword !== 'function') throw new Error('공용 ERP 연결이 필요합니다.');
-    return window.requireSupabasePassword();
-  }
-
   function ensureAdminAction(){
     if(!isPersonal() || !can('access_control', 'admin')) throw new Error('사용자·권한 관리 권한이 없습니다.');
   }
@@ -497,11 +474,11 @@
     try{
       ensureAdminAction();
       status('서버에서 사용자·역할 정보를 불러오는 중입니다.');
-      adminData = await rpc('dbmt_m02_get_admin', {p_password:adminPassword()});
+      adminData = await rpc('dbmt_erp_admin_get', {p_token:sessionToken()});
       selectedUserId = adminData.users?.some(x=>x.id===selectedUserId) ? selectedUserId : '';
       selectedRoleId = adminData.roles?.some(x=>x.id===selectedRoleId) ? selectedRoleId : (adminData.roles?.[0]?.id || '');
       renderAdmin();
-      status(`병행 운영 · 사용자 ${adminData.users?.length || 0}명 · 역할 ${adminData.roles?.length || 0}개`);
+      status(`개인 로그인 운영 · 사용자 ${adminData.users?.length || 0}명 · 역할 ${(adminData.roles || []).filter(r=>r.code!=='public_operator').length}개`);
     }catch(err){
       console.error('M02 관리자 데이터 로드 실패:', err);
       status('사용자·역할 정보를 불러오지 못했습니다: ' + String(err?.message || err), true);
@@ -542,8 +519,8 @@
   function renderRoleList(){
     const el = document.getElementById('m02-role-list');
     if(!el) return;
-    el.innerHTML = (adminData.roles || []).map(row=>{
-      const badge = row.systemRole ? ' · 기본 시스템' : row.code==='public_operator' ? ' · 공용 화면' : '';
+    el.innerHTML = (adminData.roles || []).filter(row=>row.code!=='public_operator').map(row=>{
+      const badge = row.systemRole ? ' · 기본 시스템' : '';
       return `<button type="button" class="m02-list-row ${row.id===selectedRoleId?'active':''} ${row.active?'':'m02-disabled'}" data-role-id="${esc(row.id)}">
         <strong>${esc(row.name)}${badge}</strong>
         <small>사용 중 ${Number(row.userCount || 0)}명 · ${row.active?'사용':'중지'}</small>
@@ -644,7 +621,7 @@
     setValue('m02-role-code',row.code); setValue('m02-role-name',row.name);
     setValue('m02-role-description',row.description || ''); setValue('m02-role-active',row.active?'1':'0');
     const title=document.getElementById('m02-role-form-title');
-    if(title) title.textContent=row.code==='public_operator' ? '공용운영 메뉴 설정' : '역할 수정';
+    if(title) title.textContent='역할 수정';
     const deleteButton=document.getElementById('m02-role-delete-btn');
     if(deleteButton){
       deleteButton.style.display=row.protectedRole?'none':'';
@@ -653,7 +630,7 @@
     }
     renderPermissionTable(permissionRowsForRole(id), {
       locked:Boolean(row.systemRole),
-      viewOnly:row.code==='public_operator'
+      viewOnly:false
     });
     renderRoleList();
   }
@@ -676,8 +653,8 @@
       const name=value('m02-role-name').trim();
       if(!/^[a-z][a-z0-9_]{2,39}$/.test(code)) throw new Error('내부 역할 코드를 자동 생성하지 못했습니다. 역할 등록을 다시 시작해주세요.');
       if(!name) throw new Error('역할명을 입력해주세요.');
-      const saved = await rpc('dbmt_m02_save_role', {
-        p_password:adminPassword(), p_id:id, p_code:code, p_name:name,
+      const saved = await rpc('dbmt_erp_admin_save_role', {
+        p_token:sessionToken(), p_id:id, p_code:code, p_name:name,
         p_description:value('m02-role-description').trim() || null,
         p_active:value('m02-role-active')==='1', p_permissions:collectPermissions(),
         p_expected_revision:id ? Number(value('m02-role-revision')) : null
@@ -694,11 +671,11 @@
       const id=value('m02-role-id');
       const row=(adminData?.roles || []).find(role=>role.id===id);
       if(!row) throw new Error('삭제할 역할을 선택해주세요.');
-      if(row.protectedRole) throw new Error('시스템관리자와 공용운영 역할은 삭제할 수 없습니다.');
+      if(row.protectedRole) throw new Error('기본 시스템 역할은 삭제할 수 없습니다.');
       if(Number(row.totalUserCount || 0)>0) throw new Error('이 역할에 연결된 사용자를 먼저 다른 역할로 변경해주세요.');
       if(!window.confirm(`역할 '${row.name}'을 삭제할까요?\n저장된 메뉴 권한도 함께 삭제됩니다.`)) return;
-      await rpc('dbmt_m02_delete_role', {
-        p_password:adminPassword(),
+      await rpc('dbmt_erp_admin_delete_role', {
+        p_token:sessionToken(),
         p_id:id,
         p_expected_revision:Number(value('m02-role-revision'))
       });
@@ -718,8 +695,8 @@
       if(!/^[A-Za-z0-9._-]{3,30}$/.test(loginId)) throw new Error('아이디는 영문만으로 3~30자 입력할 수 있습니다. 숫자·점·밑줄·하이픈도 선택적으로 사용할 수 있습니다.');
       if(!displayName) throw new Error('표시 이름을 입력해주세요.');
       if((!id || loginPassword) && !/^\d{4}$/.test(loginPassword)) throw new Error('비밀번호는 숫자 4자리로 입력해주세요.');
-      const saved = await rpc('dbmt_m02_save_user', {
-        p_password:adminPassword(), p_id:id, p_login_id:loginId,
+      const saved = await rpc('dbmt_erp_admin_save_user', {
+        p_token:sessionToken(), p_id:id, p_login_id:loginId,
         p_display_name:displayName, p_role_id:value('m02-user-role'),
         p_login_password:loginPassword || null, p_active:value('m02-user-active')==='1',
         p_expected_revision:id ? Number(value('m02-user-revision')) : null
@@ -743,8 +720,8 @@
         throw new Error('마지막 활성 시스템관리자는 삭제할 수 없습니다.');
       }
       if(!window.confirm(`사용자 '${row.displayName} · ${row.loginId}'을 삭제할까요?\n해당 사용자의 로그인 세션도 종료됩니다.`)) return;
-      await rpc('dbmt_m02_delete_user', {
-        p_password:adminPassword(),
+      await rpc('dbmt_erp_admin_delete_user', {
+        p_token:sessionToken(),
         p_id:id,
         p_expected_revision:Number(value('m02-user-revision'))
       });
@@ -761,9 +738,8 @@
     if(/at least one active system administrator/i.test(msg)) return '활성 시스템 관리자는 최소 1명 유지해야 합니다.';
     if(/active users are assigned/i.test(msg)) return '사용 중인 사용자가 연결된 역할은 중지할 수 없습니다.';
     if(/users are assigned to this role/i.test(msg)) return '사용자가 연결된 역할은 삭제할 수 없습니다. 먼저 사용자의 역할을 변경해주세요.';
-    if(/protected role cannot be deleted/i.test(msg)) return '시스템관리자와 공용운영 역할은 삭제할 수 없습니다.';
-    if(/protected role cannot be disabled/i.test(msg)) return '시스템관리자와 공용운영 역할은 중지할 수 없습니다.';
-    if(/invalid app password/i.test(msg)) return '공용 ERP 연동 비밀번호가 맞지 않습니다.';
+    if(/protected role cannot be deleted/i.test(msg)) return '기본 시스템 역할은 삭제할 수 없습니다.';
+    if(/protected role cannot be disabled/i.test(msg)) return '기본 시스템 역할은 중지할 수 없습니다.';
     return msg || '알 수 없는 오류입니다.';
   }
 
@@ -779,7 +755,7 @@
   };
   window.DBMTAuth=api;
 
-  function bootstrap(){
+  async function bootstrap(){
     installActionGuards();
     renderHeader();
     applyNavigation();
@@ -790,8 +766,20 @@
       })));
       observer.observe(document.body, {childList:true, subtree:true});
     }
-    loadPublicPermissions();
-    initializeSession();
+    const session = await initializeSession();
+    if(session?.ok && typeof window.startAuthenticatedErp === 'function'){
+      try{
+        await window.startAuthenticatedErp();
+        closeLogin();
+      }catch(err){
+        console.error('개인 로그인 ERP 초기화 실패:', err);
+        const errorEl=document.getElementById('m02-login-error');
+        if(errorEl){errorEl.textContent='서버 자료를 불러오지 못했습니다: '+String(err?.message||err);errorEl.classList.add('show');}
+        openLogin();
+      }
+    }else{
+      openLogin();
+    }
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bootstrap);
   else bootstrap();

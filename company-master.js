@@ -400,28 +400,28 @@ function setMaster(value, options={}){
   return copy(companyMaster);
 }
 
-async function loadRemote(password){
+async function loadRemote(token){
   if(PUBLIC_MODE) throw new Error('공용 화면에서는 ERP 회사정보 RPC를 직접 호출할 수 없습니다.');
-  const appPassword = text(password || (typeof getSupabasePassword === 'function' ? getSupabasePassword() : ''));
-  if(!appPassword) throw new Error('Supabase 연결 비밀번호가 없습니다.');
+  const sessionToken = text(token || (typeof DBMTAuth === 'object' ? DBMTAuth.getSessionToken() : ''));
+  if(!sessionToken) throw new Error('ERP 사용자 로그인이 필요합니다.');
   if(typeof sbRpc !== 'function') throw new Error('Supabase RPC를 사용할 수 없습니다.');
   try{
-    const result = await sbRpc('dbmt_get_company_master', {p_password:appPassword});
+    const result = await sbRpc('dbmt_erp_get_company_master', {p_token:sessionToken});
     rpcAvailable = true;
     const remote = normalizeMaster(result || {});
     serverEmpty = remote.companies.length === 0;
     setMaster(remote, {source:serverEmpty ? 'legacy' : 'server', mergeLegacy:true});
     return copy(remote);
   }catch(error){
-    if(/Could not find|schema cache|dbmt_get_company_master|function/i.test(String(error?.message || error))) rpcAvailable = false;
+    if(/Could not find|schema cache|dbmt_erp_get_company_master|function/i.test(String(error?.message || error))) rpcAvailable = false;
     throw error;
   }
 }
 
-function currentPassword(){
-  const password = typeof getSupabasePassword === 'function' ? text(getSupabasePassword()) : '';
-  if(!password) throw new Error('Supabase 연결 후 회사정보를 저장할 수 있습니다.');
-  return password;
+function currentSessionToken(){
+  const token = typeof DBMTAuth === 'object' ? text(DBMTAuth.getSessionToken()) : '';
+  if(!token) throw new Error('ERP 사용자 로그인 후 회사정보를 저장할 수 있습니다.');
+  return token;
 }
 
 function companyKey(company){ return company?.id || company?.code || ''; }
@@ -650,9 +650,9 @@ async function saveCompany(){
   if(serverId) record.id=serverId;
   try{
     companySavePending=true; toggleSaveButtons(true); showMessage('회사정보를 서버에 저장하는 중입니다...');
-    const password=currentPassword();
-    await sbRpc('dbmt_save_company', {p_password:password,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-company-revision')) : null});
-    await loadRemote(password);
+    const token=currentSessionToken();
+    await sbRpc('dbmt_erp_save_company', {p_token:token,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-company-revision')) : null});
+    await loadRemote(token);
     const saved=companyMaster.companies.find(row=>row.code===code);
     selectedCompanyKey=companyKey(saved); selectedSiteKey=''; ensureSelection(); renderCompanyMasterPage();
     showMessage(`${legalName} 법인 기본정보를 저장했습니다.`);
@@ -693,9 +693,9 @@ async function saveSite(){
   if(serverId) record.id=serverId;
   try{
     companySavePending=true; toggleSaveButtons(true); showMessage('사업장정보를 서버에 저장하는 중입니다...');
-    const password=currentPassword();
-    await sbRpc('dbmt_save_business_site', {p_password:password,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-site-revision')) : null});
-    await loadRemote(password);
+    const token=currentSessionToken();
+    await sbRpc('dbmt_erp_save_business_site', {p_token:token,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-site-revision')) : null});
+    await loadRemote(token);
     const savedCompany=companyMaster.companies.find(row=>row.id===company.id || row.code===company.code);
     selectedCompanyKey=companyKey(savedCompany);
     const savedSite=savedCompany?.sites.find(row=>row.code===code); selectedSiteKey=siteKey(savedSite);
@@ -721,9 +721,9 @@ async function saveSender(){
   if(serverId) record.id=serverId;
   try{
     companySavePending=true; toggleSaveButtons(true); showMessage('발신 프로필을 서버에 저장하는 중입니다...');
-    const password=currentPassword();
-    await sbRpc('dbmt_save_document_sender_profile', {p_password:password,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-sender-revision')) : null});
-    await loadRemote(password);
+    const token=currentSessionToken();
+    await sbRpc('dbmt_erp_save_document_sender_profile', {p_token:token,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-sender-revision')) : null});
+    await loadRemote(token);
     selectedSenderKey=senderKey(companyMaster.documentSenderProfiles.find(row=>row.code===code));
     renderCompanyMasterPage(); showMessage(`${label} 발신 프로필을 저장했습니다.`);
   }catch(error){ showMessage(`발신 프로필 저장 실패: ${error?.message || error}`,true); }
@@ -759,10 +759,10 @@ async function saveIdentifier(){
   const record={businessSiteId:site.id,provider,identifierType,identifierValue,validFrom:fieldValue('cm-identifier-from') || null,validTo:fieldValue('cm-identifier-to') || null,active:!!field('cm-identifier-active')?.checked};
   if(serverId) record.id=serverId;
   try{
-    companySavePending=true;toggleSaveButtons(true);const password=currentPassword();
-    await sbRpc('dbmt_save_business_site_identifier',{p_password:password,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-identifier-revision')) : null});
+    companySavePending=true;toggleSaveButtons(true);const token=currentSessionToken();
+    await sbRpc('dbmt_erp_save_business_site_identifier',{p_token:token,p_record:record,p_expected_revision:serverId ? Number(fieldValue('cm-identifier-revision')) : null});
     const companyCode=selectedCompany()?.code; const siteCode=site.code;
-    await loadRemote(password); const company=companyMaster.companies.find(row=>row.code===companyCode);
+    await loadRemote(token); const company=companyMaster.companies.find(row=>row.code===companyCode);
     selectedCompanyKey=companyKey(company);selectedSiteKey=siteKey(company?.sites.find(row=>row.code===siteCode));
     clearIdentifierForm();renderCompanyMasterPage();showMessage('외부기관 식별번호를 저장했습니다.');
   }catch(error){showMessage(`식별번호 저장 실패: ${error?.message || error}`,true);}
@@ -770,7 +770,7 @@ async function saveIdentifier(){
 }
 
 async function refreshCompanyMaster(){
-  try{ toggleSaveButtons(true); showMessage('중앙 기준정보를 불러오는 중입니다...'); await loadRemote(currentPassword()); renderCompanyMasterPage(); showMessage('법인·사업장·발신 프로필을 새로고침했습니다.'); }
+  try{ toggleSaveButtons(true); showMessage('중앙 기준정보를 불러오는 중입니다...'); await loadRemote(currentSessionToken()); renderCompanyMasterPage(); showMessage('법인·사업장·발신 프로필을 새로고침했습니다.'); }
   catch(error){ showMessage(`기준정보 새로고침 실패: ${error?.message || error}`,true); }
   finally{ toggleSaveButtons(false); }
 }
