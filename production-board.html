@@ -32,11 +32,16 @@
       width: 100vw;
       height: 100dvh;
       display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+      grid-template-columns: minmax(360px, 1fr) minmax(0, 2fr);
+      grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
+      grid-template-areas:
+        "controls whiteboard"
+        "calculator whiteboard";
       gap: 8px;
       padding: 8px;
     }
 
+    .control-panel,
     .whiteboard-panel,
     .calculator-panel {
       min-width: 0;
@@ -48,50 +53,67 @@
       box-shadow: var(--shadow);
     }
 
+    .control-panel {
+      grid-area: controls;
+      background: #f0f1f2;
+    }
+
     .whiteboard-panel {
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
+      grid-area: whiteboard;
     }
 
     .toolbar {
-      min-height: 64px;
+      width: 100%;
+      height: 100%;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--line);
+      grid-template-columns: 1fr;
+      align-content: start;
+      gap: 4px;
+      padding: 6px;
+      overflow: hidden;
       background: #f0f1f2;
     }
 
     .board-title {
-      font-size: clamp(17px, 1.35vw, 24px);
+      font-size: clamp(17px, 1.25vw, 23px);
       font-weight: 900;
       letter-spacing: -.4px;
       white-space: nowrap;
     }
 
-    .board-info,
-    .board-tools,
-    .page-controls,
-    .date-control {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    .board-info {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
     }
-    .board-info { min-width: 0; flex-wrap: wrap; }
-    .board-tools { justify-content: flex-end; }
-    .page-controls { flex-wrap: wrap; }
+    .page-controls {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 44px minmax(78px, 1fr) 44px minmax(106px, 1.1fr);
+      gap: 4px;
+      align-items: center;
+    }
     .date-control {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 4px;
       font-size: 13px;
       font-weight: 800;
       white-space: nowrap;
+    }
+    .board-tools {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px;
+      align-content: start;
     }
 
     .date-input,
     .page-button,
     .new-page-button {
-      min-height: 46px;
+      min-height: 40px;
       border: 1px solid var(--line-dark);
       border-radius: 8px;
       background: #fff;
@@ -101,8 +123,8 @@
       cursor: pointer;
       touch-action: manipulation;
     }
-    .date-input { padding: 6px 9px; font-size: 14px; }
-    .page-button { min-width: 44px; padding: 6px 10px; font-size: 20px; }
+    .date-input { width: 100%; padding: 6px 9px; font-size: 14px; }
+    .page-button { min-width: 0; padding: 6px 8px; font-size: 20px; }
     .new-page-button { padding: 6px 12px; font-size: 14px; }
     .page-button:disabled {
       cursor: default;
@@ -119,13 +141,13 @@
 
     .tool-button,
     .fullscreen-button {
-      min-height: 46px;
+      min-height: 40px;
       border: 1px solid var(--line-dark);
       border-radius: 8px;
       background: #fff;
       color: var(--text);
-      padding: 8px 14px;
-      font-size: clamp(13px, 1vw, 17px);
+      padding: 6px 10px;
+      font-size: clamp(12px, .9vw, 16px);
       font-weight: 800;
       cursor: pointer;
       touch-action: manipulation;
@@ -140,6 +162,7 @@
     .tool-button.danger { border-style: dashed; }
 
     .save-status {
+      grid-column: 1 / -1;
       min-width: 58px;
       color: var(--muted);
       font-size: 12px;
@@ -149,6 +172,8 @@
 
     .whiteboard-stage {
       position: relative;
+      width: 100%;
+      height: 100%;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
@@ -195,13 +220,14 @@
     .mode-text #draw-layer { pointer-events: none; cursor: default; }
 
     .calculator-panel {
+      grid-area: calculator;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       background: #dfe1e4;
     }
 
     .calculator-head {
-      min-height: 64px;
+      min-height: 54px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -216,9 +242,9 @@
     .calculator {
       min-height: 0;
       display: grid;
-      grid-template-rows: minmax(116px, 24%) minmax(0, 1fr);
-      gap: 10px;
-      padding: 10px;
+      grid-template-rows: minmax(82px, 22%) minmax(0, 1fr);
+      gap: 7px;
+      padding: 7px;
     }
 
     .calculator-display {
@@ -258,8 +284,8 @@
       min-height: 0;
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      grid-template-rows: repeat(5, minmax(56px, 1fr));
-      gap: 8px;
+      grid-template-rows: repeat(5, minmax(42px, 1fr));
+      gap: 6px;
     }
     .calc-key {
       min-width: 0;
@@ -287,27 +313,28 @@
         height: auto;
         min-height: 100dvh;
         grid-template-columns: 1fr;
-        grid-template-rows: minmax(70dvh, 760px) minmax(70dvh, 720px);
+        grid-template-rows: auto minmax(70dvh, 760px) minmax(70dvh, 720px);
+        grid-template-areas:
+          "controls"
+          "whiteboard"
+          "calculator";
       }
+      .control-panel { min-height: 250px; }
+      .toolbar { height: auto; }
       .calculator { grid-template-rows: 150px minmax(520px, 1fr); }
     }
 
-    @media (max-width: 1600px) {
-      .toolbar { grid-template-columns: 1fr; }
-      .board-tools { flex-wrap: wrap; }
-    }
-
     @media (max-height: 720px) and (min-width: 981px) {
-      .toolbar, .calculator-head { min-height: 54px; padding-top: 4px; padding-bottom: 4px; }
+      .toolbar, .calculator-head { padding-top: 4px; padding-bottom: 4px; }
       .tool-button, .fullscreen-button, .date-input, .page-button, .new-page-button { min-height: 40px; padding-top: 5px; padding-bottom: 5px; }
-      .calculator { gap: 6px; padding: 6px; grid-template-rows: minmax(92px, 22%) minmax(0, 1fr); }
-      .keypad { gap: 5px; grid-template-rows: repeat(5, minmax(45px, 1fr)); }
+      .calculator { gap: 5px; padding: 5px; grid-template-rows: minmax(74px, 20%) minmax(0, 1fr); }
+      .keypad { gap: 4px; grid-template-rows: repeat(5, minmax(36px, 1fr)); }
     }
   </style>
 </head>
 <body>
   <main class="board-layout">
-    <section class="whiteboard-panel">
+    <section class="control-panel">
       <header class="toolbar">
         <div class="board-info">
           <div class="board-title">생산현황 화이트보드</div>
@@ -327,6 +354,9 @@
           <span class="save-status" id="save-status">자동 저장</span>
         </div>
       </header>
+    </section>
+
+    <section class="whiteboard-panel">
       <div class="whiteboard-stage mode-text" id="whiteboard-stage">
         <canvas id="draw-layer" aria-label="터치 펜 입력 영역"></canvas>
         <textarea id="text-layer" aria-label="생산현황 글자 입력"></textarea>
