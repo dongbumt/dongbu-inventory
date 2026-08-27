@@ -17,6 +17,7 @@
     'nav-transactions':'transactions',
     'nav-production':'production',
     'nav-prod-loss':'production_loss',
+    'nav-production-board':'production_board',
     'nav-stock':'stock',
     'nav-cold-storage-request':'cold_storage_request',
     'nav-submaterials':'submaterials',

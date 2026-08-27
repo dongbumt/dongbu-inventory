@@ -170,6 +170,61 @@
       white-space: nowrap;
     }
 
+    .sync-panel {
+      display: grid;
+      grid-template-columns: minmax(120px, .8fr) minmax(190px, 1.4fr);
+      gap: 6px;
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+    .sync-pin-label {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .sync-pin-input,
+    .sync-button {
+      min-height: 50px;
+      border: 1px solid var(--line-dark);
+      border-radius: 9px;
+      font: inherit;
+      font-weight: 900;
+      touch-action: manipulation;
+    }
+    .sync-pin-input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #fff;
+      color: var(--text);
+      font-size: 22px;
+      letter-spacing: .28em;
+      text-align: center;
+      user-select: text;
+    }
+    .sync-button {
+      align-self: end;
+      padding: 8px 14px;
+      background: var(--dark);
+      color: #fff;
+      cursor: pointer;
+      font-size: clamp(14px, 1vw, 18px);
+    }
+    .sync-button:disabled { opacity: .55; cursor: wait; }
+    .sync-status {
+      grid-column: 1 / -1;
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: right;
+    }
+    .sync-status.ok { color: #30343a; }
+    .sync-status.error { color: #9b2c2c; }
+
     .whiteboard-stage {
       position: relative;
       width: 100%;
@@ -325,8 +380,16 @@
     }
 
     @media (max-height: 720px) and (min-width: 981px) {
-      .toolbar, .calculator-head { padding-top: 4px; padding-bottom: 4px; }
-      .tool-button, .fullscreen-button, .date-input, .page-button, .new-page-button { min-height: 40px; padding-top: 5px; padding-bottom: 5px; }
+      .toolbar { gap: 2px; padding: 3px 5px; }
+      .calculator-head { padding-top: 4px; padding-bottom: 4px; }
+      .board-title { font-size: 15px; line-height: 18px; }
+      .board-info, .page-controls, .board-tools { gap: 2px; }
+      .tool-button, .fullscreen-button, .date-input, .page-button, .new-page-button { min-height: 31px; padding-top: 3px; padding-bottom: 3px; }
+      .tool-button, .new-page-button, .date-input, .page-indicator { font-size: 12px; }
+      .sync-panel { gap: 3px; margin-top: 1px; padding-top: 3px; }
+      .sync-pin-label { display:block; font-size:0; }
+      .sync-pin-input, .sync-button { min-height: 37px; }
+      .sync-status, .save-status { min-height: 12px; font-size: 9px; line-height: 12px; }
       .calculator { gap: 5px; padding: 5px; grid-template-rows: minmax(74px, 20%) minmax(0, 1fr); }
       .keypad { gap: 4px; grid-template-rows: repeat(5, minmax(36px, 1fr)); }
     }
@@ -352,6 +415,13 @@
           <button class="tool-button" type="button" data-mode="eraser">▱ 지우개</button>
           <button class="tool-button danger" id="clear-board" type="button">현재 페이지 지우기</button>
           <span class="save-status" id="save-status">자동 저장</span>
+        </div>
+        <div class="sync-panel">
+          <label class="sync-pin-label">ERP 전송 PIN
+            <input class="sync-pin-input" id="sync-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="4자리" aria-label="ERP 전송 PIN">
+          </label>
+          <button class="sync-button" id="sync-board" type="button">💾 저장 · ERP 전송</button>
+          <span class="sync-status" id="sync-status">현재 페이지는 아직 ERP로 전송되지 않았습니다.</span>
         </div>
       </header>
     </section>
@@ -415,6 +485,8 @@
       const PAGE_PREFIX = 'dbmt_production_board_page_v2_';
       const LAST_DATE_KEY = 'dbmt_production_board_last_date_v2';
       const MIGRATION_KEY = 'dbmt_production_board_migrated_v2';
+      const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
+      const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
       const stage = document.getElementById('whiteboard-stage');
       const canvas = document.getElementById('draw-layer');
       const textLayer = document.getElementById('text-layer');
@@ -423,6 +495,9 @@
       const pageIndicator = document.getElementById('page-indicator');
       const previousPageButton = document.getElementById('previous-page');
       const nextPageButton = document.getElementById('next-page');
+      const syncPinInput = document.getElementById('sync-pin');
+      const syncButton = document.getElementById('sync-board');
+      const syncStatus = document.getElementById('sync-status');
       const ctx = canvas.getContext('2d', {alpha: true});
 
       let boardMode = 'text';
@@ -440,6 +515,15 @@
         saveStatus.textContent = message;
         clearTimeout(setSaveStatus.timer);
         setSaveStatus.timer = setTimeout(() => { saveStatus.textContent = '자동 저장'; }, 1400);
+      }
+
+      function setSyncStatus(message, type = ''){
+        syncStatus.textContent = message;
+        syncStatus.className = `sync-status ${type}`.trim();
+      }
+
+      function markSyncPending(){
+        setSyncStatus('현재 페이지에 변경사항이 있어 ERP 재전송이 필요합니다.');
       }
 
       function localDateString(date){
@@ -491,7 +575,7 @@
       }
 
       function persistCurrentPage({captureDrawing = true, showStatus = true} = {}){
-        if(!activeDate || !activePageId) return;
+        if(!activeDate || !activePageId) return false;
         clearTimeout(saveTimer);
         try {
           if(captureDrawing && canvas.dataset.ready === 'true'){
@@ -503,8 +587,77 @@
             updatedAt: new Date().toISOString()
           }));
           if(showStatus) setSaveStatus('저장됨');
+          return true;
         } catch(_) {
           if(showStatus) setSaveStatus('저장 실패');
+          return false;
+        }
+      }
+
+      function currentPagePayload(){
+        const rect = stage.getBoundingClientRect();
+        const style = getComputedStyle(textLayer);
+        return {
+          boardDate: activeDate,
+          pageNo: activePageIndex + 1,
+          pageId: activePageId,
+          text: textLayer.value,
+          drawing: drawingSnapshot,
+          sourceWidth: Math.max(100, Math.round(rect.width)),
+          sourceHeight: Math.max(100, Math.round(rect.height)),
+          textFontSize: Math.max(8, parseFloat(style.fontSize) || 36),
+          textLineHeight: Math.max(8, parseFloat(style.lineHeight) || 56),
+          textPadding: Math.max(0, parseFloat(style.paddingTop) || 0)
+        };
+      }
+
+      async function boardRpc(functionName, body){
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`, {
+          method: 'POST',
+          headers: {
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body || {})
+        });
+        const raw = await response.text();
+        let data = null;
+        try { data = raw ? JSON.parse(raw) : null; } catch(_) { data = raw; }
+        if(!response.ok){
+          throw new Error(data?.message || data?.error || raw || 'ERP 전송에 실패했습니다.');
+        }
+        return data;
+      }
+
+      async function syncCurrentPage(){
+        const pin = syncPinInput.value.replace(/\D/g, '').slice(0, 4);
+        syncPinInput.value = pin;
+        if(!/^\d{4}$/.test(pin)){
+          setSyncStatus('숫자 4자리 PIN을 입력하세요.', 'error');
+          syncPinInput.focus();
+          return;
+        }
+
+        syncButton.disabled = true;
+        setSyncStatus('현재 페이지를 저장하고 ERP로 전송하는 중입니다.');
+        try {
+          if(!persistCurrentPage({captureDrawing: true, showStatus: true})){
+            throw new Error('이 컴퓨터에 페이지를 저장하지 못했습니다.');
+          }
+          const result = await boardRpc('dbmt_label_production_board_save', {
+            p_pin: pin,
+            p_page: currentPagePayload()
+          });
+          const sentAt = result?.updatedAt ? new Date(result.updatedAt) : new Date();
+          const time = Number.isNaN(sentAt.getTime())
+            ? ''
+            : ` · ${String(sentAt.getHours()).padStart(2, '0')}:${String(sentAt.getMinutes()).padStart(2, '0')}`;
+          setSyncStatus(`${activeDate} ${activePageIndex + 1}페이지 ERP 전송 완료${time}`, 'ok');
+        } catch(error) {
+          setSyncStatus(`ERP 전송 실패: ${error.message || error}`, 'error');
+        } finally {
+          syncButton.disabled = false;
         }
       }
 
@@ -541,6 +694,7 @@
         resizeCanvas(false);
         updatePageControls();
         setSaveStatus('불러옴');
+        setSyncStatus('현재 페이지는 아직 ERP로 전송되지 않았습니다.');
         if(boardMode === 'text') setTimeout(() => textLayer.focus(), 0);
       }
 
@@ -646,6 +800,7 @@
         event.preventDefault();
         drawing = true;
         previousPoint = pointFromEvent(event);
+        markSyncPending();
         canvas.setPointerCapture?.(event.pointerId);
       }
 
@@ -691,6 +846,13 @@
       previousPageButton.addEventListener('click', () => switchPage(activePageIndex - 1));
       nextPageButton.addEventListener('click', () => switchPage(activePageIndex + 1));
       document.getElementById('new-page').addEventListener('click', createNewPage);
+      syncPinInput.addEventListener('input', () => {
+        syncPinInput.value = syncPinInput.value.replace(/\D/g, '').slice(0, 4);
+      });
+      syncPinInput.addEventListener('keydown', event => {
+        if(event.key === 'Enter') syncCurrentPage();
+      });
+      syncButton.addEventListener('click', syncCurrentPage);
       document.getElementById('clear-board').addEventListener('click', () => {
         if(!confirm('현재 페이지의 글자와 그림을 모두 지울까요?')) return;
         textLayer.value = '';
@@ -701,8 +863,12 @@
         drawingSnapshot = '';
         persistCurrentPage({captureDrawing: false});
         setSaveStatus('현재 페이지 지움');
+        markSyncPending();
       });
-      textLayer.addEventListener('input', saveTextSoon);
+      textLayer.addEventListener('input', () => {
+        markSyncPending();
+        saveTextSoon();
+      });
       canvas.addEventListener('pointerdown', beginStroke);
       canvas.addEventListener('pointermove', continueStroke);
       canvas.addEventListener('pointerup', endStroke);

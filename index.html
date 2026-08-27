@@ -389,6 +389,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="nav-group-items">
       <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">🏭 생산일보</div>
       <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산 로스율</div>
+      <div class="nav-tab" onclick="showPage('p-production-board',this)" id="nav-production-board">📌 생산현황 보드</div>
       <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders">📝 작업지시</div>
       <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label">🏷️ 라벨출력</div>
       <div class="nav-tab" onclick="window.open('label-print.html?v=20260825label2','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
@@ -1050,6 +1051,43 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       선택한 날짜의 거래내역 중 <strong>입고</strong> 항목을 자동으로 불러옵니다. 검사 항목은 출력 후 수기로 표시할 수 있습니다.
     </div>
     <div id="incheck-preview"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     생산현황 보드
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-production-board">
+  <div class="card production-board-viewer">
+    <div class="section-header production-board-viewer-head">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar production-board-viewer-bar"></div>
+        생산현황 보드
+      </div>
+      <div class="production-board-viewer-actions">
+        <input type="date" id="production-board-view-date" aria-label="생산현황 보드 일자" list="production-board-view-date-list" onkeydown="if(event.key==='Enter'){event.preventDefault();loadProductionBoardPage();}">
+        <datalist id="production-board-view-date-list"></datalist>
+        <button class="btn btn-primary btn-sm" type="button" onclick="loadProductionBoardPage()">조회</button>
+        <button class="btn btn-secondary btn-sm" type="button" onclick="loadProductionBoardPage(null)">최신 일자</button>
+        <button class="btn btn-secondary btn-sm" type="button" onclick="loadProductionBoardPage()">새로고침</button>
+      </div>
+    </div>
+
+    <div class="production-board-viewer-guide">
+      라벨전용 컴퓨터에서 <strong>저장 · ERP 전송</strong>한 생산현황을 날짜와 페이지별로 확인합니다.
+    </div>
+    <div class="production-board-viewer-status" id="production-board-view-status">전송된 생산현황을 불러오는 중입니다.</div>
+    <div class="production-board-viewer-summary" id="production-board-view-summary"></div>
+    <div class="production-board-page-tabs" id="production-board-view-pages" aria-label="생산현황 페이지 선택"></div>
+
+    <div class="production-board-preview-shell" id="production-board-view-preview-shell">
+      <div class="production-board-preview-stage" id="production-board-view-preview-stage">
+        <img id="production-board-view-drawing" alt="생산현황 터치 펜 내용">
+        <div id="production-board-view-text" class="production-board-preview-text"></div>
+      </div>
+      <div class="production-board-viewer-empty" id="production-board-view-empty">선택한 날짜에 전송된 생산현황이 없습니다.</div>
+    </div>
+    <div class="production-board-viewer-meta" id="production-board-view-meta"></div>
   </div>
 </div>
 
@@ -4784,6 +4822,162 @@ function activePageId(){
   return document.querySelector('.tab-panel.active')?.id || 'p-schedule';
 }
 
+const productionBoardViewerState = {
+  dates: [],
+  pages: [],
+  selectedDate: '',
+  selectedPageNo: 0,
+  loading: false
+};
+
+function productionBoardDateLabel(value){
+  const date = String(value || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.replaceAll('-', '. ') + '.' : date;
+}
+
+function productionBoardTimeLabel(value){
+  const date = new Date(value || '');
+  if(Number.isNaN(date.getTime())) return '';
+  return `${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}. ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function resizeProductionBoardPreview(){
+  const stage = document.getElementById('production-board-view-preview-stage');
+  const text = document.getElementById('production-board-view-text');
+  if(!stage || !text || stage.hidden) return;
+  const page = productionBoardViewerState.pages.find(row => Number(row.pageNo) === Number(productionBoardViewerState.selectedPageNo));
+  if(!page) return;
+  const sourceWidth = Math.max(100, Number(page.sourceWidth) || 1200);
+  const scale = stage.clientWidth / sourceWidth;
+  text.style.fontSize = `${Math.max(8, (Number(page.textFontSize) || 36) * scale)}px`;
+  text.style.lineHeight = `${Math.max(10, (Number(page.textLineHeight) || 56) * scale)}px`;
+  text.style.padding = `${Math.max(0, (Number(page.textPadding) || 32) * scale)}px`;
+}
+
+function selectProductionBoardPage(pageNo){
+  const page = productionBoardViewerState.pages.find(row => Number(row.pageNo) === Number(pageNo));
+  if(!page) return;
+  productionBoardViewerState.selectedPageNo = Number(page.pageNo);
+
+  document.querySelectorAll('#production-board-view-pages .production-board-page-tab').forEach(button => {
+    const selected = Number(button.dataset.pageNo) === productionBoardViewerState.selectedPageNo;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-selected', selected ? 'true' : 'false');
+  });
+
+  const stage = document.getElementById('production-board-view-preview-stage');
+  const drawing = document.getElementById('production-board-view-drawing');
+  const text = document.getElementById('production-board-view-text');
+  const meta = document.getElementById('production-board-view-meta');
+  const sourceWidth = Math.max(100, Number(page.sourceWidth) || 1200);
+  const sourceHeight = Math.max(100, Number(page.sourceHeight) || 900);
+  stage.style.aspectRatio = `${sourceWidth} / ${sourceHeight}`;
+  text.textContent = String(page.text || '');
+  if(String(page.drawing || '').startsWith('data:image/png;base64,')){
+    drawing.src = page.drawing;
+    drawing.hidden = false;
+  }else{
+    drawing.removeAttribute('src');
+    drawing.hidden = true;
+  }
+  meta.textContent = `${productionBoardDateLabel(page.boardDate)} · ${page.pageNo}페이지 · ERP 전송 ${productionBoardTimeLabel(page.updatedAt)}`;
+  requestAnimationFrame(resizeProductionBoardPreview);
+}
+
+function renderProductionBoardViewer(){
+  const state = productionBoardViewerState;
+  const input = document.getElementById('production-board-view-date');
+  const dateList = document.getElementById('production-board-view-date-list');
+  const summary = document.getElementById('production-board-view-summary');
+  const pages = document.getElementById('production-board-view-pages');
+  const stage = document.getElementById('production-board-view-preview-stage');
+  const empty = document.getElementById('production-board-view-empty');
+  const meta = document.getElementById('production-board-view-meta');
+  if(!input || !dateList || !summary || !pages || !stage || !empty || !meta) return;
+
+  if(state.selectedDate) input.value = String(state.selectedDate).slice(0, 10);
+  dateList.replaceChildren(...state.dates.map(row => {
+    const option = document.createElement('option');
+    option.value = String(row.boardDate || '').slice(0, 10);
+    option.label = `${row.pageCount || 0}페이지`;
+    return option;
+  }));
+
+  pages.replaceChildren(...state.pages.map(row => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'production-board-page-tab';
+    button.dataset.pageNo = row.pageNo;
+    button.textContent = `${row.pageNo} 페이지`;
+    button.addEventListener('click', () => selectProductionBoardPage(row.pageNo));
+    return button;
+  }));
+
+  const latest = state.pages.reduce((value, row) => !value || new Date(row.updatedAt) > new Date(value) ? row.updatedAt : value, '');
+  summary.textContent = state.selectedDate
+    ? `${productionBoardDateLabel(state.selectedDate)} · ${state.pages.length}페이지${latest ? ` · 최종 전송 ${productionBoardTimeLabel(latest)}` : ''}`
+    : '아직 ERP로 전송된 생산현황이 없습니다.';
+
+  const hasPages = state.pages.length > 0;
+  stage.hidden = !hasPages;
+  empty.hidden = hasPages;
+  pages.hidden = !hasPages;
+  if(!hasPages){
+    state.selectedPageNo = 0;
+    meta.textContent = '';
+    return;
+  }
+
+  const selectedExists = state.pages.some(row => Number(row.pageNo) === Number(state.selectedPageNo));
+  selectProductionBoardPage(selectedExists ? state.selectedPageNo : state.pages[0].pageNo);
+}
+
+async function loadProductionBoardPage(requestedDate){
+  const status = document.getElementById('production-board-view-status');
+  const input = document.getElementById('production-board-view-date');
+  if(!status || !input || productionBoardViewerState.loading) return;
+  if(typeof DBMTAuth !== 'object' || !DBMTAuth.can('production_board', 'view')){
+    status.textContent = '생산현황 보드 조회 권한이 없습니다.';
+    status.className = 'production-board-viewer-status error';
+    return;
+  }
+  const token = DBMTAuth.getSessionToken();
+  if(!token){
+    status.textContent = '개인 사용자 로그인이 필요합니다.';
+    status.className = 'production-board-viewer-status error';
+    return;
+  }
+
+  const selected = requestedDate === null ? '' : String(requestedDate === undefined ? input.value : requestedDate || '').slice(0, 10);
+  productionBoardViewerState.loading = true;
+  status.textContent = '생산현황을 불러오는 중입니다.';
+  status.className = 'production-board-viewer-status';
+  try{
+    const data = await sbRpc('dbmt_erp_get_production_board', {p_token: token, p_date: selected || null});
+    productionBoardViewerState.dates = Array.isArray(data?.dates) ? data.dates : [];
+    productionBoardViewerState.pages = Array.isArray(data?.pages) ? data.pages : [];
+    productionBoardViewerState.selectedDate = data?.selectedDate || selected || '';
+    productionBoardViewerState.selectedPageNo = productionBoardViewerState.pages[0]?.pageNo || 0;
+    renderProductionBoardViewer();
+    status.textContent = productionBoardViewerState.pages.length
+      ? 'ERP로 전송된 최신 내용을 표시하고 있습니다.'
+      : '선택한 날짜에 전송된 생산현황이 없습니다.';
+    status.className = 'production-board-viewer-status ok';
+  }catch(error){
+    productionBoardViewerState.pages = [];
+    renderProductionBoardViewer();
+    status.textContent = `생산현황을 불러오지 못했습니다: ${error.message || error}`;
+    status.className = 'production-board-viewer-status error';
+  }finally{
+    productionBoardViewerState.loading = false;
+  }
+}
+
+window.addEventListener('resize', () => {
+  clearTimeout(resizeProductionBoardPreview.timer);
+  resizeProductionBoardPreview.timer = setTimeout(resizeProductionBoardPreview, 100);
+});
+
 function renderPageById(id, reason='menu'){
   const startedAt = performance.now();
   let asyncTask = null;
@@ -4824,6 +5018,9 @@ function renderPageById(id, reason='menu'){
         break;
       case 'p-prod-loss':
         renderProductionLoss();
+        break;
+      case 'p-production-board':
+        asyncTask = loadProductionBoardPage(null);
         break;
       case 'p-stock':
         prepareStockPage();
