@@ -19,7 +19,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20260824navgroups1">
+<link rel="stylesheet" href="styles/main.css?v=20260827m05preview1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -410,6 +410,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="nav-group-items">
       <div class="nav-tab" onclick="showPage('p-incheck',this)" id="nav-incheck">🧾 입고검사일지</div>
       <div class="nav-tab" onclick="showPage('p-shiplog',this)" id="nav-shiplog">🚚 출고검사일지</div>
+      <div class="nav-tab" onclick="showPage('p-trace-integration',this)" id="nav-trace-integration">🔎 이력연계</div>
       <div class="nav-tab" onclick="showPage('p-doccheck',this)" id="nav-doccheck">📋 서류체크</div>
     </div>
   </div>
@@ -1902,6 +1903,99 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div>• <strong>중복 감지:</strong> 날짜·구분·품목명·이력번호·중량이 완전히 일치하면 건너뜁니다</div>
       <div>• <strong>생산일 파싱:</strong> 비고의 '생산일:YYYY/MM/DD' 형식을 자동으로 처리합니다</div>
       <div>• <strong>단가 자동 조회:</strong> 단가표에 등록된 품목은 금액이 자동으로 계산됩니다</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     M05 이력연계 신고대상 미리보기
+══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-trace-integration">
+  <div class="card">
+    <div class="section-header trace-preview-header">
+      <div>
+        <div class="card-title" style="margin:0;">
+          <div class="ct-bar" style="background:#4b5563;"></div>
+          이력연계 신고대상 미리보기
+        </div>
+        <div class="trace-preview-subtitle">거래자료를 조회해 신고 예정 항목과 확인할 내용을 구분합니다.</div>
+      </div>
+      <div class="trace-preview-readonly">조회 전용 · 기관 전송 안 함</div>
+    </div>
+
+    <div class="trace-preview-notice">
+      현재 단계에서는 MeatWatch나 국내산 이력제에 자료를 보내지 않습니다. 준비 완료로 표시된 항목도 향후 전송대기 등록 전까지는 외부에 전송되지 않습니다.
+    </div>
+
+    <div class="trace-preview-filters">
+      <div class="form-group">
+        <label>시작일</label>
+        <input type="date" id="trace-preview-from">
+      </div>
+      <div class="form-group">
+        <label>종료일</label>
+        <input type="date" id="trace-preview-to">
+      </div>
+      <div class="form-group">
+        <label>연계 구분</label>
+        <select id="trace-preview-provider">
+          <option value="all">전체</option>
+          <option value="meatwatch">수입육 MeatWatch</option>
+          <option value="domestic">국내산 소·돼지</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>준비 상태</label>
+        <select id="trace-preview-status">
+          <option value="all">전체</option>
+          <option value="ready">준비 완료</option>
+          <option value="review">확인 필요</option>
+          <option value="excluded">제외</option>
+          <option value="registered">대기 등록</option>
+          <option value="sent">전송 완료</option>
+        </select>
+      </div>
+      <div class="form-group trace-preview-search">
+        <label>검색</label>
+        <input id="trace-preview-query" placeholder="품목·이력번호·거래처" onkeydown="if(event.key==='Enter') loadTraceIntegrationPreview()">
+      </div>
+      <div class="trace-preview-filter-actions">
+        <button type="button" class="btn btn-primary" onclick="loadTraceIntegrationPreview()">대상 조회</button>
+        <button type="button" class="btn btn-secondary" onclick="exportTraceIntegrationPreviewCSV()">CSV</button>
+      </div>
+    </div>
+
+    <div id="trace-preview-summary" class="trace-preview-summary">
+      <div class="trace-preview-stat"><span>조회대상</span><strong>-</strong></div>
+      <div class="trace-preview-stat"><span>준비 완료</span><strong>-</strong></div>
+      <div class="trace-preview-stat"><span>확인 필요</span><strong>-</strong></div>
+      <div class="trace-preview-stat"><span>제외</span><strong>-</strong></div>
+      <div class="trace-preview-stat"><span>대기·완료</span><strong>-</strong></div>
+    </div>
+
+    <div id="trace-preview-status-text" class="trace-preview-status-text">조회 기간을 선택한 뒤 대상 조회를 눌러주세요.</div>
+
+    <div class="trace-preview-table-wrap">
+      <table class="trace-preview-table">
+        <thead>
+          <tr>
+            <th>거래일</th>
+            <th>거래</th>
+            <th>연계</th>
+            <th>예정 신고</th>
+            <th>품목</th>
+            <th>이력번호</th>
+            <th>거래처·이동</th>
+            <th>중량</th>
+            <th>준비 상태</th>
+            <th>확인 내용</th>
+            <th>중복방지키</th>
+          </tr>
+        </thead>
+        <tbody id="trace-preview-body">
+          <tr><td colspan="11" class="trace-preview-empty">아직 조회하지 않았습니다.</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -4777,6 +4871,9 @@ function renderPageById(id, reason='menu'){
         break;
       case 'p-shiplog':
         initShipDates();
+        break;
+      case 'p-trace-integration':
+        if(typeof initTraceIntegrationPage === 'function') asyncTask = initTraceIntegrationPage();
         break;
       case 'p-doccheck':
         openDocCheckPage();
@@ -21026,6 +21123,7 @@ function initSamsung(){
 <script src="cold-storage-request.js?v=20260827requiredlogin1"></script>
 <script src="meatwatch-lookup.js?v=20260826bulktrace1"></script>
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
-<script src="m02-auth.js?v=20260827requiredlogin1"></script>
+<script src="trace-integration.js?v=20260827m05preview1"></script>
+<script src="m02-auth.js?v=20260827m05preview1"></script>
 </body>
 </html>

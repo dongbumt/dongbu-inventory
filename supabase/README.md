@@ -74,6 +74,7 @@ Editor query for each file:
 52. `schema-rpc-30-product-codes.sql`
 53. `schema-rpc-31-erp-role-public-permissions.sql`
 54. `schema-rpc-32-erp-user-delete.sql`
+55. `schema-rpc-33-m05-trace-preview.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
@@ -360,7 +361,19 @@ npx supabase functions deploy livestock-trace-lookup --no-verify-jwt
 short-lived personal session token and transaction permission before querying
 the provider.
 
-## 6. Project values
+## 6. M05 reporting-candidate preview
+
+Apply `20260827100000_m05_trace_preview.sql` to add the read-only `이력연계`
+menu. `dbmt_erp_trace_preview` classifies active transaction rows as imported
+MeatWatch, domestic cattle, or domestic pig reporting candidates and returns a
+Korean reason whenever data is excluded or needs review. It does not call an
+institution API and does not create a transmission queue row.
+
+The migration also creates `trace_submission_registry`. Its unique source key
+and SHA-256 idempotency key are the duplicate-prevention foundation for the
+later queue/send/correction work. Previewing data never writes to this table.
+
+## 7. Project values
 
 Current project URL:
 

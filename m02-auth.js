@@ -31,6 +31,7 @@
     'nav-invoice':'invoice',
     'nav-incheck':'inbound_inspection',
     'nav-shiplog':'shipment_log',
+    'nav-trace-integration':'trace_integration',
     'nav-doccheck':'document_check',
     'nav-employees':'employees',
     'nav-leaves':'attendance',
@@ -77,6 +78,9 @@
     loadTxnToForm:['transactions','update'],
     updateTxnPrice:['transactions','update'],
     deleteTransaction:['transactions','delete'],
+
+    loadTraceIntegrationPreview:['trace_integration','view'],
+    exportTraceIntegrationPreviewCSV:['trace_integration','view'],
 
     addProdInputRow:['production','write','uiOnly'],
     addProdOutputRow:['production','write','uiOnly'],
