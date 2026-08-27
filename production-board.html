@@ -55,20 +55,65 @@
 
     .toolbar {
       min-height: 64px;
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
       gap: 8px;
       padding: 8px 10px;
       border-bottom: 1px solid var(--line);
       background: #f0f1f2;
-      flex-wrap: wrap;
     }
 
     .board-title {
       font-size: clamp(17px, 1.35vw, 24px);
       font-weight: 900;
       letter-spacing: -.4px;
-      margin-right: auto;
+      white-space: nowrap;
+    }
+
+    .board-info,
+    .board-tools,
+    .page-controls,
+    .date-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .board-info { min-width: 0; flex-wrap: wrap; }
+    .board-tools { justify-content: flex-end; }
+    .page-controls { flex-wrap: wrap; }
+    .date-control {
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .date-input,
+    .page-button,
+    .new-page-button {
+      min-height: 46px;
+      border: 1px solid var(--line-dark);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .date-input { padding: 6px 9px; font-size: 14px; }
+    .page-button { min-width: 44px; padding: 6px 10px; font-size: 20px; }
+    .new-page-button { padding: 6px 12px; font-size: 14px; }
+    .page-button:disabled {
+      cursor: default;
+      opacity: .38;
+    }
+    .page-indicator {
+      min-width: 78px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 900;
+      text-align: center;
       white-space: nowrap;
     }
 
@@ -146,7 +191,6 @@
       user-select: text;
       overflow: auto;
     }
-    #text-layer::placeholder { color: #b4b7bb; }
     .mode-draw #text-layer { pointer-events: none; }
     .mode-text #draw-layer { pointer-events: none; cursor: default; }
 
@@ -248,9 +292,14 @@
       .calculator { grid-template-rows: 150px minmax(520px, 1fr); }
     }
 
+    @media (max-width: 1600px) {
+      .toolbar { grid-template-columns: 1fr; }
+      .board-tools { flex-wrap: wrap; }
+    }
+
     @media (max-height: 720px) and (min-width: 981px) {
       .toolbar, .calculator-head { min-height: 54px; padding-top: 4px; padding-bottom: 4px; }
-      .tool-button, .fullscreen-button { min-height: 40px; padding: 5px 10px; }
+      .tool-button, .fullscreen-button, .date-input, .page-button, .new-page-button { min-height: 40px; padding-top: 5px; padding-bottom: 5px; }
       .calculator { gap: 6px; padding: 6px; grid-template-rows: minmax(92px, 22%) minmax(0, 1fr); }
       .keypad { gap: 5px; grid-template-rows: repeat(5, minmax(45px, 1fr)); }
     }
@@ -260,16 +309,27 @@
   <main class="board-layout">
     <section class="whiteboard-panel">
       <header class="toolbar">
-        <div class="board-title">생산현황 화이트보드</div>
-        <button class="tool-button active" type="button" data-mode="text">⌨ 글자 입력</button>
-        <button class="tool-button" type="button" data-mode="pen">✎ 터치 펜</button>
-        <button class="tool-button" type="button" data-mode="eraser">▱ 지우개</button>
-        <button class="tool-button danger" id="clear-board" type="button">전체 지우기</button>
-        <span class="save-status" id="save-status">자동 저장</span>
+        <div class="board-info">
+          <div class="board-title">생산현황 화이트보드</div>
+          <div class="page-controls">
+            <label class="date-control">일자 <input class="date-input" id="board-date" type="date" aria-label="화이트보드 일자"></label>
+            <button class="page-button" id="previous-page" type="button" aria-label="이전 페이지">‹</button>
+            <span class="page-indicator" id="page-indicator">1 / 1 페이지</span>
+            <button class="page-button" id="next-page" type="button" aria-label="다음 페이지">›</button>
+            <button class="new-page-button" id="new-page" type="button">＋ 새 페이지</button>
+          </div>
+        </div>
+        <div class="board-tools">
+          <button class="tool-button active" type="button" data-mode="text">⌨ 글자 입력</button>
+          <button class="tool-button" type="button" data-mode="pen">✎ 터치 펜</button>
+          <button class="tool-button" type="button" data-mode="eraser">▱ 지우개</button>
+          <button class="tool-button danger" id="clear-board" type="button">현재 페이지 지우기</button>
+          <span class="save-status" id="save-status">자동 저장</span>
+        </div>
       </header>
       <div class="whiteboard-stage mode-text" id="whiteboard-stage">
         <canvas id="draw-layer" aria-label="터치 펜 입력 영역"></canvas>
-        <textarea id="text-layer" aria-label="생산현황 글자 입력" placeholder="생산현황을 입력하세요.&#10;터치로 그림을 그리려면 위의 ‘터치 펜’을 누르세요."></textarea>
+        <textarea id="text-layer" aria-label="생산현황 글자 입력"></textarea>
       </div>
     </section>
 
@@ -319,12 +379,20 @@
     (() => {
       'use strict';
 
-      const TEXT_KEY = 'dbmt_production_board_text_v1';
-      const DRAW_KEY = 'dbmt_production_board_drawing_v1';
+      const LEGACY_TEXT_KEY = 'dbmt_production_board_text_v1';
+      const LEGACY_DRAW_KEY = 'dbmt_production_board_drawing_v1';
+      const INDEX_KEY = 'dbmt_production_board_index_v2';
+      const PAGE_PREFIX = 'dbmt_production_board_page_v2_';
+      const LAST_DATE_KEY = 'dbmt_production_board_last_date_v2';
+      const MIGRATION_KEY = 'dbmt_production_board_migrated_v2';
       const stage = document.getElementById('whiteboard-stage');
       const canvas = document.getElementById('draw-layer');
       const textLayer = document.getElementById('text-layer');
       const saveStatus = document.getElementById('save-status');
+      const boardDateInput = document.getElementById('board-date');
+      const pageIndicator = document.getElementById('page-indicator');
+      const previousPageButton = document.getElementById('previous-page');
+      const nextPageButton = document.getElementById('next-page');
       const ctx = canvas.getContext('2d', {alpha: true});
 
       let boardMode = 'text';
@@ -332,6 +400,11 @@
       let previousPoint = null;
       let saveTimer = null;
       let drawingSnapshot = '';
+      let paintGeneration = 0;
+      let boardIndex = {};
+      let activeDate = '';
+      let activePageIndex = 0;
+      let activePageId = '';
 
       function setSaveStatus(message){
         saveStatus.textContent = message;
@@ -339,32 +412,170 @@
         setSaveStatus.timer = setTimeout(() => { saveStatus.textContent = '자동 저장'; }, 1400);
       }
 
+      function localDateString(date){
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+
+      function createPageId(){
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      function pageStorageKey(date, pageId){
+        return `${PAGE_PREFIX}${date}_${pageId}`;
+      }
+
+      function readBoardIndex(){
+        try {
+          const parsed = JSON.parse(localStorage.getItem(INDEX_KEY) || '{}');
+          return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch(_) {
+          return {};
+        }
+      }
+
+      function writeBoardIndex(){
+        localStorage.setItem(INDEX_KEY, JSON.stringify(boardIndex));
+      }
+
+      function ensureDatePages(date){
+        if(!Array.isArray(boardIndex[date]) || boardIndex[date].length === 0){
+          boardIndex[date] = [createPageId()];
+          writeBoardIndex();
+        }
+        return boardIndex[date];
+      }
+
+      function readPage(date, pageId){
+        try {
+          const parsed = JSON.parse(localStorage.getItem(pageStorageKey(date, pageId)) || '{}');
+          return {
+            text: typeof parsed.text === 'string' ? parsed.text : '',
+            drawing: typeof parsed.drawing === 'string' ? parsed.drawing : ''
+          };
+        } catch(_) {
+          return {text: '', drawing: ''};
+        }
+      }
+
+      function persistCurrentPage({captureDrawing = true, showStatus = true} = {}){
+        if(!activeDate || !activePageId) return;
+        clearTimeout(saveTimer);
+        try {
+          if(captureDrawing && canvas.dataset.ready === 'true'){
+            drawingSnapshot = canvas.toDataURL('image/png');
+          }
+          localStorage.setItem(pageStorageKey(activeDate, activePageId), JSON.stringify({
+            text: textLayer.value,
+            drawing: drawingSnapshot,
+            updatedAt: new Date().toISOString()
+          }));
+          if(showStatus) setSaveStatus('저장됨');
+        } catch(_) {
+          if(showStatus) setSaveStatus('저장 실패');
+        }
+      }
+
       function saveTextSoon(){
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
-          try {
-            localStorage.setItem(TEXT_KEY, textLayer.value);
-            setSaveStatus('저장됨');
-          } catch(_) {
-            setSaveStatus('저장 실패');
-          }
+          persistCurrentPage({captureDrawing: false});
         }, 250);
       }
 
       function saveDrawing(){
         try {
           drawingSnapshot = canvas.toDataURL('image/png');
-          localStorage.setItem(DRAW_KEY, drawingSnapshot);
-          setSaveStatus('저장됨');
+          persistCurrentPage({captureDrawing: false});
         } catch(_) {
           setSaveStatus('저장 실패');
         }
       }
 
+      function updatePageControls(){
+        const pages = ensureDatePages(activeDate);
+        pageIndicator.textContent = `${activePageIndex + 1} / ${pages.length} 페이지`;
+        previousPageButton.disabled = activePageIndex <= 0;
+        nextPageButton.disabled = activePageIndex >= pages.length - 1;
+      }
+
+      function loadActivePage(){
+        const pages = ensureDatePages(activeDate);
+        activePageIndex = Math.max(0, Math.min(activePageIndex, pages.length - 1));
+        activePageId = pages[activePageIndex];
+        const page = readPage(activeDate, activePageId);
+        textLayer.value = page.text;
+        drawingSnapshot = page.drawing;
+        resizeCanvas(false);
+        updatePageControls();
+        setSaveStatus('불러옴');
+        if(boardMode === 'text') setTimeout(() => textLayer.focus(), 0);
+      }
+
+      function switchPage(nextIndex){
+        const pages = ensureDatePages(activeDate);
+        const safeIndex = Math.max(0, Math.min(nextIndex, pages.length - 1));
+        if(safeIndex === activePageIndex) return;
+        persistCurrentPage({showStatus: false});
+        activePageIndex = safeIndex;
+        loadActivePage();
+      }
+
+      function switchDate(date){
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){
+          boardDateInput.value = activeDate;
+          return;
+        }
+        if(activeDate) persistCurrentPage({showStatus: false});
+        activeDate = date;
+        activePageIndex = 0;
+        boardDateInput.value = date;
+        try { localStorage.setItem(LAST_DATE_KEY, date); } catch(_) {}
+        ensureDatePages(date);
+        loadActivePage();
+      }
+
+      function createNewPage(){
+        persistCurrentPage({showStatus: false});
+        try {
+          const pages = ensureDatePages(activeDate);
+          pages.push(createPageId());
+          writeBoardIndex();
+          activePageIndex = pages.length - 1;
+          loadActivePage();
+          setSaveStatus('새 페이지');
+        } catch(_) {
+          setSaveStatus('추가 실패');
+        }
+      }
+
+      function migrateLegacyBoard(today){
+        try {
+          if(localStorage.getItem(MIGRATION_KEY)) return;
+          const legacyText = localStorage.getItem(LEGACY_TEXT_KEY) || '';
+          const legacyDrawing = localStorage.getItem(LEGACY_DRAW_KEY) || '';
+          if((legacyText || legacyDrawing) && (!Array.isArray(boardIndex[today]) || boardIndex[today].length === 0)){
+            const pageId = createPageId();
+            boardIndex[today] = [pageId];
+            writeBoardIndex();
+            localStorage.setItem(pageStorageKey(today, pageId), JSON.stringify({
+              text: legacyText,
+              drawing: legacyDrawing,
+              updatedAt: new Date().toISOString()
+            }));
+          }
+          localStorage.setItem(MIGRATION_KEY, '1');
+        } catch(_) {}
+      }
+
       function paintSnapshot(dataUrl, targetWidth, targetHeight){
+        const generation = ++paintGeneration;
         if(!dataUrl) return;
         const img = new Image();
         img.onload = () => {
+          if(generation !== paintGeneration) return;
           const dpr = canvas.width / Math.max(targetWidth, 1);
           ctx.save();
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -375,13 +586,14 @@
         img.src = dataUrl;
       }
 
-      function resizeCanvas(){
+      function resizeCanvas(preserveCurrent = true){
         const rect = stage.getBoundingClientRect();
         if(!rect.width || !rect.height) return;
         let current = drawingSnapshot;
         try {
-          if(canvas.dataset.ready === 'true') current = canvas.toDataURL('image/png');
+          if(preserveCurrent && canvas.dataset.ready === 'true') current = canvas.toDataURL('image/png');
         } catch(_) {}
+        drawingSnapshot = current;
         const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
         canvas.width = Math.round(rect.width * dpr);
         canvas.height = Math.round(rect.height * dpr);
@@ -445,17 +657,20 @@
       document.querySelectorAll('[data-mode]').forEach(button => {
         button.addEventListener('click', () => setBoardMode(button.dataset.mode));
       });
+      boardDateInput.addEventListener('change', () => switchDate(boardDateInput.value));
+      previousPageButton.addEventListener('click', () => switchPage(activePageIndex - 1));
+      nextPageButton.addEventListener('click', () => switchPage(activePageIndex + 1));
+      document.getElementById('new-page').addEventListener('click', createNewPage);
       document.getElementById('clear-board').addEventListener('click', () => {
-        if(!confirm('화이트보드의 글자와 그림을 모두 지울까요?')) return;
+        if(!confirm('현재 페이지의 글자와 그림을 모두 지울까요?')) return;
         textLayer.value = '';
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
         drawingSnapshot = '';
-        localStorage.removeItem(TEXT_KEY);
-        localStorage.removeItem(DRAW_KEY);
-        setSaveStatus('모두 지움');
+        persistCurrentPage({captureDrawing: false});
+        setSaveStatus('현재 페이지 지움');
       });
       textLayer.addEventListener('input', saveTextSoon);
       canvas.addEventListener('pointerdown', beginStroke);
@@ -466,12 +681,17 @@
         clearTimeout(resizeCanvas.timer);
         resizeCanvas.timer = setTimeout(resizeCanvas, 120);
       });
+      window.addEventListener('beforeunload', () => persistCurrentPage({showStatus: false}));
 
+      boardIndex = readBoardIndex();
+      const today = localDateString(new Date());
+      migrateLegacyBoard(today);
+      let initialDate = today;
       try {
-        textLayer.value = localStorage.getItem(TEXT_KEY) || '';
-        drawingSnapshot = localStorage.getItem(DRAW_KEY) || '';
+        const rememberedDate = localStorage.getItem(LAST_DATE_KEY) || '';
+        if(/^\d{4}-\d{2}-\d{2}$/.test(rememberedDate)) initialDate = rememberedDate;
       } catch(_) {}
-      resizeCanvas();
+      switchDate(initialDate);
 
       const display = document.getElementById('calculation-value');
       const expression = document.getElementById('calculation-line');
