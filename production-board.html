@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>동부엠티 생산현황 보드</title>
+  <style>
+    :root {
+      --bg: #e7e9ec;
+      --panel: #f7f7f7;
+      --white: #fff;
+      --line: #c8ccd1;
+      --line-dark: #8b9097;
+      --text: #17191c;
+      --muted: #656a71;
+      --dark: #30343a;
+      --dark-2: #454a51;
+      --shadow: 0 4px 18px rgba(0, 0, 0, .14);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif;
+      user-select: none;
+    }
+    button { font: inherit; }
+
+    .board-layout {
+      width: 100vw;
+      height: 100dvh;
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
+      gap: 8px;
+      padding: 8px;
+    }
+
+    .whiteboard-panel,
+    .calculator-panel {
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid var(--line-dark);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .whiteboard-panel {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .toolbar {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      background: #f0f1f2;
+      flex-wrap: wrap;
+    }
+
+    .board-title {
+      font-size: clamp(17px, 1.35vw, 24px);
+      font-weight: 900;
+      letter-spacing: -.4px;
+      margin-right: auto;
+      white-space: nowrap;
+    }
+
+    .tool-button,
+    .fullscreen-button {
+      min-height: 46px;
+      border: 1px solid var(--line-dark);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      padding: 8px 14px;
+      font-size: clamp(13px, 1vw, 17px);
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .tool-button:hover,
+    .fullscreen-button:hover { background: #e5e7e9; }
+    .tool-button.active {
+      background: var(--dark);
+      border-color: var(--dark);
+      color: #fff;
+    }
+    .tool-button.danger { border-style: dashed; }
+
+    .save-status {
+      min-width: 58px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .whiteboard-stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background-color: var(--white);
+      background-image:
+        linear-gradient(#f1f1f1 1px, transparent 1px),
+        linear-gradient(90deg, #f1f1f1 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    #draw-layer,
+    #text-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #draw-layer {
+      z-index: 1;
+      display: block;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    #text-layer {
+      z-index: 2;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: clamp(20px, 2vw, 38px);
+      background: transparent;
+      color: #111;
+      font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
+      font-size: clamp(26px, 2.25vw, 46px);
+      font-weight: 800;
+      line-height: 1.55;
+      letter-spacing: .01em;
+      caret-color: #111;
+      user-select: text;
+      overflow: auto;
+    }
+    #text-layer::placeholder { color: #b4b7bb; }
+    .mode-draw #text-layer { pointer-events: none; }
+    .mode-text #draw-layer { pointer-events: none; cursor: default; }
+
+    .calculator-panel {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: #dfe1e4;
+    }
+
+    .calculator-head {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line-dark);
+      background: #f0f1f2;
+    }
+    .calculator-title { font-size: clamp(18px, 1.5vw, 26px); font-weight: 900; }
+    .clock { color: var(--muted); font-size: clamp(12px, .9vw, 16px); font-weight: 700; white-space: nowrap; }
+
+    .calculator {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: minmax(116px, 24%) minmax(0, 1fr);
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .calculator-display {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: flex-end;
+      padding: 14px 16px;
+      overflow: hidden;
+      border: 2px solid #696e75;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,.1);
+    }
+    .calculation-line {
+      min-height: 24px;
+      color: var(--muted);
+      font-size: clamp(14px, 1.1vw, 20px);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .calculation-value {
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #111;
+      font-family: Consolas, "Malgun Gothic", monospace;
+      font-size: clamp(40px, 4.3vw, 76px);
+      font-weight: 900;
+      line-height: 1.08;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .keypad {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-rows: repeat(5, minmax(56px, 1fr));
+      gap: 8px;
+    }
+    .calc-key {
+      min-width: 0;
+      min-height: 0;
+      border: 1px solid #8b9097;
+      border-radius: 10px;
+      background: #fff;
+      color: #17191c;
+      box-shadow: 0 2px 4px rgba(0,0,0,.12);
+      font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+      font-size: clamp(22px, 2.25vw, 42px);
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .calc-key:active { transform: translateY(1px); box-shadow: none; }
+    .calc-key.utility { background: #cfd2d6; }
+    .calc-key.operator { background: var(--dark-2); color: #fff; }
+    .calc-key.equals { background: var(--dark); color: #fff; }
+    .calc-key.zero { grid-column: span 2; }
+
+    @media (max-width: 980px) {
+      html, body { overflow: auto; }
+      .board-layout {
+        height: auto;
+        min-height: 100dvh;
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(70dvh, 760px) minmax(70dvh, 720px);
+      }
+      .calculator { grid-template-rows: 150px minmax(520px, 1fr); }
+    }
+
+    @media (max-height: 720px) and (min-width: 981px) {
+      .toolbar, .calculator-head { min-height: 54px; padding-top: 4px; padding-bottom: 4px; }
+      .tool-button, .fullscreen-button { min-height: 40px; padding: 5px 10px; }
+      .calculator { gap: 6px; padding: 6px; grid-template-rows: minmax(92px, 22%) minmax(0, 1fr); }
+      .keypad { gap: 5px; grid-template-rows: repeat(5, minmax(45px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="board-layout">
+    <section class="whiteboard-panel">
+      <header class="toolbar">
+        <div class="board-title">생산현황 화이트보드</div>
+        <button class="tool-button active" type="button" data-mode="text">⌨ 글자 입력</button>
+        <button class="tool-button" type="button" data-mode="pen">✎ 터치 펜</button>
+        <button class="tool-button" type="button" data-mode="eraser">▱ 지우개</button>
+        <button class="tool-button danger" id="clear-board" type="button">전체 지우기</button>
+        <span class="save-status" id="save-status">자동 저장</span>
+      </header>
+      <div class="whiteboard-stage mode-text" id="whiteboard-stage">
+        <canvas id="draw-layer" aria-label="터치 펜 입력 영역"></canvas>
+        <textarea id="text-layer" aria-label="생산현황 글자 입력" placeholder="생산현황을 입력하세요.&#10;터치로 그림을 그리려면 위의 ‘터치 펜’을 누르세요."></textarea>
+      </div>
+    </section>
+
+    <aside class="calculator-panel">
+      <header class="calculator-head">
+        <div>
+          <div class="calculator-title">큰 계산기</div>
+          <div class="clock" id="clock"></div>
+        </div>
+        <button class="fullscreen-button" id="fullscreen-button" type="button">⛶ 전체화면</button>
+      </header>
+      <section class="calculator" aria-label="계산기">
+        <div class="calculator-display" aria-live="polite">
+          <div class="calculation-line" id="calculation-line"></div>
+          <div class="calculation-value" id="calculation-value">0</div>
+        </div>
+        <div class="keypad">
+          <button class="calc-key utility" type="button" data-key="clear">AC</button>
+          <button class="calc-key utility" type="button" data-key="sign">±</button>
+          <button class="calc-key utility" type="button" data-key="percent">%</button>
+          <button class="calc-key operator" type="button" data-key="divide">÷</button>
+
+          <button class="calc-key" type="button" data-key="7">7</button>
+          <button class="calc-key" type="button" data-key="8">8</button>
+          <button class="calc-key" type="button" data-key="9">9</button>
+          <button class="calc-key operator" type="button" data-key="multiply">×</button>
+
+          <button class="calc-key" type="button" data-key="4">4</button>
+          <button class="calc-key" type="button" data-key="5">5</button>
+          <button class="calc-key" type="button" data-key="6">6</button>
+          <button class="calc-key operator" type="button" data-key="subtract">−</button>
+
+          <button class="calc-key" type="button" data-key="1">1</button>
+          <button class="calc-key" type="button" data-key="2">2</button>
+          <button class="calc-key" type="button" data-key="3">3</button>
+          <button class="calc-key operator" type="button" data-key="add">+</button>
+
+          <button class="calc-key zero" type="button" data-key="0">0</button>
+          <button class="calc-key" type="button" data-key="decimal">.</button>
+          <button class="calc-key equals" type="button" data-key="equals">=</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const TEXT_KEY = 'dbmt_production_board_text_v1';
+      const DRAW_KEY = 'dbmt_production_board_drawing_v1';
+      const stage = document.getElementById('whiteboard-stage');
+      const canvas = document.getElementById('draw-layer');
+      const textLayer = document.getElementById('text-layer');
+      const saveStatus = document.getElementById('save-status');
+      const ctx = canvas.getContext('2d', {alpha: true});
+
+      let boardMode = 'text';
+      let drawing = false;
+      let previousPoint = null;
+      let saveTimer = null;
+      let drawingSnapshot = '';
+
+      function setSaveStatus(message){
+        saveStatus.textContent = message;
+        clearTimeout(setSaveStatus.timer);
+        setSaveStatus.timer = setTimeout(() => { saveStatus.textContent = '자동 저장'; }, 1400);
+      }
+
+      function saveTextSoon(){
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          try {
+            localStorage.setItem(TEXT_KEY, textLayer.value);
+            setSaveStatus('저장됨');
+          } catch(_) {
+            setSaveStatus('저장 실패');
+          }
+        }, 250);
+      }
+
+      function saveDrawing(){
+        try {
+          drawingSnapshot = canvas.toDataURL('image/png');
+          localStorage.setItem(DRAW_KEY, drawingSnapshot);
+          setSaveStatus('저장됨');
+        } catch(_) {
+          setSaveStatus('저장 실패');
+        }
+      }
+
+      function paintSnapshot(dataUrl, targetWidth, targetHeight){
+        if(!dataUrl) return;
+        const img = new Image();
+        img.onload = () => {
+          const dpr = canvas.width / Math.max(targetWidth, 1);
+          ctx.save();
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          ctx.restore();
+        };
+        img.src = dataUrl;
+      }
+
+      function resizeCanvas(){
+        const rect = stage.getBoundingClientRect();
+        if(!rect.width || !rect.height) return;
+        let current = drawingSnapshot;
+        try {
+          if(canvas.dataset.ready === 'true') current = canvas.toDataURL('image/png');
+        } catch(_) {}
+        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        canvas.dataset.ready = 'true';
+        paintSnapshot(current, rect.width, rect.height);
+      }
+
+      function pointFromEvent(event){
+        const rect = canvas.getBoundingClientRect();
+        return {x: event.clientX - rect.left, y: event.clientY - rect.top};
+      }
+
+      function beginStroke(event){
+        if(boardMode === 'text') return;
+        event.preventDefault();
+        drawing = true;
+        previousPoint = pointFromEvent(event);
+        canvas.setPointerCapture?.(event.pointerId);
+      }
+
+      function continueStroke(event){
+        if(!drawing || !previousPoint) return;
+        event.preventDefault();
+        const point = pointFromEvent(event);
+        ctx.save();
+        ctx.globalCompositeOperation = boardMode === 'eraser' ? 'destination-out' : 'source-over';
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = boardMode === 'eraser' ? 38 : 5;
+        ctx.beginPath();
+        ctx.moveTo(previousPoint.x, previousPoint.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+        ctx.restore();
+        previousPoint = point;
+      }
+
+      function endStroke(event){
+        if(!drawing) return;
+        drawing = false;
+        previousPoint = null;
+        try { canvas.releasePointerCapture?.(event.pointerId); } catch(_) {}
+        saveDrawing();
+      }
+
+      function setBoardMode(mode){
+        boardMode = mode;
+        stage.classList.toggle('mode-text', mode === 'text');
+        stage.classList.toggle('mode-draw', mode !== 'text');
+        document.querySelectorAll('[data-mode]').forEach(button => {
+          button.classList.toggle('active', button.dataset.mode === mode);
+        });
+        canvas.style.cursor = mode === 'eraser' ? 'cell' : 'crosshair';
+        if(mode === 'text') setTimeout(() => textLayer.focus(), 0);
+      }
+
+      document.querySelectorAll('[data-mode]').forEach(button => {
+        button.addEventListener('click', () => setBoardMode(button.dataset.mode));
+      });
+      document.getElementById('clear-board').addEventListener('click', () => {
+        if(!confirm('화이트보드의 글자와 그림을 모두 지울까요?')) return;
+        textLayer.value = '';
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+        drawingSnapshot = '';
+        localStorage.removeItem(TEXT_KEY);
+        localStorage.removeItem(DRAW_KEY);
+        setSaveStatus('모두 지움');
+      });
+      textLayer.addEventListener('input', saveTextSoon);
+      canvas.addEventListener('pointerdown', beginStroke);
+      canvas.addEventListener('pointermove', continueStroke);
+      canvas.addEventListener('pointerup', endStroke);
+      canvas.addEventListener('pointercancel', endStroke);
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeCanvas.timer);
+        resizeCanvas.timer = setTimeout(resizeCanvas, 120);
+      });
+
+      try {
+        textLayer.value = localStorage.getItem(TEXT_KEY) || '';
+        drawingSnapshot = localStorage.getItem(DRAW_KEY) || '';
+      } catch(_) {}
+      resizeCanvas();
+
+      const display = document.getElementById('calculation-value');
+      const expression = document.getElementById('calculation-line');
+      let currentValue = '0';
+      let storedValue = null;
+      let pendingOperator = null;
+      let waitingForValue = false;
+
+      const operatorSymbol = {add: '+', subtract: '−', multiply: '×', divide: '÷'};
+
+      function normalizedResult(value){
+        if(!Number.isFinite(value)) return '오류';
+        return Number(value.toPrecision(12)).toString();
+      }
+
+      function displayNumber(value){
+        if(value === '오류') return value;
+        const negative = value.startsWith('-');
+        const raw = negative ? value.slice(1) : value;
+        const [integerPart, decimalPart] = raw.split('.');
+        const integer = Number(integerPart || 0).toLocaleString('ko-KR');
+        return `${negative ? '-' : ''}${integer}${decimalPart !== undefined ? '.' + decimalPart : ''}`;
+      }
+
+      function updateCalculator(){
+        display.textContent = displayNumber(currentValue);
+        expression.textContent = pendingOperator && storedValue !== null
+          ? `${displayNumber(String(storedValue))} ${operatorSymbol[pendingOperator]}`
+          : '';
+      }
+
+      function inputDigit(digit){
+        if(currentValue === '오류' || waitingForValue){
+          currentValue = digit;
+          waitingForValue = false;
+        } else if(currentValue === '0') {
+          currentValue = digit;
+        } else if(currentValue.replace(/[-.]/g, '').length < 14) {
+          currentValue += digit;
+        }
+        updateCalculator();
+      }
+
+      function inputDecimal(){
+        if(currentValue === '오류' || waitingForValue){
+          currentValue = '0.';
+          waitingForValue = false;
+        } else if(!currentValue.includes('.')) {
+          currentValue += '.';
+        }
+        updateCalculator();
+      }
+
+      function applyOperation(left, right, operator){
+        if(operator === 'add') return left + right;
+        if(operator === 'subtract') return left - right;
+        if(operator === 'multiply') return left * right;
+        if(operator === 'divide') return right === 0 ? NaN : left / right;
+        return right;
+      }
+
+      function chooseOperator(operator){
+        if(currentValue === '오류') clearCalculator();
+        const input = Number(currentValue);
+        if(pendingOperator && storedValue !== null && !waitingForValue){
+          currentValue = normalizedResult(applyOperation(storedValue, input, pendingOperator));
+          storedValue = currentValue === '오류' ? null : Number(currentValue);
+        } else {
+          storedValue = input;
+        }
+        pendingOperator = currentValue === '오류' ? null : operator;
+        waitingForValue = true;
+        updateCalculator();
+      }
+
+      function calculate(){
+        if(!pendingOperator || storedValue === null || currentValue === '오류') return;
+        currentValue = normalizedResult(applyOperation(storedValue, Number(currentValue), pendingOperator));
+        storedValue = null;
+        pendingOperator = null;
+        waitingForValue = true;
+        updateCalculator();
+      }
+
+      function clearCalculator(){
+        currentValue = '0';
+        storedValue = null;
+        pendingOperator = null;
+        waitingForValue = false;
+        updateCalculator();
+      }
+
+      function handleCalculatorKey(key){
+        if(/^\d$/.test(key)) return inputDigit(key);
+        if(key === 'decimal') return inputDecimal();
+        if(key === 'add' || key === 'subtract' || key === 'multiply' || key === 'divide') return chooseOperator(key);
+        if(key === 'equals') return calculate();
+        if(key === 'clear') return clearCalculator();
+        if(key === 'sign'){
+          if(currentValue !== '0' && currentValue !== '오류') currentValue = currentValue.startsWith('-') ? currentValue.slice(1) : '-' + currentValue;
+          return updateCalculator();
+        }
+        if(key === 'percent'){
+          if(currentValue !== '오류') currentValue = normalizedResult(Number(currentValue) / 100);
+          return updateCalculator();
+        }
+      }
+
+      document.querySelectorAll('.calc-key').forEach(button => {
+        button.addEventListener('click', () => handleCalculatorKey(button.dataset.key));
+      });
+
+      document.addEventListener('keydown', event => {
+        if(document.activeElement === textLayer) return;
+        const map = {'+':'add','-':'subtract','*':'multiply','/':'divide','Enter':'equals','=':'equals','.':'decimal',',':'decimal','Escape':'clear','Delete':'clear'};
+        if(/^\d$/.test(event.key)){
+          event.preventDefault();
+          inputDigit(event.key);
+        } else if(map[event.key]){
+          event.preventDefault();
+          handleCalculatorKey(map[event.key]);
+        } else if(event.key === 'Backspace'){
+          event.preventDefault();
+          if(currentValue !== '오류' && !waitingForValue){
+            currentValue = currentValue.length > 1 ? currentValue.slice(0, -1) : '0';
+            updateCalculator();
+          }
+        }
+      });
+
+      const fullscreenButton = document.getElementById('fullscreen-button');
+      fullscreenButton.addEventListener('click', async () => {
+        try {
+          if(document.fullscreenElement) await document.exitFullscreen();
+          else await document.documentElement.requestFullscreen();
+        } catch(_) {
+          alert('전체화면 전환이 차단되었습니다. 키보드의 F11을 눌러주세요.');
+        }
+      });
+      document.addEventListener('fullscreenchange', () => {
+        fullscreenButton.textContent = document.fullscreenElement ? '⛶ 전체화면 종료' : '⛶ 전체화면';
+        setTimeout(resizeCanvas, 100);
+      });
+
+      function updateClock(){
+        const now = new Date();
+        document.getElementById('clock').textContent = now.toLocaleString('ko-KR', {
+          month:'2-digit', day:'2-digit', weekday:'short', hour:'2-digit', minute:'2-digit', second:'2-digit'
+        });
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+      updateCalculator();
+    })();
+  </script>
+</body>
+</html>
