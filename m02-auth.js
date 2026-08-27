@@ -546,7 +546,7 @@
       const badge = row.systemRole ? ' · 기본 시스템' : row.code==='public_operator' ? ' · 공용 화면' : '';
       return `<button type="button" class="m02-list-row ${row.id===selectedRoleId?'active':''} ${row.active?'':'m02-disabled'}" data-role-id="${esc(row.id)}">
         <strong>${esc(row.name)}${badge}</strong>
-        <small>${esc(row.code)} · 사용 중 ${Number(row.userCount || 0)}명 · ${row.active?'사용':'중지'}</small>
+        <small>사용 중 ${Number(row.userCount || 0)}명 · ${row.active?'사용':'중지'}</small>
       </button>`;
     }).join('');
     el.querySelectorAll('[data-role-id]').forEach(btn=>btn.addEventListener('click',()=>editRole(btn.dataset.roleId)));
@@ -620,12 +620,17 @@
     });
   }
 
+  function generateRoleCode(){
+    const randomToken = typeof crypto === 'object' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g,'')
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+    return `role_${randomToken.slice(0,24).toLowerCase()}`;
+  }
+
   function newRole(render=true){
     selectedRoleId='';
-    setValue('m02-role-id',''); setValue('m02-role-revision',''); setValue('m02-role-code','');
+    setValue('m02-role-id',''); setValue('m02-role-revision',''); setValue('m02-role-code',generateRoleCode());
     setValue('m02-role-name',''); setValue('m02-role-description',''); setValue('m02-role-active','1');
-    const code=document.getElementById('m02-role-code'); if(code) code.readOnly=false;
-    const active=document.getElementById('m02-role-active'); if(active) active.disabled=false;
     const title=document.getElementById('m02-role-form-title'); if(title) title.textContent='역할 등록';
     const deleteButton=document.getElementById('m02-role-delete-btn'); if(deleteButton) deleteButton.style.display='none';
     renderPermissionTable(permissionRowsForRole(''));
@@ -638,8 +643,6 @@
     setValue('m02-role-id',row.id); setValue('m02-role-revision',row.revision);
     setValue('m02-role-code',row.code); setValue('m02-role-name',row.name);
     setValue('m02-role-description',row.description || ''); setValue('m02-role-active',row.active?'1':'0');
-    const code=document.getElementById('m02-role-code'); if(code) code.readOnly=true;
-    const active=document.getElementById('m02-role-active'); if(active) active.disabled=Boolean(row.protectedRole);
     const title=document.getElementById('m02-role-form-title');
     if(title) title.textContent=row.code==='public_operator' ? '공용운영 메뉴 설정' : '역할 수정';
     const deleteButton=document.getElementById('m02-role-delete-btn');
@@ -668,9 +671,10 @@
     try{
       ensureAdminAction();
       const id=value('m02-role-id') || null;
-      const code=value('m02-role-code').trim();
+      const code=value('m02-role-code').trim() || generateRoleCode();
+      setValue('m02-role-code',code);
       const name=value('m02-role-name').trim();
-      if(!/^[a-z][a-z0-9_]{2,39}$/.test(code)) throw new Error('역할 코드는 소문자 영문으로 시작하는 3~40자 코드여야 합니다.');
+      if(!/^[a-z][a-z0-9_]{2,39}$/.test(code)) throw new Error('내부 역할 코드를 자동 생성하지 못했습니다. 역할 등록을 다시 시작해주세요.');
       if(!name) throw new Error('역할명을 입력해주세요.');
       const saved = await rpc('dbmt_m02_save_role', {
         p_password:adminPassword(), p_id:id, p_code:code, p_name:name,
