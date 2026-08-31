@@ -623,7 +623,10 @@
             ? ''
             : ` · ${String(sentAt.getHours()).padStart(2, '0')}:${String(sentAt.getMinutes()).padStart(2, '0')}`;
           const sentDate = activeDate;
-          const sentPageNo = activePageIndex + 1;
+          const savedPageNo = Number(result?.pageNo);
+          const sentPageNo = Number.isInteger(savedPageNo) && savedPageNo > 0
+            ? savedPageNo
+            : activePageIndex + 1;
           if(createNewPage()){
             setSyncStatus(`${sentDate} ${sentPageNo}페이지 ERP 전송 완료${time} · 새 페이지로 이동했습니다.`, 'ok');
           } else {
