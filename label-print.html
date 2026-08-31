@@ -400,7 +400,7 @@
       <input id="app-password" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="4자리 PIN">
       <button id="connect-btn" class="primary" type="button">연결</button>
       <button id="reload-btn" type="button">새로고침</button>
-      <a href="production-board.html?v=20260831board5" target="_blank" rel="noopener">생산현황 보드</a>
+      <a href="production-board.html?v=20260831board6" target="_blank" rel="noopener">생산현황 보드</a>
       <a href="index.html">ERP</a>
     </div>
   </header>
@@ -644,12 +644,29 @@
     function storeLabelSession(session){
       const token = typeof session?.token === 'string' ? session.token : '';
       const expiresAt = typeof session?.expiresAt === 'string' ? session.expiresAt : '';
-      if(!/^[a-f0-9]{64}$/i.test(token) || !expiresAt) throw new Error('생산현황 전송 로그인을 준비하지 못했습니다.');
-      localStorage.setItem(LABEL_SESSION_KEY, JSON.stringify({token, expiresAt}));
+      if(!/^[a-f0-9]{64}$/i.test(token)) throw new Error('생산현황 전송 로그인을 준비하지 못했습니다.');
+
+      let stored = false;
+      try {
+        localStorage.setItem(LABEL_SESSION_KEY, JSON.stringify({token, expiresAt}));
+        stored = true;
+      } catch(_) {}
+
+      try {
+        const secure = location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = `${LABEL_SESSION_KEY}=${encodeURIComponent(token)}; Path=/; Max-Age=43200; SameSite=Strict${secure}`;
+        stored = stored || document.cookie.split(';').some(item => item.trim().startsWith(`${LABEL_SESSION_KEY}=`));
+      } catch(_) {}
+
+      if(!stored) throw new Error('생산현황 전송 로그인 정보를 이 컴퓨터에 저장하지 못했습니다.');
     }
 
     function clearLabelSession(){
       try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
+      try {
+        const secure = location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = `${LABEL_SESSION_KEY}=; Path=/; Max-Age=0; SameSite=Strict${secure}`;
+      } catch(_) {}
     }
 
     async function connect(){

@@ -501,20 +501,29 @@
         setSyncStatus('현재 페이지에 변경사항이 있어 ERP 재전송이 필요합니다.');
       }
 
+      function clearLabelSession(){
+        try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
+        try {
+          const secure = location.protocol === 'https:' ? '; Secure' : '';
+          document.cookie = `${LABEL_SESSION_KEY}=; Path=/; Max-Age=0; SameSite=Strict${secure}`;
+        } catch(_) {}
+      }
+
       function readLabelSessionToken(){
         try {
           const session = JSON.parse(localStorage.getItem(LABEL_SESSION_KEY) || '{}');
           const token = typeof session.token === 'string' ? session.token : '';
-          const expiresAt = new Date(session.expiresAt || '').getTime();
-          if(!/^[a-f0-9]{64}$/i.test(token) || !Number.isFinite(expiresAt) || expiresAt <= Date.now()){
-            localStorage.removeItem(LABEL_SESSION_KEY);
-            return '';
-          }
-          return token;
-        } catch(_) {
-          try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
-          return '';
-        }
+          if(/^[a-f0-9]{64}$/i.test(token)) return token;
+        } catch(_) {}
+
+        try {
+          const prefix = `${LABEL_SESSION_KEY}=`;
+          const item = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
+          const token = item ? decodeURIComponent(item.slice(prefix.length)) : '';
+          if(/^[a-f0-9]{64}$/i.test(token)) return token;
+        } catch(_) {}
+
+        return '';
       }
 
       function setLabelSessionStatus(){
@@ -651,7 +660,7 @@
           setSyncStatus(`${activeDate} ${activePageIndex + 1}페이지 ERP 전송 완료${time}`, 'ok');
         } catch(error) {
           if(String(error?.message || error).includes('로그인')){
-            try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
+            clearLabelSession();
           }
           setSyncStatus(`ERP 전송 실패: ${error.message || error}`, 'error');
         } finally {
@@ -868,6 +877,10 @@
       window.addEventListener('resize', () => {
         clearTimeout(resizeCanvas.timer);
         resizeCanvas.timer = setTimeout(resizeCanvas, 120);
+      });
+      window.addEventListener('focus', setLabelSessionStatus);
+      window.addEventListener('storage', event => {
+        if(event.key === LABEL_SESSION_KEY) setLabelSessionStatus();
       });
       window.addEventListener('beforeunload', () => persistCurrentPage({showStatus: false}));
 
