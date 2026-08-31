@@ -396,7 +396,7 @@
         </div>
         <div class="sync-panel">
           <button class="sync-button" id="sync-board" type="button">💾 저장 · ERP 전송</button>
-          <span class="sync-status" id="sync-status">라벨전용 로그인 상태를 확인하고 있습니다.</span>
+          <span class="sync-status" id="sync-status">로그인 없이 바로 ERP로 전송할 수 있습니다.</span>
         </div>
       </header>
     </section>
@@ -460,7 +460,6 @@
       const PAGE_PREFIX = 'dbmt_production_board_page_v2_';
       const LAST_DATE_KEY = 'dbmt_production_board_last_date_v2';
       const MIGRATION_KEY = 'dbmt_production_board_migrated_v2';
-      const LABEL_SESSION_KEY = 'dbmt_label_print_session_v1';
       const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
       const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
       const stage = document.getElementById('whiteboard-stage');
@@ -501,35 +500,8 @@
         setSyncStatus('현재 페이지에 변경사항이 있어 ERP 재전송이 필요합니다.');
       }
 
-      function clearLabelSession(){
-        try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
-        try {
-          const secure = location.protocol === 'https:' ? '; Secure' : '';
-          document.cookie = `${LABEL_SESSION_KEY}=; Path=/; Max-Age=0; SameSite=Strict${secure}`;
-        } catch(_) {}
-      }
-
-      function readLabelSessionToken(){
-        try {
-          const session = JSON.parse(localStorage.getItem(LABEL_SESSION_KEY) || '{}');
-          const token = typeof session.token === 'string' ? session.token : '';
-          if(/^[a-f0-9]{64}$/i.test(token)) return token;
-        } catch(_) {}
-
-        try {
-          const prefix = `${LABEL_SESSION_KEY}=`;
-          const item = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
-          const token = item ? decodeURIComponent(item.slice(prefix.length)) : '';
-          if(/^[a-f0-9]{64}$/i.test(token)) return token;
-        } catch(_) {}
-
-        return '';
-      }
-
-      function setLabelSessionStatus(){
-        setSyncStatus(readLabelSessionToken()
-          ? '라벨전용 로그인 연결됨 · 버튼을 누르면 바로 ERP로 전송됩니다.'
-          : '라벨전용 화면에서 먼저 로그인한 뒤 전송해주세요.');
+      function setBoardSyncStatus(){
+        setSyncStatus('로그인 없이 바로 ERP로 전송할 수 있습니다.');
       }
 
       function localDateString(date){
@@ -637,20 +609,13 @@
       }
 
       async function syncCurrentPage(){
-        const sessionToken = readLabelSessionToken();
-        if(!sessionToken){
-          setSyncStatus('라벨전용 화면에서 먼저 로그인해주세요.', 'error');
-          return;
-        }
-
         syncButton.disabled = true;
         setSyncStatus('현재 페이지를 저장하고 ERP로 전송하는 중입니다.');
         try {
           if(!persistCurrentPage({captureDrawing: true, showStatus: true})){
             throw new Error('이 컴퓨터에 페이지를 저장하지 못했습니다.');
           }
-          const result = await boardRpc('dbmt_label_production_board_save_session', {
-            p_session_token: sessionToken,
+          const result = await boardRpc('dbmt_production_board_save_standalone', {
             p_page: currentPagePayload()
           });
           const sentAt = result?.updatedAt ? new Date(result.updatedAt) : new Date();
@@ -665,9 +630,6 @@
             setSyncStatus(`${sentDate} ${sentPageNo}페이지 ERP 전송 완료${time} · 새 페이지를 열지 못했습니다.`, 'error');
           }
         } catch(error) {
-          if(String(error?.message || error).includes('로그인')){
-            clearLabelSession();
-          }
           setSyncStatus(`ERP 전송 실패: ${error.message || error}`, 'error');
         } finally {
           syncButton.disabled = false;
@@ -707,7 +669,7 @@
         resizeCanvas(false);
         updatePageControls();
         setSaveStatus('불러옴');
-        setLabelSessionStatus();
+        setBoardSyncStatus();
         if(boardMode === 'text') setTimeout(() => textLayer.focus(), 0);
       }
 
@@ -885,10 +847,6 @@
       window.addEventListener('resize', () => {
         clearTimeout(resizeCanvas.timer);
         resizeCanvas.timer = setTimeout(resizeCanvas, 120);
-      });
-      window.addEventListener('focus', setLabelSessionStatus);
-      window.addEventListener('storage', event => {
-        if(event.key === LABEL_SESSION_KEY) setLabelSessionStatus();
       });
       window.addEventListener('beforeunload', () => persistCurrentPage({showStatus: false}));
 
