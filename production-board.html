@@ -657,7 +657,13 @@
           const time = Number.isNaN(sentAt.getTime())
             ? ''
             : ` · ${String(sentAt.getHours()).padStart(2, '0')}:${String(sentAt.getMinutes()).padStart(2, '0')}`;
-          setSyncStatus(`${activeDate} ${activePageIndex + 1}페이지 ERP 전송 완료${time}`, 'ok');
+          const sentDate = activeDate;
+          const sentPageNo = activePageIndex + 1;
+          if(createNewPage()){
+            setSyncStatus(`${sentDate} ${sentPageNo}페이지 ERP 전송 완료${time} · 새 페이지로 이동했습니다.`, 'ok');
+          } else {
+            setSyncStatus(`${sentDate} ${sentPageNo}페이지 ERP 전송 완료${time} · 새 페이지를 열지 못했습니다.`, 'error');
+          }
         } catch(error) {
           if(String(error?.message || error).includes('로그인')){
             clearLabelSession();
@@ -737,8 +743,10 @@
           activePageIndex = pages.length - 1;
           loadActivePage();
           setSaveStatus('새 페이지');
+          return true;
         } catch(_) {
           setSaveStatus('추가 실패');
+          return false;
         }
       }
 
