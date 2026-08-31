@@ -400,7 +400,7 @@
       <input id="app-password" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="4자리 PIN">
       <button id="connect-btn" class="primary" type="button">연결</button>
       <button id="reload-btn" type="button">새로고침</button>
-      <a href="production-board.html?v=20260827board4" target="_blank" rel="noopener">생산현황 보드</a>
+      <a href="production-board.html?v=20260831board5" target="_blank" rel="noopener">생산현황 보드</a>
       <a href="index.html">ERP</a>
     </div>
   </header>
@@ -508,6 +508,7 @@
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
+    const LABEL_SESSION_KEY = 'dbmt_label_print_session_v1';
 
     const state = {
       pin: '',
@@ -640,6 +641,17 @@
       el.textContent = message || '';
     }
 
+    function storeLabelSession(session){
+      const token = typeof session?.token === 'string' ? session.token : '';
+      const expiresAt = typeof session?.expiresAt === 'string' ? session.expiresAt : '';
+      if(!/^[a-f0-9]{64}$/i.test(token) || !expiresAt) throw new Error('생산현황 전송 로그인을 준비하지 못했습니다.');
+      localStorage.setItem(LABEL_SESSION_KEY, JSON.stringify({token, expiresAt}));
+    }
+
+    function clearLabelSession(){
+      try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
+    }
+
     async function connect(){
       const pin = $('app-password').value.trim();
       if(!/^\d{4}$/.test(pin)){
@@ -660,6 +672,8 @@
       setStatus('Supabase 연결 중...', 'warn');
       try {
         const data = await sbRpc('dbmt_label_print_get_data', {p_pin: pin});
+        const boardSession = await sbRpc('dbmt_label_print_login', {p_pin: pin});
+        storeLabelSession(boardSession);
         try {
           if(window.DBMTCompanyMaster?.setMaster){
             const master = await sbRpc('dbmt_label_print_get_company_master', {p_pin: pin});
@@ -683,8 +697,9 @@
         const exists = visibleRows.some(row => String(row.id) === String(state.selectedId));
         state.selectedId = exists ? state.selectedId : (visibleRows[0]?.id || '');
         renderAll();
-        setStatus(`연결됨: 작업지시 ${state.workOrders.length}건, 출력이력 ${state.logs.length}건`, 'ok');
+        setStatus(`연결됨: 작업지시 ${state.workOrders.length}건, 출력이력 ${state.logs.length}건 · 생산현황 전송 준비됨`, 'ok');
       } catch(err) {
+        if(String(err?.message || err).includes('PIN') || String(err?.message || err).includes('로그인')) clearLabelSession();
         setStatus(`연결 실패: ${err.message || err}`, 'err');
       } finally {
         setLoading(false);

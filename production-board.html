@@ -172,21 +172,12 @@
 
     .sync-panel {
       display: grid;
-      grid-template-columns: minmax(120px, .8fr) minmax(190px, 1.4fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 6px;
       margin-top: 4px;
       padding-top: 8px;
       border-top: 1px solid var(--line);
     }
-    .sync-pin-label {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      gap: 4px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 800;
-    }
-    .sync-pin-input,
     .sync-button {
       min-height: 50px;
       border: 1px solid var(--line-dark);
@@ -194,18 +185,6 @@
       font: inherit;
       font-weight: 900;
       touch-action: manipulation;
-    }
-    .sync-pin-input {
-      width: 100%;
-      padding: 8px 12px;
-      background: #fff;
-      color: var(--text);
-      font-size: 22px;
-      letter-spacing: .28em;
-      text-align: center;
-      user-select: text;
-    }
-    .sync-button {
       align-self: end;
       padding: 8px 14px;
       background: var(--dark);
@@ -387,8 +366,7 @@
       .tool-button, .fullscreen-button, .date-input, .page-button, .new-page-button { min-height: 31px; padding-top: 3px; padding-bottom: 3px; }
       .tool-button, .new-page-button, .date-input, .page-indicator { font-size: 12px; }
       .sync-panel { gap: 3px; margin-top: 1px; padding-top: 3px; }
-      .sync-pin-label { display:block; font-size:0; }
-      .sync-pin-input, .sync-button { min-height: 37px; }
+      .sync-button { min-height: 37px; }
       .sync-status, .save-status { min-height: 12px; font-size: 9px; line-height: 12px; }
       .calculator { gap: 5px; padding: 5px; grid-template-rows: minmax(74px, 20%) minmax(0, 1fr); }
       .keypad { gap: 4px; grid-template-rows: repeat(5, minmax(36px, 1fr)); }
@@ -417,11 +395,8 @@
           <span class="save-status" id="save-status">자동 저장</span>
         </div>
         <div class="sync-panel">
-          <label class="sync-pin-label">ERP 전송 PIN
-            <input class="sync-pin-input" id="sync-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="4자리" aria-label="ERP 전송 PIN">
-          </label>
           <button class="sync-button" id="sync-board" type="button">💾 저장 · ERP 전송</button>
-          <span class="sync-status" id="sync-status">현재 페이지는 아직 ERP로 전송되지 않았습니다.</span>
+          <span class="sync-status" id="sync-status">라벨전용 로그인 상태를 확인하고 있습니다.</span>
         </div>
       </header>
     </section>
@@ -485,6 +460,7 @@
       const PAGE_PREFIX = 'dbmt_production_board_page_v2_';
       const LAST_DATE_KEY = 'dbmt_production_board_last_date_v2';
       const MIGRATION_KEY = 'dbmt_production_board_migrated_v2';
+      const LABEL_SESSION_KEY = 'dbmt_label_print_session_v1';
       const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
       const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
       const stage = document.getElementById('whiteboard-stage');
@@ -495,7 +471,6 @@
       const pageIndicator = document.getElementById('page-indicator');
       const previousPageButton = document.getElementById('previous-page');
       const nextPageButton = document.getElementById('next-page');
-      const syncPinInput = document.getElementById('sync-pin');
       const syncButton = document.getElementById('sync-board');
       const syncStatus = document.getElementById('sync-status');
       const ctx = canvas.getContext('2d', {alpha: true});
@@ -524,6 +499,28 @@
 
       function markSyncPending(){
         setSyncStatus('현재 페이지에 변경사항이 있어 ERP 재전송이 필요합니다.');
+      }
+
+      function readLabelSessionToken(){
+        try {
+          const session = JSON.parse(localStorage.getItem(LABEL_SESSION_KEY) || '{}');
+          const token = typeof session.token === 'string' ? session.token : '';
+          const expiresAt = new Date(session.expiresAt || '').getTime();
+          if(!/^[a-f0-9]{64}$/i.test(token) || !Number.isFinite(expiresAt) || expiresAt <= Date.now()){
+            localStorage.removeItem(LABEL_SESSION_KEY);
+            return '';
+          }
+          return token;
+        } catch(_) {
+          try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
+          return '';
+        }
+      }
+
+      function setLabelSessionStatus(){
+        setSyncStatus(readLabelSessionToken()
+          ? '라벨전용 로그인 연결됨 · 버튼을 누르면 바로 ERP로 전송됩니다.'
+          : '라벨전용 화면에서 먼저 로그인한 뒤 전송해주세요.');
       }
 
       function localDateString(date){
@@ -631,11 +628,9 @@
       }
 
       async function syncCurrentPage(){
-        const pin = syncPinInput.value.replace(/\D/g, '').slice(0, 4);
-        syncPinInput.value = pin;
-        if(!/^\d{4}$/.test(pin)){
-          setSyncStatus('숫자 4자리 PIN을 입력하세요.', 'error');
-          syncPinInput.focus();
+        const sessionToken = readLabelSessionToken();
+        if(!sessionToken){
+          setSyncStatus('라벨전용 화면에서 먼저 로그인해주세요.', 'error');
           return;
         }
 
@@ -645,8 +640,8 @@
           if(!persistCurrentPage({captureDrawing: true, showStatus: true})){
             throw new Error('이 컴퓨터에 페이지를 저장하지 못했습니다.');
           }
-          const result = await boardRpc('dbmt_label_production_board_save', {
-            p_pin: pin,
+          const result = await boardRpc('dbmt_label_production_board_save_session', {
+            p_session_token: sessionToken,
             p_page: currentPagePayload()
           });
           const sentAt = result?.updatedAt ? new Date(result.updatedAt) : new Date();
@@ -655,6 +650,9 @@
             : ` · ${String(sentAt.getHours()).padStart(2, '0')}:${String(sentAt.getMinutes()).padStart(2, '0')}`;
           setSyncStatus(`${activeDate} ${activePageIndex + 1}페이지 ERP 전송 완료${time}`, 'ok');
         } catch(error) {
+          if(String(error?.message || error).includes('로그인')){
+            try { localStorage.removeItem(LABEL_SESSION_KEY); } catch(_) {}
+          }
           setSyncStatus(`ERP 전송 실패: ${error.message || error}`, 'error');
         } finally {
           syncButton.disabled = false;
@@ -694,7 +692,7 @@
         resizeCanvas(false);
         updatePageControls();
         setSaveStatus('불러옴');
-        setSyncStatus('현재 페이지는 아직 ERP로 전송되지 않았습니다.');
+        setLabelSessionStatus();
         if(boardMode === 'text') setTimeout(() => textLayer.focus(), 0);
       }
 
@@ -846,12 +844,6 @@
       previousPageButton.addEventListener('click', () => switchPage(activePageIndex - 1));
       nextPageButton.addEventListener('click', () => switchPage(activePageIndex + 1));
       document.getElementById('new-page').addEventListener('click', createNewPage);
-      syncPinInput.addEventListener('input', () => {
-        syncPinInput.value = syncPinInput.value.replace(/\D/g, '').slice(0, 4);
-      });
-      syncPinInput.addEventListener('keydown', event => {
-        if(event.key === 'Enter') syncCurrentPage();
-      });
       syncButton.addEventListener('click', syncCurrentPage);
       document.getElementById('clear-board').addEventListener('click', () => {
         if(!confirm('현재 페이지의 글자와 그림을 모두 지울까요?')) return;
