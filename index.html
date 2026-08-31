@@ -1071,6 +1071,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <button class="btn btn-primary btn-sm" type="button" onclick="loadProductionBoardPage()">조회</button>
         <button class="btn btn-secondary btn-sm" type="button" onclick="loadProductionBoardPage(null)">최신 일자</button>
         <button class="btn btn-secondary btn-sm" type="button" onclick="loadProductionBoardPage()">새로고침</button>
+        <button class="btn btn-danger btn-sm" id="production-board-delete-page" type="button" onclick="deleteProductionBoardPage()" hidden disabled>현재 페이지 삭제</button>
       </div>
     </div>
 
@@ -4842,6 +4843,14 @@ function productionBoardTimeLabel(value){
   return `${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}. ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+function updateProductionBoardDeleteButton(){
+  const button = document.getElementById('production-board-delete-page');
+  if(!button) return;
+  const canDelete = typeof DBMTAuth === 'object' && DBMTAuth.isPersonal() && DBMTAuth.can('production_board', 'delete');
+  button.hidden = !canDelete;
+  button.disabled = !canDelete || productionBoardViewerState.loading || !productionBoardViewerState.selectedPageNo;
+}
+
 function resizeProductionBoardPreview(){
   const stage = document.getElementById('production-board-view-preview-stage');
   const text = document.getElementById('production-board-view-text');
@@ -4926,11 +4935,13 @@ function renderProductionBoardViewer(){
   if(!hasPages){
     state.selectedPageNo = 0;
     meta.textContent = '';
+    updateProductionBoardDeleteButton();
     return;
   }
 
   const selectedExists = state.pages.some(row => Number(row.pageNo) === Number(state.selectedPageNo));
   selectProductionBoardPage(selectedExists ? state.selectedPageNo : state.pages[0].pageNo);
+  updateProductionBoardDeleteButton();
 }
 
 async function loadProductionBoardPage(requestedDate){
@@ -4951,6 +4962,7 @@ async function loadProductionBoardPage(requestedDate){
 
   const selected = requestedDate === null ? '' : String(requestedDate === undefined ? input.value : requestedDate || '').slice(0, 10);
   productionBoardViewerState.loading = true;
+  updateProductionBoardDeleteButton();
   status.textContent = '생산현황을 불러오는 중입니다.';
   status.className = 'production-board-viewer-status';
   try{
@@ -4971,6 +4983,52 @@ async function loadProductionBoardPage(requestedDate){
     status.className = 'production-board-viewer-status error';
   }finally{
     productionBoardViewerState.loading = false;
+    updateProductionBoardDeleteButton();
+  }
+}
+
+async function deleteProductionBoardPage(){
+  const state = productionBoardViewerState;
+  const status = document.getElementById('production-board-view-status');
+  if(!status || state.loading) return;
+  if(typeof DBMTAuth !== 'object' || !DBMTAuth.isPersonal() || !DBMTAuth.can('production_board', 'delete')){
+    status.textContent = '생산현황 페이지를 삭제할 권한이 없습니다.';
+    status.className = 'production-board-viewer-status error';
+    return;
+  }
+
+  const token = DBMTAuth.getSessionToken();
+  const boardDate = String(state.selectedDate || '').slice(0, 10);
+  const pageNo = Number(state.selectedPageNo);
+  if(!token || !/^\d{4}-\d{2}-\d{2}$/.test(boardDate) || !Number.isInteger(pageNo) || pageNo < 1){
+    status.textContent = '삭제할 생산현황 페이지를 선택해주세요.';
+    status.className = 'production-board-viewer-status error';
+    return;
+  }
+  if(!confirm(`${productionBoardDateLabel(boardDate)} ${pageNo}페이지를 삭제할까요?\n삭제한 내용은 복구할 수 없습니다.`)) return;
+
+  state.loading = true;
+  updateProductionBoardDeleteButton();
+  status.textContent = `${pageNo}페이지를 삭제하는 중입니다.`;
+  status.className = 'production-board-viewer-status';
+  try{
+    const result = await sbRpc('dbmt_erp_delete_production_board_page', {
+      p_token: token,
+      p_board_date: boardDate,
+      p_page_no: pageNo
+    });
+    if(result?.ok === false) throw new Error(result.message || '생산현황 페이지를 삭제하지 못했습니다.');
+    state.loading = false;
+    await loadProductionBoardPage(boardDate);
+    if(Number(result?.selectedPageNo) > 0) selectProductionBoardPage(Number(result.selectedPageNo));
+    status.textContent = `${productionBoardDateLabel(boardDate)} ${pageNo}페이지를 삭제했습니다.`;
+    status.className = 'production-board-viewer-status ok';
+  }catch(error){
+    status.textContent = `생산현황 페이지를 삭제하지 못했습니다: ${error.message || error}`;
+    status.className = 'production-board-viewer-status error';
+  }finally{
+    state.loading = false;
+    updateProductionBoardDeleteButton();
   }
 }
 
