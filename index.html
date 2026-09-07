@@ -1310,6 +1310,9 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         전체 재고현황
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <label for="stock-as-of-date" style="font-size:12px;white-space:nowrap;">기준일</label>
+        <input type="date" id="stock-as-of-date" style="width:150px;" onchange="markStockSearchPending()" oninput="markStockSearchPending()" aria-describedby="stock-query-note">
+        <button class="btn btn-secondary btn-sm" onclick="resetStockAsOfDate()">현재</button>
         <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" autocomplete="off" oninput="markStockSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runStockSearch();}">
         <button id="stock-search-btn" class="btn btn-primary btn-sm" onclick="runStockSearch()">조회</button>
         <select id="stock-location-filter" style="font-size:12px;padding:7px 10px;width:auto;" onchange="markStockSearchPending()">
@@ -1322,9 +1325,11 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <option value="소진">소진</option>
           <option value="">전체(소진포함)</option>
         </select>
-        <button class="btn btn-secondary btn-sm" onclick="exportStockCSV()">CSV</button>
+        <button id="stock-print-btn" class="btn btn-secondary btn-sm" onclick="printStockReport()" disabled>🖨 출력 (A4)</button>
+        <button id="stock-csv-btn" class="btn btn-secondary btn-sm" onclick="exportStockCSV()" disabled>CSV</button>
       </div>
     </div>
+    <div id="stock-query-note" style="font-size:12px;color:#555;line-height:1.6;margin:0 0 12px;">기준일 미선택: 현재 재고 · 날짜 선택 시 해당일 마감 기준으로 조회합니다.</div>
     <div class="stat-grid" id="stock-stats"></div>
     <div class="tbl-wrap">
       <table id="stock-table">
@@ -8067,9 +8072,12 @@ function selectLot(lot, origin, proddate, stock, price=0, packunit='', stockKey=
 let _stockMapCache = null;
 let stockSearchActivated = false;
 let stockSearchDirty = true;
+let stockQuerySnapshot = null;
 function invalidateStockMap(){
   _stockMapCache = null;
   stockSearchDirty = true;
+  stockQuerySnapshot = null;
+  setStockExportEnabled(false);
 }
 
 let localCoreRevision = 0;
@@ -8078,9 +8086,20 @@ function markLocalCoreChanged(){
   invalidateStockMap();
 }
 
-// 현재 재고 맵 계산 — total_in/total_use/total_out/stock 모두 동적 계산
-function getStockMap(){
-  if(_stockMapCache) return _stockMapCache;
+// 거래일 기준의 날짜만 사용한다. 생산일/등록 시각은 재고의 발생일이 아니다.
+function stockLedgerDateKey(value){
+  const date = normProdDate(String(value || '').trim().split(/[T ]/)[0]);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
+  const parsed = new Date(date + 'T00:00:00Z');
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? date : '';
+}
+
+// 기준일 지정 시 해당일까지 재계산한다. 출고/생산 입력용 현재 재고 캐시와 분리한다.
+function getStockMap(asOfDate=''){
+  const cutoff = asOfDate ? stockLedgerDateKey(asOfDate) : '';
+  if(asOfDate && !cutoff) throw new Error('올바른 재고 기준일을 선택해주세요.');
+  if(!cutoff && _stockMapCache) return _stockMapCache;
+  if(cutoff && EXCEL_STOCK.length) throw new Error('기초재고의 기준일 정보가 없어 날짜별 재고를 계산할 수 없습니다.');
   const map={};
 
   // EXCEL_STOCK 기준값 (빈 배열이면 건너뜀)
@@ -8139,11 +8158,12 @@ function getStockMap(){
   };
 
   const stockTxns = userTransactions
-    .map((t, idx)=>({t, idx}))
+    .map((t, idx)=>({t, idx, date:cutoff ? stockLedgerDateKey(t.date) : ''}))
     .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동'].includes(x.t.type))
+    .filter(x=>!cutoff || (x.date && x.date <= cutoff))
     .sort((a,b)=>{
-      const ad = String(a.t.date||'').replace(/\//g,'-');
-      const bd = String(b.t.date||'').replace(/\//g,'-');
+      const ad = cutoff ? a.date : String(a.t.date||'').replace(/\//g,'-');
+      const bd = cutoff ? b.date : String(b.t.date||'').replace(/\//g,'-');
       const d = ad.localeCompare(bd);
       return d || (a.idx - b.idx);
     });
@@ -8277,7 +8297,7 @@ function getStockMap(){
     if(bucket.brand===undefined) bucket.brand='';
     if(bucket.grade===undefined) bucket.grade='';
   });
-  _stockMapCache = map;
+  if(!cutoff) _stockMapCache = map;
   return map;
 }
 function priceKey(value){
@@ -11529,11 +11549,46 @@ function exportProductionLossCSV(){
 const EXCEL_STOCK = [];
 let stockRenderTimer = null;
 
+function stockCanAdjustCurrent(){
+  return stockPersonalCan('update') && !document.getElementById('stock-as-of-date')?.value;
+}
+
 function stockTableColspan(){
-  return stockPersonalCan('update') ? 16 : 15;
+  return stockCanAdjustCurrent() ? 16 : 15;
+}
+
+function setStockExportEnabled(enabled){
+  ['stock-print-btn','stock-csv-btn'].forEach(id=>{
+    const button = document.getElementById(id);
+    if(button) button.disabled = !enabled;
+  });
+}
+
+function getStockQueryFilters(){
+  return {
+    asOfDate:document.getElementById('stock-as-of-date')?.value || '',
+    query:(document.getElementById('stock-search')?.value || '').trim(),
+    status:document.getElementById('stock-filter-status')?.value ?? '재고',
+    location:document.getElementById('stock-location-filter')?.value || ''
+  };
+}
+
+function stockQueryDescription(filters){
+  return filters.asOfDate
+    ? `${filters.asOfDate} 마감 기준 · 해당일까지의 거래를 반영합니다. 재고 정리는 ‘현재’ 조회에서 가능합니다.`
+    : '기준일 미선택: 현재 재고 · 날짜 선택 시 해당일 마감 기준으로 조회합니다.';
+}
+
+function resetStockAsOfDate(){
+  const date = document.getElementById('stock-as-of-date');
+  if(date) date.value = '';
+  markStockSearchPending();
+  runStockSearch();
 }
 
 function showStockQueryState(message){
+  stockQuerySnapshot = null;
+  setStockExportEnabled(false);
   const statsEl = document.getElementById('stock-stats');
   if(statsEl) statsEl.innerHTML = '';
   const body = document.getElementById('stock-body');
@@ -11557,12 +11612,18 @@ function prepareStockPage(){
 
 function markStockSearchPending(){
   stockSearchDirty = true;
+  stockQuerySnapshot = null;
+  setStockExportEnabled(false);
+  applyStockPermissionState();
+  const note = document.getElementById('stock-query-note');
+  if(note) note.textContent = stockQueryDescription(getStockQueryFilters());
   if(stockSearchActivated) showStockQueryState('재조회 필요');
 }
 
 function runStockSearch(){
   if(stockRenderTimer) clearTimeout(stockRenderTimer);
   stockSearchActivated = true;
+  stockSearchDirty = true;
   showStockQueryState('조회 중...');
   const button = document.getElementById('stock-search-btn');
   if(button) button.disabled = true;
@@ -11582,7 +11643,7 @@ function runStockSearch(){
       stockSearchDirty = true;
       showStockQueryState('조회 실패');
       console.error('재고현황 조회 실패:', error);
-      toast('재고현황 조회에 실패했습니다.');
+      toast(error?.message || '재고현황 조회에 실패했습니다.');
     }finally{
       if(button) button.disabled = false;
     }
@@ -11591,22 +11652,20 @@ function runStockSearch(){
 
 function renderStock(){
   applyStockPermissionState();
-  const canAdjustStock = stockPersonalCan('update');
-  const q=document.getElementById('stock-search').value.toLowerCase();
-  const el_sf=document.getElementById('stock-filter-status'); const filterStatus=el_sf ? (el_sf.value??'재고') : '재고';
-  const locationFilter = document.getElementById('stock-location-filter')?.value || '';
+  const canAdjustStock = stockCanAdjustCurrent();
+  const filters = getStockQueryFilters();
+  const q = filters.query.toLowerCase();
+  const filterStatus = filters.status;
+  const locationFilter = filters.location;
+  if(document.getElementById('stock-as-of-date')?.validity?.badInput) throw new Error('올바른 재고 기준일을 선택해주세요.');
 
-  const stockMap=getStockMap();
+  const stockMap=getStockMap(filters.asOfDate);
   refreshStockLocationFilter();
   stockSearchActivated = true;
   stockSearchDirty = false;
 
   // 부동소수점 오차 보정: ±0.01 미만은 0으로 처리 (-0.00 소진 분류)
-  Object.values(stockMap).forEach(s=>{
-    if(Math.abs(s.stock)<0.01) s.stock=0;
-  });
-
-  const allRows=Object.values(stockMap);
+  const allRows=Object.values(stockMap).map(s=>({...s, stock:Math.abs(s.stock)<0.01 ? 0 : s.stock}));
   let rows=[...allRows];
 
   // 필터
@@ -11627,6 +11686,14 @@ function renderStock(){
       return _dir * (((a.stock||0) * (a.price||0)) - ((b.stock||0) * (b.price||0)));
     return _dir * ((a[k]||0) - (b[k]||0));
   });
+  const undatedCount = filters.asOfDate ? userTransactions.filter(t=>
+    ['입고','생산입고','출고','사용','재고조정','재고이동'].includes(t.type) && !stockLedgerDateKey(t.date)
+  ).length : 0;
+  const warning = undatedCount ? `주의: 거래일이 없거나 올바르지 않은 거래 ${undatedCount}건은 기준일 계산에서 제외되었습니다.` : '';
+  stockQuerySnapshot = {filters, rows, warning, queriedAt:new Date().toLocaleString('ko-KR')};
+  setStockExportEnabled(true);
+  const queryNote = document.getElementById('stock-query-note');
+  if(queryNote) queryNote.textContent = [stockQueryDescription(filters), warning].filter(Boolean).join(' ');
   // 정렬 표시(▲▼) 업데이트
   ['stockLocation','product','brand','grade','lot','proddate','origin','price','total_in','total_use','total_out','total_adjust','stock','stock_amount'].forEach(k=>{
     const el=document.getElementById('ss-'+k);
@@ -11689,7 +11756,7 @@ function stockPersonalCan(action){
 }
 
 function applyStockPermissionState(){
-  const canAdjust = stockPersonalCan('update');
+  const canAdjust = stockCanAdjustCurrent();
   const head = document.getElementById('stock-manage-head');
   if(head) head.style.display = canAdjust ? '' : 'none';
   if(!canAdjust) closeStockAdjust();
@@ -11697,6 +11764,7 @@ function applyStockPermissionState(){
 
 function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit='', stockLocation=''){
   if(!stockPersonalCan('update')){ toast('재고 정리 권한이 없습니다.'); return; }
+  if(!stockCanAdjustCurrent()){ toast('기준일 재고는 조회 전용입니다. ‘현재’로 조회한 뒤 재고를 정리해주세요.'); return; }
   const set = (id, value) => { const el=document.getElementById(id); if(el) el.value=value; };
   const loc = normalizeStockLocation(stockLocation);
   set('stock-adj-product', product || '');
@@ -11735,6 +11803,7 @@ function calcStockAdjustDiff(){
 
 async function saveStockAdjust(){
   if(!stockPersonalCan('update')){ closeStockAdjust(); toast('재고 정리 권한이 없습니다.'); return; }
+  if(!stockCanAdjustCurrent()){ closeStockAdjust(); toast('기준일 재고는 조회 전용입니다. ‘현재’로 조회해주세요.'); return; }
   const date = document.getElementById('stock-adj-date')?.value || localDateString();
   const product = document.getElementById('stock-adj-product')?.value || '';
   const lot = document.getElementById('stock-adj-lot')?.value || '';
@@ -13844,10 +13913,35 @@ function exportProductionCSV(){
     : '생산일보_전체.csv';
   downloadCSV(rows, fname);
 }
+function getStockExportSnapshot(){
+  if(!stockPersonalCan('view')){ toast('재고현황 조회 권한이 없습니다.'); return null; }
+  if(!stockSearchActivated || stockSearchDirty || !stockQuerySnapshot || stockRenderTimer ||
+    JSON.stringify(stockQuerySnapshot.filters) !== JSON.stringify(getStockQueryFilters())){
+    toast('기준일과 조회조건을 확인하고 먼저 조회해주세요.');
+    return null;
+  }
+  // 데이터 변경과 정렬을 반영한 동일한 결과를 화면·인쇄·CSV에서 사용한다.
+  renderStock();
+  return stockQuerySnapshot;
+}
+
+function printStockReport(){
+  const snapshot = getStockExportSnapshot();
+  if(!snapshot) return;
+  const printer = window.DBMTStockReport;
+  if(!printer){ toast('출력 기능을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+  const company = window.DBMTCompanyMaster?.getPrimaryProfile?.();
+  if(!printer.open({...snapshot, companyName:company?.legalName || company?.name || '주식회사 동부엠티'})){
+    toast('인쇄 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.');
+  }
+}
+
 function exportStockCSV(){
-  const header=['지점','품목명','브랜드','등급','이력번호','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고'];
-  const rows=Object.values(getStockMap()).map(r=>[
-    r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.brand||'',r.grade||'',r.lot||'',r.origin||'',
+  const snapshot = getStockExportSnapshot();
+  if(!snapshot) return;
+  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고'];
+  const rows=snapshot.rows.map(r=>[
+    snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',r.proddate||'',r.origin||'',
     Number(r.total_in||0).toFixed(2),
     Number(r.total_use||0).toFixed(2),
     Number(r.total_out||0).toFixed(2),
@@ -13857,7 +13951,7 @@ function exportStockCSV(){
     Math.round((Number(r.stock)||0) * (Number(r.price)||0)) || '',
     r.note||''
   ]);
-  downloadCSV([header,...rows],'재고현황.csv');
+  downloadCSV([header,...rows],`재고현황_${snapshot.filters.asOfDate || '현재'}.csv`);
 }
 function exportInvoiceExcel(){
   const area = document.getElementById('inv-print-area');
@@ -21421,6 +21515,7 @@ function initSamsung(){
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
 <script src="trace-integration.js?v=20260827m05preview1"></script>
 <script src="submaterial-usage-print.js?v=20260907a4usage1"></script>
-<script src="m02-auth.js?v=20260907a4usage1"></script>
+<script src="stock-report.js?v=20260907stockdate1"></script>
+<script src="m02-auth.js?v=20260907stockdate1"></script>
 </body>
 </html>

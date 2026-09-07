@@ -96,6 +96,8 @@
 
     openStockAdjust:['stock','update'],
     saveStockAdjust:['stock','update'],
+    printStockReport:['stock','view'],
+    exportStockCSV:['stock','view'],
 
     newColdStorageRequest:['cold_storage_request','create','uiOnly'],
     addColdStorageRequestItem:['cold_storage_request','create','uiOnly'],
