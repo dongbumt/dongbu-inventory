@@ -91,6 +91,7 @@
     addSubMaterialUsageDraftRow:['production','update'],
     removeSubMaterialUsageDraftRow:['production','update'],
     saveSubMaterialUsageModal:['production','update'],
+    printSubMaterialUsage:['production','view'],
     deleteSubMaterialUsage:['production','delete'],
 
     openStockAdjust:['stock','update'],

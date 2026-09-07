@@ -292,6 +292,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="em-btns" style="justify-content:space-between;">
       <button class="btn btn-secondary" onclick="addSubMaterialUsageDraftRow()">+ 사용항목</button>
       <div style="display:flex;gap:8px;">
+        <button id="sm-usage-print-btn" class="btn btn-secondary" onclick="printSubMaterialUsage()">🖨 출력 (A4)</button>
         <button class="btn btn-secondary" onclick="closeSubMaterialUsageModal()">닫기</button>
         <button class="btn btn-primary" onclick="saveSubMaterialUsageModal()">저장</button>
       </div>
@@ -11809,6 +11810,7 @@ let subMaterialUsageLastRefreshAt = 0;
 let subMaterialUsageDraftRows = [];
 let subMaterialUsageDraftSeq = 0;
 let activeSubMaterialUsageProductionId = '';
+let subMaterialUsageSaving = false;
 
 function subMaterialId(){
   return 'sm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
@@ -12355,7 +12357,39 @@ function closeSubMaterialUsageModal(){
   subMaterialUsageDraftRows = [];
 }
 
+function printSubMaterialUsage(){
+  if(!subMaterialUsagePersonalCan('view')){ toast('생산일보 조회 권한이 없습니다.'); return; }
+  if(subMaterialUsageSaving){ toast('부자재 사용내역 저장이 완료된 후 출력해주세요.'); return; }
+  const entry = subMaterialUsageProductionEntry(activeSubMaterialUsageProductionId);
+  if(!entry){ toast('연결된 생산 작업을 찾을 수 없습니다.'); return; }
+  const printer = window.DBMTSubMaterialUsagePrint;
+  if(!printer){ toast('출력 기능을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+  const usages = getProductionSubMaterialUsages(activeSubMaterialUsageProductionId);
+  if(printer.hasUnsavedChanges(subMaterialUsageDraftRows, usages)){
+    const message = '변경한 부자재 사용내역을 먼저 저장한 뒤 출력해주세요.';
+    const statusEl = document.getElementById('sm-usage-editor-status');
+    if(statusEl){ statusEl.textContent = message; statusEl.style.display = 'block'; }
+    toast(message);
+    return;
+  }
+  if(!usages.length){ toast('저장된 부자재 사용내역이 없습니다. 사용항목을 등록하고 저장해주세요.'); return; }
+  const company = window.DBMTCompanyMaster?.getPrimaryProfile?.();
+  const opened = printer.open({
+    companyName:company?.legalName || company?.name || '주식회사 동부엠티',
+    production:{
+      date:subMaterialUsageWorkDate(entry),
+      jobNo:entry.job_no,
+      jobType:getProdJobType(entry),
+      note:getProdEntryNote(entry),
+      outputs:asArray(entry.outputs)
+    },
+    usages
+  });
+  if(!opened) toast('인쇄 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.');
+}
+
 async function saveSubMaterialUsageModal(){
+  if(subMaterialUsageSaving){ toast('부자재 사용내역을 저장하고 있습니다.'); return; }
   if(!subMaterialUsagePersonalCan('update')){ toast('부자재 사용항목 수정 권한이 없습니다.'); return; }
   const productionId = activeSubMaterialUsageProductionId;
   const entry = subMaterialUsageProductionEntry(productionId);
@@ -12424,6 +12458,9 @@ async function saveSubMaterialUsageModal(){
   subMaterialUsages = subMaterialUsages
     .filter(u => String(u.productionId || '') !== String(productionId))
     .concat(rows);
+  subMaterialUsageSaving = true;
+  const printButton = document.getElementById('sm-usage-print-btn');
+  if(printButton) printButton.disabled = true;
   try{
     await saveSubMaterialUsageRows(rows, deletedIds, {
       action:existing.length ? '수정' : '저장',
@@ -12434,6 +12471,9 @@ async function saveSubMaterialUsageModal(){
     subMaterialUsages = previousUsages;
     console.error('Supabase submaterial usage save failed:', err);
     return fail(String(err?.message || err || '부자재 사용이력 저장에 실패했습니다.'));
+  }finally{
+    subMaterialUsageSaving = false;
+    if(printButton) printButton.disabled = false;
   }
   closeSubMaterialUsageModal();
   renderAll('submaterial-save');
@@ -21380,6 +21420,7 @@ function initSamsung(){
 <script src="meatwatch-lookup.js?v=20260826bulktrace1"></script>
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
 <script src="trace-integration.js?v=20260827m05preview1"></script>
-<script src="m02-auth.js?v=20260827m05preview1"></script>
+<script src="submaterial-usage-print.js?v=20260907a4usage1"></script>
+<script src="m02-auth.js?v=20260907a4usage1"></script>
 </body>
 </html>
