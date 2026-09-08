@@ -2590,6 +2590,31 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div id="da-status" style="font-size:12px;color:#667085;margin-top:9px;"></div>
   </div>
 
+  <div class="card" id="driver-temperature-office">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#666;"></div>차량 온도기록지</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadDriverTemperatureRecords()">조회 / 새로고침</button>
+    </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group"><label for="dt-from">기록일 시작</label><input id="dt-from" type="date" onchange="markDriverTemperaturePending()"></div>
+      <div class="form-group"><label for="dt-to">기록일 종료</label><input id="dt-to" type="date" onchange="markDriverTemperaturePending()"></div>
+      <div class="form-group"><label for="dt-search">기사명 / 차량번호</label><input id="dt-search" maxlength="100" placeholder="전체" oninput="markDriverTemperaturePending()" onkeydown="if(event.key==='Enter')loadDriverTemperatureRecords()"></div>
+    </div>
+    <div style="font-size:12px;color:#555;line-height:1.6;margin-bottom:10px;">배송기사가 전송한 기록지 부분만 보관합니다. ‘보기 / 출력’에서 A4용지에 가로 5.5cm로 출력할 수 있습니다. 인쇄 배율은 100%(실제 크기)로 설정해주세요.</div>
+    <div id="dt-status" style="font-size:12px;color:#555;margin-bottom:8px;" role="status"></div>
+    <div class="tbl-wrap"><table><thead><tr><th>기록일</th><th>기사명</th><th>차량번호</th><th>전송시각</th><th>비고</th><th>출력</th></tr></thead><tbody id="dt-body"><tr><td colspan="6">조회 전</td></tr></tbody></table></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;"><button id="dt-prev" class="btn btn-secondary btn-sm" onclick="shiftDriverTemperaturePage(-1)" disabled>이전</button><button id="dt-next" class="btn btn-secondary btn-sm" onclick="shiftDriverTemperaturePage(1)" disabled>다음</button></div>
+  </div>
+  <div id="dt-view-modal" class="edit-modal-bg hidden">
+    <div class="edit-modal" style="max-width:760px;">
+      <h3>온도기록지 보기 / 출력</h3>
+      <div id="dt-view-info" style="font-size:13px;margin:10px 0;"></div>
+      <div style="max-height:60vh;overflow:auto;text-align:center;background:#eee;padding:10px;"><img id="dt-view-image" alt="전송된 온도기록지" style="width:55mm;max-width:100%;height:auto;"></div>
+      <p style="font-size:12px;color:#555;">인쇄 시 기록지 가로 5.5cm · A4 세로 · 배율 100%(실제 크기)</p>
+      <div class="em-btns"><button class="btn btn-secondary" onclick="closeDriverTemperatureRecord()">닫기</button><button id="dt-view-print" class="btn btn-primary" onclick="printDriverTemperatureRecord()" disabled>출력 (A4 · 폭 5.5cm)</button></div>
+    </div>
+  </div>
+
   <div class="stat-grid" id="da-stat-grid">
     <div class="stat"><div class="stat-label">등록 기사</div><div class="stat-val" id="da-stat-drivers">0명</div></div>
     <div class="stat"><div class="stat-label">주간 인정근로</div><div class="stat-val" id="da-stat-hours">0시간</div></div>
@@ -6177,6 +6202,7 @@ function initDriverAdmin(){
   if(week && !week.value) week.value = driverMondayValue();
   resetDriverAccountForm();
   resetDriverAttendanceForm();
+  window.initDriverTemperatureOffice?.();
   loadDriverAdminData();
 }
 
@@ -21516,6 +21542,8 @@ function initSamsung(){
 <script src="trace-integration.js?v=20260827m05preview1"></script>
 <script src="submaterial-usage-print.js?v=20260907a4usage1"></script>
 <script src="stock-report.js?v=20260907stockdate1"></script>
-<script src="m02-auth.js?v=20260907stockdate1"></script>
+<script src="temperature-record.js?v=20260908temp1"></script>
+<script src="driver-temperature-office.js?v=20260908temp1"></script>
+<script src="m02-auth.js?v=20260908temp1"></script>
 </body>
 </html>

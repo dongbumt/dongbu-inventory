@@ -143,6 +143,9 @@
     deleteWeekendWork:['attendance','delete'],
 
     saveDriverAccount:['driver_attendance','admin'],
+    loadDriverTemperatureRecords:['driver_attendance','view'],
+    openDriverTemperatureRecord:['driver_attendance','view'],
+    printDriverTemperatureRecord:['driver_attendance','view'],
     editDriverAccount:['driver_attendance','admin'],
     setDriverAccountActive:['driver_attendance','admin'],
     saveDriverAttendanceAdmin:['driver_attendance','write'],

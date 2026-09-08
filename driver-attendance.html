@@ -11,6 +11,7 @@
   <link rel="manifest" href="driver-manifest.webmanifest">
   <link rel="icon" href="driver-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="driver-icon-192.png">
+  <link rel="stylesheet" href="driver-temperature.css?v=20260908temp1">
   <style>
     :root{--ink:#22302d;--muted:#6c7774;--line:#d9dfdd;--bg:#f2f4f3;--panel:#fff;--brand:#0f766e;--brand-dark:#17342f;--danger:#c0392b;--warn:#b45309;--ok:#16724d}
     *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;background:var(--bg);color:var(--ink);letter-spacing:0}
@@ -79,6 +80,32 @@
           <div id="clock-message" class="message"></div>
         </div>
 
+        <section id="temperature-panel" class="panel">
+          <div class="section-title">차량 온도기록지 전송</div>
+          <p class="temp-help">기록지를 평평하게 펴고 어두운 바탕에서 네 모서리가 모두 보이게 촬영해주세요. 전체 사진은 저장하지 않고 기록지 부분만 전송합니다.</p>
+          <div class="temp-actions"><button id="temp-camera-btn" class="btn btn-secondary" type="button">사진 촬영</button><button id="temp-gallery-btn" class="btn btn-secondary" type="button">사진 선택</button></div>
+          <input id="temp-camera-input" class="hidden" type="file" accept="image/*" capture="environment">
+          <input id="temp-photo-input" class="hidden" type="file" accept="image/*">
+          <div id="temp-editor" class="hidden">
+            <p class="temp-help">네 점을 온도기록지의 네 모서리에 맞춰주세요. 글자와 숫자가 잘리지 않았는지 확인하세요.</p>
+            <canvas id="temp-canvas" aria-label="기록지 모서리 선택"></canvas>
+            <div class="temp-actions"><button id="temp-rotate-btn" class="btn btn-secondary" type="button">90° 회전</button><button id="temp-detect-btn" class="btn btn-secondary" type="button">영역 다시 찾기</button></div>
+            <button id="temp-crop-btn" class="btn btn-primary" type="button">기록지 부분 확인</button>
+          </div>
+          <div id="temp-preview" class="hidden">
+            <p class="temp-help">사무실에 전달할 기록지입니다. 글자가 선명한지 확인해주세요. 출력 폭은 5.5cm입니다.</p>
+            <img id="temp-preview-image" alt="잘라낸 온도기록지">
+            <div class="field"><label for="temp-date">기록일</label><input id="temp-date" type="date" required></div>
+            <div class="field"><label for="temp-vehicle">차량번호</label><input id="temp-vehicle" maxlength="32" placeholder="예: 12가 3456" required></div>
+            <div class="field"><label for="temp-note">비고 (선택)</label><input id="temp-note" maxlength="200" placeholder="예: 오전 배송"></div>
+            <div class="temp-actions"><button id="temp-back-btn" class="btn btn-secondary" type="button">영역 다시 맞추기</button><button id="temp-upload-btn" class="btn btn-primary" type="button">사무실로 전송</button></div>
+          </div>
+          <button id="temp-cancel-btn" class="btn btn-secondary hidden" type="button">사진 취소</button>
+          <div id="temp-message" class="message" role="status" aria-live="polite"></div>
+          <div class="section-title" style="margin-top:18px;">최근 7일 전송내역 <button id="temp-refresh-btn" class="mini-btn" type="button">새로고침</button></div>
+          <div id="temp-history" class="temp-help">로그인 후 확인할 수 있습니다.</div>
+        </section>
+
         <div class="metrics">
           <div class="metric"><small>이번 주 인정</small><strong id="week-total">0시간</strong></div>
           <div class="metric"><small>인천 가산</small><strong id="week-bonus">0시간</strong></div>
@@ -98,6 +125,8 @@
     </main>
   </div>
 
+  <script src="temperature-record.js?v=20260908temp1"></script>
+  <script src="driver-temperature.js?v=20260908temp1"></script>
   <script>
     const SUPABASE_URL='https://hdwjwtmbsxfjrlvicgnn.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY='sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
@@ -186,12 +215,13 @@
     }
     async function logoutDriver(){
       const token=driverToken;driverToken='';localStorage.removeItem(TOKEN_KEY);driverState=null;currentPosition=null;currentAddress='';currentRegion='기타';
+      DBMTDriverTemperature.reset();
       document.getElementById('app-view').classList.add('hidden');document.getElementById('login-view').classList.remove('hidden');document.getElementById('logout-btn').classList.add('hidden');
       if(token)rpc('dbmt_driver_logout',{p_token:token}).catch(()=>{});
     }
     async function loadState(){
       if(!driverToken)return;
-      try{driverState=await rpc('dbmt_driver_state',{p_token:driverToken});renderState();document.getElementById('login-view').classList.add('hidden');document.getElementById('app-view').classList.remove('hidden');document.getElementById('logout-btn').classList.remove('hidden');}
+      try{driverState=await rpc('dbmt_driver_state',{p_token:driverToken});renderState();document.getElementById('login-view').classList.add('hidden');document.getElementById('app-view').classList.remove('hidden');document.getElementById('logout-btn').classList.remove('hidden');DBMTDriverTemperature.onSession();}
       catch(err){localStorage.removeItem(TOKEN_KEY);driverToken='';document.getElementById('login-view').classList.remove('hidden');setMessage('login-message',err.message,'error');}
     }
     function renderState(){
@@ -228,6 +258,7 @@
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;const button=document.getElementById('install-btn');if(!driverToken)button.classList.remove('hidden');});
     document.getElementById('install-btn').addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;document.getElementById('install-btn').classList.add('hidden');});
     if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('driver-sw.js').catch(()=>{}));
+    DBMTDriverTemperature.init({rpc,getToken:()=>driverToken});
     setInterval(tick,1000);tick();if(driverToken)loadState();
   </script>
 </body>

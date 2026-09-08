@@ -75,6 +75,7 @@ Editor query for each file:
 53. `schema-rpc-31-erp-role-public-permissions.sql`
 54. `schema-rpc-32-erp-user-delete.sql`
 55. `schema-rpc-33-m05-trace-preview.sql`
+56. `schema-rpc-34-driver-temperature-records.sql`
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
