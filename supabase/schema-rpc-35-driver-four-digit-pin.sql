@@ -1,39 +1,6 @@
--- Delivery driver attendance - administrator read and account management.
-
-create or replace function public.dbmt_driver_admin_data(
-  p_password text,
-  p_week_start date default null
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions
-as $dbmt$
-declare
-  v_week date := coalesce(p_week_start, current_date);
-begin
-  if not public.dbmt_check_password(p_password) then
-    raise exception 'invalid app password';
-  end if;
-  return jsonb_build_object(
-    'accounts', coalesce((select jsonb_agg(to_jsonb(a) - 'password_hash'
-      order by a.employee_name) from public.driver_accounts a), '[]'::jsonb),
-    'locations', coalesce((select jsonb_agg(to_jsonb(l) order by l.name)
-      from public.driver_locations l), '[]'::jsonb),
-    'attendance', coalesce((select jsonb_agg(to_jsonb(x) order by x.start_at desc)
-      from (
-        select d.*, a.employee_name, a.login_id,
-          sl.name as start_location_name, el.name as end_location_name
-        from public.driver_attendance d
-        join public.driver_accounts a on a.id = d.account_id
-        left join public.driver_locations sl on sl.id = d.start_location_id
-        left join public.driver_locations el on el.id = d.end_location_id
-        where d.work_date between v_week and v_week + 6
-      ) x), '[]'::jsonb)
-  );
-end;
-$dbmt$;
-
+-- Apply after the existing driver account and personal ERP login schemas.
+-- Changes password-setting validation only. Existing hashes and login rules stay intact.
+-- The personal-session wrapper still requires driver_attendance admin permission.
 create or replace function public.dbmt_driver_admin_save_account(
   p_password text, p_employee_id text, p_employee_name text,
   p_login_id text, p_login_password text default null,
@@ -87,7 +54,3 @@ begin
   return jsonb_build_object('ok', true, 'id', v_id);
 end;
 $dbmt$;
-
-grant execute on function public.dbmt_driver_admin_data(text, date) to anon, authenticated;
-grant execute on function public.dbmt_driver_admin_save_account(text, text, text, text, text, boolean)
-  to anon, authenticated;

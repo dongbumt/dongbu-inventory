@@ -1,4 +1,4 @@
-const CACHE_NAME='dbmt-driver-attendance-v6-temperature';
+const CACHE_NAME='dbmt-driver-attendance-v7-pin';
 const APP_FILES=['./driver-attendance.html','./driver-manifest.webmanifest','./driver-icon-192.png','./driver-icon-512.png','./temperature-record.js?v=20260908temp1','./driver-temperature.js?v=20260908temp1','./driver-temperature.css?v=20260908temp1'];
 
 self.addEventListener('install',event=>{

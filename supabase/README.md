@@ -76,6 +76,13 @@ Editor query for each file:
 54. `schema-rpc-32-erp-user-delete.sql`
 55. `schema-rpc-33-m05-trace-preview.sql`
 56. `schema-rpc-34-driver-temperature-records.sql`
+57. `schema-rpc-35-driver-four-digit-pin.sql`
+
+Driver PIN upgrade: step 57 changes newly set driver passwords to exactly four
+ASCII digits. Existing hashes/login and blank-password edits are preserved.
+`tools/check-driver-pin-db.ps1` verifies this with rollback-only fixtures; add
+`-Apply` to commit only the function definition after all checks pass. No real
+driver passwords are reset by this upgrade.
 
 `schema-rpc.sql` contains the original combined setup. Use the split files above
 for the current setup and for safer execution in the Supabase dashboard.
