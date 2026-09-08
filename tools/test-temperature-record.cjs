@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {pathToFileURL}=require('node:url');
 const {chromium}=require('playwright');
 const repo=path.resolve(__dirname,'..');
-for(const file of ['temperature-record.js','driver-temperature.js','driver-temperature-office.js','driver-sw.js','m02-auth.js'])new vm.Script(fs.readFileSync(path.join(repo,file),'utf8'),{filename:file});
+for(const file of ['temperature-record.js','driver-temperature-ocr.js','driver-temperature.js','driver-temperature-office.js','driver-sw.js','m02-auth.js'])new vm.Script(fs.readFileSync(path.join(repo,file),'utf8'),{filename:file});
 for(const file of ['index.html','driver-attendance.html'])for(const match of fs.readFileSync(path.join(repo,file),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(match[1]);
 const photoIndex=process.argv.indexOf('--photo'),photo=photoIndex>=0?process.argv[photoIndex+1]:null;
 const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-temperature-'));
@@ -35,6 +35,8 @@ const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[
       await route.fulfill({contentType:'application/json',body:JSON.stringify(response)});
     });
     const page=await context.newPage();await page.goto(base+'/driver-attendance.html');await page.waitForSelector('#app-view:not(.hidden)');
+    // Real OCR and failure/cancel behavior are covered by test-temperature-vehicle-ocr.cjs.
+    await page.evaluate(()=>{DBMTTemperatureOCR.recognizeVehicle=async()=>({vehicleNo:'4245',confidence:95});});
     await page.evaluate(()=>{const original=DBMTTemperatureRecord.detectPaper;DBMTTemperatureRecord.detectPaper=source=>{const result=original(source);window.detectedPaper=result;return result;};});
     const sample=await page.evaluate(()=>{
       const c=document.createElement('canvas');c.width=1000;c.height=1600;const g=c.getContext('2d');g.fillStyle='#333';g.fillRect(0,0,c.width,c.height);g.fillStyle='#eee';g.fillRect(250,80,500,1440);g.fillStyle='#222';g.font='25px sans-serif';g.fillText('TEMPERATURE TEST / 4245',280,140);
@@ -49,7 +51,7 @@ const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[
     await page.screenshot({path:path.join(artifacts,'driver-corners.png'),fullPage:true});
     await page.locator('#temp-crop-btn').click();await page.waitForSelector('#temp-preview:not(.hidden)');
     await page.waitForFunction(()=>!document.getElementById('temp-upload-btn').disabled);
-    await page.locator('#temp-date').fill('2026-09-07');await page.locator('#temp-vehicle').fill('4245');
+    await page.locator('#temp-date').fill('2026-09-07');assert.equal(await page.locator('#temp-vehicle').inputValue(),'4245');
     const crop=await page.locator('#temp-preview-image').evaluate(img=>({image:img.src,width:img.naturalWidth,height:img.naturalHeight}));
     assert.ok(crop.width>=450&&crop.width<=900);assert.ok(crop.height>crop.width);assert.ok(crop.image.startsWith('data:image/jpeg;base64,'));
     await page.screenshot({path:path.join(artifacts,'driver-preview.png'),fullPage:true});

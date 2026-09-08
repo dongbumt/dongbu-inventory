@@ -2,3 +2,9 @@
 *.png binary
 *.jpg binary
 *.jpeg binary
+
+# Keep generated OCR assets byte-for-byte and out of source-code diffs.
+vendor/temperature-ocr/** linguist-vendored=true
+vendor/temperature-ocr/*.js -text -diff
+vendor/temperature-ocr/core/*.js -text -diff
+vendor/temperature-ocr/lang/*.gz binary

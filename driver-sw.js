@@ -1,5 +1,6 @@
-const CACHE_NAME='dbmt-driver-attendance-v7-pin';
-const APP_FILES=['./driver-attendance.html','./driver-manifest.webmanifest','./driver-icon-192.png','./driver-icon-512.png','./temperature-record.js?v=20260908temp1','./driver-temperature.js?v=20260908temp1','./driver-temperature.css?v=20260908temp1'];
+const CACHE_NAME='dbmt-driver-attendance-v8-vehicle-ocr';
+// OCR engine/model files are cached on first use, not during attendance startup.
+const APP_FILES=['./driver-attendance.html','./driver-manifest.webmanifest','./driver-icon-192.png','./driver-icon-512.png','./temperature-record.js?v=20260908temp1','./driver-temperature-ocr.js?v=20260908ocr1','./driver-temperature.js?v=20260908ocr1','./driver-temperature.css?v=20260908ocr1'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_FILES)).then(()=>self.skipWaiting()));

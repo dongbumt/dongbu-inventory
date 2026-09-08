@@ -4,4 +4,8 @@
 #temp-canvas{display:block;max-width:100%;margin:12px auto;touch-action:none;border:1px solid #999;background:#eee}
 #temp-preview-image{display:block;max-width:100%;max-height:55vh;object-fit:contain;margin:10px auto 16px;border:1px solid #aaa}
 #temp-cancel-btn{margin-top:10px}
+#temperature-panel .temp-vehicle-row{display:flex;gap:8px;align-items:stretch}
+#temperature-panel .temp-vehicle-row input{flex:1;min-width:0}
+#temperature-panel #temp-vehicle-retry-btn{width:auto;min-width:100px;flex-shrink:0;padding:10px}
+#temp-vehicle-status{display:block;color:#555;font-size:12px;line-height:1.5;margin-top:6px}
 #temp-history .temp-history-row{border-top:1px solid #ddd;padding:8px 0;font-size:12px;line-height:1.5}
