@@ -15,8 +15,8 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url=`http://127.0.0.1:${server.address().port}`;
   const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
-    const context=await browser.newContext({viewport:{width:1366,height:1000}});let calls=[],fail=true,completed=false,serverLogs=structuredClone(logs);
-    const status=()=>completed?[{workOrderId:order.id,productionId:entry.id,date:entry.date,jobNo:'1',completedAt:'2026-09-10T01:00:00Z'}]:[];
+    const context=await browser.newContext({viewport:{width:1366,height:1000}});let calls=[],fail=true,completed=false,deleted=false,currentProductionId=entry.id,serverLogs=structuredClone(logs),resubmits=[];
+    const status=()=>completed?[{workOrderId:order.id,productionId:currentProductionId,date:entry.date,jobNo:'1',completedAt:'2026-09-10T01:00:00Z',deleted}]:[];
     await context.addInitScript(()=>window.print=()=>{});
     await context.route('https://**/*',async route=>{
       const fn=route.request().url().split('/').pop(),body=route.request().postDataJSON();
@@ -26,6 +26,11 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
         calls.push(body);assert.deepEqual(body.p_log_ids.sort(),['a','b']);
         if(fail){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA 통신 오류"}'});return;}
         completed=true;result={ok:true,productionId:entry.id,completions:status()};
+      }else if(fn==='dbmt_label_resubmit_production'){
+        resubmits.push(body);assert.equal(body.p_previous_production_id,entry.id);
+        assert(!body.p_log_ids.includes('a'));assert(body.p_log_ids.includes('b'));assert.equal(body.p_log_ids.length,2);
+        if(fail){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA 재전송 오류"}'});return;}
+        deleted=false;currentProductionId='prod_label_replacement';result={ok:true,productionId:currentProductionId,completions:status()};
       }else if(fn==='dbmt_label_print_save_logs'){serverLogs=body.p_logs;result={ok:true,logs:serverLogs,completions:status()};}
       await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
     });
@@ -45,6 +50,26 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     assert.equal(await page.locator('#metric-output').textContent(),'12.35 kg');
     await page.reload();await page.locator('#app-password').fill('0927');await page.locator('#connect-btn').click();await page.waitForFunction(()=>!state.loading);assert(await page.locator('#complete-production-btn').isDisabled());assert.deepEqual(errors,[]);
     console.log('PASS: completion UI, failure/retry, void exclusion, duplicate guard, completed lock, reprint, browser restart');
+    deleted=true;await page.locator('#reload-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert(await page.locator('#print-btn').isEnabled());assert(await page.locator('#complete-production-btn').isEnabled());
+    assert(await page.locator('#print-weight').isEnabled());assert.equal(await page.locator('#history-body button[data-act="void"]:enabled').count(),2);
+    assert.match(await page.locator('#completion-status').textContent(),/전송 전 상태/);assert.match(await page.locator('#complete-production-btn').textContent(),/재전송/);
+    assert.equal(await page.evaluate(()=>state.logs.length),3,'Reopening must preserve print history');
+    await page.locator('#history-body button[data-act="void"][data-id="a"]').click();await page.waitForFunction(()=>!state.loading);
+    assert.equal(await page.locator('#metric-output').textContent(),'7.35 kg');
+    await page.locator('#print-weight').selectOption('custom');await page.locator('#print-weight-custom').fill('9');
+    const correctedPopup=page.waitForEvent('popup');await page.locator('#print-btn').click();const corrected=await correctedPopup;await corrected.waitForSelector('.print-label');await corrected.close();await page.waitForFunction(()=>!state.loading);
+    assert.equal(await page.locator('#metric-output').textContent(),'16.35 kg');assert.equal(await page.evaluate(()=>state.logs.length),4);
+    await page.screenshot({path:path.join(artifacts,'label-reopened.png'),fullPage:true});
+    fail=true;await page.locator('#complete-production-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert.match(await page.locator('#status').textContent(),/QA 재전송 오류/);assert(await page.locator('#print-btn').isEnabled());
+    fail=false;await page.locator('#complete-production-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert.equal(resubmits.length,2);assert.equal(calls.length,2,'Resubmission must use its own generation-aware endpoint');
+    assert(await page.locator('#print-btn').isDisabled());assert(await page.locator('#complete-production-btn').isDisabled());assert.equal(await page.locator('#history-body button[data-act="void"]:enabled').count(),0);
+    await page.evaluate(()=>completeProduction());assert.equal(resubmits.length,2);
+    await page.reload();await page.locator('#app-password').fill('0927');await page.locator('#connect-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert(await page.locator('#complete-production-btn').isDisabled());assert.equal(await page.evaluate(()=>state.completions[0].productionId),'prod_label_replacement');assert.deepEqual(errors,[]);
+    console.log('PASS: deleted journal reopen, history preservation, void/new output, corrected totals, generation-aware retry, relock and restart');
 
     const erp=await browser.newPage({viewport:{width:1550,height:1200}});await erp.route('**/*',route=>route.fulfill({contentType:'text/html',body:'<main></main>'}));await erp.goto(url+'/fixture');
     await erp.evaluate(html=>{const t=document.createElement('template');t.innerHTML=html;document.body.append(t.content.querySelector('#p-production'));document.getElementById('p-production').classList.add('active');},index);

@@ -23,6 +23,7 @@ try {
   }
   $schema = Get-Content -LiteralPath (Join-Path $taskRoot 'supabase/schema-rpc-36-label-production-completion.sql') -Encoding UTF8 -Raw
   $schema += "`n" + (Get-Content -LiteralPath (Join-Path $taskRoot 'supabase/schema-rpc-37-label-production-full-edit.sql') -Encoding UTF8 -Raw)
+  $schema += "`n" + (Get-Content -LiteralPath (Join-Path $taskRoot 'supabase/schema-rpc-38-label-production-reopen.sql') -Encoding UTF8 -Raw)
   $taskArgs = @((Join-Path $PSScriptRoot 'check-label-production-db.py'))
   if($Apply){ $taskArgs += '--apply' }
   $previousEncoding = $OutputEncoding

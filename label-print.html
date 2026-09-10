@@ -755,19 +755,25 @@
       renderCompletion();
     }
 
-    function completionFor(orderId){
+    function completionRecordFor(orderId){
       return state.completions.find(item=>String(item.workOrderId)===String(orderId));
+    }
+
+    function completionFor(orderId){
+      const record = completionRecordFor(orderId);
+      return record && !record.deleted ? record : null;
     }
 
     function renderCompletion(){
       const row = selectedOrder();
       const completed = row && completionFor(row.id);
+      const reopened = row && completionRecordFor(row.id)?.deleted;
       const button = $('complete-production-btn');
       button.disabled = state.loading || !row || !!completed || !activeLogsForOrder(row.id).length;
-      button.textContent = completed ? '생산일보 전송 완료' : '생산완료 · 생산일보 전송';
+      button.textContent = completed ? '생산일보 전송 완료' : (reopened ? '생산완료 · 생산일보 재전송' : '생산완료 · 생산일보 전송');
       $('completion-status').textContent = completed
-        ? (completed.deleted ? '사무실에서 삭제된 생산일보입니다. 재전송하지 않습니다.' : `${completed.date || ''} #${completed.jobNo || ''} 생산일보에 등록되었습니다. 원료·생산품목·중량 등은 ERP에서 수정할 수 있습니다.`)
-        : '출력 생산량을 생산일보·재고에 반영합니다. 완료 후에는 기존 라벨 재출력만 가능합니다.';
+        ? `${completed.date || ''} #${completed.jobNo || ''} 생산일보에 등록되었습니다. 원료·생산품목·중량 등은 ERP에서 수정할 수 있습니다.`
+        : (reopened ? '생산일보가 삭제되어 전송 전 상태로 돌아왔습니다. 기존 출력이력은 유지됩니다. 잘못 출력한 라벨을 삭제하고 필요한 라벨을 출력한 뒤 재전송하세요.' : '출력 생산량을 생산일보·재고에 반영합니다. 완료 후에는 기존 라벨 재출력만 가능합니다.');
       $('print-btn').disabled = state.loading || !row || !!completed;
       for(const id of ['print-weight','print-weight-custom','print-copies','print-size']){
         $(id).disabled = state.loading || !row || !!completed || (id==='print-weight-custom' && $(id).hidden);
@@ -779,13 +785,16 @@
       const row = selectedOrder();
       if(!row || completionFor(row.id)) return;
       const logs = activeLogsForOrder(row.id);
+      const previous = completionRecordFor(row.id);
       if(!logs.length){ setStatus('출력한 라벨이 없습니다.', 'warn'); return; }
       const weight = logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
       if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 출력 생산 ${kg(weight)} (${logs.length}장)\n\n생산일보와 재고에 반영할까요?\n완료 후에는 추가 출력·라벨 삭제가 제한됩니다.`)) return;
       setLoading(true);
       setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
       try {
-        const result = await sbRpc('dbmt_label_complete_production', {p_pin:state.pin,p_work_order_id:String(row.id),p_log_ids:logs.map(log=>String(log.id))});
+        const args = {p_pin:state.pin,p_work_order_id:String(row.id),p_log_ids:logs.map(log=>String(log.id))};
+        if(previous?.deleted) args.p_previous_production_id = previous.productionId;
+        const result = await sbRpc(previous?.deleted ? 'dbmt_label_resubmit_production' : 'dbmt_label_complete_production', args);
         if(result?.ok !== true) throw new Error(result?.message || '생산완료를 확인하지 못했습니다.');
         state.completions = normalizeArray(result.completions);
         renderAll();

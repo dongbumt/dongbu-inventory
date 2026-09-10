@@ -136,10 +136,48 @@ def fixture_tests(conn):
     normal=dict(id='qa_normal_'+suffix,date='2026/09/10',job_no='99',inputs=[],outputs=[],_isUser=True)
     assert rpc('dbmt_erp_save_production',token,normal,[],None)['ok']
     assert rpc('dbmt_erp_save_production',token,None,[],normal['id'])['ok']
+    def resubmit(ids,previous=pid,code=pin):
+        return rpc('dbmt_label_resubmit_production',code,order['id'],ids,previous)
+    reject(lambda:resubmit([a['id'],b['id']],code='invalid'),'PIN')
+    reject(lambda:resubmit([a['id'],b['id']]),'먼저 삭제')
     assert rpc('dbmt_erp_save_production',token,None,[],pid)['ok']
+    # A delayed original request cannot recreate a journal after the office deleted it.
     reject(lambda:complete([]),'삭제')
     assert pid in rpc('dbmt_erp_get_label_productions',token)['productionIds']
     assert not any(e['id']==pid for e in rpc('dbmt_erp_get_label_productions',token)['entries'])
+    status=next(c for c in rpc('dbmt_label_print_get_data',pin)['completions'] if c['workOrderId']==order['id'])
+    assert status['deleted'] is True
+    save([{**a,'status':'void','voidReason':'QA correction'}])
+    d=log('replacement',9);save([d])
+    # Failure after moving the marker into history must roll back that move too.
+    reject(lambda:resubmit([a['id'],b['id']]),'변경')
+    assert conn.execute('select production_id from public.label_production_completions where work_order_id=%s',(order['id'],)).fetchone()[0]==pid
+    assert not conn.execute('select 1 from public.label_production_completion_history where production_id=%s',(pid,)).fetchone()
+    with conn.transaction(force_rollback=True):
+        conn.execute('update public.transactions set deleted_at=null where prod_id=%s',(pid,))
+        reject(lambda:resubmit([b['id'],d['id']]),'재고')
+    resent=resubmit([b['id'],d['id']]);new_pid=resent['productionId'];assert new_pid!=pid
+    assert float(conn.execute('select output_weight from public.production_entries where id=%s',(new_pid,)).fetchone()[0])==16.35
+    archived=conn.execute('select baseline,successor_id from public.label_production_completion_history where production_id=%s',(pid,)).fetchone()
+    assert archived==(entry,new_pid)
+    assert conn.execute('select count(*) from public.transactions where prod_id=%s and deleted_at is null',(pid,)).fetchone()[0]==0
+    assert conn.execute('select count(*) from public.transactions where prod_id=%s and deleted_at is null',(new_pid,)).fetchone()[0]==2
+    assert resubmit([b['id'],d['id']])['productionId']==new_pid
+    assert resubmit([])['alreadyCompleted'] is True
+    assert complete([])['productionId']==new_pid
+    reject(lambda:save([log('after-resubmit')]),'생산완료')
+    reject(lambda:save([{**b,'status':'void'}]),'생산완료')
+    office=rpc('dbmt_erp_get_label_productions',token)
+    assert pid in office['productionIds'] and new_pid in office['productionIds']
+    assert new_pid in [e['id'] for e in office['entries']] and pid not in [e['id'] for e in office['entries']]
+    assert rpc('dbmt_erp_save_production',token,None,[],new_pid)['ok']
+    reject(lambda:resubmit([b['id'],d['id']]),'변경')
+    newest=resubmit([b['id'],d['id']],previous=new_pid)['productionId']
+    assert newest not in (pid,new_pid)
+    reject(lambda:resubmit([b['id'],d['id']]),'변경')
+    assert resubmit([],previous=new_pid)['productionId']==newest
+    assert conn.execute('select count(*) from public.label_production_completion_history where work_order_id=%s',(order['id'],)).fetchone()[0]==2
+    assert conn.execute("select has_table_privilege('anon','public.label_production_completion_history','SELECT')").fetchone()[0] is False
 
 
 def main():
@@ -152,7 +190,7 @@ def main():
             conn.execute('set local role postgres')
             conn.execute(sql)
             with conn.transaction(force_rollback=True): fixture_tests(conn)
-    print(json.dumps(dict(ok=True,schemaApplied=apply,fixturesRolledBack=True,tests='PIN, atomic postings, retries, stale logs, void/reprint, full journal edit, dates/types/LOTs/prices, row add/remove, provenance, permissions, normal journals, deleted completion')))
+    print(json.dumps(dict(ok=True,schemaApplied=apply,fixturesRolledBack=True,tests='PIN, atomic postings, full journal edit, reopen only deleted, corrected labels, resubmit rollback, repeated generations, stale retry protection, history/cache IDs, permissions')))
 
 
 if __name__=='__main__':
