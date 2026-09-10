@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
+<script src="label-weight.js?v=20260910workorder1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
 // variables are created so no prior business data exists behind the login wall.
@@ -3630,11 +3631,12 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <label>작업명</label>
           <input id="wo-title" placeholder="예) 돈등심 라벨작업" oninput="refreshWorkOrderPreview()">
         </div>
-        <div class="form-group" style="grid-column:1/-1;position:relative;">
+        <div class="form-group" style="grid-column:1/-1;">
           <label>투입 원료육 현재고 선택</label>
-          <input id="wo-stock-search" placeholder="품목명·이력번호·원산지·지점 검색" autocomplete="off"
-            oninput="renderWorkOrderStockResults()" onfocus="renderWorkOrderStockResults()" onblur="hideWorkOrderStockResultsSoon()">
-          <div id="wo-stock-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
+          <div class="txn-managed-product-field production-picker-field">
+            <input id="wo-stock-search" data-picker-context="workorder-input" placeholder="품목명·이력번호 검색 후 검색 버튼" autocomplete="off" oninput="onWorkOrderStockInput()" onkeydown="handleWorkOrderPickerKeydown(event,'stock')">
+            <button type="button" class="btn btn-secondary" onclick="openWorkOrderStockPicker()">검색</button>
+          </div>
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label>선택 원료육</label>
@@ -3651,12 +3653,13 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <option value="10x10">10 × 10cm</option>
           </select>
         </div>
-        <div class="form-group" style="grid-column:1/-1;position:relative;">
+        <div class="form-group" style="grid-column:1/-1;">
           <label>생산물 제품명</label>
-          <input id="wo-product" placeholder="품목관리 제품명 검색" autocomplete="off"
-            oninput="renderWorkOrderProductResults()" onfocus="renderWorkOrderProductResults()" onblur="hideWorkOrderProductResultsSoon()">
+          <div class="txn-managed-product-field production-picker-field">
+            <input id="wo-product" data-picker-context="workorder-output" placeholder="생산물 제품명 검색" autocomplete="off" oninput="onWorkOrderProductInput()" onkeydown="handleWorkOrderPickerKeydown(event,'product')">
+            <button type="button" class="btn btn-secondary" onclick="openWorkOrderProductPicker()">검색</button>
+          </div>
           <input type="hidden" id="wo-label-product-id">
-          <div id="wo-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
         </div>
         <div class="form-group">
           <label>원산지</label>
@@ -3676,7 +3679,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         </div>
         <div class="form-group">
           <label>생산 중량(KG)</label>
-          <input id="wo-weight" type="number" step="0.01" placeholder="0.00" oninput="refreshWorkOrderPreview()">
+          <input id="wo-weight" type="hidden">
+          <div style="padding:8px;background:#f8f9fa;border:1px solid var(--border);border-radius:6px;color:#555;">라벨 출력 시 1장당 중량을 선택합니다.</div>
         </div>
         <div class="form-group">
           <label>보관온도</label>
@@ -3745,6 +3749,11 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <select id="lbl-workorder-select" onchange="updateLabelPreview()">
             <option value="">-- 작업지시 선택 --</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label for="lbl-weight">라벨 1장 중량(KG)</label>
+          <select id="lbl-weight"><option value="">중량 선택</option></select>
+          <input id="lbl-weight-custom" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="중량 직접 입력" aria-label="라벨 중량 직접 입력(KG)" hidden style="margin-top:6px;">
         </div>
         <div class="form-group">
           <label>출력 매수</label>
@@ -7313,15 +7322,15 @@ function openTxnProductPicker(initialQuery, targetInput=null){
   const pickerContext = targetInput?.dataset?.pickerContext || '';
   const selectedProductId = pickerContext === 'production-output'
     ? (document.getElementById(`prod-out-product-id-${targetInput.dataset.productionRowId}`)?.value || '')
-    : '';
+    : (pickerContext === 'workorder-output' ? (document.getElementById('wo-label-product-id')?.value || '') : '');
   const selectedProduct = selectedProductId
     ? (labelProducts || []).find(product => String(product.id || '') === String(selectedProductId))
     : null;
-  txnProductPickerKind = pickerContext === 'production-output'
+  txnProductPickerKind = ['production-output','workorder-output'].includes(pickerContext)
     ? (selectedProduct ? txnProductKindValue(selectedProduct) : '제품')
     : '원료육';
   const title = document.getElementById('txn-product-picker-title');
-  if(title) title.textContent = pickerContext === 'production-output' ? '생산 품목 선택' : (targetInput ? '입고일괄 품목 선택' : '입고 품목 선택');
+  if(title) title.textContent = pickerContext === 'workorder-output' ? '작업지시 생산물 제품 선택' : (pickerContext === 'production-output' ? '생산 품목 선택' : (targetInput ? '입고일괄 품목 선택' : '입고 품목 선택'));
   syncTxnProductKindButtons();
   const allSearch = document.getElementById('tpp-search-all');
   const nameSearch = document.getElementById('tpp-search-name');
@@ -7438,6 +7447,12 @@ function confirmTxnProductPicker(){
   if(!selectedProduct) return;
   if(txnProductPickerTargetInput){
     const targetInput = txnProductPickerTargetInput;
+    if(targetInput.dataset?.pickerContext === 'workorder-output'){
+      selectWorkOrderLabelProduct(selectedProduct.id);
+      closeTxnProductPicker(false);
+      requestAnimationFrame(()=>document.getElementById('wo-origin')?.focus());
+      return;
+    }
     if(targetInput.dataset?.pickerContext === 'production-output'){
       const rowId = targetInput.dataset.productionRowId;
       const productIndex = (labelProducts || []).indexOf(selectedProduct);
@@ -7627,7 +7642,7 @@ function getTxnStockPickerOptions(){
 }
 
 function isProductionInputStockPicker(){
-  return txnStockPickerTargetInput?.dataset?.pickerContext === 'production-input';
+  return ['production-input','workorder-input'].includes(txnStockPickerTargetInput?.dataset?.pickerContext);
 }
 
 function txnStockPickerProductMeta(stock){
@@ -7697,12 +7712,12 @@ function openTxnStockPicker(initialQuery, targetInput=null){
   const allSearch = document.getElementById('tsp-search-all');
   const pickerContext = targetInput?.dataset?.pickerContext || '';
   const selectedKey = targetInput
-    ? (pickerContext === 'production-input' ? (targetInput.dataset.stockKey || '') : (targetInput.closest('tr')?.querySelector('.bulk-out-key')?.value || ''))
+    ? (pickerContext === 'workorder-input' ? (document.getElementById('wo-stock-key')?.value || '') : (pickerContext === 'production-input' ? (targetInput.dataset.stockKey || '') : (targetInput.closest('tr')?.querySelector('.bulk-out-key')?.value || '')))
     : (document.getElementById('t-stock-key')?.value || '');
   const sourceValue = targetInput?.value || document.getElementById('t-stock-search')?.value || '';
   if(allSearch) allSearch.value = initialQuery !== undefined ? String(initialQuery || '') : (selectedKey ? '' : sourceValue);
   const title = document.getElementById('txn-stock-picker-title');
-  if(title) title.textContent = pickerContext === 'production-input' ? '생산 투입 재고 선택' : (targetInput ? '출고일괄 재고 선택' : '출고 재고 선택');
+  if(title) title.textContent = pickerContext === 'workorder-input' ? '작업지시 투입 원료육 선택' : (pickerContext === 'production-input' ? '생산 투입 재고 선택' : (targetInput ? '출고일괄 재고 선택' : '출고 재고 선택'));
   refreshTxnStockPickerColumns();
   const nameSearch = document.getElementById('tsp-search-name');
   const lotSearch = document.getElementById('tsp-search-lot');
@@ -7713,7 +7728,7 @@ function openTxnStockPicker(initialQuery, targetInput=null){
     if(element) element.value = '';
   });
   refreshTxnStockPickerFilterOptions();
-  if(pickerContext === 'production-input'){
+  if(isProductionInputStockPicker()){
     const selectedStock = selectedKey ? getTxnStockPickerOptions().find(stock=>stock.key === selectedKey) : null;
     const defaultLocation = normalizeStockLocation(selectedStock?.stockLocation || STOCK_LOCATION_DEFAULT);
     const locationSelect = document.getElementById('tsp-search-location');
@@ -7846,6 +7861,12 @@ function confirmTxnStockPicker(){
   if(!stock) return;
   const targetInput = txnStockPickerTargetInput;
   if(targetInput){
+    if(targetInput.dataset?.pickerContext === 'workorder-input'){
+      selectWorkOrderStock(stock.key);
+      closeTxnStockPicker(false);
+      requestAnimationFrame(()=>document.getElementById('wo-input-weight')?.focus());
+      return;
+    }
     if(targetInput.dataset?.pickerContext === 'production-input'){
       const rowId = targetInput.dataset.productionRowId;
       const source = stock.source || (stock.produced_weight > 0 ? '생산입고' : '입고');
@@ -19625,7 +19646,36 @@ function onWorkOrderDateChange(){
   const mfgEl = document.getElementById('wo-mfgdate');
   if(mfgEl) mfgEl.value = date;
   autoSetWorkOrderExpiry();
-  renderWorkOrderStockResults();
+  refreshWorkOrderPreview();
+}
+
+function openWorkOrderStockPicker(){
+  const input = document.getElementById('wo-stock-search');
+  if(input) openTxnStockPicker(document.getElementById('wo-stock-key')?.value ? '' : input.value, input);
+}
+
+function openWorkOrderProductPicker(){
+  const input = document.getElementById('wo-product');
+  if(input) openTxnProductPicker(document.getElementById('wo-label-product-id')?.value ? '' : input.value, input);
+}
+
+function handleWorkOrderPickerKeydown(event,kind){
+  if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
+    event.preventDefault();
+    if(kind === 'stock') openWorkOrderStockPicker(); else openWorkOrderProductPicker();
+  }
+}
+
+function onWorkOrderStockInput(){
+  const previous = findWorkOrderStock(document.getElementById('wo-stock-key')?.value || '');
+  if(previous && document.getElementById('wo-lot').value === previous.lot) document.getElementById('wo-lot').value = '';
+  document.getElementById('wo-stock-key').value = '';
+  document.getElementById('wo-stock-summary').value = '';
+  refreshWorkOrderPreview();
+}
+
+function onWorkOrderProductInput(){
+  document.getElementById('wo-label-product-id').value = '';
   refreshWorkOrderPreview();
 }
 
@@ -19637,53 +19687,12 @@ function selectedWorkOrderLabelProduct(){
   return (labelProducts || []).find(p => samePriceText(p.name || '', product)) || null;
 }
 
-function workOrderProductSearchText(p){
-  return [p.productCode, p.name, p.brand, p.factoryNo, p.nationalPartCode, nationalPartNameForCode(p.nationalPartCode), p.packunit, p.origin, p.meattype, normalizeLabelProductTaxType(p.taxType), p.storage, p.shelfdays, p.itemno, p.grade].join(' ');
-}
-
-function renderWorkOrderProductResults(){
-  const input = document.getElementById('wo-product');
-  const box = document.getElementById('wo-product-results');
-  const hidden = document.getElementById('wo-label-product-id');
-  if(!input || !box) return;
-  if(hidden && hidden.value){
-    const selected = (labelProducts || []).find(p => String(p.id || '') === String(hidden.value));
-    if(!selected || String(selected.name || '').trim() !== String(input.value || '').trim()) hidden.value = '';
-  }
-  const q = bulkOutboundSearchKey(input.value);
-  let rows = (labelProducts || []).slice();
-  if(q) rows = rows.filter(p => bulkOutboundSearchKey(workOrderProductSearchText(p)).includes(q));
-  rows = rows.slice(0, 80);
-  if(!rows.length){
-    box.innerHTML = '<div style="padding:10px;font-size:12px;color:#999;">품목관리에 등록된 제품이 없습니다.</div>';
-  } else {
-    box.innerHTML = rows.map(p => `
-      <div data-id="${htmlEscape(p.id || '')}" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;"
-        onmousedown="selectWorkOrderLabelProduct(this.dataset.id)">
-        <div style="font-weight:800;color:#2c3e50;">${p.productCode ? htmlEscape(p.productCode)+' · ' : ''}${htmlEscape(p.name || '')}${p.packunit ? ' / ' + htmlEscape(p.packunit) : ''}</div>
-        <div style="color:#666;margin-top:2px;">${htmlEscape([p.brand && '브랜드 '+p.brand, p.factoryNo && '공장 '+p.factoryNo, p.nationalPartCode && `${p.nationalPartCode} ${nationalPartNameForCode(p.nationalPartCode)}`, p.origin, p.meattype, normalizeLabelProductTaxType(p.taxType), p.storage, p.shelfdays ? '소비기한 ' + p.shelfdays + '일' : '', p.itemno].filter(Boolean).join(' / '))}</div>
-      </div>
-    `).join('');
-  }
-  box.style.display = 'block';
-  refreshWorkOrderPreview();
-}
-
-function hideWorkOrderProductResultsSoon(){
-  setTimeout(() => {
-    const box = document.getElementById('wo-product-results');
-    if(box) box.style.display = 'none';
-  }, 180);
-}
-
 function selectWorkOrderLabelProduct(productId){
   const p = (labelProducts || []).find(row => String(row.id || '') === String(productId));
   if(!p) return;
   const hidden = document.getElementById('wo-label-product-id');
   if(hidden) hidden.value = p.id || '';
   applyWorkOrderLabelProduct(p);
-  const box = document.getElementById('wo-product-results');
-  if(box) box.style.display = 'none';
 }
 
 function applyWorkOrderLabelProduct(product){
@@ -19746,39 +19755,6 @@ function workOrderStockLabel(s){
   return parts.join(' / ');
 }
 
-function renderWorkOrderStockResults(){
-  const box = document.getElementById('wo-stock-results');
-  const input = document.getElementById('wo-stock-search');
-  if(!box || !input) return;
-  const q = bulkOutboundSearchKey(input.value);
-  let rows = workOrderStockOptions();
-  if(q){
-    rows = rows.filter(s => bulkOutboundSearchKey([
-      s.product, s.packunit, s.stockLocation, s.lot, s.origin, s.proddate, s.price
-    ].join(' ')).includes(q));
-  }
-  rows = rows.slice(0, 80);
-  if(!rows.length){
-    box.innerHTML = '<div style="padding:10px;font-size:12px;color:#999;">검색되는 현재고가 없습니다.</div>';
-  } else {
-    box.innerHTML = rows.map(s => `
-      <div data-key="${htmlEscape(s.key)}" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f3f5;"
-        onmousedown="selectWorkOrderStock(this.dataset.key)">
-        <div style="font-weight:800;color:#2c3e50;">${htmlEscape(s.product || '')}${s.packunit ? ' / ' + htmlEscape(s.packunit) : ''}</div>
-        <div style="color:#666;margin-top:2px;">${htmlEscape(workOrderStockLabel(s))}</div>
-      </div>
-    `).join('');
-  }
-  box.style.display = 'block';
-}
-
-function hideWorkOrderStockResultsSoon(){
-  setTimeout(() => {
-    const box = document.getElementById('wo-stock-results');
-    if(box) box.style.display = 'none';
-  }, 180);
-}
-
 function selectWorkOrderStock(key){
   const s = findWorkOrderStock(key);
   if(!s) return;
@@ -19790,25 +19766,23 @@ function selectWorkOrderStock(key){
   set('wo-stock-search', s.product || '');
   set('wo-stock-summary', workOrderStockLabel(s));
   if(!document.getElementById('wo-input-weight')?.value) set('wo-input-weight', parseAppNumber(s.stock).toFixed(2));
-  if(!document.getElementById('wo-lot')?.value) set('wo-lot', s.lot || '');
+  set('wo-lot', s.lot || '');
   if(!document.getElementById('wo-origin')?.value) set('wo-origin', s.origin || '');
   if(!document.getElementById('wo-ingredients')?.value){
     set('wo-ingredients', `${inferLabelMeatType(s.product, '')} 100%`);
   }
-  const box = document.getElementById('wo-stock-results');
-  if(box) box.style.display = 'none';
   refreshWorkOrderPreview();
 }
 
 function collectWorkOrderForm(){
   const val = id => document.getElementById(id)?.value || '';
-  const stock = findWorkOrderStock(val('wo-stock-key'));
+  const existing = workOrders.find(row => String(row.id) === val('wo-edit-id'));
+  const stock = findWorkOrderStock(val('wo-stock-key')) || (existing?.sourceStockKey === val('wo-stock-key') ? existing.sourceStock : null);
   const product = val('wo-product').trim();
   const date = val('wo-date');
   const weight = parseAppNumber(val('wo-weight'));
   if(!date){ alert('작업일을 입력해주세요.'); return null; }
   if(!product){ alert('생산물 제품명을 입력해주세요.'); return null; }
-  if(!weight){ alert('생산 중량을 입력해주세요.'); return null; }
   const selectedProduct = selectedWorkOrderLabelProduct();
   return {
     id: val('wo-edit-id') || workOrderId(),
@@ -19942,7 +19916,7 @@ function renderWorkOrders(){
       <tr>
         <td>${htmlEscape(r.date || '')}</td>
         <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div></td>
-        <td style="text-align:right;">${parseAppNumber(r.weight).toFixed(2)} KG</td>
+        <td style="text-align:right;">${parseAppNumber(r.weight) > 0 ? parseAppNumber(r.weight).toFixed(2)+' KG (기존값)' : '출력 시 선택'}</td>
         <td>${htmlEscape(r.lot || '')}</td>
         <td style="font-size:11px;color:#555;">${htmlEscape(r.sourceStock ? workOrderStockLabel(r.sourceStock) : '-')}</td>
         <td style="white-space:nowrap;">
@@ -20012,7 +19986,7 @@ function selectedLabelWorkOrder(){
 
 function labelWorkOrderOptionText(row){
   const title = row.title ? `${row.title} / ` : '';
-  return `${title}${row.product || ''} / ${parseAppNumber(row.weight).toFixed(2)}KG${row.lot ? ' / LOT ' + row.lot : ''}`;
+  return `${title}${row.product || ''} / ${parseAppNumber(row.weight) > 0 ? parseAppNumber(row.weight).toFixed(2)+'KG' : '중량 출력 시 선택'}${row.lot ? ' / LOT ' + row.lot : ''}`;
 }
 
 function refreshLabelWorkOrderSelect(){
@@ -20067,6 +20041,7 @@ function updateSelectedWorkOrderLabelPreview(){
   const summary = document.getElementById('lbl-workorder-summary');
   if(!el) return;
   const row = selectedLabelWorkOrder();
+  DBMTLabelWeight.sync('lbl-weight', row, updateLabelPreview);
   if(!row){
     el.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px;">작업지시를 선택하세요.</div>';
     if(summary) summary.textContent = '작업지시를 선택하면 라벨 정보가 표시됩니다.';
@@ -20074,12 +20049,13 @@ function updateSelectedWorkOrderLabelPreview(){
   }
   const cfg = labelSizeConfigByKey(row.labelSize || '7x10');
   applyLabelPreviewSizeForConfig(cfg);
-  el.innerHTML = buildLabelBody(workOrderLabelData(row));
+  const weight = DBMTLabelWeight.value('lbl-weight');
+  el.innerHTML = buildLabelBody(workOrderLabelData({...row, weight}));
   if(summary){
     summary.innerHTML =
       `<strong>${htmlEscape(row.product || '')}</strong><br>` +
       `작업일: ${htmlEscape(row.date || '')}<br>` +
-      `중량: ${parseAppNumber(row.weight).toFixed(2)} KG<br>` +
+      `중량: ${weight ? weight.toFixed(2)+' KG' : '선택해주세요'}<br>` +
       `이력번호: ${htmlEscape(row.lot || row.sourceStock?.lot || '')}<br>` +
       `투입 원료육: ${htmlEscape(row.sourceStock ? workOrderStockLabel(row.sourceStock) : '-')}`;
   }
@@ -20088,7 +20064,9 @@ function updateSelectedWorkOrderLabelPreview(){
 function printSelectedWorkOrderLabel(){
   const row = selectedLabelWorkOrder();
   if(!row){ alert('출력할 작업지시를 선택해주세요.'); return; }
-  printLabelData(workOrderLabelData(row), row.labelSize || '7x10', getLabelPrintCount());
+  const weight = DBMTLabelWeight.value('lbl-weight');
+  if(!weight){ alert('라벨 1장 중량을 0보다 큰 값으로 선택하거나 소수 둘째 자리까지 입력해주세요.'); return; }
+  printLabelData(workOrderLabelData({...row, weight}), row.labelSize || '7x10', getLabelPrintCount());
 }
 
 function getLabelPrintCount(){

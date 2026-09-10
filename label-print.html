@@ -273,7 +273,7 @@
 
     .print-line {
       display: grid;
-      grid-template-columns: 1.2fr 84px 84px auto auto;
+      grid-template-columns: minmax(120px,1fr) minmax(140px,180px) 64px 74px auto auto;
       gap: 6px;
       align-items: end;
     }
@@ -384,6 +384,7 @@
       .left, .right { min-height: 360px; }
       .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .print-line { grid-template-columns: 1fr 70px 80px; }
+      .print-line .product-field { grid-column: 1 / -1; }
       .print-line button { grid-column: span 1; }
     }
 
@@ -456,9 +457,14 @@
         </div>
         <div class="panel-body">
           <div class="print-line">
-            <div class="field">
+            <div class="field product-field">
               <label>제품명</label>
               <input id="print-product" type="text" readonly>
+            </div>
+            <div class="field">
+              <label for="print-weight">라벨 1장 중량(KG)</label>
+              <select id="print-weight"><option value="">중량 선택</option></select>
+              <input id="print-weight-custom" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="중량 직접 입력" aria-label="라벨 중량 직접 입력(KG)" hidden style="margin-top:5px;">
             </div>
             <div class="field">
               <label>매수</label>
@@ -503,6 +509,7 @@
     </section>
   </main>
 
+  <script src="label-weight.js?v=20260910workorder1"></script>
   <script src="company-master.js?v=20260813m01"></script>
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -716,6 +723,9 @@
         const el = $(id);
         if(el) el.disabled = isLoading;
       });
+      $('print-weight').disabled = isLoading || !selectedOrder();
+      $('print-weight-custom').disabled = isLoading || !selectedOrder() || $('print-weight-custom').hidden;
+      ['print-size','print-copies'].forEach(id=>$(id).disabled=isLoading);
     }
 
     async function saveLogs(){
@@ -753,6 +763,7 @@
       $('order-count').textContent = `${rows.length}건`;
       const list = $('order-list');
       if(!rows.length){
+        state.selectedId = '';
         list.innerHTML = `<div class="empty">${state.workOrders.length ? '조건에 맞는 작업지시가 없습니다.' : '작업지시가 없습니다.'}</div>`;
         return;
       }
@@ -777,6 +788,7 @@
     }
 
     function selectOrder(id){
+      if(state.loading) return;
       state.selectedId = id;
       renderAll();
     }
@@ -797,6 +809,9 @@
 
     function renderSelected(){
       const row = selectedOrder();
+      DBMTLabelWeight.sync('print-weight', row, ()=>{
+        $('metric-label-weight').textContent = kg(DBMTLabelWeight.value('print-weight'));
+      });
       if(!row){
         $('selected-name').textContent = '작업지시를 선택하세요.';
         $('selected-date').textContent = '-';
@@ -813,7 +828,7 @@
       }
       const active = activeLogsForOrder(row.id);
       const inputWeight = toNumber(row.inputWeight);
-      const labelWeight = toNumber(row.weight);
+      const labelWeight = DBMTLabelWeight.value('print-weight');
       const outputWeight = active.reduce((sum, log) => sum + toNumber(log.labelWeight), 0);
       const lossWeight = inputWeight ? inputWeight - outputWeight : 0;
       const yieldRate = inputWeight ? outputWeight / inputWeight * 100 : NaN;
@@ -877,11 +892,16 @@
     }
 
     async function printSelectedLabels(){
+      if(state.loading) return;
       const row = selectedOrder();
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
         return;
       }
+      const weight = DBMTLabelWeight.value('print-weight');
+      if(!weight){ setStatus('라벨 1장 중량을 선택하거나 0보다 큰 값을 소수 둘째 자리까지 입력하세요.', 'warn'); return; }
+      const size = $('print-size').value || row.labelSize || '7x10';
+      const printRow = {...row, weight, labelSize:size};
       const win = window.open('', '_blank', 'width=420,height=720');
       if(!win){
         setStatus('팝업이 차단되어 출력창을 열 수 없습니다.', 'err');
@@ -890,7 +910,7 @@
 
       const count = printCount();
       const batchId = `LPB-${compactDateTime()}-${hashText(`${row.id}-${Date.now()}`).slice(0, 5)}`;
-      const records = Array.from({length: count}, (_, index) => makePrintLog(row, batchId, index + 1));
+      const records = Array.from({length: count}, (_, index) => makePrintLog(printRow, batchId, index + 1));
       const previousLogs = state.logs.slice();
       state.logs = [...records, ...state.logs];
       renderAll();
@@ -898,7 +918,7 @@
       setStatus('출력이력 저장 중...', 'warn');
       try {
         await saveLogs();
-        writePrintDocument(win, records, $('print-size').value || row.labelSize || '7x10');
+        writePrintDocument(win, records, size);
         setStatus(`출력 저장됨: ${records.length}장`, 'ok');
       } catch(err) {
         state.logs = previousLogs;
@@ -911,19 +931,23 @@
     }
 
     async function previewSelectedLabel(){
+      if(state.loading) return;
       const row = selectedOrder();
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
         return;
       }
-      const sample = makePrintLog(row, 'PREVIEW', 1);
+      const weight = DBMTLabelWeight.value('print-weight');
+      if(!weight){ setStatus('미리보기할 라벨 1장 중량을 선택하거나 입력하세요.', 'warn'); return; }
+      const size = $('print-size').value || row.labelSize || '7x10';
+      const sample = makePrintLog({...row, weight, labelSize:size}, 'PREVIEW', 1);
       sample.code = 'PREVIEW-0001';
       const win = window.open('', '_blank', 'width=420,height=720');
       if(!win){
         setStatus('팝업이 차단되어 미리보기를 열 수 없습니다.', 'err');
         return;
       }
-      writePrintDocument(win, [sample], $('print-size').value || row.labelSize || '7x10', true);
+      writePrintDocument(win, [sample], size, true);
     }
 
     async function reprintLog(id){
@@ -1002,7 +1026,7 @@
         lot: row.lot || row.sourceStock?.lot || '',
         labelWeight: toNumber(row.weight),
         inputWeight: toNumber(row.inputWeight),
-        sizeKey: $('print-size').value || row.labelSize || '7x10',
+        sizeKey: row.labelSize || '7x10',
         reprintCount: 0,
         workOrderSnapshot: snapshotOrder(row)
       };
@@ -1025,7 +1049,7 @@
         temptype: row.temptype || '냉동',
         inputWeight: toNumber(row.inputWeight),
         sourceStock: row.sourceStock || null,
-        labelSize: $('print-size').value || row.labelSize || '7x10'
+        labelSize: row.labelSize || '7x10'
       };
     }
 
