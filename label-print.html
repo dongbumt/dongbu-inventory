@@ -514,6 +514,7 @@
   </main>
 
   <script src="label-weight.js?v=20260910workorder1"></script>
+  <script src="label-print-document.js?v=20260910print1"></script>
   <script src="company-master.js?v=20260813m01"></script>
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -1153,68 +1154,12 @@
     }
 
     function writePrintDocument(win, logs, sizeKey='7x10', preview=false){
-      const size = sizeConfig(sizeKey);
       const labels = logs.map(log => {
         const data = labelDataFromLog(log);
         return `<section class="print-label">${buildLabelBody(data)}</section>`;
       }).join('');
-      const doc = `<!DOCTYPE html>
-        <html lang="ko">
-        <head>
-          <meta charset="UTF-8">
-          <title>라벨 출력</title>
-          <style>
-            @page { size: ${size.widthCm}cm ${size.heightCm}cm; margin: 0; }
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            html, body { margin: 0; padding: 0; background: #fff; }
-            body {
-              width: ${size.widthCm}cm;
-              font-family: "Malgun Gothic", "맑은 고딕", Arial, sans-serif;
-              font-size: 7pt;
-              color: #000;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            .print-label {
-              width: ${size.widthCm}cm;
-              height: ${size.heightCm}cm;
-              page-break-after: always;
-              break-after: page;
-              border: 2px solid #000;
-              padding: 1.5pt 2pt 4pt;
-              display: flex;
-              flex-direction: column;
-              line-height: 1.2;
-              font-weight: bold;
-              overflow: hidden;
-              background: #fff;
-            }
-            .print-label:last-child { page-break-after: auto; break-after: auto; }
-            .preview-watermark {
-              position: fixed;
-              inset: 0;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 28pt;
-              font-weight: 900;
-              color: rgba(180, 35, 24, 0.18);
-              transform: rotate(-25deg);
-              pointer-events: none;
-            }
-          </style>
-        </head>
-        <body>
-          ${labels}
-          ${preview ? '<div class="preview-watermark">미리보기</div>' : ''}
-          <script>
-            window.onload = function(){ ${preview ? '' : 'window.print();'} };
-          <\/script>
-        </body>
-        </html>`;
-      win.document.open();
-      win.document.write(doc);
-      win.document.close();
+      const doc = DBMTLabelPrint.createDocument({labelsHtml:labels,sizeKey,preview});
+      DBMTLabelPrint.write(win,doc);
     }
 
     function labelDataFromLog(log){

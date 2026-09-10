@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
 <script src="label-weight.js?v=20260910workorder1"></script>
+<script src="label-print-document.js?v=20260910print1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
 // variables are created so no prior business data exists behind the login wall.
@@ -20890,24 +20891,13 @@ function updateLabelPreview(){
 }
 
 function printLabelData(data, sizeKey='7x10', copies=1){
-  const sizeCfg = labelSizeConfigByKey(sizeKey);
   const count = Math.max(1, Math.min(parseInt(copies || 1, 10) || 1, 500));
   const labelsHtml = Array.from({length: count}, () => `<div class="lbl-label">${buildLabelBody(data)}</div>`).join('');
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <style>
-    @page { size: ${sizeCfg.widthCm}cm ${sizeCfg.heightCm}cm; margin: 0; }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { width:${sizeCfg.widthCm}cm; font-family:'Malgun Gothic','맑은 고딕',sans-serif; font-size:7pt; background:#fff; }
-    .lbl-label { width:${sizeCfg.widthCm}cm; height:${sizeCfg.heightCm}cm; border:2px solid #000; display:flex; flex-direction:column; padding:1.5pt 2pt 4pt; overflow:hidden; box-sizing:border-box; line-height:1.2; font-weight:bold; -webkit-print-color-adjust:exact; print-color-adjust:exact; page-break-after:always; break-after:page; }
-    .lbl-label:last-child { page-break-after:auto; break-after:auto; }
-  </style></head><body>
-  ${labelsHtml}
-  </body></html>`;
+  const html = DBMTLabelPrint.createDocument({labelsHtml,sizeKey});
 
   const win = window.open('', '_blank', 'width=400,height=600');
-  win.document.write(html);
-  win.document.close();
-  win.onload = () => { win.print(); };
+  if(!win){ alert('팝업이 차단되어 라벨 인쇄창을 열 수 없습니다. 팝업을 허용한 뒤 다시 시도해주세요.'); return; }
+  DBMTLabelPrint.write(win,html);
 }
 
 function printLabel(){
