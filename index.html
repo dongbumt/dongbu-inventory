@@ -1106,6 +1106,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="ct-bar" style="background:var(--orange);"></div>
       새 생산일보 입력
     </div>
+    <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 전송된 원료·생산품목·중량은 고정됩니다. 아래에서 원료를 추가하고 저장하거나 목록의 부자재 버튼에서 사용내역을 수정하세요.</div>
     <div class="form-row">
       <div class="form-group"><label>작업일</label><input type="date" id="prod-date" onchange="autoSetJobNo()"></div>
       <div class="form-group"><label>작업번호</label><input id="prod-job-no" placeholder="1" style="width:80px;"></div>
@@ -1130,7 +1131,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div id="prod-output-rows">
       <!-- JS로 렌더 -->
     </div>
-    <button class="btn btn-secondary btn-sm" onclick="addProdOutputRow()" style="margin-bottom:10px;">+ 생산 품목 추가</button>
+    <button id="prod-output-add-btn" class="btn btn-secondary btn-sm" onclick="addProdOutputRow()" style="margin-bottom:10px;">+ 생산 품목 추가</button>
 
     <div class="btn-row">
       <button class="btn btn-success" onclick="saveProdEntry()">✓ 생산일보 저장</button>
@@ -5113,6 +5114,7 @@ function renderPageById(id, reason='menu'){
         updateOriginList();
         if(reason === 'menu') prepareProductionList();
         else renderProduction();
+        if(reason === 'menu') asyncTask = refreshLabelProductions().then(()=>{ if(productionListQueryActive) renderProduction(); });
         scheduleProductionPickerWarmup();
         break;
       case 'p-prod-loss':
@@ -5909,11 +5911,21 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
     p_replace_id:deletedProdId ? String(deletedProdId) : null
   });
   assertPersonalServerResult(result, '생산일보를 저장할 권한이 없습니다.');
+  if(result.entry && Array.isArray(result.transactionRows)){
+    Object.assign(entry, result.entry);
+    userProdEntries = userProdEntries.filter(e=>String(e.id)!==String(entry.id));
+    userProdEntries.push(entry);
+    userTransactions = userTransactions.filter(t=>String(t._prodId)!==String(entry.id));
+    userTransactions.push(...result.transactionRows);
+    transactions = [...EXCEL_TRANSACTIONS,...userTransactions];
+  }
   gsShowSync('✅ Supabase 생산일보 저장 완료');
   return result;
 }
 
 async function saveProductionRows(entry, transactionRows, deletedProdId, deletedProdEntry){
+  productionWritePending += 1;
+  try {
   markLocalCoreChanged();
   normalizeLocalTransactionIds();
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
@@ -5929,6 +5941,7 @@ async function saveProductionRows(entry, transactionRows, deletedProdId, deleted
   safeLocalStorageSet('dbmt_user_prod', JSON.stringify(userProdEntries), true);
   safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') save();
+  } finally { productionWritePending -= 1; }
 }
 
 async function supabaseLoadSubMaterialUsages(token=requireSupabasePassword()){
@@ -10234,6 +10247,9 @@ let prodInputRowCount = 0;
 let prodOutputRowCount = 0;
 
 function initProdForm(){
+  _editProdId=null;
+  _labelEditEntry=null;
+  applyLabelProductionLocks();
   document.getElementById('prod-date').value = today;
   const noteEl = document.getElementById('prod-note');
   if(noteEl) noteEl.value = '';
@@ -10550,6 +10566,7 @@ function updateProdOutputOriginField(el, origin){
 }
 
 function updateProdOutputOriginsFromInputs(){
+  if(_labelEditEntry) return;
   const commonOrigin = getCommonProdInputOrigin();
   document.querySelectorAll('[id^="prod-out-origin-"]').forEach(el=>{
     updateProdOutputOriginField(el, commonOrigin);
@@ -10747,6 +10764,7 @@ function getProdOutSamsungMeta(id){
 }
 
 async function saveProdEntry(){
+  if(_labelEditEntry) return saveLabelCompletedEntry();
   const date = document.getElementById('prod-date').value;
   const jobNo = document.getElementById('prod-job-no').value.trim() || '1';
   const jobNote = document.getElementById('prod-note')?.value.trim() || '';
@@ -10934,6 +10952,9 @@ async function saveProdEntry(){
 }
 
 function clearProdForm(){
+  _editProdId=null;
+  _labelEditEntry=null;
+  applyLabelProductionLocks();
   const noteEl = document.getElementById('prod-note');
   if(noteEl) noteEl.value = '';
   const jobTypeEl = document.getElementById('prod-job-type');
@@ -10979,12 +11000,95 @@ async function deleteProdEntry(id){
 
 // ── 생산일보 수정 ──
 let _editProdId=null;
+let _labelEditEntry=null;
+let productionWritePending=0;
+let labelProductionRefreshPromise=null;
+
+async function refreshLabelProductions(){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1' || !getSupabasePassword() || _editProdId || productionWritePending) return;
+  if(labelProductionRefreshPromise) return labelProductionRefreshPromise;
+  const revision=localCoreRevision;
+  labelProductionRefreshPromise=(async()=>{
+    try {
+      const data=await sbRpc('dbmt_erp_get_label_productions',{p_token:getSupabasePassword()});
+      assertPersonalServerResult(data,'전송된 생산일보를 불러올 수 없습니다.');
+      if(localCoreRevision!==revision || _editProdId || productionWritePending) return;
+      const ids=new Set(data.productionIds.map(String));
+      userProdEntries=userProdEntries.filter(e=>!ids.has(String(e.id))).concat(data.entries);
+      userTransactions=userTransactions.filter(t=>!ids.has(String(t._prodId))).concat(data.transactions);
+      transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+      markLocalCoreChanged();
+      safeLocalStorageSet('dbmt_user_prod',JSON.stringify(userProdEntries),true);
+      safeLocalStorageSet('dbmt_user_transactions',JSON.stringify(userTransactions),true);
+    } catch(err){ toast(`라벨 생산일보 새로고침 실패: ${err?.message || err}`); }
+    finally { labelProductionRefreshPromise=null; }
+  })();
+  return labelProductionRefreshPromise;
+}
+
+function applyLabelProductionLocks(){
+  const locked = !!_labelEditEntry;
+  const notice = document.getElementById('prod-label-notice');
+  if(notice) notice.hidden = !locked;
+  for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-output-add-btn']){
+    const el = document.getElementById(id);
+    if(el) el.disabled = locked;
+  }
+  if(!locked) return;
+  const count = Number(_labelEditEntry._labelCompletion.lockedInputCount)||1;
+  const rows = [...document.getElementById('prod-input-rows').children].slice(0,count);
+  rows.push(...document.getElementById('prod-output-rows').children);
+  for(const row of rows){
+    row.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
+    row.title='라벨 출력에서 전송된 확정 항목';
+  }
+}
+
+async function saveLabelCompletedEntry(){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){
+    toast('라벨에서 전송된 생산일보는 서버 연결 후 수정할 수 있습니다.'); return;
+  }
+  const entry = JSON.parse(JSON.stringify(_labelEditEntry));
+  const count = Number(entry._labelCompletion.lockedInputCount)||1;
+  const inputs = entry.inputs.slice(0,count);
+  for(const row of [...document.getElementById('prod-input-rows').children].slice(count)){
+    const id = row.id.replace('prod-in-','');
+    const value = field=>document.getElementById(`prod-in-${field}-${id}`)?.value.trim() || '';
+    const product = value('product'), qty = parseAppNumber(value('qty'));
+    if(!product && !qty) continue;
+    if(!product || qty<=0){ alert('추가 원료의 품목과 0보다 큰 투입량을 입력하세요.'); return; }
+    const price = parseAppNumber(value('price'));
+    if(price<0){ alert('추가 원료의 단가를 확인하세요.'); return; }
+    inputs.push({product,lot:value('lot'),qty,price,amount:price*qty,
+      origin:value('origin'),packunit:value('packunit'),proddate:value('proddate'),
+      stockUnitPrice:parseAppNumber(value('stock-price'))||price,
+      stockLocation:normalizeStockLocation(value('location')),
+      sourceStockKey:document.getElementById(`prod-in-sel-${id}`)?.dataset.stockKey||'',
+      samsung:getProdInputSamsungMeta(id)});
+  }
+  entry.inputs=inputs;
+  const button=document.querySelector('button[onclick="saveProdEntry()"]');
+  if(button?.disabled) return;
+  if(button) button.disabled=true;
+  try {
+    await saveProductionRows(entry,[],entry.id,_labelEditEntry);
+    syncSubMaterialUsageProductionMetadata(entry);
+    renderProduction();
+    clearProdForm();
+    toast('추가 원료 저장 완료. 재고와 생산단가에 반영됐습니다.');
+    openSubMaterialUsageModal(entry.id,true);
+  } catch(err){ toast(String(err?.message || err || '추가 원료 저장 실패')); }
+  finally { if(button) button.disabled=false; }
+}
+
 function openEditProdEntry(id){
   const entry=userProdEntries.find(e=>String(e.id)===String(id));
   if(!entry)return;
   if(!confirm('이 생산일보를 수정하시겠습니까?\n입력 폼에 데이터를 불러옵니다.'))return;
   _editProdId=id;
   showPage('p-production',document.getElementById('nav-production'));
+  _editProdId=id;
+  _labelEditEntry=entry._labelCompletion ? JSON.parse(JSON.stringify(entry)) : null;
   document.getElementById('prod-date').value  =(entry.date||'').replace(/\//g,'-');
   document.getElementById('prod-job-no').value=entry.job_no||'1';
   const noteEl = document.getElementById('prod-note');
@@ -11040,7 +11144,8 @@ function openEditProdEntry(id){
       if(swProduct) swProduct.value=sw.productRowId || '';
     }
   });
-  toast('수정할 내용 변경 후 ✓ 생산일보 저장을 누르세요.',4000);
+  applyLabelProductionLocks();
+  toast(_labelEditEntry ? '추가 원료를 입력하고 저장하세요. 부자재는 목록의 부자재 버튼에서 수정할 수 있습니다.' : '수정할 내용 변경 후 ✓ 생산일보 저장을 누르세요.',4000);
 }
 
 // ─── 생산일보 ───────────────────────────────────────────
@@ -11145,8 +11250,9 @@ function validateProductionDateRange(){
   return true;
 }
 
-function runProductionSearch(){
+async function runProductionSearch(){
   if(!validateProductionDateRange()) return;
+  await refreshLabelProductions();
   productionListQueryActive = true;
   renderProduction();
 }

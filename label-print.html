@@ -447,6 +447,10 @@
             <div class="metric"><span>로스량</span><strong id="metric-loss">-</strong></div>
             <div class="metric"><span>수율</span><strong id="metric-yield">-</strong></div>
           </div>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px;">
+            <button id="complete-production-btn" type="button" style="min-height:52px;padding:12px 24px;font-size:17px;font-weight:800;background:#343a40;color:white;">생산완료 · 생산일보 전송</button>
+            <span id="completion-status" style="color:#555;font-size:13px;line-height:1.6;" role="status"></span>
+          </div>
         </div>
       </section>
 
@@ -520,6 +524,7 @@
       workOrders: [],
       labelProducts: [],
       logs: [],
+      completions: [],
       selectedId: '',
       loading: false,
       allDates: false,
@@ -567,6 +572,7 @@
       });
       $('print-btn').addEventListener('click', printSelectedLabels);
       $('preview-btn').addEventListener('click', previewSelectedLabel);
+      $('complete-production-btn').addEventListener('click', completeProduction);
       $('print-size').addEventListener('change', () => {
         const order = selectedOrder();
         if(order) order.labelSize = $('print-size').value;
@@ -680,6 +686,7 @@
         state.workOrders = normalizeArray(appData.workOrders);
         state.labelProducts = normalizeArray(appData.labelProducts);
         state.logs = normalizeArray(appData.labelPrintLogs);
+        state.completions = normalizeArray(data?.completions);
         const filterDate = $('date-filter')?.value || '';
         if(!state.allDates && filterDate && state.workOrders.length && !state.workOrders.some(row => String(row.date || '') === filterDate)){
           state.allDates = true;
@@ -726,20 +733,66 @@
       $('print-weight').disabled = isLoading || !selectedOrder();
       $('print-weight-custom').disabled = isLoading || !selectedOrder() || $('print-weight-custom').hidden;
       ['print-size','print-copies'].forEach(id=>$(id).disabled=isLoading);
+      renderCompletion();
     }
 
     async function saveLogs(){
       if(!state.pin) throw new Error('라벨전용 PIN이 없습니다.');
-      await sbRpc('dbmt_label_print_save_logs', {
+      const result = await sbRpc('dbmt_label_print_save_logs', {
         p_pin: state.pin,
         p_logs: state.logs
       });
+      if(result?.ok !== true) throw new Error(result?.message || '출력이력 저장을 확인하지 못했습니다.');
+      if(Array.isArray(result.logs)) state.logs = result.logs;
+      if(Array.isArray(result.completions)) state.completions = result.completions;
+      renderAll();
     }
 
     function renderAll(){
       renderOrders();
       renderSelected();
       renderHistory();
+      renderCompletion();
+    }
+
+    function completionFor(orderId){
+      return state.completions.find(item=>String(item.workOrderId)===String(orderId));
+    }
+
+    function renderCompletion(){
+      const row = selectedOrder();
+      const completed = row && completionFor(row.id);
+      const button = $('complete-production-btn');
+      button.disabled = state.loading || !row || !!completed || !activeLogsForOrder(row.id).length;
+      button.textContent = completed ? '생산일보 전송 완료' : '생산완료 · 생산일보 전송';
+      $('completion-status').textContent = completed
+        ? (completed.deleted ? '사무실에서 삭제된 생산일보입니다. 재전송하지 않습니다.' : `${completed.date || ''} #${completed.jobNo || ''} 생산일보에 등록되었습니다. 추가 원료·부자재는 ERP에서 수정하세요.`)
+        : '출력 생산량을 생산일보·재고에 반영합니다. 완료 후에는 기존 라벨 재출력만 가능합니다.';
+      $('print-btn').disabled = state.loading || !row || !!completed;
+      for(const id of ['print-weight','print-weight-custom','print-copies','print-size']){
+        $(id).disabled = state.loading || !row || !!completed || (id==='print-weight-custom' && $(id).hidden);
+      }
+    }
+
+    async function completeProduction(){
+      if(state.loading) return;
+      const row = selectedOrder();
+      if(!row || completionFor(row.id)) return;
+      const logs = activeLogsForOrder(row.id);
+      if(!logs.length){ setStatus('출력한 라벨이 없습니다.', 'warn'); return; }
+      const weight = logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
+      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 출력 생산 ${kg(weight)} (${logs.length}장)\n\n생산일보와 재고에 반영할까요?\n완료 후에는 추가 출력·라벨 삭제가 제한됩니다.`)) return;
+      setLoading(true);
+      setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
+      try {
+        const result = await sbRpc('dbmt_label_complete_production', {p_pin:state.pin,p_work_order_id:String(row.id),p_log_ids:logs.map(log=>String(log.id))});
+        if(result?.ok !== true) throw new Error(result?.message || '생산완료를 확인하지 못했습니다.');
+        state.completions = normalizeArray(result.completions);
+        renderAll();
+        setStatus('생산일보 전송 완료. ERP → 생산관리 → 생산일보에서 작업일자로 조회하세요.', 'ok');
+      } catch(err) {
+        setStatus(`생산완료 확인 실패: ${err.message || err} (새로고침 후 확인하거나 다시 누르세요. 중복 등록되지 않습니다.)`, 'err');
+      } finally { setLoading(false); }
     }
 
     function filteredOrders(){
@@ -779,7 +832,7 @@
               <span class="order-title">${html(title)}</span>
               <span class="order-sub">${html(sub)}</span>
             </span>
-            <span class="order-badge">${kg(activeWeight)}</span>
+            <span class="order-badge">${completionFor(row.id) ? '완료 · ' : ''}${kg(activeWeight)}</span>
           </button>`;
       }).join('');
       list.querySelectorAll('.order-row').forEach(btn => {
@@ -873,7 +926,7 @@
             <td>
               <div class="actions">
                 <button type="button" data-act="reprint" data-id="${html(log.id)}">재출력</button>
-                <button type="button" class="danger" data-act="void" data-id="${html(log.id)}" ${isVoid ? 'disabled' : ''}>삭제</button>
+                <button type="button" class="danger" data-act="void" data-id="${html(log.id)}" ${isVoid || completionFor(row.id) ? 'disabled' : ''}>삭제</button>
               </div>
             </td>
           </tr>`;
@@ -894,6 +947,7 @@
     async function printSelectedLabels(){
       if(state.loading) return;
       const row = selectedOrder();
+      if(row && completionFor(row.id)){ setStatus('생산완료된 작업입니다. 기존 라벨은 출력이력에서 재출력하세요.', 'warn'); return; }
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
         return;
@@ -951,6 +1005,7 @@
     }
 
     async function reprintLog(id){
+      if(state.loading) return;
       const log = state.logs.find(item => String(item.id) === String(id));
       if(!log){
         setStatus('출력이력을 찾을 수 없습니다.', 'err');
@@ -982,7 +1037,9 @@
     }
 
     async function voidLog(id){
+      if(state.loading) return;
       const idx = state.logs.findIndex(item => String(item.id) === String(id));
+      if(idx>=0 && completionFor(state.logs[idx].workOrderId)){ setStatus('생산완료된 라벨은 삭제할 수 없습니다.', 'warn'); return; }
       if(idx < 0){
         setStatus('출력이력을 찾을 수 없습니다.', 'err');
         return;
@@ -1001,7 +1058,7 @@
       setStatus('삭제 처리 저장 중...', 'warn');
       try {
         await saveLogs();
-        setStatus(`삭제 처리됨: ${state.logs[idx].code}`, 'ok');
+        setStatus('라벨 삭제 처리됨', 'ok');
       } catch(err) {
         state.logs = previousLogs;
         renderAll();
@@ -1038,6 +1095,14 @@
         date: row.date || '',
         title: row.title || '',
         product: row.product || '',
+        labelProductId: row.labelProductId || '',
+        productCode: row.productCode || '',
+        brand: row.brand || '',
+        factoryNo: row.factoryNo || '',
+        nationalPartCode: row.nationalPartCode || '',
+        nationalPartName: row.nationalPartName || '',
+        taxType: row.taxType || '면세',
+        packunit: state.labelProducts.find(p=>String(p.id)===String(row.labelProductId))?.packunit || row.packunit || '',
         origin: row.origin || '',
         grade: row.grade || '',
         mfgdate: row.mfgdate || row.date || '',
