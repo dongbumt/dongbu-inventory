@@ -59,6 +59,10 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       const refreshProdInputSamsungOptions=()=>{},refreshProdOutSamsungProducts=()=>{},getCommonProdInputOrigin=()=>'';
       const updateProdOutputOriginField=(el,value)=>el.value=value,samsungVendorOptionsHtml=()=>'<option value="">선택 안 함</option>';
       const getProdInputSamsungMeta=()=>null,normalizeStockLocation=v=>v||'가공장',parseAppNumber=v=>Number(v)||0;
+      const getProdOutSamsungMeta=()=>null,getPrice=()=>0,nationalPartNameForCode=()=>'',normalizeLabelProductTaxType=v=>v||'면세';
+      const labelProducts=[{id:'qa-product',name:'냉장돈등심'},{id:'qa-other',name:'수정 생산품',packunit:'EA',origin:'미국산'}];
+      const samePriceText=(a,b)=>String(a||'')===String(b||''),samsungTxnFields=()=>({samsung:null});
+      const makeProductionTxnId=(id,kind,n)=>'tx_'+id+'_'+kind+'_'+n,makeAppId=()=> 'normal-new';
       const personalServerWriteToken=()=> 'fixture-token',normalizeRowsForUpsert=v=>v;
       const assertPersonalServerResult=r=>{if(!r.ok)throw Error('permission denied');};
       let localCoreRevision=0;const markLocalCoreChanged=()=>localCoreRevision++,normalizeLocalTransactionIds=()=>{},recordProductionChange=()=>{},safeLocalStorageSet=()=>{},gsShowSync=()=>{};
@@ -68,30 +72,44 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       const sbRpc=async(fn,body)=>{
         if(fn==='dbmt_erp_get_label_productions') return remoteProduction;
         requests.push({fn,body});if(failSave)throw Error('QA 저장 실패');
-        const entry=JSON.parse(JSON.stringify(body.p_entry));const cost=entry.inputs.reduce((sum,row)=>sum+row.qty*row.price,0);
-        entry.outputs.forEach(row=>{row.price=Math.ceil(cost/12.35);row.amount=Math.ceil(row.price*row.qty);});
-        return {ok:true,entry,transactionRows:entry.inputs.map((row,i)=>({...row,id:'tx-'+i,_prodId:entry.id,weight:row.qty}))};
+        const entry=JSON.parse(JSON.stringify(body.p_entry));
+        return {ok:true,entry,transactionRows:body.p_transaction_rows};
       };
       ${block('let prodInputRowCount = 0;','function getStockOptions(){')}
       ${block('function addProdInputRow(){','function selectProdInputStock(')}
       ${block('function addProdOutputRow(){','function labelProductPackUnitText(')}
+      ${block('function labelProductPackUnitText(','function refreshProdOutSamsungProducts(')}
       ${block('async function supabaseSaveProductionRows(','async function supabaseLoadSubMaterialUsages(')}
       ${block('async function saveProdEntry(){','async function deleteProdEntry(')}
       ${block('let _editProdId=null;','// ─── 생산일보 ─')}
       openEditProdEntry('prod_label_qa');
     `});
-    assert(await erp.locator('#prod-label-notice').isVisible());assert(await erp.locator('#prod-date').isDisabled());assert(await erp.locator('#prod-out-qty-1').isDisabled());assert(await erp.locator('#prod-in-qty-1').isDisabled());assert(await erp.locator('#prod-output-add-btn').isDisabled());
+    assert(await erp.locator('#prod-label-notice').isVisible());assert.match(await erp.locator('#prod-label-notice').textContent(),/모든 입력 항목을 수정/);
+    for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-in-product-1','prod-in-qty-1','prod-in-price-1','prod-out-product-1','prod-out-qty-1','prod-out-price-1','prod-output-add-btn']) assert(await erp.locator('#'+id).isEnabled(),id);
+    assert.equal(await erp.locator('#prod-input-rows button:disabled,#prod-output-rows button:disabled').count(),0);
+    await erp.locator('#prod-date').fill('2026-09-09');await erp.locator('#prod-job-no').fill('7');await erp.locator('#prod-note').fill('수정 테스트');await erp.locator('#prod-job-type').selectOption('묶음');
+    for(const [field,value] of [['product','수정 원료'],['lot','NEW-RAW'],['qty','90'],['price','4000']]) await erp.locator('#prod-in-'+field+'-1').fill(value);
+    await erp.evaluate(()=>selectProdOutProduct(1,1));await erp.locator('#prod-out-lot-1').fill('NEW-OUT');await erp.locator('#prod-out-qty-1').fill('42');await erp.locator('#prod-out-price-1').fill('22000');await erp.locator('#prod-out-origin-1').fill('미국산');
     await erp.locator('button[onclick="addProdInputRow()"]').click();assert(await erp.locator('#prod-in-qty-2').isEnabled());
     for(const [field,value] of [['product','추가 돈등심'],['lot','ADD-LOT'],['qty','10'],['price','6000']]) await erp.locator('#prod-in-'+field+'-2').fill(value);
-    await erp.screenshot({path:path.join(artifacts,'erp-additional-input.png'),fullPage:true});
-    await erp.evaluate(()=>failSave=true);await erp.locator('button[onclick="saveProdEntry()"]').click();assert.equal(await erp.locator('#prod-in-qty-2').inputValue(),'10');assert(await erp.locator('#prod-out-qty-1').isDisabled());
+    await erp.locator('#prod-output-add-btn').click();await erp.evaluate(()=>selectProdOutProduct(2,0));await erp.locator('#prod-out-qty-2').fill('3');await erp.locator('#prod-out-price-2').fill('2000');
+    await erp.screenshot({path:path.join(artifacts,'erp-full-edit.png'),fullPage:true});
+    await erp.evaluate(()=>failSave=true);await erp.locator('button[onclick="saveProdEntry()"]').click();assert.equal(await erp.locator('#prod-in-qty-2').inputValue(),'10');assert(await erp.locator('#prod-out-qty-1').isEnabled());
     await erp.evaluate(()=>failSave=false);await erp.locator('button[onclick="saveProdEntry()"]').click();
-    const saved=await erp.evaluate(()=>({entry:userProdEntries[0],requests,modalIds}));
-    assert.deepEqual(saved.entry.inputs[0],entry.inputs[0]);assert.equal(saved.entry.inputs[1].qty,10);assert.equal(saved.entry.outputs[0].qty,12.35);assert.equal(saved.entry.outputs[0].price,45345);assert.deepEqual(saved.modalIds,[entry.id]);
-    assert.deepEqual(saved.requests[1].body.p_transaction_rows,[]);assert(await erp.locator('#prod-date').isEnabled());assert(await erp.locator('#prod-output-add-btn').isEnabled());assert(await erp.locator('#prod-label-notice').isHidden());
+    await erp.waitForFunction(()=>modalIds.length===1);
+    const saved=await erp.evaluate(()=>({entry:userProdEntries[0],requests,modalIds,transactions:userTransactions}));
+    assert.equal(saved.entry.inputs[0].product,'수정 원료');assert.equal(saved.entry.inputs[0].qty,90);assert.equal(saved.entry.inputs[1].qty,10);
+    assert.equal(saved.entry.outputs[0].product,'수정 생산품');assert.equal(saved.entry.outputs[0].lot,'NEW-OUT');assert.equal(saved.entry.outputs[0].qty,42);assert.equal(saved.entry.outputs[0].price,22000);assert.equal(saved.entry.outputs[0].amount,924000);
+    assert.equal(saved.entry.date,'2026/09/09');assert.equal(saved.entry.job_no,'7');assert.equal(saved.entry.note,'수정 테스트');assert.equal(saved.entry.job_type,'묶음');assert.deepEqual(saved.entry._labelCompletion,entry._labelCompletion);assert.deepEqual(saved.modalIds,[entry.id]);
+    assert.equal(saved.requests[1].body.p_transaction_rows.length,4);assert.equal(saved.transactions.length,4);assert(saved.transactions.every(row=>row.date==='2026-09-09'&&row.note.includes('수정 테스트')));
+    assert.equal(saved.transactions.find(row=>row._isProdOut&&row.product==='수정 생산품').proddate,'2026-09-10','Preserve historical manufactured date');
+    assert(await erp.locator('#prod-date').isEnabled());assert(await erp.locator('#prod-output-add-btn').isEnabled());assert(await erp.locator('#prod-label-notice').isHidden());
     assert.equal(await erp.evaluate(()=>_editProdId),null);
     await erp.evaluate(()=>openEditProdEntry('prod_label_qa'));assert.equal(await erp.locator('#prod-in-qty-2').inputValue(),'10');assert(await erp.locator('#prod-in-qty-2').isEnabled());
-    await erp.locator('#prod-in-2 button.btn-danger').click();await erp.locator('button[onclick="saveProdEntry()"]').click();assert.equal(await erp.evaluate(()=>userProdEntries[0].inputs.length),1);
+    assert.equal(await erp.locator('#prod-out-qty-1').inputValue(),'42');
+    await erp.locator('#prod-in-1 button.btn-danger').click();await erp.locator('#prod-out-1 button.btn-danger').click();
+    await erp.locator('#prod-out-price-2').fill('');await erp.locator('button[onclick="saveProdEntry()"]').click();await erp.waitForFunction(()=>modalIds.length===2);
+    assert.equal(await erp.evaluate(()=>userProdEntries[0].inputs.length),1);assert.equal(await erp.evaluate(()=>userProdEntries[0].outputs.length),1);assert.equal(await erp.evaluate(()=>userProdEntries[0].outputs[0].price),20000,'Use the ordinary automatic price calculation');
     await erp.evaluate(async()=>{
       const normal={id:'normal',inputs:[],outputs:[]};userProdEntries.push(normal);userTransactions.push({id:'normal-tx',_prodId:'normal'});
       remoteProduction={ok:true,productionIds:['prod_label_qa','prod_label_remote'],entries:[{...userProdEntries[0],id:'prod_label_remote'}],transactions:[{id:'remote-tx',_prodId:'prod_label_remote',weight:12.35}]};
@@ -101,7 +119,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     assert.deepEqual(await erp.evaluate(()=>userTransactions.map(e=>e.id)),['normal-tx','remote-tx']);
     await erp.evaluate(async()=>{productionWritePending=1;remoteProduction={ok:true,productionIds:['normal'],entries:[],transactions:[]};await refreshLabelProductions();productionWritePending=0;});
     assert.equal(await erp.evaluate(()=>userProdEntries.length),2,'Refresh must not race a pending production save');
-    console.log('PASS: ERP imported locks, editable extra inputs, server-authoritative transactions/cost, failure retention, re-edit, extra removal, reset to normal form');
+    console.log('PASS: ERP full editing, original input/output changes, dates/types/LOTs/prices, row add/remove, manual/auto prices, failure retention, re-edit, provenance and manufactured date retention, refresh guards');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

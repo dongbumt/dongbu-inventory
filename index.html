@@ -1106,7 +1106,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="ct-bar" style="background:var(--orange);"></div>
       새 생산일보 입력
     </div>
-    <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 전송된 원료·생산품목·중량은 고정됩니다. 아래에서 원료를 추가하고 저장하거나 목록의 부자재 버튼에서 사용내역을 수정하세요.</div>
+    <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 일반 생산일보처럼 모든 입력 항목을 수정할 수 있으며, 저장하면 변경된 내용으로 재고에 반영됩니다. 기존 라벨 출력이력은 변경되지 않습니다.</div>
     <div class="form-row">
       <div class="form-group"><label>작업일</label><input type="date" id="prod-date" onchange="autoSetJobNo()"></div>
       <div class="form-group"><label>작업번호</label><input id="prod-job-no" placeholder="1" style="width:80px;"></div>
@@ -10248,8 +10248,7 @@ let prodOutputRowCount = 0;
 
 function initProdForm(){
   _editProdId=null;
-  _labelEditEntry=null;
-  applyLabelProductionLocks();
+  updateLabelProductionNotice();
   document.getElementById('prod-date').value = today;
   const noteEl = document.getElementById('prod-note');
   if(noteEl) noteEl.value = '';
@@ -10566,7 +10565,6 @@ function updateProdOutputOriginField(el, origin){
 }
 
 function updateProdOutputOriginsFromInputs(){
-  if(_labelEditEntry) return;
   const commonOrigin = getCommonProdInputOrigin();
   document.querySelectorAll('[id^="prod-out-origin-"]').forEach(el=>{
     updateProdOutputOriginField(el, commonOrigin);
@@ -10599,6 +10597,7 @@ function addProdOutputRow(){
         <button type="button" class="btn btn-secondary" onclick="openProdOutputProductPicker(${id})">검색</button>
       </div>
       <input type="hidden" id="prod-out-product-id-${id}">
+      <input type="hidden" id="prod-out-proddate-${id}">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">포장단위</label>
@@ -10764,7 +10763,7 @@ function getProdOutSamsungMeta(id){
 }
 
 async function saveProdEntry(){
-  if(_labelEditEntry) return saveLabelCompletedEntry();
+  if(productionWritePending) return;
   const date = document.getElementById('prod-date').value;
   const jobNo = document.getElementById('prod-job-no').value.trim() || '1';
   const jobNote = document.getElementById('prod-note')?.value.trim() || '';
@@ -10821,6 +10820,7 @@ async function saveProdEntry(){
       }
       const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
       rawOutputs.push({
+        proddate: document.getElementById(`prod-out-proddate-${id}`)?.value || '',
         product: registered.name || product,
         productId: registered.id || productId,
         labelProductId: registered.id || productId,
@@ -10855,6 +10855,7 @@ async function saveProdEntry(){
     const price = o.manualPrice > 0 ? o.manualPrice : autoUnitPrice;
     return {
       product:o.product, productId:o.productId, labelProductId:o.labelProductId,
+      proddate:o.proddate,
       productCode:o.productCode,
       brand:o.brand, factoryNo:o.factoryNo,
       nationalPartCode:o.nationalPartCode, nationalPartName:o.nationalPartName,
@@ -10881,6 +10882,8 @@ async function saveProdEntry(){
     _isUser:true,
     id: editingProdId || makeAppId('prod')
   };
+  const completion = userProdEntries.find(e=>String(e.id)===String(editingProdId))?._labelCompletion;
+  if(completion) entry._labelCompletion = {...completion};
 
   // 수정 모드: 기존 항목과 관련 트랜잭션 삭제 후 교체
   let deletedProdId = null;
@@ -10920,6 +10923,7 @@ async function saveProdEntry(){
       const newTxn = {
         id:makeProductionTxnId(entry.id, 'out', index), date, type:'생산입고',
         product:out.product, lot:out.lot||'', origin:out.origin||'',
+        proddate:out.proddate||'', stockProddate:out.proddate||'',
         packunit:out.packunit||'', productId:out.productId||'', labelProductId:out.labelProductId||out.productId||'',
         productCode:out.productCode||'',
         brand:out.brand||'', factoryNo:out.factoryNo||'',
@@ -10953,8 +10957,7 @@ async function saveProdEntry(){
 
 function clearProdForm(){
   _editProdId=null;
-  _labelEditEntry=null;
-  applyLabelProductionLocks();
+  updateLabelProductionNotice();
   const noteEl = document.getElementById('prod-note');
   if(noteEl) noteEl.value = '';
   const jobTypeEl = document.getElementById('prod-job-type');
@@ -11000,7 +11003,6 @@ async function deleteProdEntry(id){
 
 // ── 생산일보 수정 ──
 let _editProdId=null;
-let _labelEditEntry=null;
 let productionWritePending=0;
 let labelProductionRefreshPromise=null;
 
@@ -11026,59 +11028,9 @@ async function refreshLabelProductions(){
   return labelProductionRefreshPromise;
 }
 
-function applyLabelProductionLocks(){
-  const locked = !!_labelEditEntry;
+function updateLabelProductionNotice(entry=null){
   const notice = document.getElementById('prod-label-notice');
-  if(notice) notice.hidden = !locked;
-  for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-output-add-btn']){
-    const el = document.getElementById(id);
-    if(el) el.disabled = locked;
-  }
-  if(!locked) return;
-  const count = Number(_labelEditEntry._labelCompletion.lockedInputCount)||1;
-  const rows = [...document.getElementById('prod-input-rows').children].slice(0,count);
-  rows.push(...document.getElementById('prod-output-rows').children);
-  for(const row of rows){
-    row.querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
-    row.title='라벨 출력에서 전송된 확정 항목';
-  }
-}
-
-async function saveLabelCompletedEntry(){
-  if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){
-    toast('라벨에서 전송된 생산일보는 서버 연결 후 수정할 수 있습니다.'); return;
-  }
-  const entry = JSON.parse(JSON.stringify(_labelEditEntry));
-  const count = Number(entry._labelCompletion.lockedInputCount)||1;
-  const inputs = entry.inputs.slice(0,count);
-  for(const row of [...document.getElementById('prod-input-rows').children].slice(count)){
-    const id = row.id.replace('prod-in-','');
-    const value = field=>document.getElementById(`prod-in-${field}-${id}`)?.value.trim() || '';
-    const product = value('product'), qty = parseAppNumber(value('qty'));
-    if(!product && !qty) continue;
-    if(!product || qty<=0){ alert('추가 원료의 품목과 0보다 큰 투입량을 입력하세요.'); return; }
-    const price = parseAppNumber(value('price'));
-    if(price<0){ alert('추가 원료의 단가를 확인하세요.'); return; }
-    inputs.push({product,lot:value('lot'),qty,price,amount:price*qty,
-      origin:value('origin'),packunit:value('packunit'),proddate:value('proddate'),
-      stockUnitPrice:parseAppNumber(value('stock-price'))||price,
-      stockLocation:normalizeStockLocation(value('location')),
-      sourceStockKey:document.getElementById(`prod-in-sel-${id}`)?.dataset.stockKey||'',
-      samsung:getProdInputSamsungMeta(id)});
-  }
-  entry.inputs=inputs;
-  const button=document.querySelector('button[onclick="saveProdEntry()"]');
-  if(button?.disabled) return;
-  if(button) button.disabled=true;
-  try {
-    await saveProductionRows(entry,[],entry.id,_labelEditEntry);
-    syncSubMaterialUsageProductionMetadata(entry);
-    renderProduction();
-    clearProdForm();
-    toast('추가 원료 저장 완료. 재고와 생산단가에 반영됐습니다.');
-    openSubMaterialUsageModal(entry.id,true);
-  } catch(err){ toast(String(err?.message || err || '추가 원료 저장 실패')); }
-  finally { if(button) button.disabled=false; }
+  if(notice) notice.hidden = !entry?._labelCompletion;
 }
 
 function openEditProdEntry(id){
@@ -11088,7 +11040,6 @@ function openEditProdEntry(id){
   _editProdId=id;
   showPage('p-production',document.getElementById('nav-production'));
   _editProdId=id;
-  _labelEditEntry=entry._labelCompletion ? JSON.parse(JSON.stringify(entry)) : null;
   document.getElementById('prod-date').value  =(entry.date||'').replace(/\//g,'-');
   document.getElementById('prod-job-no').value=entry.job_no||'1';
   const noteEl = document.getElementById('prod-note');
@@ -11134,6 +11085,8 @@ function openEditProdEntry(id){
     if(p)p.value=out.product||'';
     if(pk)pk.value=out.packunit||'';
     if(pid)pid.value=out.productId||'';
+    const pd=document.getElementById(`prod-out-proddate-${n}`);
+    if(pd)pd.value=out.proddate||out.stockProddate||'';
     if(o){o.value=out.origin||'';o.removeAttribute('readonly');}
     if(l)l.value=out.lot||''; if(q)q.value=out.qty||0; if(pr)pr.value=out.price||0;
     const swVendor=document.getElementById(`prod-out-sw-vendor-${n}`);
@@ -11144,8 +11097,8 @@ function openEditProdEntry(id){
       if(swProduct) swProduct.value=sw.productRowId || '';
     }
   });
-  applyLabelProductionLocks();
-  toast(_labelEditEntry ? '추가 원료를 입력하고 저장하세요. 부자재는 목록의 부자재 버튼에서 수정할 수 있습니다.' : '수정할 내용 변경 후 ✓ 생산일보 저장을 누르세요.',4000);
+  updateLabelProductionNotice(entry);
+  toast('수정할 내용 변경 후 ✓ 생산일보 저장을 누르세요.',4000);
 }
 
 // ─── 생산일보 ───────────────────────────────────────────

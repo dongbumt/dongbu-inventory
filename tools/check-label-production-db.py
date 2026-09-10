@@ -87,17 +87,48 @@ def fixture_tests(conn):
     conn.execute('update public.erp_role_permissions set can_update=true where role_id=%s',(role,))
     saved=edit(updated)
     assert saved['ok'] and saved['entry']['outputs'][0]['qty']==12.35
-    assert saved['entry']['outputs'][0]['price']==45345
+    assert saved['entry']['outputs'][0]['price']==entry['outputs'][0]['price'], 'Keep user-entered unit price'
     assert len(saved['transactionRows'])==3
-    for field in ['outputs','inputs']:
-        bad=copy.deepcopy(updated);bad[field][0]['qty']=99
-        reject(lambda:edit(bad),'변경')
-    bad=copy.deepcopy(updated);bad['date']='2026/09/09';reject(lambda:edit(bad),'변경')
-    bad=copy.deepcopy(updated);bad.pop('_labelCompletion');reject(lambda:edit(bad),'변경')
+    changed=copy.deepcopy(updated)
+    changed.update(date='2026/09/09',job_no='7',job_type='묶음',key=['2026/09/09','7'],note='QA office correction')
+    changed['inputs'][0].update(product='QA changed raw',lot='NEW-RAW',qty=90,price=4000,origin='미국산',packunit='박스')
+    changed['outputs'][0].update(product='QA changed output',productId='qa_other',labelProductId='qa_other',
+                                 lot='NEW-OUT',qty=42,price=22000,origin='미국산',packunit='EA')
+    changed['outputs'].append(dict(product='QA second output',lot='SECOND',qty=3,price=2000))
+    changed.pop('_labelCompletion')  # Normal form and older clients may omit the metadata.
+    changed_result=edit(changed)
+    assert changed_result['ok'] and len(changed_result['transactionRows'])==4
+    assert changed_result['entry']['_labelCompletion']==entry['_labelCompletion']
+    assert changed_result['entry']['inputs'][0]['amount']==360000
+    assert changed_result['entry']['outputs'][0]['amount']==924000
+    typed=conn.execute('select work_date,output_weight,product,lot from public.production_entries where id=%s',(pid,)).fetchone()
+    assert str(typed[0])=='2026-09-09' and float(typed[1])==45 and typed[2:] == ('QA changed output','NEW-OUT')
+    posted=conn.execute('select type,product,lot,weight,date,note from public.transactions where prod_id=%s and deleted_at is null',(pid,)).fetchall()
+    assert len(posted)==4 and all(str(r[4])=='2026-09-09' and 'QA office correction' in r[5] for r in posted)
+    assert any(r[1]=='QA changed raw' and float(r[3])==90 for r in posted)
+    assert not any(r[1]=='QA raw' for r in posted), 'Original stock movement must be replaced, not duplicated'
+    assert complete([])['alreadyCompleted'] is True
+    status=next(c for c in rpc('dbmt_label_print_get_data',pin)['completions'] if c['workOrderId']==order['id'])
+    assert status['date']=='2026/09/09' and status['jobNo']=='7'
+    assert conn.execute('select baseline from public.label_production_completions where production_id=%s',(pid,)).fetchone()[0]==entry
+    assert conn.execute('select output_weight from public.production_entries where id=%s',(pid,)).fetchone()[0]==45
+    invalid=copy.deepcopy(changed);invalid['outputs'][0]['qty']=0
+    reject(lambda:edit(invalid),'중량')
+    invalid=copy.deepcopy(changed);invalid['id']='other-id'
+    reject(lambda:edit(invalid),'식별값')
+    assert conn.execute('select output_weight from public.production_entries where id=%s',(pid,)).fetchone()[0]==45
+    tampered=copy.deepcopy(changed);tampered['_labelCompletion']={'workOrderId':'forged'}
+    assert edit(tampered)['entry']['_labelCompletion']==entry['_labelCompletion']
+    removed=copy.deepcopy(changed);removed['inputs']=removed['inputs'][1:];removed['outputs']=removed['outputs'][1:]
+    assert len(edit(removed)['transactionRows'])==2, 'Original rows may be removed'
+    only_output=copy.deepcopy(removed);only_output['inputs']=[]
+    assert len(edit(only_output)['transactionRows'])==1, 'Output-only journal matches ordinary form'
+    only_input=copy.deepcopy(removed);only_input['outputs']=[]
+    assert len(edit(only_input)['transactionRows'])==1, 'Input-only journal matches ordinary form'
     # Arbitrary caller postings cannot replace the server-generated output.
     again=rpc('dbmt_erp_save_production',token,updated,[{'id':'forged','weight':999}],pid)
     assert again['ok'] and next(row for row in again['transactionRows'] if row['_isProdOut'])['weight']==12.35
-    assert edit(entry)['ok']  # remove additional inputs without changing baseline
+    assert edit(entry)['ok']  # Restore fixture inputs and output, never real business data.
     assert conn.execute('select count(*) from public.transactions where prod_id=%s and deleted_at is null',(pid,)).fetchone()[0]==2
     reject(lambda:rpc('dbmt_erp_save_production_before_label',token,entry,[],pid))
     reject(lambda:rpc('dbmt_label_production_transactions',entry))
@@ -121,7 +152,7 @@ def main():
             conn.execute('set local role postgres')
             conn.execute(sql)
             with conn.transaction(force_rollback=True): fixture_tests(conn)
-    print(json.dumps(dict(ok=True,schemaApplied=apply,fixturesRolledBack=True,tests='PIN, atomic postings, retries, stale logs, void/reprint, fixed outputs, additional inputs, permission checks, normal journals, deleted completion')))
+    print(json.dumps(dict(ok=True,schemaApplied=apply,fixturesRolledBack=True,tests='PIN, atomic postings, retries, stale logs, void/reprint, full journal edit, dates/types/LOTs/prices, row add/remove, provenance, permissions, normal journals, deleted completion')))
 
 
 if __name__=='__main__':
