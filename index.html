@@ -1621,11 +1621,30 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         부자재 재고현황 <span id="sm-stock-count" style="font-size:12px;font-weight:400;color:#888;"></span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input id="sm-stock-search" placeholder="품목명 / 고유번호 검색..." style="width:220px;" oninput="renderSubMaterials()">
+        <select id="sm-stock-view" aria-label="부자재 재고 조회 방식" style="width:145px;" onchange="renderSubMaterialStock()">
+          <option value="lot">LOT별 재고</option><option value="item">품목별 재고</option>
+        </select>
+        <select id="sm-stock-status" aria-label="부자재 LOT 재고 상태" style="width:130px;" onchange="renderSubMaterialStock()">
+          <option value="all">전체 재고</option><option value="available">재고 있음</option><option value="empty">소진</option><option value="negative">음수 재고</option>
+        </select>
+        <input id="sm-stock-search" aria-label="부자재 재고 검색" placeholder="품목명 / 고유번호 / LOT / 거래처 검색..." style="width:280px;max-width:100%;" oninput="renderSubMaterialStock()">
         <button type="button" class="btn btn-primary btn-sm" onclick="printSubMaterialCountSheet()">실사입력시트 인쇄</button>
       </div>
     </div>
-    <div class="tbl-wrap" style="max-height:320px;">
+    <div id="sm-stock-lot-note" style="font-size:12px;color:#555;line-height:1.6;margin:0 0 10px;">
+      LOT별 현재고 = 입고수량 − 해당 LOT의 생산 사용수량입니다. 품목 단위 실사 수량은 LOT별로 배분되지 않으므로 ‘품목별 재고’의 관리 재고와 다를 수 있습니다.
+    </div>
+    <div class="tbl-wrap" id="sm-stock-lot-wrap" style="max-height:420px;">
+      <table aria-label="부자재 LOT별 재고현황">
+        <thead><tr>
+          <th>입고일자</th><th>고유번호</th><th>품목명</th><th>규격</th><th>입고 LOT</th><th>거래처</th>
+          <th style="text-align:right;">입고수량</th><th style="text-align:right;">사용수량</th><th style="text-align:right;">현재고</th>
+          <th>단위</th><th>상태</th><th>비고</th>
+        </tr></thead>
+        <tbody id="sm-stock-lot-body"></tbody>
+      </table>
+    </div>
+    <div class="tbl-wrap" id="sm-stock-item-wrap" style="max-height:320px;display:none;">
       <table>
         <thead><tr>
           <th>고유번호</th><th>품목명</th><th>규격</th>
@@ -12800,6 +12819,109 @@ function getSubMaterialStockRows(){
     });
 }
 
+function getSubMaterialLotStockRows(){
+  // 입고 건의 ID로 연결한다. LOT 표기나 품목명이 같아도 다른 입고의 사용량을 섞지 않는다.
+  const usedByLot = new Map();
+  subMaterialUsages.forEach(usage => {
+    const key = String(usage.lotId || '');
+    if(key) usedByLot.set(key, (usedByLot.get(key) || 0) + parseAppNumber(usage.qty));
+  });
+  const roundQty = value => Number(value.toFixed(6));
+  return subMaterialLots.map(lot => {
+    const item = subMaterialItems.find(item => lot.itemId && String(item.id) === String(lot.itemId)) ||
+      subMaterialItems.find(item => lot.itemCode && String(item.code) === String(lot.itemCode));
+    const totalIn = roundQty(parseAppNumber(lot.qty));
+    const totalUsed = roundQty(usedByLot.get(String(lot.id || '')) || 0);
+    const stockQty = roundQty(totalIn - totalUsed);
+    return {
+      ...lot, itemCode:lot.itemCode || item?.code || '', itemName:lot.itemName || item?.name || '',
+      itemSpec:lot.itemSpec || item?.spec || '', unit:lot.unit || item?.unit || '',
+      totalIn, totalUsed, stockQty,
+      status:stockQty < 0 ? '음수 재고' : (stockQty > 0 ? '재고 있음' : '소진')
+    };
+  }).sort((a,b)=>
+    String(a.itemName).localeCompare(String(b.itemName),'ko') ||
+    String(a.itemSpec).localeCompare(String(b.itemSpec),'ko') ||
+    String(a.date || '').localeCompare(String(b.date || '')) ||
+    String(a.lot || '').localeCompare(String(b.lot || ''), undefined, {numeric:true})
+  );
+}
+
+function renderSubMaterialStock(){
+  const lotView = document.getElementById('sm-stock-view')?.value !== 'item';
+  const stockQ = (document.getElementById('sm-stock-search')?.value || '').toLowerCase().trim();
+  const lotWrap = document.getElementById('sm-stock-lot-wrap');
+  const itemWrap = document.getElementById('sm-stock-item-wrap');
+  const lotNote = document.getElementById('sm-stock-lot-note');
+  const statusEl = document.getElementById('sm-stock-status');
+  const searchEl = document.getElementById('sm-stock-search');
+  if(lotWrap) lotWrap.style.display = lotView ? '' : 'none';
+  if(itemWrap) itemWrap.style.display = lotView ? 'none' : '';
+  if(lotNote) lotNote.style.display = lotView ? '' : 'none';
+  if(statusEl) statusEl.style.display = lotView ? '' : 'none';
+  if(searchEl) searchEl.placeholder = lotView ? '품목명 / 고유번호 / LOT / 거래처 검색...' : '품목명 / 고유번호 / 규격 검색...';
+  const stockCountEl = document.getElementById('sm-stock-count');
+  if(lotView){
+    const status = statusEl?.value || 'all';
+    const rows = getSubMaterialLotStockRows().filter(row => {
+      if(status === 'available' && row.stockQty <= 0) return false;
+      if(status === 'empty' && row.stockQty !== 0) return false;
+      if(status === 'negative' && row.stockQty >= 0) return false;
+      return !stockQ || [row.itemCode, row.itemName, row.itemSpec, row.lot, row.trader, row.note]
+        .some(value => String(value || '').toLowerCase().includes(stockQ));
+    });
+    if(stockCountEl) stockCountEl.textContent = `(LOT ${rows.length}건)`;
+    const body = document.getElementById('sm-stock-lot-body');
+    const qty = value => value.toLocaleString('ko-KR', {maximumFractionDigits:6});
+    if(body) body.innerHTML = rows.length ? rows.map(row=>`<tr>
+      <td style="white-space:nowrap;">${htmlEscape(row.date || '-')}</td>
+      <td>${htmlEscape(row.itemCode || '-')}</td>
+      <td><strong>${htmlEscape(row.itemName || '-')}</strong></td>
+      <td>${htmlEscape(row.itemSpec || '-')}</td>
+      <td style="font-family:Consolas,'Courier New',monospace;">${htmlEscape(row.lot || '-')}</td>
+      <td>${htmlEscape(row.trader || '-')}</td>
+      <td style="text-align:right;">${qty(row.totalIn)}</td>
+      <td style="text-align:right;">${qty(row.totalUsed)}</td>
+      <td style="text-align:right;font-weight:800;">${qty(row.stockQty)}</td>
+      <td>${htmlEscape(row.unit || '-')}</td>
+      <td style="white-space:nowrap;font-weight:700;">${htmlEscape(row.status)}</td>
+      <td>${htmlEscape(row.note || '-')}</td>
+    </tr>`).join('') : '<tr><td colspan="12" style="text-align:center;color:#888;padding:20px;">조건에 맞는 부자재 LOT 재고가 없습니다.</td></tr>';
+    return;
+  }
+
+  let stockRows = getSubMaterialStockRows();
+  if(stockQ) stockRows = stockRows.filter(r =>
+    [r.item.code, r.item.name, r.item.spec, r.status, r.latest?.note]
+      .some(v => String(v || '').toLowerCase().includes(stockQ))
+  );
+  if(stockCountEl) stockCountEl.textContent = `(품목 ${stockRows.length}건)`;
+  const stockBody = document.getElementById('sm-stock-body');
+  if(stockBody){
+    stockBody.innerHTML = stockRows.length ? stockRows.map(r=>{
+      const statusColor = r.status === '실사필요' ? '#e74c3c' : (r.status === '실사 후 변동' ? '#d35400' : '#27ae60');
+      return `<tr>
+        <td style="font-family:Consolas,'Courier New',monospace;font-weight:700;color:#2c3e50;">${htmlEscape(r.item.code || '')}</td>
+        <td><strong>${htmlEscape(r.item.name || '')}</strong></td>
+        <td>${htmlEscape(r.item.spec || '-')}</td>
+        <td style="text-align:right;">${r.totalIn.toLocaleString('ko-KR')}</td>
+        <td style="text-align:right;">${r.totalUsed.toLocaleString('ko-KR')}</td>
+        <td style="text-align:right;">${r.latest ? r.latestQty.toLocaleString('ko-KR') : '-'}</td>
+        <td style="text-align:right;">${r.latest ? r.inAfterCount.toLocaleString('ko-KR') : '-'}</td>
+        <td style="text-align:right;">${r.latest ? r.usedAfterCount.toLocaleString('ko-KR') : '-'}</td>
+        <td style="text-align:right;font-weight:800;color:#2c3e50;">${r.managedQty.toLocaleString('ko-KR')}</td>
+        <td>${htmlEscape(r.unit || '-')}</td>
+        <td style="white-space:nowrap;">${r.latest ? htmlEscape(r.latest.date || '') : '-'}</td>
+        <td>${htmlEscape(r.latest?.manager || '-')}</td>
+        <td><span style="background:${statusColor};color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;">${htmlEscape(r.status)}</span></td>
+        <td>${htmlEscape(r.latest?.note || '-')}</td>
+        <td style="text-align:center;white-space:nowrap;">${r.latest ? `<button class="btn btn-sm btn-danger" onclick="deleteSubMaterialCount('${r.latest.id}')">실사삭제</button>` : '-'}</td>
+      </tr>`;
+    }).join('')
+    : '<tr><td colspan="15" style="text-align:center;color:#888;padding:20px;">표시할 부자재 재고현황이 없습니다.</td></tr>';
+  }
+}
+
 function renderSubMaterials(){
   ensureSubMaterialCodes();
   const inDate = document.getElementById('sm-in-date');
@@ -12831,38 +12953,7 @@ function renderSubMaterials(){
       : '<tr><td colspan="7" style="text-align:center;color:#888;padding:18px;">등록된 부자재 품목이 없습니다.</td></tr>';
   }
 
-  const stockQ = (document.getElementById('sm-stock-search')?.value || '').toLowerCase().trim();
-  let stockRows = getSubMaterialStockRows();
-  if(stockQ) stockRows = stockRows.filter(r =>
-    [r.item.code, r.item.name, r.item.spec, r.status, r.latest?.note]
-      .some(v => String(v || '').toLowerCase().includes(stockQ))
-  );
-  const stockCountEl = document.getElementById('sm-stock-count');
-  if(stockCountEl) stockCountEl.textContent = `(${stockRows.length}건)`;
-  const stockBody = document.getElementById('sm-stock-body');
-  if(stockBody){
-    stockBody.innerHTML = stockRows.length ? stockRows.map(r=>{
-      const statusColor = r.status === '실사필요' ? '#e74c3c' : (r.status === '실사 후 변동' ? '#d35400' : '#27ae60');
-      return `<tr>
-        <td style="font-family:Consolas,'Courier New',monospace;font-weight:700;color:#2c3e50;">${htmlEscape(r.item.code || '')}</td>
-        <td><strong>${htmlEscape(r.item.name || '')}</strong></td>
-        <td>${htmlEscape(r.item.spec || '-')}</td>
-        <td style="text-align:right;">${r.totalIn.toLocaleString('ko-KR')}</td>
-        <td style="text-align:right;">${r.totalUsed.toLocaleString('ko-KR')}</td>
-        <td style="text-align:right;">${r.latest ? r.latestQty.toLocaleString('ko-KR') : '-'}</td>
-        <td style="text-align:right;">${r.latest ? r.inAfterCount.toLocaleString('ko-KR') : '-'}</td>
-        <td style="text-align:right;">${r.latest ? r.usedAfterCount.toLocaleString('ko-KR') : '-'}</td>
-        <td style="text-align:right;font-weight:800;color:#2c3e50;">${r.managedQty.toLocaleString('ko-KR')}</td>
-        <td>${htmlEscape(r.unit || '-')}</td>
-        <td style="white-space:nowrap;">${r.latest ? htmlEscape(r.latest.date || '') : '-'}</td>
-        <td>${htmlEscape(r.latest?.manager || '-')}</td>
-        <td><span style="background:${statusColor};color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;">${htmlEscape(r.status)}</span></td>
-        <td>${htmlEscape(r.latest?.note || '-')}</td>
-        <td style="text-align:center;white-space:nowrap;">${r.latest ? `<button class="btn btn-sm btn-danger" onclick="deleteSubMaterialCount('${r.latest.id}')">실사삭제</button>` : '-'}</td>
-      </tr>`;
-    }).join('')
-    : '<tr><td colspan="15" style="text-align:center;color:#888;padding:20px;">표시할 부자재 재고현황이 없습니다.</td></tr>';
-  }
+  renderSubMaterialStock();
 
   const q = (document.getElementById('sm-search')?.value || '').toLowerCase().trim();
   const ym = filterMonth?.value || '';
