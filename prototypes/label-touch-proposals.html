@@ -1,0 +1,330 @@
+<div id="dbmt-label-touch-proposals" lang="ko" aria-label="라벨 출력 화면 배치 비교">
+  <section class="dbmt-proposal" data-layout="balanced" aria-label="1안 균형형">
+    <h2 class="dbmt-proposal-title">1안 · 균형형 <span>작업목록 + 출력 + 계산기</span></h2>
+    <div class="dbmt-screen"></div>
+  </section>
+  <section class="dbmt-proposal" data-layout="scale" aria-label="2안 저울 중심형">
+    <h2 class="dbmt-proposal-title">2안 · 저울 중심형 <span>큰 계근중량 + 한 장씩 출력</span></h2>
+    <div class="dbmt-screen"></div>
+  </section>
+  <section class="dbmt-proposal" data-layout="guided" aria-label="3안 단계형">
+    <h2 class="dbmt-proposal-title">3안 · 단계형 <span>작업 선택 → 중량 확인 → 출력</span></h2>
+    <div class="dbmt-screen"></div>
+  </section>
+</div>
+<style>
+  #dbmt-label-touch-proposals { display:grid; gap:36px; color-scheme:light; --dbmt-ink:#25292d; --dbmt-muted:#62676c; --dbmt-line:#c9cdd1; --dbmt-paper:#fff; --dbmt-back:#eff0f2; --dbmt-soft:#f6f6f7; --dbmt-dark:#33383e; font-family:"Malgun Gothic","Segoe UI",sans-serif; color:var(--dbmt-ink); }
+  #dbmt-label-touch-proposals * { box-sizing:border-box; }
+  #dbmt-label-touch-proposals [hidden] { display:none !important; }
+  #dbmt-label-touch-proposals .dbmt-proposal { container-type:inline-size; min-width:0; }
+  #dbmt-label-touch-proposals .dbmt-proposal-title { margin:0 0 12px; font-size:20px; font-weight:500; }
+  #dbmt-label-touch-proposals .dbmt-proposal-title span { margin-left:12px; color:var(--dbmt-muted); font-size:14px; font-weight:400; }
+  #dbmt-label-touch-proposals .dbmt-screen { --dbmt-target:5.31cqi; --dbmt-gap:clamp(8px,.94cqi,12px); width:100%; aspect-ratio:5/4; display:grid; grid-template-rows:auto minmax(0,1fr) auto; background:var(--dbmt-back); color:var(--dbmt-ink); border:1px solid var(--dbmt-line); border-radius:8px; font-size:clamp(14px,1.41cqi,18px); line-height:1.35; position:relative; }
+  #dbmt-label-touch-proposals button, #dbmt-label-touch-proposals input, #dbmt-label-touch-proposals select { font:inherit; color:inherit; border:1px solid #b8bec4; border-radius:7px; background:var(--dbmt-paper); min-width:0; min-height:clamp(44px,var(--dbmt-target),68px); touch-action:manipulation; }
+  #dbmt-label-touch-proposals button { cursor:pointer; padding:8px 10px; font-weight:500; }
+  #dbmt-label-touch-proposals button:active { background:#dfe2e5; }
+  #dbmt-label-touch-proposals button:disabled { cursor:default; opacity:.45; }
+  #dbmt-label-touch-proposals input, #dbmt-label-touch-proposals select { padding:8px 10px; width:100%; font-size:clamp(16px,1.5cqi,20px); }
+  #dbmt-label-touch-proposals .dbmt-primary, #dbmt-label-touch-proposals button[aria-pressed="true"] { background:var(--dbmt-dark); color:#fff; border-color:var(--dbmt-dark); }
+  #dbmt-label-touch-proposals .dbmt-soft-button { background:#e5e7e9; }
+  #dbmt-label-touch-proposals .dbmt-topbar { padding:8px var(--dbmt-gap); display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--dbmt-line); background:#fff; border-radius:8px 8px 0 0; }
+  #dbmt-label-touch-proposals .dbmt-brand { font-size:clamp(16px,1.72cqi,22px); font-weight:500; white-space:nowrap; }
+  #dbmt-label-touch-proposals .dbmt-topbar .dbmt-muted { margin-left:auto; }
+  #dbmt-label-touch-proposals .dbmt-topbar button { min-height:clamp(44px,4.37cqi,56px); }
+  #dbmt-label-touch-proposals .dbmt-muted { color:var(--dbmt-muted); font-size:clamp(12px,1.17cqi,15px); }
+  #dbmt-label-touch-proposals .dbmt-body { padding:var(--dbmt-gap); display:grid; grid-template-columns:29% minmax(0,1fr); gap:var(--dbmt-gap); min-height:0; }
+  #dbmt-label-touch-proposals .dbmt-sidebar { display:grid; grid-template-rows:auto minmax(0,1fr); gap:var(--dbmt-gap); min-width:0; min-height:0; }
+  #dbmt-label-touch-proposals .dbmt-panel { background:var(--dbmt-paper); border:1px solid var(--dbmt-line); border-radius:8px; padding:var(--dbmt-gap); min-width:0; min-height:0; }
+  #dbmt-label-touch-proposals .dbmt-panel-head { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:10px; font-weight:500; }
+  #dbmt-label-touch-proposals .dbmt-order-list { display:grid; gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-order { display:grid; grid-template-columns:1fr auto; text-align:left; gap:4px 8px; min-height:clamp(66px,6.5cqi,83px); border-left:4px solid #b8bec4; }
+  #dbmt-label-touch-proposals .dbmt-order[aria-pressed="true"] { background:#eceeef; color:var(--dbmt-ink); border-color:#60656a; }
+  #dbmt-label-touch-proposals .dbmt-order small { grid-column:1/-1; color:var(--dbmt-muted); font-size:clamp(12px,1.09cqi,14px); font-weight:400; }
+  #dbmt-label-touch-proposals .dbmt-order-number { color:var(--dbmt-muted); }
+  #dbmt-label-touch-proposals .dbmt-date { width:100%; margin-bottom:8px; min-height:clamp(44px,4.37cqi,56px); }
+  #dbmt-label-touch-proposals .dbmt-orders-foot { display:flex; align-items:center; justify-content:space-between; margin-top:8px; gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-orders-foot button { flex:1; min-height:clamp(44px,4.37cqi,56px); }
+  #dbmt-label-touch-proposals .dbmt-calculator { display:grid; grid-template-rows:auto minmax(56px,.95fr) minmax(0,5fr); gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-calculator .dbmt-panel-head { margin:0; }
+  #dbmt-label-touch-proposals .dbmt-calc-display { display:flex; align-items:center; justify-content:flex-end; padding:8px 12px; border:1px solid var(--dbmt-line); border-radius:7px; background:var(--dbmt-soft); font-size:clamp(28px,3.13cqi,40px); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  #dbmt-label-touch-proposals .dbmt-calc-keys { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:repeat(5,minmax(0,1fr)); gap:6px; min-height:0; }
+  #dbmt-label-touch-proposals .dbmt-calc-keys button { padding:3px; min-height:44px; font-size:clamp(22px,2.35cqi,30px); }
+  #dbmt-label-touch-proposals .dbmt-calc-keys button[data-key="AC"] { font-size:clamp(18px,1.88cqi,24px); }
+  #dbmt-label-touch-proposals .dbmt-calc-keys button[data-key="0"] { grid-column:span 2; }
+  #dbmt-label-touch-proposals .dbmt-workspace { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-width:0; min-height:0; gap:var(--dbmt-gap); }
+  #dbmt-label-touch-proposals .dbmt-job-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
+  #dbmt-label-touch-proposals .dbmt-product { font-size:clamp(20px,2.19cqi,28px); font-weight:500; margin:0 0 4px; }
+  #dbmt-label-touch-proposals .dbmt-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--dbmt-line); padding-top:10px; gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-metric { display:grid; gap:4px; }
+  #dbmt-label-touch-proposals .dbmt-metric strong { font-size:clamp(17px,1.88cqi,24px); font-weight:500; font-variant-numeric:tabular-nums; }
+  #dbmt-label-touch-proposals .dbmt-print-panel { display:flex; flex-direction:column; gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-segment { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-weight-block { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:12px; border:1px solid var(--dbmt-line); background:var(--dbmt-soft); border-radius:8px; }
+  #dbmt-label-touch-proposals .dbmt-weight-number { font-size:clamp(40px,4.37cqi,56px); font-weight:500; letter-spacing:-2px; font-variant-numeric:tabular-nums; line-height:1.15; }
+  #dbmt-label-touch-proposals .dbmt-weight-number small { font-size:clamp(18px,1.88cqi,24px); letter-spacing:0; margin-left:8px; }
+  #dbmt-label-touch-proposals .dbmt-weight-side { display:grid; gap:8px; text-align:right; }
+  #dbmt-label-touch-proposals .dbmt-weight-side button { padding-inline:14px; }
+  #dbmt-label-touch-proposals .dbmt-presets { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:end; }
+  #dbmt-label-touch-proposals .dbmt-field { display:grid; gap:5px; min-width:0; }
+  #dbmt-label-touch-proposals .dbmt-stepper { display:grid; grid-template-columns:clamp(44px,4.7cqi,60px) minmax(0,1fr) clamp(44px,4.7cqi,60px); gap:6px; }
+  #dbmt-label-touch-proposals .dbmt-stepper input { text-align:center; }
+  #dbmt-label-touch-proposals .dbmt-stepper button { font-size:26px; padding:4px; }
+  #dbmt-label-touch-proposals .dbmt-print-actions { display:grid; grid-template-columns:1fr 2fr; gap:10px; margin-top:auto; }
+  #dbmt-label-touch-proposals .dbmt-print-actions .dbmt-print { min-height:clamp(70px,7.2cqi,92px); font-size:clamp(22px,2.35cqi,30px); }
+  #dbmt-label-touch-proposals .dbmt-history { display:grid; gap:8px; border-top:1px solid var(--dbmt-line); padding-top:10px; }
+  #dbmt-label-touch-proposals .dbmt-history-row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+  #dbmt-label-touch-proposals .dbmt-history-row button { min-height:clamp(44px,4.37cqi,56px); }
+  #dbmt-label-touch-proposals .dbmt-completion { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; }
+  #dbmt-label-touch-proposals .dbmt-completion > button { border:2px solid #555b61; min-width:clamp(190px,20cqi,256px); }
+  #dbmt-label-touch-proposals .dbmt-completion .dbmt-history { border:0; padding:0; }
+  #dbmt-label-touch-proposals .dbmt-completion .dbmt-history-row { display:grid; grid-template-columns:1fr auto; gap:4px 8px; }
+  #dbmt-label-touch-proposals .dbmt-completion .dbmt-history-row > span { grid-column:1; }
+  #dbmt-label-touch-proposals .dbmt-completion .dbmt-history-row button { grid-column:2; grid-row:1 / span 2; }
+  #dbmt-label-touch-proposals .dbmt-status { border-top:1px solid var(--dbmt-line); padding:6px 12px; font-size:clamp(12px,1.09cqi,14px); color:var(--dbmt-muted); background:var(--dbmt-paper); border-radius:0 0 8px 8px; }
+  #dbmt-label-touch-proposals .dbmt-scale-toolbar { display:grid; grid-template-columns:1fr .7fr; gap:12px; align-items:end; }
+  #dbmt-label-touch-proposals [data-layout="scale"] [data-weight-mode="scale"] .dbmt-weight-block { grid-template-columns:1fr; text-align:center; flex:1; align-content:center; }
+  #dbmt-label-touch-proposals [data-layout="scale"] [data-weight-mode="scale"] .dbmt-weight-number { font-size:clamp(64px,9.38cqi,120px); }
+  #dbmt-label-touch-proposals [data-layout="scale"] [data-weight-mode="scale"] .dbmt-weight-side { grid-template-columns:1fr auto; align-items:center; text-align:left; }
+  #dbmt-label-touch-proposals [data-layout="scale"] [data-weight-mode="scale"] .dbmt-print-actions { grid-template-columns:1fr 3fr; }
+  #dbmt-label-touch-proposals [data-layout="scale"] [data-weight-mode="scale"] .dbmt-print-actions .dbmt-print { min-height:clamp(82px,9.38cqi,120px); }
+  #dbmt-label-touch-proposals .dbmt-stages { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  #dbmt-label-touch-proposals .dbmt-stages button { text-align:left; display:grid; gap:5px; }
+  #dbmt-label-touch-proposals .dbmt-stage-count { font-size:clamp(12px,1.17cqi,15px); opacity:.8; }
+  #dbmt-label-touch-proposals .dbmt-stage-content { display:flex; flex-direction:column; gap:var(--dbmt-gap); flex:1; }
+  #dbmt-label-touch-proposals .dbmt-stage-title { font-size:clamp(20px,2.19cqi,28px); font-weight:500; }
+  #dbmt-label-touch-proposals .dbmt-confirm-product { padding:20px 16px; background:var(--dbmt-soft); border:1px solid var(--dbmt-line); border-radius:8px; display:grid; gap:16px; }
+  #dbmt-label-touch-proposals .dbmt-step-actions { display:grid; grid-template-columns:1fr 2fr; gap:8px; margin-top:auto; }
+  #dbmt-label-touch-proposals .dbmt-step-actions button { min-height:clamp(64px,6.88cqi,88px); font-size:clamp(18px,1.88cqi,24px); }
+  #dbmt-label-touch-proposals .dbmt-overlay { position:absolute; inset:0; z-index:5; display:grid; align-items:center; justify-items:center; padding:20px; background:#25292d80; border-radius:8px; }
+  #dbmt-label-touch-proposals .dbmt-dialog { background:#fff; color:var(--dbmt-ink); border:1px solid var(--dbmt-line); border-radius:10px; padding:24px; width:min(100%,560px); display:grid; gap:20px; }
+  #dbmt-label-touch-proposals .dbmt-dialog-title { font-size:22px; font-weight:500; }
+  #dbmt-label-touch-proposals .dbmt-dialog-actions { display:flex; gap:10px; }
+  #dbmt-label-touch-proposals .dbmt-dialog-actions button { flex:1; }
+  #dbmt-label-touch-proposals .dbmt-label-proof { border:2px solid #25292d; padding:14px; display:grid; gap:8px; background:#fff; }
+  #dbmt-label-touch-proposals .dbmt-label-proof > div { border-bottom:1px solid #9b9fa3; padding-bottom:8px; }
+  @container (max-width:760px) {
+    #dbmt-label-touch-proposals .dbmt-screen { aspect-ratio:auto; }
+    #dbmt-label-touch-proposals .dbmt-body { grid-template-columns:1fr; }
+    #dbmt-label-touch-proposals .dbmt-sidebar { grid-template-rows:auto auto; }
+    #dbmt-label-touch-proposals .dbmt-calculator { grid-template-rows:auto 68px auto; }
+    #dbmt-label-touch-proposals .dbmt-calc-keys { grid-template-rows:repeat(5,56px); }
+    #dbmt-label-touch-proposals .dbmt-workspace { grid-template-rows:auto auto auto; }
+    #dbmt-label-touch-proposals .dbmt-topbar { flex-wrap:wrap; }
+    #dbmt-label-touch-proposals .dbmt-topbar .dbmt-muted { margin-left:0; }
+    #dbmt-label-touch-proposals .dbmt-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    #dbmt-label-touch-proposals .dbmt-completion, #dbmt-label-touch-proposals .dbmt-form-row { grid-template-columns:1fr; }
+    #dbmt-label-touch-proposals .dbmt-weight-block { grid-template-columns:1fr; }
+    #dbmt-label-touch-proposals .dbmt-weight-side { text-align:left; }
+    #dbmt-label-touch-proposals .dbmt-scale-toolbar { grid-template-columns:1fr; }
+    #dbmt-label-touch-proposals [data-layout="scale"] [data-weight-mode="scale"] .dbmt-weight-side { grid-template-columns:1fr; }
+    #dbmt-label-touch-proposals .dbmt-job-title { flex-wrap:wrap; }
+    #dbmt-label-touch-proposals .dbmt-proposal-title span { display:block; margin:4px 0 0; }
+  }
+</style>
+<script>
+(() => {
+  // Pure calculator logic. Never sends values to a real label or scale.
+  function calcResult(left, right, operator) {
+    if (operator === '+') return left + right;
+    if (operator === '−') return left - right;
+    if (operator === '×') return left * right;
+    if (operator === '÷') return right === 0 ? NaN : left / right;
+    return right;
+  }
+  function calcStep(state, key) {
+    const next = { ...state };
+    const clear = { value:'0', stored:null, operator:null, fresh:false };
+    const format = n => Number.isFinite(n) ? String(Number(n.toPrecision(10))) : '오류';
+    if (key === 'AC') return clear;
+    if (!Number.isFinite(Number(next.value))) Object.assign(next, clear);
+    if (/^[0-9.]$/.test(key)) {
+      if (next.fresh) { next.value = '0'; next.fresh = false; }
+      if (key === '.') {
+        if (!next.value.includes('.')) next.value += '.';
+      } else if (next.value.replace(/[-.]/g, '').length < 10) {
+        next.value = next.value === '0' ? key : next.value + key;
+      }
+      return next;
+    }
+    if (key === '⌫') { next.value = next.value.slice(0,-1) || '0'; if(next.value === '-') next.value = '0'; return next; }
+    if (key === '%') { next.value = format(Number(next.value) / 100); return next; }
+    if (key === '=') {
+      if (next.operator && next.stored !== null) next.value = format(calcResult(next.stored, Number(next.value), next.operator));
+      next.stored = null; next.operator = null; next.fresh = true;
+      return next;
+    }
+    if (['+','−','×','÷'].includes(key)) {
+      if (next.operator && !next.fresh) next.value = format(calcResult(next.stored, Number(next.value), next.operator));
+      next.stored = Number(next.value); next.operator = key; next.fresh = true;
+    }
+    return next;
+  }
+  const root = document.getElementById('dbmt-label-touch-proposals');
+  if (!root) return;
+  const designs = { view:'all', touch:68 };
+  const jobs = [
+    { name:'냉장돈등심(치즈용)', lot:'120008906379', origin:'국내산', raw:'돈등심', input:120, printed:85, base:5 },
+    { name:'LA갈비(작업)', lot:'803150900111', origin:'미국산', raw:'LA갈비', input:50.68, printed:42, base:2 },
+    { name:'냉장돈전지(불고기용)', lot:'120008906402', origin:'국내산', raw:'돈전지', input:80, printed:0, base:3 }
+  ];
+  const moneyless = n => Number(n).toLocaleString('ko-KR',{maximumFractionDigits:3,minimumFractionDigits:2});
+  const button = (text, action, cls='', attributes='') => `<button type="button" class="${cls}" data-action="${action}" ${attributes}>${text}</button>`;
+  const allScreens = [];
+  for (const proposal of root.querySelectorAll('.dbmt-proposal')) {
+    const layout = proposal.dataset.layout;
+    const screen = proposal.querySelector('.dbmt-screen');
+    const state = {
+      job:0, mode:layout === 'scale' ? 'scale' : 'fixed', weight:5, copies:1, size:'7 × 10 cm',
+      captured:false, step:1, printed:85, demoPrints:0, lastPrint:null, completed:false,
+      calc:{ value:'0', stored:null, operator:null, fresh:false }
+    };
+    const notify = text => { screen.querySelector('.dbmt-status').textContent = text; };
+    function orderMarkup() {
+      return `<div class="dbmt-panel-head"><span>작업지시 선택</span><span class="dbmt-muted">3건</span></div>
+        <label class="dbmt-field"><span class="dbmt-muted">작업일</span><input class="dbmt-date" aria-label="시안 작업일" type="date" value="2026-09-10"></label>
+        <div class="dbmt-order-list">${jobs.slice(0,2).map((job,index)=>button(`<span>${job.name}</span><span class="dbmt-order-number">${index+1}</span><small>투입 ${moneyless(job.input)} kg · ${job.origin}</small>`,'job','dbmt-order',`data-job="${index}" aria-pressed="${state.job===index}"`)).join('')}</div>
+        <div class="dbmt-orders-foot">${button('전체 작업 3건','orders')}<span class="dbmt-muted">09.10</span></div>`;
+    }
+    function calculatorMarkup() {
+      const keys = ['AC','⌫','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='];
+      return `<div class="dbmt-panel-head"><span>계산기</span><span class="dbmt-muted">독립 계산</span></div><output class="dbmt-calc-display" aria-label="계산 결과" aria-live="polite">0</output><div class="dbmt-calc-keys">${keys.map(key=>button(key,'calc',key==='='?'dbmt-primary':['+','−','×','÷'].includes(key)?'dbmt-soft-button':'',`data-key="${key}" aria-label="${key==='⌫'?'계산기 한 글자 지우기':key==='AC'?'계산기 초기화':key}"`)).join('')}</div>`;
+    }
+    function jobMarkup() {
+      const job = jobs[state.job];
+      return `<div class="dbmt-job-title"><div><div class="dbmt-product">${job.name}</div><div class="dbmt-muted">작업 ${String(state.job+1).padStart(2,'0')} · ${job.origin} · LOT ${job.lot}</div></div>${button('작업 변경','orders')}</div>
+        <div class="dbmt-metrics">${[['투입중량',moneyless(job.input)+' kg'],['출력 생산량',moneyless(state.printed)+' kg'],['잔여 / 로스',moneyless(job.input-state.printed)+' kg'],['수율',moneyless(state.printed/job.input*100)+' %']].map(([label,value])=>`<div class="dbmt-metric"><span class="dbmt-muted">${label}</span><strong>${value}</strong></div>`).join('')}</div>`;
+    }
+    function modeMarkup() {
+      return `<div class="dbmt-segment">${button('고정중량','fixed','',`aria-pressed="${state.mode==='fixed'}"`)}${button('저울중량','scale','',`aria-pressed="${state.mode==='scale'}"`)}</div>`;
+    }
+    function weightMarkup() {
+      const scale = state.mode === 'scale';
+      const value = scale ? (state.captured ? '2.48' : '—') : moneyless(state.weight);
+      return `<div class="dbmt-weight-block"><div><div class="dbmt-muted">${scale?'계근 순중량 · 시연값':'라벨 1장당 중량'}</div><div class="dbmt-weight-number">${value}<small>kg</small></div></div><div class="dbmt-weight-side"><span class="dbmt-muted">${scale?(state.captured?'시연 중량 확인됨':'저울 미연결'):'직접 입력 / 빠른 선택'}</span>${button(scale?'중량 가져오기 · 시연':'중량 직접 입력',scale?'capture':'custom')}</div></div>`;
+    }
+    function optionsMarkup(showFields=true, showPresets=true) {
+      const scale = state.mode === 'scale';
+      return `${scale||!showPresets?'':`<div class="dbmt-presets">${[2,3,5,10].map(weight=>button(weight+' kg','preset','',`data-weight="${weight}" aria-pressed="${state.weight===weight}"`)).join('')}</div>`}
+        ${!showFields?'':`<div class="dbmt-form-row"><label class="dbmt-field"><span>출력 매수${scale?' · 계근당 1장':''}</span><span class="dbmt-stepper">${button('−','minus','',scale?'disabled':'')}<input aria-label="출력 매수" type="number" inputmode="numeric" min="1" max="500" value="${scale?1:state.copies}" ${scale?'disabled':''}>${button('+','plus','',scale?'disabled':'')}</span></label><label class="dbmt-field"><span>라벨 크기</span><select aria-label="라벨 크기"><option ${state.size==='7 × 10 cm'?'selected':''}>7 × 10 cm</option><option ${state.size==='10 × 10 cm'?'selected':''}>10 × 10 cm</option></select></label></div>`}`;
+    }
+    function printButtons() {
+      const count = state.mode==='scale'?1:state.copies;
+      return `<div class="dbmt-print-actions">${button('미리보기','preview')}${button(`라벨 ${count}장 출력`,'print','dbmt-primary dbmt-print',state.mode==='scale'&&!state.captured||state.completed?'disabled':'')}</div>`;
+    }
+    function historyMarkup() {
+      const last = state.lastPrint;
+      const job = jobs[state.job];
+      return `<div class="dbmt-history"><div class="dbmt-history-row"><span class="dbmt-muted">최근 출력${last?' · 시연':' · 예시'}</span><span>${last?`${moneyless(last.weight)} kg × ${last.copies}장`:job.printed>0?`${moneyless(job.base)} kg × 1장`:'아직 출력 없음'}</span>${button('재출력','reprint','',!last&&job.printed===0?'disabled':'')}</div></div>`;
+    }
+    function guidedMarkup() {
+      const job = jobs[state.job];
+      let inner;
+      if (state.step===1) inner = `<div class="dbmt-stage-title">출력할 작업을 확인하세요</div><div class="dbmt-confirm-product"><div class="dbmt-product">${job.name}</div><div>원료 ${job.raw} · ${job.origin}</div><div>LOT ${job.lot}</div><div>투입중량 ${moneyless(job.input)} kg</div></div><div class="dbmt-step-actions">${button('다른 작업','orders')}${button('이 작업으로 계속 →','next','dbmt-primary')}</div>`;
+      else if (state.step===2) inner = `${modeMarkup()}${weightMarkup()}${optionsMarkup(false)}<div class="dbmt-step-actions">${button('← 작업 확인','previous')}${button('출력 전 확인 →','next','dbmt-primary',state.mode==='scale'&&!state.captured?'disabled':'')}</div>`;
+      else inner = `<div class="dbmt-confirm-product"><div class="dbmt-weight-number">${moneyless(state.mode==='scale'?2.48:state.weight)}<small>kg</small></div><div>${state.mode==='scale'?'저울중량 · 시연값':'고정중량'} · 출력 전 확인</div></div>${optionsMarkup(true,false)}${printButtons()}`;
+      return `<div class="dbmt-stages">${['작업 선택','중량 확인','라벨 출력'].map((label,index)=>button(`<span class="dbmt-stage-count">STEP 0${index+1}</span><span>${label}</span>`,'step','',`data-step="${index+1}" aria-pressed="${state.step===index+1}" ${index+1>state.step?'disabled':''}`)).join('')}</div><div class="dbmt-stage-content">${inner}</div>`;
+    }
+    function renderWork() {
+      screen.dataset.weightMode = state.mode;
+      screen.querySelector('.dbmt-job').innerHTML = jobMarkup();
+      let printing;
+      if(layout==='guided') printing=guidedMarkup();
+      else if(layout==='scale' && state.mode==='scale') printing=`<div class="dbmt-scale-toolbar">${modeMarkup()}<label class="dbmt-field"><span>라벨 크기</span><select aria-label="라벨 크기"><option ${state.size==='7 × 10 cm'?'selected':''}>7 × 10 cm</option><option ${state.size==='10 × 10 cm'?'selected':''}>10 × 10 cm</option></select></label></div>${weightMarkup()}<span class="dbmt-muted">계근당 1장 · 출력 후 다음 중량을 다시 확인합니다.</span>${printButtons()}`;
+      else printing=`${modeMarkup()}${weightMarkup()}${optionsMarkup()}${printButtons()}`;
+      screen.querySelector('.dbmt-print-panel').innerHTML = printing;
+      screen.querySelector('.dbmt-completion').innerHTML = `${historyMarkup()}${button(state.completed?'전송 완료 · 시연':'생산완료 · 전송','complete','',state.completed?'disabled':'')}`;
+      for(const order of screen.querySelectorAll('.dbmt-order')) order.setAttribute('aria-pressed',String(Number(order.dataset.job)===state.job));
+    }
+    function openDialog(title, body, buttons) {
+      closeDialog();
+      const overlay = document.createElement('div');
+      overlay.className = 'dbmt-overlay';
+      overlay.innerHTML = `<section class="dbmt-dialog" role="dialog" aria-modal="true" aria-label="${title}"><div class="dbmt-dialog-title">${title}</div>${body}<div class="dbmt-dialog-actions">${buttons}</div></section>`;
+      screen.append(overlay);
+      const before = document.activeElement;
+      overlay._before = before;
+      overlay.querySelector('button,input,select')?.focus();
+      overlay.addEventListener('keydown', event => {
+        if(event.key==='Escape') { closeDialog(); return; }
+        if(event.key!=='Tab') return;
+        const focusable = [...overlay.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled)')];
+        if(event.shiftKey && document.activeElement===focusable[0]) { event.preventDefault(); focusable.at(-1).focus(); }
+        else if(!event.shiftKey && document.activeElement===focusable.at(-1)) { event.preventDefault(); focusable[0].focus(); }
+      });
+    }
+    function closeDialog() {
+      const overlay = screen.querySelector('.dbmt-overlay');
+      if(overlay) { const before=overlay._before; overlay.remove(); if(before?.isConnected) before.focus(); }
+    }
+    screen.innerHTML = `<header class="dbmt-topbar"><span class="dbmt-brand">동부엠티 ERP · 라벨 출력</span><span class="dbmt-muted">시안 / 예시 데이터</span>${button('저울 설정','settings')}${button('전체화면','fullscreen')}</header><div class="dbmt-body"><aside class="dbmt-sidebar"><section class="dbmt-panel dbmt-orders">${orderMarkup()}</section><section class="dbmt-panel dbmt-calculator" aria-label="터치 계산기">${calculatorMarkup()}</section></aside><main class="dbmt-workspace"><section class="dbmt-panel dbmt-job"></section><section class="dbmt-panel dbmt-print-panel"></section><section class="dbmt-panel dbmt-completion"></section></main></div><footer class="dbmt-status" role="status" aria-live="polite">1280 × 1024 기준 · 실제 저울·프린터·ERP에 연결되지 않은 시안입니다.</footer>`;
+    renderWork();
+    screen.addEventListener('change', event => {
+      const target = event.target;
+      if(target.matches('input[aria-label="출력 매수"]')) { state.copies = Math.max(1,Math.min(500,Math.trunc(Number(target.value)||1))); renderWork(); }
+      if(target.matches('select[aria-label="라벨 크기"]')) { state.size=target.value; }
+      if(target.matches('.dbmt-date')) notify('작업일 선택 시연입니다. 작업목록은 예시 데이터로 유지됩니다.');
+    });
+    screen.addEventListener('click', event => {
+      const target = event.target.closest('button[data-action]');
+      if (!target || target.disabled) return;
+      const action = target.dataset.action;
+      if (action==='calc') { state.calc=calcStep(state.calc,target.dataset.key); screen.querySelector('.dbmt-calc-display').textContent=state.calc.value; return; }
+      if (action==='close') { closeDialog(); return; }
+      if (action==='orders') {
+        openDialog('작업지시 선택',`<div class="dbmt-order-list">${jobs.map((job,index)=>button(`<span>${job.name}</span><small>투입 ${moneyless(job.input)} kg · ${job.origin}</small>`,'job','dbmt-order',`data-job="${index}"`)).join('')}</div>`,button('닫기','close')); return;
+      }
+      if (action==='job') {
+        state.job=Number(target.dataset.job); state.weight=jobs[state.job].base; state.printed=jobs[state.job].printed; state.lastPrint=null; state.demoPrints=0; state.completed=false; state.captured=false; state.step=1; closeDialog(); renderWork(); notify('작업을 변경했습니다. 표시된 수치는 시안용 예시입니다.'); return;
+      }
+      if(action==='settings') {
+        openDialog('저울 연결 설정 · 시안',`<div>저울 모델·연결 방식 확인 후 설정</div><div class="dbmt-muted">연결 포트 / 통신속도 / 수신 형식 / kg 단위 / 안정 중량 / 용기무게</div><div>현재: 실제 장치 미연결</div>`,button('닫기','close')); return;
+      }
+      if(action==='fullscreen') { notify('전체화면 버튼 위치 시연입니다. 실제 적용 시 1280×1024 화면을 가득 채웁니다.'); return; }
+      if(action==='fixed'||action==='scale') { state.mode=action; state.captured=false; renderWork(); return; }
+      if(action==='capture') { state.captured=true; renderWork(); notify('예시 순중량 2.48 kg을 표시했습니다. 실제 저울 수신값은 아닙니다.'); return; }
+      if(action==='preset') { state.weight=Number(target.dataset.weight); renderWork(); return; }
+      if(action==='minus'||action==='plus') { state.copies=Math.max(1,Math.min(500,state.copies+(action==='plus'?1:-1))); renderWork(); return; }
+      if(action==='custom') {
+        openDialog('라벨 중량 직접 입력',`<label class="dbmt-field">1장당 중량 (kg)<input aria-label="직접 입력 중량" type="number" inputmode="decimal" min="0.001" step="0.001" value="${state.weight}"></label>`,button('취소','close')+button('적용','apply-weight','dbmt-primary')); return;
+      }
+      if(action==='apply-weight') {
+        const value=Number(screen.querySelector('input[aria-label="직접 입력 중량"]').value);
+        if(!Number.isFinite(value)||value<=0||value>1000) { notify('중량은 0보다 크고 1,000 kg 이하로 입력하세요.'); return; }
+        state.weight=value; closeDialog(); renderWork(); return;
+      }
+      if(action==='step') { state.step=Number(target.dataset.step); renderWork(); return; }
+      if(action==='next'||action==='previous') { state.step=Math.max(1,Math.min(3,state.step+(action==='next'?1:-1))); renderWork(); return; }
+      if(action==='preview') {
+        openDialog('출력 내용 확인 · 시안',`<div class="dbmt-label-proof"><div>${jobs[state.job].name}</div><div>원산지 ${jobs[state.job].origin}</div><div>중량 ${state.mode==='scale'?(state.captured?'2.48 kg':'중량 수신 대기'):moneyless(state.weight)+' kg'}</div><div>이력번호 ${jobs[state.job].lot}</div><span>주식회사 동부엠티</span></div><div class="dbmt-muted">내용 확인용 시안 · 실제 라벨 서식은 기존 서식 유지</div>`,button('닫기','close')); return;
+      }
+      if(action==='print') {
+        if(state.completed || state.mode==='scale'&&!state.captured) return;
+        const weight=state.mode==='scale'?2.48:state.weight;
+        const copies=state.mode==='scale'?1:state.copies;
+        state.printed=Number((state.printed+weight*copies).toFixed(3)); state.demoPrints+=copies; state.lastPrint={weight,copies}; state.captured=false;
+        if(layout==='guided' && state.mode==='scale') state.step=2;
+        renderWork(); notify(`출력 시연: ${moneyless(weight)} kg × ${copies}장. 실제 인쇄·저장은 하지 않았습니다.`); return;
+      }
+      if(action==='reprint') { notify('기존 라벨 재출력 시연입니다. 실제 인쇄와 생산량 추가는 하지 않습니다.'); return; }
+      if(action==='complete') {
+        openDialog('생산완료 · 전송 확인',`<div>${jobs[state.job].name}</div><div>출력 생산량 ${moneyless(state.printed)} kg</div><div class="dbmt-muted">시안용 동작이며 실제 생산일보에는 전송되지 않습니다.</div>`,button('취소','close')+button('전송 확인 · 시연','confirm-complete','dbmt-primary')); return;
+      }
+      if(action==='confirm-complete') { state.completed=true; closeDialog(); renderWork(); notify('생산완료 전송 시연을 마쳤습니다. 실제 ERP 데이터는 변경되지 않았습니다.'); }
+    });
+    allScreens.push({ proposal, screen });
+  }
+  function renderDesign() {
+    for(const {proposal,screen} of allScreens) {
+      proposal.hidden=designs.view!=='all'&&proposal.dataset.layout!==designs.view;
+      screen.style.setProperty('--dbmt-target',`${designs.touch/12.8}cqi`);
+    }
+  }
+  renderDesign();
+  if(globalThis.Tweak) {
+    const tweak = new Tweak({container:root,onChange:renderDesign});
+    tweak.addSelect(designs,'view',{label:'비교할 화면',options:[{label:'세 가지 모두',value:'all'},{label:'1안 · 균형형',value:'balanced'},{label:'2안 · 저울 중심형',value:'scale'},{label:'3안 · 단계형',value:'guided'}]});
+    tweak.addSlider(designs,'touch',{label:'일반 버튼 높이 · 1280px 기준',min:60,max:68,step:4,unit:'px'});
+  }
+})();
+</script>
