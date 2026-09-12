@@ -13,7 +13,6 @@
     'nav-access-control':'access_control',
     'nav-labelproducts':'label_products',
     'nav-traders':'traders',
-    'nav-samsung':'samsung',
     'nav-transactions':'transactions',
     'nav-production':'production',
     'nav-prod-loss':'production_loss',
@@ -65,11 +64,6 @@
     clearCompanyIdentifierForm:['company_master','create','uiOnly'],
     saveCompanySiteIdentifier:['company_master','write'],
 
-    addSamsungVendor:['samsung','create'],
-    deleteSamsungVendor:['samsung','delete'],
-    addSamsungVendorProduct:['samsung','write'],
-    editSamsungVendorProduct:['samsung','update'],
-    deleteSamsungVendorProduct:['samsung','delete'],
 
     addTransaction:['transactions','write'],
     lookupImportedMeatExpiry:['transactions','write'],

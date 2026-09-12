@@ -4,6 +4,7 @@ const {chromium}=require('playwright');
 const repo=path.resolve(__dirname,'..'),index=fs.readFileSync(path.join(repo,'index.html'),'utf8');
 const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-label-completion-'));
 const block=(start,end)=>{const at=index.indexOf(start);assert(at>=0,start);const stop=index.indexOf(end,at);assert(stop>at,end);return index.slice(at,stop);};
+const source=name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,name);return match[0];};
 const order={id:'qa-wo',date:'2026-09-10',title:'QA 생산완료',product:'냉장돈등심',labelProductId:'qa-product',inputWeight:100,weight:0,lot:'OUT-LOT',origin:'국내산',mfgdate:'2026-09-10',sourceStock:{key:'qa-stock',product:'돈등심 원료',lot:'RAW-LOT',origin:'국내산',price:5000,stock:100,stockLocation:'가공장'}};
 const logs=[{id:'a',labelWeight:5,status:'active'},{id:'b',labelWeight:7.35,status:'active'},{id:'c',labelWeight:10,status:'void'}].map(row=>({...row,workOrderId:order.id,product:order.product,workOrderSnapshot:{...order,weight:row.labelWeight},reprintCount:0}));
 const entry={id:'prod_label_qa',date:'2026/09/10',job_no:'1',job_type:'생산',key:['2026/09/10','1'],note:'QA 생산완료',_isUser:true,
@@ -83,6 +84,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       const getProdInputStockLabel=e=>e.product,normalizeSamsungMeta=()=>null,samsungMetaOptionKey=()=>'';
       const refreshProdInputSamsungOptions=()=>{},refreshProdOutSamsungProducts=()=>{},getCommonProdInputOrigin=()=>'';
       const updateProdOutputOriginField=(el,value)=>el.value=value,samsungVendorOptionsHtml=()=>'<option value="">선택 안 함</option>';
+      const updateProdOutputOriginsFromInputs=()=>{};
       const getProdInputSamsungMeta=()=>null,normalizeStockLocation=v=>v||'가공장',parseAppNumber=v=>Number(v)||0;
       const getProdOutSamsungMeta=()=>null,getPrice=()=>0,nationalPartNameForCode=()=>'',normalizeLabelProductTaxType=v=>v||'면세';
       const labelProducts=[{id:'qa-product',name:'냉장돈등심'},{id:'qa-other',name:'수정 생산품',packunit:'EA',origin:'미국산'}];
@@ -100,10 +102,11 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
         const entry=JSON.parse(JSON.stringify(body.p_entry));
         return {ok:true,entry,transactionRows:body.p_transaction_rows};
       };
+      ${['htmlEscape','productionStockNote','productionLegacySamsung','productionRowSamsungSnapshot','productionLegacySamsungTxnFields','productionOutputStockIdentity','validateProductionStockRowChanges','validateProductionStockInputs','selectProdInputStock','setProdInputStockIdentityReadOnly'].map(source).join('\n')}
       ${block('let prodInputRowCount = 0;','function getStockOptions(){')}
       ${block('function addProdInputRow(){','function selectProdInputStock(')}
-      ${block('function addProdOutputRow(){','function labelProductPackUnitText(')}
-      ${block('function labelProductPackUnitText(','function refreshProdOutSamsungProducts(')}
+      ${block('function addProdOutputRow(','function labelProductPackUnitText(')}
+      ${block('function labelProductPackUnitText(','async function saveProdEntry(){')}
       ${block('async function supabaseSaveProductionRows(','async function supabaseLoadSubMaterialUsages(')}
       ${block('async function saveProdEntry(){','async function deleteProdEntry(')}
       ${block('let _editProdId=null;','// ─── 생산일보 ─')}
@@ -113,13 +116,13 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-in-product-1','prod-in-qty-1','prod-in-price-1','prod-out-product-1','prod-out-qty-1','prod-out-price-1','prod-output-add-btn']) assert(await erp.locator('#'+id).isEnabled(),id);
     assert.equal(await erp.locator('#prod-input-rows button:disabled,#prod-output-rows button:disabled').count(),0);
     await erp.locator('#prod-date').fill('2026-09-09');await erp.locator('#prod-job-no').fill('7');await erp.locator('#prod-note').fill('수정 테스트');await erp.locator('#prod-job-type').selectOption('묶음');
-    for(const [field,value] of [['product','수정 원료'],['lot','NEW-RAW'],['qty','90'],['price','4000']]) await erp.locator('#prod-in-'+field+'-1').fill(value);
+    await erp.evaluate(()=>selectProdInputStock(1,'수정 원료','NEW-RAW','국내산','',90,'입고',4000));
     await erp.evaluate(()=>selectProdOutProduct(1,1));await erp.locator('#prod-out-lot-1').fill('NEW-OUT');await erp.locator('#prod-out-qty-1').fill('42');await erp.locator('#prod-out-price-1').fill('22000');await erp.locator('#prod-out-origin-1').fill('미국산');
     await erp.locator('button[onclick="addProdInputRow()"]').click();assert(await erp.locator('#prod-in-qty-2').isEnabled());
-    for(const [field,value] of [['product','추가 돈등심'],['lot','ADD-LOT'],['qty','10'],['price','6000']]) await erp.locator('#prod-in-'+field+'-2').fill(value);
+    await erp.evaluate(()=>selectProdInputStock(2,'추가 돈등심','ADD-LOT','국내산','',10,'입고',6000));
     await erp.locator('#prod-output-add-btn').click();await erp.evaluate(()=>selectProdOutProduct(2,0));await erp.locator('#prod-out-qty-2').fill('3');await erp.locator('#prod-out-price-2').fill('2000');
     await erp.screenshot({path:path.join(artifacts,'erp-full-edit.png'),fullPage:true});
-    await erp.evaluate(()=>failSave=true);await erp.locator('button[onclick="saveProdEntry()"]').click();assert.equal(await erp.locator('#prod-in-qty-2').inputValue(),'10');assert(await erp.locator('#prod-out-qty-1').isEnabled());
+    await erp.evaluate(()=>failSave=true);await erp.locator('button[onclick="saveProdEntry()"]').click();assert.equal(Number(await erp.locator('#prod-in-qty-2').inputValue()),10);assert(await erp.locator('#prod-out-qty-1').isEnabled());
     await erp.evaluate(()=>failSave=false);await erp.locator('button[onclick="saveProdEntry()"]').click();
     await erp.waitForFunction(()=>modalIds.length===1);
     const saved=await erp.evaluate(()=>({entry:userProdEntries[0],requests,modalIds,transactions:userTransactions}));

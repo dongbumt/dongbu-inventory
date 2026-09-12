@@ -383,7 +383,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">🧾 거래명세서</div>
       <div class="nav-tab" onclick="showPage('p-submaterials',this);" id="nav-submaterials">📦 부자재 관리</div>
       <div class="nav-tab" onclick="showPage('p-cold-storage-request',this)" id="nav-cold-storage-request">📠 냉동창고 요청</div>
-      <div class="nav-tab" onclick="showPage('p-samsung',this)" id="nav-samsung">🏬 삼성웰스토리</div>
     </div>
   </div>
 
@@ -612,77 +611,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <!-- ══════════════════════════════════════════
      거래내역
 ══════════════════════════════════════════ -->
-<!-- ══════════════════════════════════════════
-     삼성웰스토리
-══════════════════════════════════════════ -->
-<div class="tab-panel" id="p-samsung">
-  <!-- 카드 1: 거래처 관리 -->
-  <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#1428a0;"></div>🏢 삼성웰스토리 하위 거래처 관리</div>
-    <div class="form-row" style="align-items:flex-end;">
-      <div class="form-group" style="flex:1;min-width:180px;"><label>거래처명 <span style="color:#888;font-size:10px;">(거래내역 거래처와 동일하게)</span></label><input id="sw-vendor-name" placeholder="예: 삼성-OO식당"></div>
-      <div class="form-group" style="flex:1;min-width:180px;"><label>비고</label><input id="sw-vendor-note" placeholder="(선택)"></div>
-      <div class="form-group" style="flex:0;"><label>&nbsp;</label><button class="btn btn-primary" onclick="addSamsungVendor()">+ 거래처 추가</button></div>
-    </div>
-    <div class="tbl-wrap" style="max-height:none;margin-top:10px;">
-      <table>
-        <thead><tr><th>거래처명</th><th style="text-align:center;width:90px;">등록 품목수</th><th>비고</th><th style="text-align:center;width:90px;">관리</th></tr></thead>
-        <tbody id="sw-vendor-tbody"><tr><td colspan="4" style="text-align:center;padding:20px;color:#888;">등록된 거래처가 없습니다.</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 카드 2: 거래처별 납품 품목 -->
-  <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#1428a0;"></div>📦 거래처별 납품 품목</div>
-    <div class="form-row sw-product-form">
-      <div class="form-group sw-prod-vendor-field"><label>거래처</label>
-        <select id="sw-prod-vendor"><option value="">-- 거래처 선택 --</option></select>
-      </div>
-      <div class="form-group sw-prod-product-field"><label>품목 (품목관리 기준)</label>
-        <input id="sw-prod-product" class="bulk-in-product" oninput="onBulkProductSearch(this,true)" onfocus="onBulkProductSearch(this,false)" onblur="hideBulkProductResults(this)" placeholder="품목 검색..." autocomplete="off">
-        <input type="hidden" class="bulk-in-product-id" id="sw-prod-product-id">
-        <div class="bulk-in-product-results" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:1500;"></div>
-      </div>
-      <div class="form-group sw-prod-weekly-field"><label>예상 주간량(KG)</label><input id="sw-prod-weekly" type="number" step="0.01" placeholder="0"></div>
-      <div class="form-group sw-prod-spec-field"><label>작업스펙</label><input id="sw-prod-spec" placeholder="예: 5KG진공, 부분작업"></div>
-      <div class="form-group sw-prod-action-field"><label>&nbsp;</label><button id="sw-prod-save-btn" class="btn btn-primary" onclick="addSamsungVendorProduct()">+ 품목 추가</button></div>
-      <div class="form-group sw-prod-action-field"><label>&nbsp;</label><button id="sw-prod-cancel-btn" class="btn btn-secondary" onclick="cancelSamsungVendorProductEdit()" style="display:none;">취소</button></div>
-    </div>
-    <div style="font-size:11px;color:#888;margin:6px 0 0;">💡 <strong>단가는 단가표</strong>의 (품목·원산지·거래처) 단가를 자동 사용합니다. 같은 품목도 작업스펙이 다르면 별도 품목으로 등록됩니다.</div>
-    <div id="sw-prod-area" style="margin-top:14px;"></div>
-  </div>
-
-  <!-- 카드 3: 거래처별 재고현황 -->
-  <div class="card">
-    <div class="section-header">
-      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#1428a0;"></div>📊 거래처별 재고현황</div>
-      <button class="btn btn-secondary btn-sm" onclick="renderSamsungStock()">🔄 새로고침</button>
-    </div>
-    <div id="sw-stock-area" style="margin-top:8px;"></div>
-  </div>
-
-  <!-- 카드 4: 납품량 집계 -->
-  <div class="card">
-    <div class="section-header">
-      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#1428a0;"></div>📅 납품량 집계 <span style="font-size:11px;font-weight:400;color:#888;">(거래내역 출고 기준)</span></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <select id="sw-period" onchange="renderSamsungDelivery()" style="font-size:12px;padding:6px 8px;width:auto;">
-          <option value="week">주별</option>
-          <option value="month">월별</option>
-        </select>
-        <select id="sw-delivery-vendor" onchange="renderSamsungDelivery()" style="font-size:12px;padding:6px 8px;width:auto;">
-          <option value="">전체 거래처</option>
-        </select>
-        <input type="month" id="sw-delivery-from" onchange="renderSamsungDelivery()" style="font-size:12px;padding:6px 8px;">
-        <span style="color:#888;">~</span>
-        <input type="month" id="sw-delivery-to" onchange="renderSamsungDelivery()" style="font-size:12px;padding:6px 8px;">
-      </div>
-    </div>
-    <div id="sw-delivery-area" style="margin-top:8px;"></div>
-  </div>
-</div>
-
 <div class="tab-panel" id="p-transactions">
   <div class="card">
     <div class="card-title">
@@ -817,23 +745,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:6px;">📦 재고 있는 이력번호 선택 (클릭 시 자동 입력)</div>
       <div id="lot-match-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     </div>
-    <div id="t-samsung-area" style="display:none;margin-bottom:10px;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:8px 10px;">
-      <div style="font-size:11px;font-weight:800;color:#1428a0;margin-bottom:6px;">삼성웰스토리 납품품목 지정</div>
-      <div class="form-row" style="margin:0;align-items:flex-end;">
-        <div class="form-group" style="max-width:230px;">
-          <label>삼성 하위 거래처</label>
-          <select id="t-samsung-vendor" onchange="refreshTxnSamsungProducts()">
-            <option value="">-- 선택 안 함 --</option>
-          </select>
-        </div>
-        <div class="form-group" style="flex:1;min-width:240px;">
-          <label>등록 납품품목 / 작업스펙</label>
-          <select id="t-samsung-product">
-            <option value="">-- 삼성 거래처 선택 --</option>
-          </select>
-        </div>
-      </div>
-    </div>
     <div id="t-edit-banner" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#856404;">
       ✏️ <strong>수정 모드</strong> — 내용을 수정한 후 [수정 저장] 버튼을 누르세요.
     </div>
@@ -959,8 +870,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <th style="min-width:112px;text-align:center;">이력번호</th>
             <th style="min-width:86px;text-align:right;">현재재고</th>
             <th style="min-width:110px;">거래처</th>
-            <th style="min-width:120px;">삼성거래처</th>
-            <th style="min-width:165px;">삼성 납품품목/스펙</th>
             <th style="min-width:88px;text-align:right;">출고중량(KG)</th>
             <th style="min-width:78px;text-align:right;">단가</th>
             <th style="min-width:88px;text-align:right;">금액</th>
@@ -1108,10 +1017,11 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       새 생산일보 입력
     </div>
     <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 일반 생산일보처럼 모든 입력 항목을 수정할 수 있으며, 저장하면 변경된 내용으로 재고에 반영됩니다. 기존 라벨 출력이력은 변경되지 않습니다.</div>
+
     <div class="form-row">
       <div class="form-group"><label>작업일</label><input type="date" id="prod-date" onchange="autoSetJobNo()"></div>
       <div class="form-group"><label>작업번호</label><input id="prod-job-no" placeholder="1" style="width:80px;"></div>
-      <div class="form-group" style="flex:1;min-width:220px;"><label>비고(선택)</label><input id="prod-note" placeholder="예) 삼성 납품용, 재작업, 테스트 생산 등"></div>
+      <div class="form-group" style="flex:1;min-width:220px;"><label>비고(선택)</label><input id="prod-note" placeholder="예) 작업 공통사항, 재작업 사유 등"></div>
       <div class="form-group"><label>작업유형</label>
         <select id="prod-job-type" style="width:120px;">
           <option value="생산">생산</option>
@@ -1352,6 +1262,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <th onclick="stockSort('price')" style="text-align:right;cursor:pointer;user-select:none;">단가 <span id="ss-price"></span></th>
           <th onclick="stockSort('stock_amount')" style="text-align:right;cursor:pointer;user-select:none;">재고금액 <span id="ss-stock_amount"></span></th>
           <th>상태</th>
+          <th style="min-width:200px;">비고 / 관리번호</th>
           <th id="stock-manage-head" class="stock-col-manage">관리</th>
         </tr></thead>
         <tbody id="stock-body"></tbody>
@@ -1369,6 +1280,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <input type="hidden" id="stock-adj-proddate">
     <input type="hidden" id="stock-adj-packunit">
     <input type="hidden" id="stock-adj-location">
+    <input type="hidden" id="stock-adj-row-id"><input type="hidden" id="stock-adj-stock-note">
     <input type="hidden" id="stock-adj-origin">
     <input type="hidden" id="stock-adj-price">
     <div class="form-row">
@@ -5118,9 +5030,6 @@ function renderPageById(id, reason='menu'){
       case 'p-traders':
         renderTraders();
         break;
-      case 'p-samsung':
-        initSamsung();
-        break;
       case 'p-transactions':
         if(reason === 'menu') prepareTransactionList();
         else renderTransactions();
@@ -5347,7 +5256,7 @@ const APP_DATA_REGISTRY = {
   subMaterialLots:  { get:()=>subMaterialLots,  set:v=>{ subMaterialLots=v; },  ls:'dbmt_submaterial_lots'  },
   subMaterialCounts:{ get:()=>subMaterialCounts,set:v=>{ subMaterialCounts=v; },ls:'dbmt_submaterial_counts'},
   factorySimScenarios:{ get:()=>factorySimScenarios,set:v=>{ factorySimScenarios=Array.isArray(v)?v:[]; },ls:'dbmt_factory_sim_scenarios'},
-  samsungVendors:   { get:()=>samsungVendors,   set:v=>{ samsungVendors=v; },   ls:'dbmt_samsung_vendors'  },
+  samsungVendors:   { get:()=>samsungVendors,   set:v=>{ samsungVendors=v; },   ls:'dbmt_samsung_vendors', readOnly:true },
   dataChangeLogs:   { get:()=>dataChangeLogs,   set:v=>{ dataChangeLogs=Array.isArray(v)?v:[]; }, ls:'dbmt_change_logs',readOnly:true },
 };
 
@@ -5400,7 +5309,7 @@ const DATA_CHANGE_MENU_BY_APP_KEY = {
   samsungVendors: '삼성웰스토리',
 };
 const DATA_CHANGE_MENU_ORDER = [
-  '일정관리','품목관리','거래처 관리','삼성웰스토리','거래내역','생산일보','단가표',
+  '일정관리','품목관리','거래처 관리','거래내역','생산일보','단가표',
   '작업지시','부자재 관리','라벨출력','경비 설정','원가계산기','서류체크',
   '직원정보','근태관리','지출관리','확장공장 시뮬레이터'
 ];
@@ -7097,7 +7006,7 @@ function onTxnLocationChange(){
 
 function updateTransactionForm(){
   const t = document.getElementById('t-type').value;
-  const isStockPick = (t==='출고' || t==='재고이동');
+  const isStockPick = (t==='출고' || t==='재고이동' || t==='사용');
   const traderInput = document.getElementById('t-trader');
   const traderListId = t === '출고'
     ? 'sales-trader-list'
@@ -7122,12 +7031,10 @@ function updateTransactionForm(){
   const managedOrig = document.getElementById('t-origin-managed');
   const dispOrig = document.getElementById('t-origin-display');
   const storageWrap = document.getElementById('t-storage-managed-wrap');
-  const samsungArea = document.getElementById('t-samsung-area');
   const locationWrap = document.getElementById('t-stock-location-wrap');
   const locationLabel = document.getElementById('t-stock-location-label');
   const moveWrap = document.getElementById('t-move-location-wrap');
   refreshLocationSelectOptions();
-  if(samsungArea) samsungArea.style.display = (t === '출고') ? 'block' : 'none';
   if(locationWrap) locationWrap.style.display = (t === '재고이동') ? 'none' : 'flex';
   if(locationLabel) locationLabel.textContent = t === '출고' ? '출고지' : (t === '사용' ? '사용지' : '지점');
   if(moveWrap) moveWrap.style.display = (t === '재고이동') ? 'flex' : 'none';
@@ -7150,12 +7057,6 @@ function updateTransactionForm(){
     storageWrap.style.display = 'none';
     updateOutProductList();
     onOutProductChange();
-    if(t === '출고'){
-      refreshTxnSamsungVendorSelect();
-      refreshTxnSamsungProducts();
-    } else {
-      clearTxnSamsungControls();
-    }
   } else if(t === '입고'){
     // 입고 모드: 품목관리 기준값만 선택
     inpProd.style.display  = 'none';
@@ -7169,10 +7070,9 @@ function updateTransactionForm(){
     dispOrig.style.display = 'none';
     storageWrap.style.display = 'none';
     document.getElementById('lot-match-area').style.display = 'none';
-    clearTxnSamsungControls();
     refreshTxnManagedProductControls();
   } else {
-    // 사용/생산입고 모드: 자유입력
+    // 수동 생산입고 모드: 자유입력
     inpProd.style.display  = 'block';
     managedWrap.style.display = 'none';
     managedProd.style.display = 'block';
@@ -7184,7 +7084,6 @@ function updateTransactionForm(){
     dispOrig.style.display = 'none';
     storageWrap.style.display = 'none';
     document.getElementById('lot-match-area').style.display = 'none';
-    clearTxnSamsungControls();
     updateOriginList(); // 입고 시에도 원산지 datalist 갱신
   }
   autoFillTxnPrice();
@@ -7647,7 +7546,6 @@ function onOutProductSelectChange(){
   )];
   dispOrig.value = origins.length===1 ? origins[0] : (origins[0]||'');
   onOutProductChange();
-  refreshTxnSamsungProducts();
   autoFillTxnPrice();
 }
 
@@ -7726,7 +7624,6 @@ function refreshTxnStockPickerFilterOptions(){
 
 function onTxnStockPickerInput(){
   clearTxnStockSelection(false, true);
-  refreshTxnSamsungProducts();
   autoFillTxnPrice();
 }
 
@@ -7834,7 +7731,7 @@ function renderTxnStockPicker(resetSelection=false){
   body.innerHTML = filtered.map((stock,index)=>{
     const meta = txnStockPickerProductMeta(stock);
     const cells = productionInput
-      ? `<td><strong>${htmlEscape(stock.product || '-')}</strong></td>
+      ? `<td><strong>${htmlEscape(stock.product || '-')}</strong>${stock.stockNote ? `<div style="font-size:11px;color:#555;white-space:normal;">${htmlEscape(stock.stockNote)}</div>` : ''}${stock.stockRowId ? `<div style="font-size:10px;color:#777;overflow-wrap:anywhere;">관리번호 ${htmlEscape(stock.stockRowId)}</div>` : ''}</td>
     <td>${htmlEscape(meta.brand || '-')}</td>
     <td>${htmlEscape(meta.grade || '-')}</td>
     <td>${htmlEscape(meta.factoryNo || '-')}</td>
@@ -7844,7 +7741,7 @@ function renderTxnStockPicker(resetSelection=false){
     <td>${htmlEscape(stock.proddate || '-')}</td>
     <td class="txn-stock-picker-number">${stock.price ? `${Number(stock.price).toLocaleString('ko-KR')}원` : '-'}</td>
     <td class="txn-stock-picker-number"><strong>${Number(stock.stock || 0).toFixed(2)} KG</strong></td>`
-      : `<td><strong>${htmlEscape(stock.product || '-')}</strong></td>
+      : `<td><strong>${htmlEscape(stock.product || '-')}</strong>${stock.stockNote ? `<div style="font-size:11px;color:#555;white-space:normal;">${htmlEscape(stock.stockNote)}</div>` : ''}${stock.stockRowId ? `<div style="font-size:10px;color:#777;overflow-wrap:anywhere;">관리번호 ${htmlEscape(stock.stockRowId)}</div>` : ''}</td>
     <td>${htmlEscape(stock.packunit || '-')}</td>
     <td class="txn-stock-picker-lot">${htmlEscape(stock.lot || 'LOT 없음')}</td>
     <td>${htmlEscape(normalizeOriginName(stock.origin) || '-')}</td>
@@ -7869,7 +7766,7 @@ function syncTxnStockPickerSelection(scrollIntoView=true){
   const summary = document.getElementById('tsp-selected-summary');
   const confirmButton = document.getElementById('tsp-confirm');
   if(summary) summary.textContent = stock
-    ? `${stock.product || '-'} · ${stock.lot ? 'LOT ' + stock.lot : 'LOT 없음'} · ${normalizeStockLocation(stock.stockLocation)} · ${Number(stock.stock || 0).toFixed(2)} KG`
+    ? `${stock.product || '-'} · ${stock.lot ? 'LOT ' + stock.lot : 'LOT 없음'} · ${normalizeStockLocation(stock.stockLocation)} · ${Number(stock.stock || 0).toFixed(2)} KG${stock.stockNote ? ' · '+stock.stockNote : ''}${stock.stockRowId ? ' · 관리번호 '+stock.stockRowId : ''}`
     : '선택된 재고 없음';
   if(confirmButton) confirmButton.disabled = !stock;
   if(scrollIntoView && txnStockPickerIndex >= 0){
@@ -7905,7 +7802,7 @@ function confirmTxnStockPicker(){
       const source = stock.source || (stock.produced_weight > 0 ? '생산입고' : '입고');
       const inputPrice = getPriceFromLot(stock.product, stock.lot, stock.origin, source, stock.price);
       if(rowId){
-        selectProdInputStock(rowId, stock.product, stock.lot || '', stock.origin || '', stock.packunit || '', stock.stock, source, inputPrice, stock.proddate || '', stock.price || 0, stock.stockLocation || STOCK_LOCATION_DEFAULT, stock.key || '');
+        selectProdInputStock(rowId, stock.product, stock.lot || '', stock.origin || '', stock.packunit || '', stock.stock, source, inputPrice, stock.proddate || '', stock.price || 0, stock.stockLocation || STOCK_LOCATION_DEFAULT, stock.key || '', stock.stockRowId || '', stock.stockNote || '');
       }
       closeTxnStockPicker(false);
       requestAnimationFrame(()=>document.getElementById(`prod-in-qty-${rowId}`)?.focus());
@@ -8004,11 +7901,6 @@ function selectTxnStock(key){
 
   const area = document.getElementById('lot-match-area');
   if(area) area.style.display = 'none';
-  const samsungVendorId = document.getElementById('t-samsung-vendor')?.value || '';
-  const samsungRowId = document.getElementById('t-samsung-product')?.value || '';
-  const samsungMeta = samsungRowId ? getSamsungProductMeta(samsungVendorId, samsungRowId) : null;
-  const keepSamsungRow = samsungMeta && bulkOutboundIdentityKey(samsungMeta.productName || '') === bulkOutboundIdentityKey(s.product || '');
-  refreshTxnSamsungProducts(keepSamsungRow ? samsungRowId : '');
   autoFillTxnPrice();
   toast('재고 선택: ' + (s.product || ''));
 }
@@ -8029,7 +7921,7 @@ function showTxnStockFromTransaction(t){
 // 출고 시 품목/원산지 기준으로 재고 이력번호 자동 매칭 카드 표시
 function onOutProductChange(){
   const type = document.getElementById('t-type').value;
-  if(type!=='출고' && type!=='재고이동') return;
+  if(type!=='출고' && type!=='재고이동' && type!=='사용') return;
   const product = getTProduct();
   const origin  = getTOrigin();
   const packunit = getTPackunit();
@@ -8070,6 +7962,8 @@ function onOutProductChange(){
       min-width:140px;">
       <div style="font-family:monospace;font-size:11px;font-weight:700;color:var(--green)">${s.lot ? htmlEscape(s.lot) : 'LOT 없음'}</div>
       <div style="color:#666;font-size:10px;">${htmlEscape(s.origin||'')}${locText}${s.packunit ? ' · 포장 '+htmlEscape(s.packunit) : ''}${prodDate ? ' · 생산일 '+htmlEscape(prodDate) : ''}${priceText} · <strong>${Number(s.stock||0).toFixed(2)} KG</strong></div>
+      ${s.stockNote ? `<div style="color:#444;font-size:11px;">${htmlEscape(s.stockNote)}</div>` : ''}
+      ${s.stockRowId ? `<div style="color:#777;font-size:10px;">${htmlEscape(s.stockRowId)}</div>` : ''}
     </div>`;
   }).join('');
   autoFillTxnPrice();
@@ -8120,6 +8014,7 @@ function selectLot(lot, origin, proddate, stock, price=0, packunit='', stockKey=
   const stockInput = document.getElementById('t-stock-search');
   if(stockInput){
     stockInput.value = bulkOutboundStockLabel({
+      ...outboundStockOptionsForEdit().find(row=>row.key === stockKey),
       product: getTProduct(),
       packunit: packunit || getTPackunit(),
       lot,
@@ -8187,9 +8082,10 @@ function getStockMap(asOfDate=''){
     const price = parseAppNumber(s.price);
     const proddate = stockDateKey(s.proddate || s.producedDate || '');
     const stockLocation = normalizeStockLocation(s.stockLocation || s.location || '');
-    const key=stockMapKey(s.product, s.lot, price, s.origin, s.packunit || '', proddate, stockLocation);
+    const key=stockMapKey(s.product, s.lot, price, s.origin, s.packunit || '', proddate, stockLocation, s.stockRowId || '');
     map[key]={
       product:s.product, packunit:s.packunit || '', lot:String(s.lot||''), origin:s.origin, proddate, stockLocation,
+      stockRowId:s.stockRowId || '', stockNote:s.stockNote || '',
       total_in:Number(s.total_in)||0, total_use:Number(s.total_use)||0, total_out:Number(s.total_out)||0,
       total_adjust:Number(s.total_adjust)||0,
       stock:Number(s.stock)||0,
@@ -8198,12 +8094,13 @@ function getStockMap(asOfDate=''){
     };
   });
 
-  const ensureBucket = (product, lot, origin, price, packunit='', proddate='', stockLocation='') => {
+  const ensureBucket = (product, lot, origin, price, packunit='', proddate='', stockLocation='', stockRowId='') => {
     const stockProddate = stockDateKey(proddate || '');
     const loc = normalizeStockLocation(stockLocation);
-    const key = stockMapKey(product, lot, price, origin, packunit, stockProddate, loc);
+    const key = stockMapKey(product, lot, price, origin, packunit, stockProddate, loc, stockRowId);
     if(!map[key]) map[key]={
       product, packunit:String(packunit||'').trim(), lot:String(lot||''), origin:normalizeOriginName(origin||''), stockLocation:loc,
+      stockRowId:String(stockRowId || ''), stockNote:'',
       total_in:0, total_use:0, total_out:0, stock:0, proddate:stockProddate,
       total_adjust:0,
       total_in_amount:0, price:parseAppNumber(price),
@@ -8225,6 +8122,9 @@ function getStockMap(asOfDate=''){
 
   const applyBucketProductMeta = (bucket, row) => {
     if(!bucket || !row) return bucket;
+    const note = typeof productionStockNote === 'function' ? productionStockNote({stockNote:row.stockNote, samsung:row.samsung, samsungVendorName:row.samsungVendorName, samsungSpec:row.samsungSpec}) : String(row.stockNote || '');
+    if(row.type === '생산입고' && row.stockRowId) bucket.stockNote = note;
+    else if(note && !bucket.stockNote.split(' / ').includes(note)) bucket.stockNote = [...new Set([bucket.stockNote, note].filter(Boolean))].join(' / ');
     const labelProductId = row.labelProductId || row.productId || '';
     if(labelProductId && !bucket.labelProductId) bucket.labelProductId = labelProductId;
     if(row.productCode && !bucket.productCode) bucket.productCode = row.productCode;
@@ -8258,6 +8158,9 @@ function getStockMap(asOfDate=''){
     const stockProddate = getStockTxnProddate(t);
     const selectedStockPrice = parseAppNumber(t.stockUnitPrice || t.sourceStockPrice || t.stockPrice || 0);
     const stockLocation = getTxnStockLocation(t);
+    // Untagged history stays in its original aggregate; never allocate it to new production rows.
+    const stockRowId = String(t.stockRowId || '');
+    const matchesRow = s => String(s.stockRowId || '') === stockRowId;
 
     if(t.type==='재고조정'){
       if(!packunit){
@@ -8267,13 +8170,13 @@ function getStockMap(asOfDate=''){
           .filter(Boolean))];
         if(inferredPackunits.length === 1) packunit = inferredPackunits[0];
       }
-      const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation);
+      const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation, stockRowId);
       applyBucketProductMeta(bucket, t);
       bucket.total_adjust += weight;
       bucket.stock += weight;
       if(!bucket.source) bucket.source = '재고조정';
     } else if(t.type==='입고' || t.type==='생산입고'){
-      const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation);
+      const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation, stockRowId);
       applyBucketProductMeta(bucket, t);
       bucket.total_in += weight;
       bucket.stock += weight;
@@ -8301,7 +8204,7 @@ function getStockMap(asOfDate=''){
       const movePrice = selectedStockPrice || unitPrice;
       let remaining = weight;
       let candidates = Object.values(map)
-        .filter(s=>sameStockIdentity(s, product, lot, origin, packunit, movePrice, stockProddate, fromLocation))
+        .filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(fromLocation) : sameStockIdentity(s, product, lot, origin, packunit, movePrice, stockProddate, fromLocation)))
         .filter(s=>s.stock>0.01)
         .sort((a,b)=>String(a.proddate||'').localeCompare(String(b.proddate||'')) || (a.price||0)-(b.price||0));
       candidates.forEach(s=>{
@@ -8312,11 +8215,12 @@ function getStockMap(asOfDate=''){
         remaining -= moved;
       });
       if(remaining > 0.01){
-        const fallback = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, fromLocation);
+        const fallback = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, fromLocation, stockRowId);
+        applyBucketProductMeta(fallback, t);
         fallback.total_adjust -= remaining;
         fallback.stock -= remaining;
       }
-      const dest = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, toLocation);
+      const dest = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, toLocation, stockRowId);
       applyBucketProductMeta(dest, t);
       dest.total_adjust += weight;
       dest.stock += weight;
@@ -8324,7 +8228,7 @@ function getStockMap(asOfDate=''){
     } else {
       let remaining = weight;
       const origin = normalizeOriginName(t.origin||'');
-      let candidates = Object.values(map).filter(s=>sameStockIdentity(s, product, lot, origin, packunit, '', '', stockLocation));
+      let candidates = Object.values(map).filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(stockLocation) : sameStockIdentity(s, product, lot, origin, packunit, '', '', stockLocation)));
       candidates = candidates.filter(s=>s.stock>0.01);
       const preferredStockPrice = selectedStockPrice || (t.type==='사용' ? unitPrice : 0);
       if(stockProddate){
@@ -8352,12 +8256,20 @@ function getStockMap(asOfDate=''){
         remaining -= used;
       });
       if(remaining > 0.01){
-        const fallback = ensureBucket(product, lot, origin, t.type==='사용' ? unitPrice : (selectedStockPrice || 0), packunit, stockProddate, stockLocation);
+        const fallback = ensureBucket(product, lot, origin, t.type==='사용' ? unitPrice : (selectedStockPrice || 0), packunit, stockProddate, stockLocation, stockRowId);
+        applyBucketProductMeta(fallback, t);
         if(t.type==='출고') fallback.total_out += remaining;
         else fallback.total_use += remaining;
         fallback.stock -= remaining;
       }
     }
+  });
+  const productionNotes = new Map();
+  stockTxns.forEach(({t})=>{
+    if(t.type === '생산입고' && t.stockRowId) productionNotes.set(String(t.stockRowId), String(t.stockNote || ''));
+  });
+  Object.values(map).forEach(bucket=>{
+    if(bucket.stockRowId && productionNotes.has(bucket.stockRowId)) bucket.stockNote = productionNotes.get(bucket.stockRowId);
   });
   // 과거 재고행은 품목 스냅샷이 없을 수 있다. 영구 ID/제품코드 또는 유일하게
   // 식별되는 품목만 마스터와 연결해 브랜드·등급을 보완한다.
@@ -8464,7 +8376,8 @@ function getStockTxnProddate(t){
   return String(t?.type || '') === '생산입고' ? stockDateKey(t?.date || '') : '';
 }
 
-function stockMapKey(product, lot, price, origin='', packunit='', proddate='', stockLocation=''){
+function stockMapKey(product, lot, price, origin='', packunit='', proddate='', stockLocation='', stockRowId=''){
+  if(stockRowId) return ['row', encodeURIComponent(String(stockRowId)), stockLocationKey(stockLocation)].join('|');
   return [
     String(product||'').trim(),
     String(packunit||'').trim(),
@@ -8562,7 +8475,7 @@ function getPriceFromLot(product, lot, origin, preferredType=''){
 // 현재 거래내역 폼의 품목명 값 읽기 (입고/출고 모드 통합)
 function getTProduct(){
   const type = document.getElementById('t-type')?.value || '';
-  if(type === '출고' || type === '재고이동'){
+  if(type === '출고' || type === '재고이동' || type === '사용'){
     const sel = document.getElementById('t-product-select');
     if(sel?.value) return sel.value;
     return document.getElementById('t-product-input')?.value.trim() || '';
@@ -8760,6 +8673,7 @@ async function updateTxnPrice(id, newPriceStr){
   const newPrice = parseFloat(newPriceStr)||0;
   const txn = userTransactions.find(t=>String(t.id)===String(id));
   if(!txn) return;
+  if(txn.stockRowId && txn._prodId){ toast('생산일보에서 생성된 재고의 단가는 해당 생산일보에서 수정해주세요.'); renderTransactions(); return; }
   if(txn.type === '재고이동'){
     toast('재고이동 단가는 선택한 재고의 입고/생산단가로 고정됩니다.', 2500);
     renderTransactions();
@@ -8831,41 +8745,14 @@ function updateTxnAmtPreview(){
   if(el) el.value = (price && weight) ? Math.round(price * weight).toLocaleString('ko-KR') + ' 원' : '';
 }
 
-function refreshTxnSamsungVendorSelect(selectedId=''){
-  const sel = document.getElementById('t-samsung-vendor');
-  if(!sel) return;
-  const cur = selectedId || sel.value || '';
-  sel.innerHTML = samsungVendorOptionsHtml(cur, '-- 선택 안 함 --');
-  sel.value = cur;
-}
 
-function refreshTxnSamsungProducts(selectedRowId=''){
-  const vendorId = document.getElementById('t-samsung-vendor')?.value || '';
-  const productId = document.getElementById('t-product-select')?.selectedOptions?.[0]?.dataset?.productId || '';
-  const productName = getTProduct();
-  const sel = document.getElementById('t-samsung-product');
-  if(!sel) return;
-  sel.innerHTML = samsungProductOptionsHtml(vendorId, productId, productName, selectedRowId);
-  if(selectedRowId) sel.value = selectedRowId;
-}
 
-function clearTxnSamsungControls(){
-  const vendorEl = document.getElementById('t-samsung-vendor');
-  const productEl = document.getElementById('t-samsung-product');
-  if(vendorEl) vendorEl.value = '';
-  if(productEl) productEl.innerHTML = '<option value="">-- 삼성 거래처 선택 --</option>';
-}
 
-function getTxnSamsungMeta(){
-  const vendorId = document.getElementById('t-samsung-vendor')?.value || '';
-  const rowId = document.getElementById('t-samsung-product')?.value || '';
-  if(!vendorId && !rowId) return null;
-  if(vendorId && !rowId) return { error:'삼성 납품품목/작업스펙을 선택하세요.' };
-  return getSamsungProductMeta(vendorId, rowId);
-}
 
 
 async function addTransaction(){
+  const linkedProductionTxn = _editTxnId ? userTransactions.find(txn=>String(txn.id)===String(_editTxnId)) : null;
+  if(linkedProductionTxn?.stockRowId && linkedProductionTxn?._prodId){ alert('생산일보에서 생성된 재고입니다. 해당 생산일보에서 수정해주세요.'); return; }
   const date=document.getElementById('t-date').value;
   const type=document.getElementById('t-type').value;
   const product=getTProduct();
@@ -8906,7 +8793,7 @@ async function addTransaction(){
   }
   const editTxn = getEditingTransaction();
   let selectedStock = null;
-  if(type === '출고' || type === '재고이동'){
+  if(type === '출고' || type === '재고이동' || type === '사용'){
     if(type === '재고이동' && fromLocation === toLocation){
       alert('이동 출발 지점과 도착 지점이 같습니다.');
       return;
@@ -8914,6 +8801,7 @@ async function addTransaction(){
     const stockKey = document.getElementById('t-stock-key')?.value || '';
     const stockOptions = outboundStockOptionsForEdit(editTxn);
     if(stockKey) selectedStock = stockOptions.find(s => s.key === stockKey) || null;
+    if(stockKey && !selectedStock){ alert('선택한 재고를 찾을 수 없습니다. 재고 목록에서 다시 선택해주세요.'); return; }
     if(!selectedStock && lot){
       const candidates = stockOptions.filter(s =>
         bulkOutboundIdentityKey(s.product) === bulkOutboundIdentityKey(product) &&
@@ -8925,13 +8813,16 @@ async function addTransaction(){
       );
       if(candidates.length === 1) selectedStock = candidates[0];
       else if(candidates.length > 1){
-        alert('같은 이력번호에 생산일/원가가 다른 재고가 여러 개 있습니다.\n아래 재고 목록에서 출고할 생산일/원가 항목을 직접 선택해주세요.');
+        alert('같은 이력번호의 재고가 여러 행 있습니다.\n생산일·비고·관리번호를 확인하고 출고할 행을 직접 선택해주세요.');
         return;
       }
     }
     if(!selectedStock){
-      alert((type === '재고이동' ? '이동할' : '출고할') + ' 재고를 아래 목록에서 선택해주세요.');
+      alert((type === '재고이동' ? '이동할' : (type === '사용' ? '사용할' : '출고할')) + ' 재고를 아래 목록에서 선택해주세요.');
       return;
+    }
+    if(selectedStock.stockRowId && (!samePriceText(selectedStock.product, product) || String(selectedStock.lot || '').trim() !== String(lot || '').trim() || !sameOriginText(selectedStock.origin, origin) || !samePriceText(selectedStock.packunit || '', packunit || ''))){
+      alert('선택한 생산 재고의 품목·원산지·이력번호·포장단위가 변경됐습니다. 재고 행을 다시 선택해주세요.'); return;
     }
     const availableStock = availableStockForEdit(selectedStock, editTxn);
     if(weight > availableStock + 0.01){
@@ -8939,15 +8830,11 @@ async function addTransaction(){
       return;
     }
   }
-  if(type === '재고이동' && selectedStock){
+  if((type === '재고이동' || type === '사용') && selectedStock){
     price = parseAppNumber(selectedStock.price);
   }
-  const proddateForSave = ((type === '출고' || type === '재고이동') && selectedStock) ? (selectedStock.proddate || proddate) : proddate;
-  const samsungMeta = type === '출고' ? getTxnSamsungMeta() : null;
-  if(samsungMeta && samsungMeta.error){
-    alert('삼성웰스토리 지정 정보를 확인해주세요.\n\n' + samsungMeta.error);
-    return;
-  }
+  const proddateForSave = ((type === '출고' || type === '재고이동' || type === '사용') && selectedStock) ? (selectedStock.proddate || proddate) : proddate;
+
   const transactionProductMeta = managedProduct || selectedStock || null;
 
   let savedTxn = null;
@@ -8989,7 +8876,9 @@ async function addTransaction(){
       t.fromLocation = type === '재고이동' ? fromLocation : '';
       t.toLocation = type === '재고이동' ? toLocation : '';
       t.sourceStockKey = selectedStock ? selectedStock.key : '';
-      Object.assign(t, samsungTxnFields(samsungMeta));
+      t.stockRowId = selectedStock ? (selectedStock.stockRowId || '') : '';
+      t.stockNote = selectedStock ? (selectedStock.stockNote || '') : (t.stockNote || '');
+
       savedTxn = t;
     }
   } else {
@@ -9025,7 +8914,8 @@ async function addTransaction(){
       fromLocation: type === '재고이동' ? fromLocation : '',
       toLocation: type === '재고이동' ? toLocation : '',
       sourceStockKey: selectedStock ? selectedStock.key : '',
-      ...samsungTxnFields(samsungMeta),_isUser:true
+      stockRowId:selectedStock?.stockRowId || '', stockNote:selectedStock?.stockNote || '',
+      _isUser:true
     };
     userTransactions.push(newItem);
     savedTxn = newItem;
@@ -9076,7 +8966,6 @@ function clearTransactionForm(options={}){
   const locsel=document.getElementById('t-stock-location'); if(locsel) locsel.value=STOCK_LOCATION_DEFAULT;
   const fromsel=document.getElementById('t-move-from'); if(fromsel) fromsel.value=STOCK_LOCATION_DEFAULT;
   const tosel=document.getElementById('t-move-to'); if(tosel) tosel.value=STOCK_LOCATION_SECONDARY;
-  clearTxnSamsungControls();
   const weightEl = document.getElementById('t-weight');
   if(weightEl){ weightEl.value=''; weightEl.style.background=''; weightEl.title=''; }
   const priceEl = document.getElementById('t-price');
@@ -9482,7 +9371,8 @@ function initBulkInbound(){
 }
 
 // ─── 출고 일괄 입력 그리드 ─────────────────────────────────────────────
-function bulkOutboundKeyFromValues(product, lot, origin='', packunit='', proddate='', price=0, stockLocation=''){
+function bulkOutboundKeyFromValues(product, lot, origin='', packunit='', proddate='', price=0, stockLocation='', stockRowId=''){
+  if(stockRowId) return stockMapKey(product, lot, price, origin, packunit, proddate, stockLocation, stockRowId);
   return [
     bulkOutboundIdentityKey(product),
     bulkOutboundIdentityKey(packunit),
@@ -9519,10 +9409,11 @@ function bulkOutboundStockOptions(){
     const proddate = stockDateKey(s.proddate || '');
     const price = parseAppNumber(s.price);
     const stockLocation = normalizeStockLocation(s.stockLocation || '');
-    const key = bulkOutboundKeyFromValues(product, lot, s.origin, s.packunit || '', proddate, price, stockLocation);
+    const key = bulkOutboundKeyFromValues(product, lot, s.origin, s.packunit || '', proddate, price, stockLocation, s.stockRowId || '');
     if(!grouped[key]){
       grouped[key] = {
         key,
+        stockRowId:s.stockRowId || '', stockNote:s.stockNote || '',
         product,
         labelProductId:s.labelProductId || s.productId || '',
         brand:String(s.brand || '').trim(),
@@ -9599,7 +9490,7 @@ function getEditingTransaction(){
 }
 
 function stockOptionFromTransaction(t){
-  if(!t || !['출고','재고이동'].includes(t.type)) return null;
+  if(!t || !['출고','재고이동','사용'].includes(t.type)) return null;
   const product = String(t.product || '').trim();
   if(!product) return null;
   const packunit = String(t.packunit || '').trim();
@@ -9608,9 +9499,10 @@ function stockOptionFromTransaction(t){
   const proddate = stockDateKey(t.stockProddate || t.sourceProddate || t.proddate || '');
   const price = parseAppNumber(t.stockUnitPrice || t.sourceStockPrice || t.stockPrice || 0);
   const stockLocation = normalizeStockLocation(t.type === '재고이동' ? (t.fromLocation || t.stockLocation || '') : (t.stockLocation || ''));
-  const key = t.sourceStockKey || bulkOutboundKeyFromValues(product, lot, origin, packunit, proddate, price, stockLocation);
+  const key = t.stockRowId ? bulkOutboundKeyFromValues(product, lot, origin, packunit, proddate, price, stockLocation, t.stockRowId) : (t.sourceStockKey || bulkOutboundKeyFromValues(product, lot, origin, packunit, proddate, price, stockLocation));
   return {
     key,
+    stockRowId:t.stockRowId || '', stockNote:t.stockNote || '',
     product,
     packunit,
     lot,
@@ -9626,6 +9518,7 @@ function stockOptionFromTransaction(t){
 
 function sameBulkOutboundStockOption(a, b){
   if(!a || !b) return false;
+  if(a.stockRowId || b.stockRowId) return String(a.stockRowId || '') === String(b.stockRowId || '') && stockLocationKey(a.stockLocation || '') === stockLocationKey(b.stockLocation || '');
   if(a.key && b.key && a.key === b.key) return true;
   return bulkOutboundIdentityKey(a.product) === bulkOutboundIdentityKey(b.product) &&
     bulkOutboundIdentityKey(a.packunit || '') === bulkOutboundIdentityKey(b.packunit || '') &&
@@ -9637,7 +9530,7 @@ function sameBulkOutboundStockOption(a, b){
 }
 
 function outboundStockOptionsForEdit(editTxn=null){
-  const options = bulkOutboundStockOptions();
+  const options = [...bulkOutboundStockOptions()];
   const editOption = stockOptionFromTransaction(editTxn || getEditingTransaction());
   if(editOption && !options.some(s=>sameBulkOutboundStockOption(s, editOption))){
     options.push(editOption);
@@ -9671,11 +9564,11 @@ function bulkOutboundStockLabel(s){
   const loc = s.stockLocation ? ` / ${s.stockLocation}` : '';
   const prod = s.proddate ? ` / 생산일 ${s.proddate}` : '';
   const price = s.price ? ` / 원가 ${Number(s.price).toLocaleString('ko-KR')}` : '';
-  return `${s.product}${pack}${loc} / ${s.origin||'-'} / ${s.lot ? 'LOT ' + s.lot : 'LOT 없음'}${prod}${price} / ${Number(s.stock||0).toFixed(2)}KG`;
+  return `${s.product}${pack}${loc} / ${s.origin||'-'} / ${s.lot ? 'LOT ' + s.lot : 'LOT 없음'}${prod}${price} / ${Number(s.stock||0).toFixed(2)}KG${s.stockNote ? ' / '+s.stockNote : ''}${s.stockRowId ? ' / 관리번호 '+s.stockRowId : ''}`;
 }
 
 function bulkOutboundSearchText(s){
-  return `${s.product} ${s.packunit||''} ${s.stockLocation||''} ${s.origin||''} ${s.lot||''} ${s.proddate||''} ${s.price||''} ${s.lot ? '' : 'LOT없음 이력번호없음'} ${s.source||''} ${Number(s.stock||0).toFixed(2)}`;
+  return `${s.product} ${s.packunit||''} ${s.stockLocation||''} ${s.origin||''} ${s.lot||''} ${s.proddate||''} ${s.price||''} ${s.lot ? '' : 'LOT없음 이력번호없음'} ${s.source||''} ${s.stockRowId||''} ${s.stockNote||''} ${Number(s.stock||0).toFixed(2)}`;
 }
 
 function clearBulkOutboundStockSelection(tr){
@@ -9741,7 +9634,6 @@ function selectBulkOutboundStock(inp, key){
   if(stockEl) stockEl.textContent = `${Number(s.stock||0).toFixed(2)} KG`;
   const weightEl = tr.querySelector('.bulk-out-weight');
   if(weightEl && !weightEl.value) weightEl.value = Number(s.stock||0).toFixed(2);
-  refreshBulkOutboundSamsungProducts(tr);
   refreshBulkOutboundPrice(tr);
   updateBulkOutboundAmount(tr);
 }
@@ -9762,8 +9654,6 @@ function addBulkOutboundRow(){
     <td class="bulk-out-lot-cell" style="font-size:11px;color:#666;text-align:center;font-family:monospace;">-</td>
     <td class="bulk-out-stock-cell" style="font-size:11px;color:#666;text-align:right;">-</td>
     <td><input class="bulk-out-trader" list="sales-trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
-    <td><select class="bulk-out-sw-vendor" onchange="refreshBulkOutboundSamsungProducts(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;">${samsungVendorOptionsHtml('', '-- 선택 안 함 --')}</select></td>
-    <td><select class="bulk-out-sw-product" style="width:100%;font-size:12px;padding:5px 6px;"><option value="">-- 선택 안 함 --</option></select></td>
     <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td class="bulk-out-amount-cell" style="font-size:11px;color:#555;text-align:right;">-</td>
@@ -9842,24 +9732,7 @@ function applyBulkOutboundTrader(){
   toast(cnt ? `${cnt}개 행에 거래처를 채웠습니다.` : '빈 거래처 칸이 없습니다.');
 }
 
-function refreshBulkOutboundSamsungProducts(tr, selectedRowId=''){
-  if(!tr) return;
-  const vendorId = tr.querySelector('.bulk-out-sw-vendor')?.value || '';
-  const productName = tr.querySelector('.bulk-out-product')?.value || '';
-  const sel = tr.querySelector('.bulk-out-sw-product');
-  if(!sel) return;
-  sel.innerHTML = samsungProductOptionsHtml(vendorId, '', productName, selectedRowId);
-  if(selectedRowId) sel.value = selectedRowId;
-}
 
-function getBulkOutboundSamsungMeta(tr){
-  if(!tr) return null;
-  const vendorId = tr.querySelector('.bulk-out-sw-vendor')?.value || '';
-  const rowId = tr.querySelector('.bulk-out-sw-product')?.value || '';
-  if(!vendorId && !rowId) return null;
-  if(vendorId && !rowId) return { error:'삼성 납품품목/작업스펙을 선택하세요.' };
-  return getSamsungProductMeta(vendorId, rowId);
-}
 
 async function saveBulkOutbound(){
   const date = document.getElementById('bulk-out-date')?.value || '';
@@ -9884,8 +9757,6 @@ async function saveBulkOutbound(){
     let price = parseAppNumber(tr.querySelector('.bulk-out-price-input')?.value);
     if(!price) price = getPrice(stockInfo.product, stockInfo.origin, trader) || 0;
     if(!price){ errorMsg = `${idx+1}번째 행: 단가를 찾지 못했습니다. 단가를 직접 입력하세요.`; return; }
-    const samsungMeta = getBulkOutboundSamsungMeta(tr);
-    if(samsungMeta && samsungMeta.error){ errorMsg = `${idx+1}번째 행: ${samsungMeta.error}`; return; }
     requested[key] = (requested[key] || 0) + weight;
     staged.push({
       idx,
@@ -9893,8 +9764,7 @@ async function saveBulkOutbound(){
       stockInfo,
       trader,
       weight,
-      price,
-      samsung: samsungMeta
+      price
     });
   });
   if(errorMsg){ toast(errorMsg); return; }
@@ -9942,7 +9812,7 @@ async function saveBulkOutbound(){
       stockProddate: s.proddate || '',
       stockLocation: s.stockLocation || STOCK_LOCATION_DEFAULT,
       sourceStockKey: s.key,
-      ...samsungTxnFields(row.samsung),
+      stockRowId:s.stockRowId || '', stockNote:s.stockNote || '',
       _isUser:true,
       _isProdUse:false,
       _isProdOut:false,
@@ -10163,6 +10033,8 @@ function renderTransactions(){
   }).join('');
 }
 async function deleteTransaction(id){
+  const linked = userTransactions.find(txn=>String(txn.id)===String(id));
+  if(linked?.stockRowId && linked?._prodId){ toast('생산일보에서 생성된 재고입니다. 해당 생산일보에서 삭제해주세요.'); return; }
   if(!confirm('삭제하시겠습니까?'))return;
   const deletedTxn = userTransactions.find(t=>String(t.id)===String(id));
   userTransactions=userTransactions.filter(t=>String(t.id)!==String(id));
@@ -10186,6 +10058,7 @@ function saveEditTxn(){ return addTransaction(); }
 function loadTxnToForm(id){
   const t=userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
+  if(t.stockRowId && t._prodId){ openEditProdEntry(t._prodId); return; }
   _editTxnId=id;
   showTransactionSaveStatus('');
 
@@ -10205,7 +10078,7 @@ function loadTxnToForm(id){
   if(fromEl) fromEl.value = normalizeStockLocation(t.fromLocation || t.stockLocation || '');
   if(toEl) toEl.value = normalizeStockLocation(t.toLocation || STOCK_LOCATION_SECONDARY);
 
-  if(t.type==='출고' || t.type==='재고이동'){
+  if(t.type==='출고' || t.type==='재고이동' || t.type==='사용'){
     updateOutProductList();
     ensureOutProductOption(t.product || '', t.packunit || '');
     const sel=document.getElementById('t-product-select');
@@ -10235,15 +10108,6 @@ function loadTxnToForm(id){
   document.getElementById('t-price').value   =t.price||'';
   document.getElementById('t-note').value    =t.note||'';
   if(typeof restoreMeatwatchLookupFromTransaction === 'function') restoreMeatwatchLookupFromTransaction(t);
-  if(t.type==='출고'){
-    const sw = normalizeSamsungMeta(t);
-    refreshTxnSamsungVendorSelect(sw?.vendorId || '');
-    if(sw?.vendorId){
-      const vendorEl = document.getElementById('t-samsung-vendor');
-      if(vendorEl) vendorEl.value = sw.vendorId;
-      refreshTxnSamsungProducts(sw.productRowId || '');
-    }
-  }
   updateTxnAmtPreview();
 
   // 수정 모드 UI
@@ -10286,7 +10150,7 @@ function initProdForm(){
 function getStockOptions(){
   // 재고 있는 품목 목록 반환 (투입 품목 선택용)
   const stockMap = getStockMap();
-  return Object.values(stockMap)
+  return Object.entries(stockMap).map(([key,row])=>({...row,key}))
     .filter(s=>s.stock>0.01)
     .sort((a,b)=>String(a.product).localeCompare(String(b.product)) || String(a.lot||'').localeCompare(String(b.lot||'')));
 }
@@ -10295,7 +10159,7 @@ function getFilteredProdInputStockOptions(query=''){
   const q = priceKey(query);
   return getStockOptions().filter(s=>{
     if(!q) return true;
-    return priceKey([s.product, s.lot, s.origin, s.packunit, s.stockLocation, s.proddate, s.price, s.source].join(' ')).includes(q);
+    return priceKey([s.product, s.lot, s.origin, s.packunit, s.stockLocation, s.proddate, s.price, s.source, s.stockNote].join(' ')).includes(q);
   });
 }
 
@@ -10306,104 +10170,124 @@ function getProdInputStockLabel(s){
   const packLabel = s.packunit ? ` / ${s.packunit}` : '';
   const locLabel = s.stockLocation ? ` / ${s.stockLocation}` : '';
   const prodLabel = s.proddate ? ` / 생산일 ${s.proddate}` : '';
-  return `${s.product}${packLabel}${locLabel} [${s.lot || ''}] ${s.origin || ''}${prodLabel} (${Number(s.stock||0).toFixed(2)}KG${inputPrice?' / '+priceLabel+' '+Number(inputPrice).toLocaleString()+'원':''})`;
+  const noteLabel = s.stockNote ? ` / 비고 ${s.stockNote}` : '';
+  return `${s.product}${packLabel}${locLabel} [${s.lot || ''}] ${s.origin || ''}${prodLabel}${noteLabel} (${Number(s.stock||0).toFixed(2)}KG${inputPrice?' / '+priceLabel+' '+Number(inputPrice).toLocaleString()+'원':''})`;
 }
 
-function samsungMetaOptionKey(meta){
-  const raw = meta || {};
-  return [raw.vendorId || raw.samsungVendorId || '', raw.productRowId || raw.samsungProductRowId || ''].join('||');
+
+
+
+
+function productionStockNote(row){
+  let note = String(row?.note || row?.stockNote || '').trim();
+  const legacy = productionLegacySamsung(row);
+  [legacy?.vendorName, legacy?.spec].map(value=>String(value || '').trim()).filter(Boolean).forEach(value=>{
+    if(!note.includes(value)) note = [note, value].filter(Boolean).join(' / ');
+  });
+  return note;
 }
 
-function samsungMetaFromOptionKey(key){
-  const [vendorId, productRowId] = String(key || '').split('||');
-  if(!vendorId || !productRowId) return null;
-  return getSamsungProductMeta(vendorId, productRowId);
+function productionStockNoteHtml(row){
+  const note = productionStockNote(row);
+  return note ? `<div style="margin-top:3px;font-size:10px;color:#666;line-height:1.4;overflow-wrap:anywhere;">비고: ${htmlEscape(note)}</div>` : '';
 }
 
-function samsungStockBucketOptionLabel(row){
-  const spec = row.spec ? `스펙 ${row.spec}` : '스펙 없음';
-  const lot = row.lot ? `LOT ${row.lot}` : 'LOT 없음';
-  return `${row.vendorName || '삼성'} / ${row.product || row.productName || ''} / ${spec} / ${lot} / ${parseAppNumber(row.stock).toFixed(2)}KG`;
+function productionLegacySamsung(row){
+  if(row?.samsung && typeof row.samsung === 'object') return {...row.samsung};
+  if(!row?.samsungVendorId && !row?.samsungProductRowId && !row?.samsungVendorName && !row?.samsungSpec) return null;
+  return {
+    vendorId:row.samsungVendorId || '', vendorName:row.samsungVendorName || '',
+    productRowId:row.samsungProductRowId || '', productId:row.samsungProductId || '',
+    productName:row.samsungProductName || '', spec:row.samsungSpec || ''
+  };
 }
 
-function samsungStockIdentityMatches(row, product, lot, origin='', packunit=''){
-  const productText = String(product || '').trim();
-  const lotText = String(lot || '').trim();
-  const originText = normalizeOriginName(origin || '');
-  const packText = String(packunit || '').trim();
-  if(!productText) return false;
-  return bulkOutboundIdentityKey(row.product || row.productName || '') === bulkOutboundIdentityKey(productText) &&
-    String(row.lot || '').trim() === lotText &&
-    (!originText || sameOriginText(row.origin || '', originText)) &&
-    (!packText || bulkOutboundIdentityKey(row.packunit || '') === bulkOutboundIdentityKey(packText));
+function productionRowSamsungSnapshot(element){
+  try { return JSON.parse(element?.dataset.legacySamsung || 'null'); }
+  catch { return null; }
 }
 
-function getSamsungStockMatchesForInput(product, lot, origin='', packunit=''){
-  const seen = new Set();
-  return getSamsungStockBuckets()
-    .filter(row => parseAppNumber(row.stock) > 0.01)
-    .filter(row => samsungStockIdentityMatches(row, product, lot, origin, packunit))
-    .filter(row => {
-      const key = samsungMetaOptionKey(row);
-      if(seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+function productionLegacySamsungTxnFields(meta){
+  if(!meta) return {};
+  return {
+    samsung:{...meta}, samsungVendorId:meta.vendorId || '', samsungVendorName:meta.vendorName || '',
+    samsungProductRowId:meta.productRowId || '', samsungProductId:meta.productId || '',
+    samsungProductName:meta.productName || '', samsungSpec:meta.spec || ''
+  };
 }
 
-function refreshProdInputSamsungOptions(id, selectedKey=''){
-  const selectEl = document.getElementById(`prod-in-sw-product-${id}`);
-  const labelEl = document.getElementById(`prod-in-sw-label-${id}`);
-  if(!selectEl) return;
-  const currentKey = selectedKey || selectEl.value || '';
-  const product = document.getElementById(`prod-in-product-${id}`)?.value.trim() || '';
-  const lot = document.getElementById(`prod-in-lot-${id}`)?.value.trim() || '';
-  const origin = document.getElementById(`prod-in-origin-${id}`)?.value.trim() || '';
-  const packunit = document.getElementById(`prod-in-packunit-${id}`)?.value.trim() || '';
-  const matches = getSamsungStockMatchesForInput(product, lot, origin, packunit);
-  let chosenKey = currentKey;
-  if(!chosenKey && matches.length === 1) chosenKey = samsungMetaOptionKey(matches[0]);
-  const hasChosen = matches.some(row => samsungMetaOptionKey(row) === chosenKey);
-  let html = '<option value="">-- 삼성 재고 아님 --</option>' + matches.map(row => {
-    const key = samsungMetaOptionKey(row);
-    return `<option value="${htmlEscape(key)}" ${key===chosenKey?'selected':''}>${htmlEscape(samsungStockBucketOptionLabel(row))}</option>`;
-  }).join('');
-  if(chosenKey && !hasChosen){
-    const meta = samsungMetaFromOptionKey(chosenKey);
-    if(meta){
-      const savedLabel = `${meta.vendorName || '삼성'} / ${meta.productName || ''} / ${meta.spec || '스펙 없음'} / 저장된 연결`;
-      html += `<option value="${htmlEscape(chosenKey)}" selected>${htmlEscape(savedLabel)}</option>`;
-    } else {
-      chosenKey = '';
+function productionOutputStockIdentity(output, entry){
+  return JSON.stringify([
+    String(output.product || '').trim(), String(output.packunit || '').trim(), String(output.lot || '').trim(),
+    originKey(output.origin || ''), stockPriceKey(output.price),
+    stockDateKey(output.proddate || output.stockProddate || entry.date || ''),
+    stockDateKey(entry.date || '')
+  ]);
+}
+
+function validateProductionStockRowChanges(previous, next){
+  const nextOutputs = next?.outputs || [];
+  const nextById = new Map();
+  for(const output of nextOutputs){
+    const rowId = String(output.stockRowId || '');
+    if(!rowId) continue;
+    if(nextById.has(rowId)) return '같은 생산 재고가 두 행에 연결되어 있습니다. 생산품 행을 다시 확인해주세요.';
+    nextById.set(rowId, output);
+  }
+  if(!previous) return '';
+  for(const output of previous.outputs || []){
+    const rowId = String(output.stockRowId || '');
+    if(!rowId) continue;
+    const linkedOrders = typeof workOrders !== 'undefined' ? workOrders.filter(order=>String(order.sourceStock?.stockRowId || '') === rowId) : [];
+    const linked = linkedOrders.length || userTransactions.some(txn=>String(txn.stockRowId || '') === rowId &&
+      String(txn._prodId || '') !== String(previous.id) && ['출고','사용','재고이동','재고조정'].includes(txn.type));
+    if(!linked) continue;
+    const replacement = nextById.get(rowId);
+    const label = [output.product, productionStockNote(output)].filter(Boolean).join(' / ');
+    if(!replacement) return `${label}: 출고·사용·이동·조정 또는 작업지시에 연결되어 생산품을 삭제할 수 없습니다. 연결 내역을 먼저 정리해주세요.`;
+    const qtyDelta = parseAppNumber(replacement.qty) - parseAppNumber(output.qty);
+    if(qtyDelta < -0.01){
+      const byLocation = new Map();
+      Object.values(getStockMap()).filter(stock=>String(stock.stockRowId || '') === rowId).forEach(stock=>{
+        const location = stockLocationKey(stock.stockLocation || '');
+        byLocation.set(location,(byLocation.get(location) || 0)+parseAppNumber(stock.stock));
+      });
+      const productionLocation = stockLocationKey(output.stockLocation || STOCK_LOCATION_DEFAULT);
+      byLocation.set(productionLocation,(byLocation.get(productionLocation) || 0)+qtyDelta);
+      if([...byLocation.values()].some(stock=>stock < -0.01))
+        return `${label}: 이미 출고·사용·이동한 중량보다 생산량을 줄일 수 없습니다.`;
+      if(linkedOrders.some(order=>parseAppNumber(order.inputWeight) > parseAppNumber(replacement.qty)+0.01))
+        return `${label}: 작업지시의 투입중량보다 생산량을 줄일 수 없습니다. 작업지시를 먼저 정리해주세요.`;
     }
+    if(productionOutputStockIdentity(output, previous) !== productionOutputStockIdentity(replacement, next))
+      return `${label}: 연결된 재고 내역이 있어 품목·규격·원산지·이력번호·생산일·단가는 변경할 수 없습니다. 비고는 수정할 수 있습니다.`;
   }
-  selectEl.innerHTML = html;
-  selectEl.value = chosenKey || '';
-  updateProdInputSamsungLabel(id);
+  return '';
 }
 
-function updateProdInputSamsungLabel(id){
-  const selectEl = document.getElementById(`prod-in-sw-product-${id}`);
-  const labelEl = document.getElementById(`prod-in-sw-label-${id}`);
-  if(!selectEl || !labelEl) return;
-  const meta = getProdInputSamsungMeta(id);
-  if(meta){
-    labelEl.textContent = `삼성 재고로 연결됨: ${meta.vendorName || ''} / ${meta.productName || ''}${meta.spec ? ' / ' + meta.spec : ''}`;
-    labelEl.style.color = '#1428a0';
-    return;
+function validateProductionStockInputs(inputs, previous, outputs=[]){
+  const tracked = inputs.filter(input=>input.stockRowId);
+  if(!tracked.length) return '';
+  const stockRows = Object.values(getStockMap());
+  const outputIds = new Set(outputs.map(output=>String(output.stockRowId || '')).filter(Boolean));
+  const requested = new Map();
+  for(const input of tracked){
+    const rowId = String(input.stockRowId);
+    if(outputIds.has(rowId)) return `${input.product}: 같은 생산일보의 생산품을 다시 투입할 수 없습니다.`;
+    const location = stockLocationKey(input.stockLocation || '');
+    const key = `${rowId}|${location}`;
+    const matching = stockRows.filter(stock=>String(stock.stockRowId || '') === rowId &&
+      stockLocationKey(stock.stockLocation || '') === location &&
+      sameStockIdentity(stock,input.product,input.lot,input.origin,input.packunit,input.stockUnitPrice,input.proddate,input.stockLocation));
+    const restored = (previous?.inputs || []).filter(old=>String(old.stockRowId || '') === rowId &&
+      stockLocationKey(old.stockLocation || '') === location).reduce((sum,old)=>sum+parseAppNumber(old.qty),0);
+    if(!matching.length && !restored) return `${input.product}: 선택한 생산 재고를 찾을 수 없습니다. 재고를 다시 선택해주세요.`;
+    const available = matching.reduce((sum,stock)=>sum+parseAppNumber(stock.stock),0) + restored;
+    const qty = (requested.get(key) || 0) + parseAppNumber(input.qty);
+    requested.set(key,qty);
+    if(qty > available + 0.01) return `${input.product}: 선택 재고 ${available.toFixed(2)}KG보다 투입 합계 ${qty.toFixed(2)}KG가 큽니다.`;
   }
-  const hasMatches = Array.from(selectEl.options).some(opt => opt.value);
-  labelEl.textContent = hasMatches ? '삼성 재고 후보가 있습니다. 필요하면 선택하세요.' : '일반 재고로 처리됩니다.';
-  labelEl.style.color = '#667085';
-}
-
-function applyProdInputSamsungStock(id){
-  updateProdInputSamsungLabel(id);
-}
-
-function getProdInputSamsungMeta(id){
-  const key = document.getElementById(`prod-in-sw-product-${id}`)?.value || '';
-  return samsungMetaFromOptionKey(key);
+  return '';
 }
 
 function renderProdInputStockSuggestions(id){
@@ -10419,9 +10303,9 @@ function renderProdInputStockSuggestions(id){
   box.innerHTML = rows.map(s=>{
     const source = s.source || (s.produced_weight > 0 ? '생산입고' : '입고');
     const inputPrice = getPriceFromLot(s.product, s.lot, s.origin, source, s.price);
-    return `<button type="button" onpointerdown="event.preventDefault()" onclick="selectProdInputStock(${id},${jsArg(s.product)},${jsArg(s.lot||'')},${jsArg(s.origin||'')},${jsArg(s.packunit||'')},${Number(s.stock||0)},${jsArg(source)},${Number(inputPrice)||0},${jsArg(s.proddate||'')},${Number(s.price)||0},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
+    return `<button type="button" onpointerdown="event.preventDefault()" onclick="selectProdInputStock(${id},${jsArg(s.product)},${jsArg(s.lot||'')},${jsArg(s.origin||'')},${jsArg(s.packunit||'')},${Number(s.stock||0)},${jsArg(source)},${Number(inputPrice)||0},${jsArg(s.proddate||'')},${Number(s.price)||0},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.key||'')},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})" style="width:100%;display:block;text-align:left;padding:8px 11px;border:0;border-bottom:1px solid #f1f3f5;background:#fff;cursor:pointer;font-family:inherit;">
       <div style="font-size:12px;font-weight:700;color:#2c3e50;">${htmlEscape(s.product || '')}${s.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(s.packunit)}</span>` : ''}</div>
-      <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(s.lot || '')} · ${htmlEscape(s.origin || '')} · ${htmlEscape(s.stockLocation || STOCK_LOCATION_DEFAULT)}${s.proddate ? ' · 생산일 '+htmlEscape(s.proddate) : ''} · ${Number(s.stock||0).toFixed(2)}KG${inputPrice?' · '+Number(inputPrice).toLocaleString()+'원':''}</div>
+      <div style="font-size:11px;color:#777;margin-top:2px;">${htmlEscape(s.lot || '')} · ${htmlEscape(s.origin || '')} · ${htmlEscape(s.stockLocation || STOCK_LOCATION_DEFAULT)}${s.proddate ? ' · 생산일 '+htmlEscape(s.proddate) : ''} · ${Number(s.stock||0).toFixed(2)}KG${inputPrice?' · '+Number(inputPrice).toLocaleString()+'원':''}${s.stockNote ? ' · 비고 '+htmlEscape(s.stockNote) : ''}</div>
     </button>`;
   }).join('');
   box.style.display = 'block';
@@ -10437,12 +10321,23 @@ function hideProdInputStockSuggestionsSoon(id){
 function clearProdInputStockSelection(id){
   const picker = document.getElementById(`prod-in-sel-${id}`);
   if(picker) picker.dataset.stockKey = '';
-  [`prod-in-product-${id}`,`prod-in-lot-${id}`,`prod-in-origin-${id}`,`prod-in-packunit-${id}`,`prod-in-proddate-${id}`,`prod-in-stock-price-${id}`,`prod-in-location-${id}`,`prod-in-qty-${id}`,`prod-in-price-${id}`].forEach(fieldId=>{
+  [`prod-in-product-${id}`,`prod-in-lot-${id}`,`prod-in-origin-${id}`,`prod-in-packunit-${id}`,`prod-in-proddate-${id}`,`prod-in-stock-price-${id}`,`prod-in-location-${id}`,`prod-in-stock-row-id-${id}`,`prod-in-stock-note-${id}`,`prod-in-qty-${id}`,`prod-in-price-${id}`].forEach(fieldId=>{
     const field = document.getElementById(fieldId);
     if(field) field.value = '';
   });
-  refreshProdInputSamsungOptions(id);
+  const row = document.getElementById(`prod-in-${id}`);
+  if(row) delete row.dataset.legacySamsung;
+  setProdInputStockIdentityReadOnly(id);
   updateProdOutputOriginsFromInputs();
+}
+
+function setProdInputStockIdentityReadOnly(id, stockRowId=''){
+  [`prod-in-product-${id}`,`prod-in-lot-${id}`].forEach(fieldId=>{
+    const field = document.getElementById(fieldId);
+    if(!field) return;
+    field.readOnly = !!stockRowId;
+    field.style.background = stockRowId ? '#f8f9fa' : '#fff';
+  });
 }
 
 function openProdInputStockPicker(id){
@@ -10456,7 +10351,8 @@ function openProdInputStockPicker(id){
     const proddate = document.getElementById(`prod-in-proddate-${id}`)?.value || '';
     const stockPrice = document.getElementById(`prod-in-stock-price-${id}`)?.value || '';
     const stockLocation = document.getElementById(`prod-in-location-${id}`)?.value || '';
-    const match = product ? bulkOutboundStockOptions().find(stock => sameStockIdentity(stock, product, lot, origin, packunit, stockPrice, proddate, stockLocation)) : null;
+    const stockRowId = document.getElementById(`prod-in-stock-row-id-${id}`)?.value || '';
+    const match = product ? bulkOutboundStockOptions().find(stock => String(stock.stockRowId || '') === stockRowId && sameStockIdentity(stock, product, lot, origin, packunit, stockPrice, proddate, stockLocation)) : null;
     if(match) input.dataset.stockKey = match.key;
   }
   const query = input.dataset.stockKey ? undefined : (document.getElementById(`prod-in-product-${id}`)?.value || input.value || '');
@@ -10488,14 +10384,15 @@ function addProdInputRow(){
       <input type="hidden" id="prod-in-proddate-${id}">
       <input type="hidden" id="prod-in-stock-price-${id}">
       <input type="hidden" id="prod-in-location-${id}">
+      <input type="hidden" id="prod-in-stock-row-id-${id}">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">품목명</label>
-      <input id="prod-in-product-${id}" placeholder="품목명" oninput="refreshProdInputSamsungOptions(${id})" style="font-size:12px;">
+      <input id="prod-in-product-${id}" placeholder="품목명" style="font-size:12px;">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">이력번호</label>
-      <input id="prod-in-lot-${id}" placeholder="LOT" oninput="refreshProdInputSamsungOptions(${id})" style="font-family:monospace;font-size:11px;">
+      <input id="prod-in-lot-${id}" placeholder="LOT" style="font-family:monospace;font-size:11px;">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">투입량(KG)</label>
@@ -10506,25 +10403,19 @@ function addProdInputRow(){
       <input type="number" id="prod-in-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
     <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-in-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
-    <div style="grid-column:1 / -1;display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:8px;align-items:end;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:7px 9px;">
-      <div class="form-group">
-        <label style="font-size:11px;font-weight:800;color:#1428a0;">삼성 재고 연결</label>
-        <select id="prod-in-sw-product-${id}" onchange="applyProdInputSamsungStock(${id})" style="font-size:12px;">
-          <option value="">-- 재고 선택 후 자동 확인 --</option>
-        </select>
-      </div>
-      <div id="prod-in-sw-label-${id}" style="font-size:11px;color:#667085;line-height:1.35;padding-bottom:4px;">재고품목을 선택하면 삼성 LOT 여부를 확인합니다.</div>
+    <div class="form-group" style="grid-column:1 / -1;">
+      <label style="font-size:11px;font-weight:700;color:#666;">선택 재고 비고</label>
+      <input id="prod-in-stock-note-${id}" readonly placeholder="선택한 재고의 비고" style="font-size:12px;background:#f8f9fa;">
     </div>
   `;
   document.getElementById('prod-input-rows').appendChild(row);
-  refreshProdInputSamsungOptions(id);
 }
 
-function selectProdInputStock(id, product, lot, origin, packunit, stock, source, inputPrice, proddate='', stockPrice=0, stockLocation='', stockKey=''){
+function selectProdInputStock(id, product, lot, origin, packunit, stock, source, inputPrice, proddate='', stockPrice=0, stockLocation='', stockKey='', stockRowId='', stockNote=''){
   const input = document.getElementById(`prod-in-sel-${id}`);
   const loc = normalizeStockLocation(stockLocation);
   if(input){
-    input.value = getProdInputStockLabel({ product, lot, origin, packunit, stock, source, price: inputPrice || stockPrice, proddate, stockLocation:loc });
+    input.value = getProdInputStockLabel({ product, lot, origin, packunit, stock, source, price: inputPrice || stockPrice, proddate, stockLocation:loc, stockNote });
     input.dataset.stockKey = stockKey || '';
   }
   const box = document.getElementById(`prod-in-results-${id}`);
@@ -10541,6 +10432,13 @@ function selectProdInputStock(id, product, lot, origin, packunit, stock, source,
   if(stockPriceEl) stockPriceEl.value = stockPrice || inputPrice || '';
   const locEl = document.getElementById(`prod-in-location-${id}`);
   if(locEl) locEl.value = loc;
+  const stockRowEl = document.getElementById(`prod-in-stock-row-id-${id}`);
+  if(stockRowEl) stockRowEl.value = stockRowId || '';
+  setProdInputStockIdentityReadOnly(id, stockRowId);
+  const stockNoteEl = document.getElementById(`prod-in-stock-note-${id}`);
+  if(stockNoteEl) stockNoteEl.value = stockNote || '';
+  const row = document.getElementById(`prod-in-${id}`);
+  if(row) delete row.dataset.legacySamsung;
   const stockQty = Number(stock) || 0;
   const qtyEl = document.getElementById(`prod-in-qty-${id}`);
   if(qtyEl && stockQty){
@@ -10557,7 +10455,6 @@ function selectProdInputStock(id, product, lot, origin, packunit, stock, source,
     const priceTypeLabel = source === '생산입고' ? '생산입고단가' : '입고단가';
     priceEl.title = autoPrice ? `거래내역 ${priceTypeLabel} 자동입력 (수정 가능)` : `해당 이력번호의 ${priceTypeLabel}를 찾지 못했습니다.`;
   }
-  refreshProdInputSamsungOptions(id);
   updateProdOutputOriginsFromInputs();
   toast(`선택: ${product} [${lot}] 재고 ${Number(stockQty).toFixed(2)}KG${autoPrice?' / 단가 '+autoPrice.toLocaleString()+'원':''}`, 2800);
 }
@@ -10604,7 +10501,7 @@ function handleProdOutputProductPickerKeydown(event,id){
   }
 }
 
-function addProdOutputRow(){
+function addProdOutputRow(stockRowId=makeAppId('prodrow')){
   const id = ++prodOutputRowCount;
   const row = document.createElement('div');
   row.id = `prod-out-${id}`;
@@ -10618,6 +10515,7 @@ function addProdOutputRow(){
       </div>
       <input type="hidden" id="prod-out-product-id-${id}">
       <input type="hidden" id="prod-out-proddate-${id}">
+      <input type="hidden" id="prod-out-stock-row-id-${id}" value="${htmlEscape(stockRowId)}">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">포장단위</label>
@@ -10640,26 +10538,14 @@ function addProdOutputRow(){
       <input type="number" id="prod-out-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
     <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-out-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
-    <div style="grid-column:1 / -1;display:grid;grid-template-columns:minmax(180px,230px) minmax(260px,1fr) 1fr;gap:8px;align-items:end;background:#f6f8ff;border:1px solid #dce6ff;border-radius:8px;padding:7px 9px;">
-      <div class="form-group">
-        <label style="font-size:11px;font-weight:800;color:#1428a0;">삼성 하위 거래처</label>
-        <select id="prod-out-sw-vendor-${id}" onchange="refreshProdOutSamsungProducts(${id})" style="font-size:12px;">
-          ${samsungVendorOptionsHtml('', '-- 선택 안 함 --')}
-        </select>
-      </div>
-      <div class="form-group">
-        <label style="font-size:11px;font-weight:800;color:#1428a0;">등록 납품품목 / 작업스펙</label>
-        <select id="prod-out-sw-product-${id}" onchange="applyProdOutSamsungProduct(${id})" style="font-size:12px;">
-          <option value="">-- 삼성 거래처 선택 --</option>
-        </select>
-      </div>
-      <div style="font-size:11px;color:#667085;line-height:1.35;padding-bottom:4px;">선택하면 삼성웰스토리 전용 재고로 집계됩니다.</div>
+    <div class="form-group" style="grid-column:1 / -1;">
+      <label style="font-size:11px;font-weight:700;color:#666;">생산품 비고</label>
+      <input id="prod-out-note-${id}" placeholder="예: 3mm 슬라이스 / 납품처 / 작업 용도" style="font-size:12px;background:#fff;">
     </div>
   `;
   document.getElementById('prod-output-rows').appendChild(row);
   const outOriginEl = document.getElementById(`prod-out-origin-${id}`);
   updateProdOutputOriginField(outOriginEl, getCommonProdInputOrigin());
-  refreshProdOutSamsungProducts(id);
 }
 
 function labelProductPackUnitText(p){
@@ -10704,7 +10590,6 @@ function onProdOutProductSearch(id){
   const packEl = document.getElementById(`prod-out-packunit-${id}`);
   if(hidden) hidden.value = '';
   if(packEl) packEl.value = '';
-  refreshProdOutSamsungProducts(id);
 }
 
 function renderProdOutProductSuggestions(id){
@@ -10749,38 +10634,8 @@ function selectProdOutProduct(id, productIdx){
   if(hidden) hidden.value = prod?.id || '';
   if(packEl) packEl.value = labelProductPackUnitText(prod);
   if(box) box.style.display = 'none';
-  refreshProdOutSamsungProducts(id);
 }
 
-function refreshProdOutSamsungProducts(id, selectedRowId=''){
-  const vendorEl = document.getElementById(`prod-out-sw-vendor-${id}`);
-  const productEl = document.getElementById(`prod-out-sw-product-${id}`);
-  if(!vendorEl || !productEl) return;
-  const productId = document.getElementById(`prod-out-product-id-${id}`)?.value || '';
-  const productName = document.getElementById(`prod-out-product-${id}`)?.value || '';
-  productEl.innerHTML = samsungProductOptionsHtml(vendorEl.value, productId, productName, selectedRowId);
-}
-
-function applyProdOutSamsungProduct(id){
-  const meta = getProdOutSamsungMeta(id);
-  if(!meta) return;
-  const productEl = document.getElementById(`prod-out-product-${id}`);
-  const hidden = document.getElementById(`prod-out-product-id-${id}`);
-  const packEl = document.getElementById(`prod-out-packunit-${id}`);
-  const originEl = document.getElementById(`prod-out-origin-${id}`);
-  if(productEl && meta.productName) productEl.value = meta.productName;
-  if(hidden && meta.productId) hidden.value = meta.productId;
-  if(packEl) packEl.value = meta.packunit || '';
-  if(originEl && meta.origin) originEl.value = meta.origin;
-}
-
-function getProdOutSamsungMeta(id){
-  const vendorId = document.getElementById(`prod-out-sw-vendor-${id}`)?.value || '';
-  const rowId = document.getElementById(`prod-out-sw-product-${id}`)?.value || '';
-  if(!vendorId && !rowId) return null;
-  if(vendorId && !rowId) return { error:'삼성 납품품목/작업스펙을 선택하세요.' };
-  return getSamsungProductMeta(vendorId, rowId);
-}
 
 async function saveProdEntry(){
   if(productionWritePending) return;
@@ -10801,13 +10656,16 @@ async function saveProdEntry(){
     const proddate = document.getElementById(`prod-in-proddate-${id}`)?.value.trim() || '';
     const stockUnitPrice = parseAppNumber(document.getElementById(`prod-in-stock-price-${id}`)?.value);
     const stockLocation = normalizeStockLocation(document.getElementById(`prod-in-location-${id}`)?.value || '');
+    const stockRowId = document.getElementById(`prod-in-stock-row-id-${id}`)?.value || '';
+    const stockNote = document.getElementById(`prod-in-stock-note-${id}`)?.value.trim() || '';
+    const sourceStockKey = document.getElementById(`prod-in-sel-${id}`)?.dataset.stockKey || '';
     const qty = parseFloat(el.value)||0;
     // 단가: 사용자 입력 우선, 없으면 단가표
     const manualPrice = parseFloat(document.getElementById(`prod-in-price-${id}`)?.value)||0;
     const p = manualPrice || getPrice(product, origin);
     if(product && qty>0){
-      const samsungMeta = getProdInputSamsungMeta(id);
-      inputs.push({product,lot,qty,price:p,amount:p*qty,origin,packunit,proddate,stockUnitPrice:stockUnitPrice || p,stockLocation,samsung:samsungMeta});
+      const samsung = productionRowSamsungSnapshot(document.getElementById(`prod-in-${id}`));
+      inputs.push({product,lot,qty,price:p,amount:p*qty,origin,packunit,proddate,stockUnitPrice:stockUnitPrice || p,stockLocation,stockRowId,stockNote,sourceStockKey,...(samsung ? {samsung} : {})});
     }
   });
 
@@ -10818,13 +10676,14 @@ async function saveProdEntry(){
   // 1차: raw 데이터 수집
   const rawOutputs = [];
   let invalidOutputProduct = '';
-  let invalidSamsungProduct = '';
   document.querySelectorAll('[id^="prod-out-qty-"]').forEach(el=>{
     const id = el.id.replace('prod-out-qty-','');
     const product = document.getElementById(`prod-out-product-${id}`)?.value.trim();
     const productId = document.getElementById(`prod-out-product-id-${id}`)?.value.trim() || '';
     const packunit = document.getElementById(`prod-out-packunit-${id}`)?.value.trim() || '';
     const lot = document.getElementById(`prod-out-lot-${id}`)?.value.trim();
+    const stockRowId = document.getElementById(`prod-out-stock-row-id-${id}`)?.value || '';
+    const note = document.getElementById(`prod-out-note-${id}`)?.value.trim() || '';
     const qty = parseFloat(el.value)||0;
     const manualPrice = parseFloat(document.getElementById(`prod-out-price-${id}`)?.value)||0;
     if(product && qty>0){
@@ -10833,11 +10692,7 @@ async function saveProdEntry(){
         invalidOutputProduct = product + (packunit ? ` / ${packunit}` : '');
         return;
       }
-      const samsungMeta = getProdOutSamsungMeta(id);
-      if(samsungMeta && samsungMeta.error){
-        invalidSamsungProduct = `${product}: ${samsungMeta.error}`;
-        return;
-      }
+      const samsung = productionRowSamsungSnapshot(document.getElementById(`prod-out-${id}`));
       const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
       rawOutputs.push({
         proddate: document.getElementById(`prod-out-proddate-${id}`)?.value || '',
@@ -10851,16 +10706,13 @@ async function saveProdEntry(){
         nationalPartName: nationalPartNameForCode(registered.nationalPartCode),
         taxType: normalizeLabelProductTaxType(registered.taxType),
         grade: registered.grade || '',
-        packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, samsung:samsungMeta
+        packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, stockRowId, note,
+        ...(samsung ? {samsung} : {})
       });
     }
   });
   if(invalidOutputProduct){
     alert(`생산품목은 품목관리에 등록된 품목만 선택할 수 있습니다.\n\n등록되지 않은 품목: ${invalidOutputProduct}`);
-    return;
-  }
-  if(invalidSamsungProduct){
-    alert(`삼성웰스토리 지정 정보를 확인해주세요.\n\n${invalidSamsungProduct}`);
     return;
   }
 
@@ -10881,7 +10733,8 @@ async function saveProdEntry(){
       nationalPartCode:o.nationalPartCode, nationalPartName:o.nationalPartName,
       taxType:o.taxType,
       grade:o.grade || '',
-      packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin, samsung:o.samsung
+      packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin,
+      stockRowId:o.stockRowId, note:o.note, ...(o.samsung ? {samsung:o.samsung} : {})
     };
   });
 
@@ -10904,6 +10757,9 @@ async function saveProdEntry(){
   };
   const completion = userProdEntries.find(e=>String(e.id)===String(editingProdId))?._labelCompletion;
   if(completion) entry._labelCompletion = {...completion};
+  const previousEntry = userProdEntries.find(e=>String(e.id)===String(editingProdId)) || null;
+  const rowError = validateProductionStockRowChanges(previousEntry, entry) || validateProductionStockInputs(inputs, previousEntry, outputs);
+  if(rowError){ alert(rowError); return; }
 
   // 수정 모드: 기존 항목과 관련 트랜잭션 삭제 후 교체
   let deletedProdId = null;
@@ -10930,7 +10786,8 @@ async function saveProdEntry(){
         stockProddate: inp.proddate || '',
         stockUnitPrice: inp.stockUnitPrice || inp.price || '',
         stockLocation: inp.stockLocation || STOCK_LOCATION_DEFAULT,
-        ...samsungTxnFields(inp.samsung),
+        stockRowId:inp.stockRowId || '', stockNote:inp.stockNote || '', sourceStockKey:inp.sourceStockKey || '',
+        ...productionLegacySamsungTxnFields(inp.samsung),
         _isUser:true, _isProdUse:true, _prodId:entry.id
       };
       userTransactions.push(newTxn);
@@ -10941,7 +10798,7 @@ async function saveProdEntry(){
   outputs.forEach((out, index)=>{
     if(out.product && out.qty>0){
       const newTxn = {
-        id:makeProductionTxnId(entry.id, 'out', index), date, type:'생산입고',
+        id:makeProductionTxnId(entry.id, 'out', out.stockRowId || index), date, type:'생산입고',
         product:out.product, lot:out.lot||'', origin:out.origin||'',
         proddate:out.proddate||'', stockProddate:out.proddate||'',
         packunit:out.packunit||'', productId:out.productId||'', labelProductId:out.labelProductId||out.productId||'',
@@ -10953,7 +10810,8 @@ async function saveProdEntry(){
         trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
         note:`${jobType}완료 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         stockLocation: STOCK_LOCATION_DEFAULT,
-        ...samsungTxnFields(out.samsung),
+        stockRowId:out.stockRowId || '', stockNote:out.note || '',
+        ...productionLegacySamsungTxnFields(out.samsung),
         _isUser:true, _isProdOut:true, _prodId:entry.id
       };
       userTransactions.push(newTxn);
@@ -10991,12 +10849,15 @@ function clearProdForm(){
 }
 
 async function deleteProdEntry(id){
+  if(productionWritePending) return;
+  const deletedProdEntry = userProdEntries.find(e=>String(e.id)===String(id)) || null;
+  const rowError = validateProductionStockRowChanges(deletedProdEntry, null);
+  if(rowError){ alert(rowError); return; }
   const linkedSubMaterialUsages = getProductionSubMaterialUsages(id);
   const usageNotice = linkedSubMaterialUsages.length
     ? `\n연결된 부자재 사용 ${linkedSubMaterialUsages.length}건도 취소되어 재고가 복원됩니다.`
     : '';
   if(!confirm(`삭제하시겠습니까?\n관련 재고(사용/생산입고)도 함께 취소됩니다.${usageNotice}`))return;
-  const deletedProdEntry = userProdEntries.find(e=>String(e.id)===String(id)) || null;
   userProdEntries=userProdEntries.filter(e=>String(e.id)!==String(id));
   userTransactions=userTransactions.filter(t=>String(t._prodId)!==String(id));
   if(linkedSubMaterialUsages.length){
@@ -11081,19 +10942,27 @@ function openEditProdEntry(id){
     const pd=document.getElementById(`prod-in-proddate-${n}`);
     const sp=document.getElementById(`prod-in-stock-price-${n}`);
     const loc=document.getElementById(`prod-in-location-${n}`);
+    const stockRowEl=document.getElementById(`prod-in-stock-row-id-${n}`);
+    const stockNoteEl=document.getElementById(`prod-in-stock-note-${n}`);
+    const stockNote=productionStockNote(inp);
     if(p)p.value=inp.product||''; if(l)l.value=inp.lot||'';
     if(o)o.value=inp.origin||'';
     if(pd)pd.value=inp.proddate||inp.stockProddate||'';
     if(sp)sp.value=inp.stockUnitPrice||inp.price||'';
     if(loc)loc.value=inp.stockLocation||STOCK_LOCATION_DEFAULT;
-    if(sel)sel.value=inp.product ? getProdInputStockLabel({product:inp.product, lot:inp.lot, origin:inp.origin, packunit:inp.packunit, stock:inp.qty, source:'', price:inp.price, proddate:inp.proddate||inp.stockProddate||'', stockLocation:inp.stockLocation||STOCK_LOCATION_DEFAULT}) : '';
+    if(stockRowEl)stockRowEl.value=inp.stockRowId||'';
+    setProdInputStockIdentityReadOnly(n, inp.stockRowId || '');
+    if(stockNoteEl)stockNoteEl.value=stockNote;
+    if(sel){
+      sel.value=inp.product ? getProdInputStockLabel({product:inp.product, lot:inp.lot, origin:inp.origin, packunit:inp.packunit, stock:inp.qty, source:'', price:inp.price, proddate:inp.proddate||inp.stockProddate||'', stockLocation:inp.stockLocation||STOCK_LOCATION_DEFAULT,stockNote}) : '';
+      sel.dataset.stockKey=inp.sourceStockKey||'';
+    }
     if(pk)pk.value=inp.packunit||'';
     if(q)q.value=inp.qty||0;      if(pr)pr.value=inp.price||0;
-    const sw=normalizeSamsungMeta(inp.samsung || inp);
-    refreshProdInputSamsungOptions(n, sw ? samsungMetaOptionKey(sw) : '');
+    document.getElementById(`prod-in-${n}`).dataset.legacySamsung=JSON.stringify(productionLegacySamsung(inp));
   });
   (entry.outputs||[]).forEach(out=>{
-    addProdOutputRow(); const n=prodOutputRowCount;
+    addProdOutputRow(out.stockRowId || ''); const n=prodOutputRowCount;
     const p=document.getElementById(`prod-out-product-${n}`);
     const o=document.getElementById(`prod-out-origin-${n}`);
     const l=document.getElementById(`prod-out-lot-${n}`);
@@ -11101,7 +10970,6 @@ function openEditProdEntry(id){
     const pr=document.getElementById(`prod-out-price-${n}`);
     const pk=document.getElementById(`prod-out-packunit-${n}`);
     const pid=document.getElementById(`prod-out-product-id-${n}`);
-    const sw=normalizeSamsungMeta(out.samsung || out);
     if(p)p.value=out.product||'';
     if(pk)pk.value=out.packunit||'';
     if(pid)pid.value=out.productId||'';
@@ -11109,13 +10977,9 @@ function openEditProdEntry(id){
     if(pd)pd.value=out.proddate||out.stockProddate||'';
     if(o){o.value=out.origin||'';o.removeAttribute('readonly');}
     if(l)l.value=out.lot||''; if(q)q.value=out.qty||0; if(pr)pr.value=out.price||0;
-    const swVendor=document.getElementById(`prod-out-sw-vendor-${n}`);
-    const swProduct=document.getElementById(`prod-out-sw-product-${n}`);
-    if(swVendor && sw?.vendorId){
-      swVendor.value=sw.vendorId;
-      refreshProdOutSamsungProducts(n, sw.productRowId || '');
-      if(swProduct) swProduct.value=sw.productRowId || '';
-    }
+    const outputNote=document.getElementById(`prod-out-note-${n}`);
+    if(outputNote)outputNote.value=productionStockNote(out);
+    document.getElementById(`prod-out-${n}`).dataset.legacySamsung=JSON.stringify(productionLegacySamsung(out));
   });
   updateLabelProductionNotice(entry);
   toast('수정할 내용 변경 후 ✓ 생산일보 저장을 누르세요.',4000);
@@ -11158,7 +11022,7 @@ function getProdJobType(entry){
 
 function getProdEntryNote(entry){
   const direct = String(entry?.note || entry?.job_note || entry?.jobNote || entry?.memo || entry?.remark || '').trim();
-  if(direct) return direct;
+  if(direct || Object.prototype.hasOwnProperty.call(entry || {}, 'note')) return direct;
   const legacyNotes = (entry?.outputs || [])
     .map(out => String(out?.note || out?.memo || out?.remark || '').trim())
     .filter(Boolean);
@@ -11283,7 +11147,7 @@ function productionMatchesSearch(entry, productQ, lotQ){
   const inputs = entry.inputs || [];
   const outputs = entry.outputs || [];
   const productMatched = !productQ || [...inputs, ...outputs]
-    .some(row => (String(row.product || '') + ' ' + String(row.packunit || '')).toLowerCase().includes(productQ));
+    .some(row => [row.product, row.packunit, productionStockNote(row)].join(' ').toLowerCase().includes(productQ));
   const lotMatched = !lotQ || [...inputs, ...outputs]
     .some(row => String(row.lot || '').toLowerCase().includes(lotQ));
   return productMatched && lotMatched;
@@ -11361,7 +11225,7 @@ function renderProduction(){
         :'';
       // 투입
       html+=inp
-        ?`<td>${htmlEscape(inp.product || '')}${inp.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(inp.packunit)}</span>` : ''}</td><td>${inp.origin||''}</td>
+        ?`<td>${htmlEscape(inp.product || '')}${inp.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(inp.packunit)}</span>` : ''}${productionStockNoteHtml(inp)}</td><td>${inp.origin||''}</td>
            <td style="text-align:right">${inp.qty.toFixed(2)}</td>
            <td style="text-align:right">${inp.price?inp.price.toLocaleString():'-'}</td>
            <td style="text-align:right;font-weight:500">${inp.amount?Math.round(inp.amount).toLocaleString():'-'}</td>
@@ -11371,7 +11235,7 @@ function renderProduction(){
       html+=`<td style="border-left:2px solid var(--color-border-tertiary)"></td>`;
       // 생산
       html+=out
-        ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}</td><td>${out.origin||''}</td>
+        ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}${productionStockNoteHtml(out)}</td><td>${out.origin||''}</td>
            <td style="text-align:right">${out.qty.toFixed(2)}</td>
            <td style="text-align:right">${out.price?Math.ceil(out.price).toLocaleString():'-'}</td>
            <td style="text-align:right;font-weight:500">${out.amount?Math.ceil(out.amount).toLocaleString():'-'}</td>
@@ -11680,7 +11544,7 @@ function stockCanAdjustCurrent(){
 }
 
 function stockTableColspan(){
-  return stockCanAdjustCurrent() ? 16 : 15;
+  return stockCanAdjustCurrent() ? 17 : 16;
 }
 
 function setStockExportEnabled(enabled){
@@ -11800,7 +11664,7 @@ function renderStock(){
   if(locationFilter) rows=rows.filter(s=>stockLocationKey(s.stockLocation || '') === stockLocationKey(locationFilter));
   // 전체('')는 필터 없음
 
-  if(q) rows=rows.filter(s=>(s.stockLocation+s.product+(s.brand||'')+(s.grade||'')+(s.packunit||'')+s.lot+(s.proddate||'')+s.origin+String(s.price||'')).toLowerCase().includes(q));
+  if(q) rows=rows.filter(s=>(s.stockLocation+s.product+(s.brand||'')+(s.grade||'')+(s.packunit||'')+s.lot+(s.proddate||'')+s.origin+String(s.price||'')+(s.stockNote||'')+(s.stockRowId||'')).toLowerCase().includes(q));
 
   // 정렬: 클릭한 열 기준 오름차순/내림차순
   const _dir = stockSortDir === 'asc' ? 1 : -1;
@@ -11845,7 +11709,7 @@ function renderStock(){
 
   const b=document.getElementById('stock-body');
   if(!rows.length){
-    b.innerHTML=`<tr><td colspan="${canAdjustStock ? 16 : 15}" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>`;
+    b.innerHTML=`<tr><td colspan="${canAdjustStock ? 17 : 16}" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>`;
     return;
   }
   b.innerHTML=rows.map(s=>{
@@ -11872,7 +11736,8 @@ function renderStock(){
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
-      ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)})">정리</button></td>` : ''}
+      <td style="min-width:200px;max-width:320px;white-space:normal;overflow-wrap:anywhere;color:#444;">${htmlEscape(s.stockNote||'')}${s.stockRowId ? `<div style="font-size:10px;color:#777;">${htmlEscape(s.stockRowId)}</div>` : ''}</td>
+      ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})">정리</button></td>` : ''}
     </tr>`;
   }).join('');
 }
@@ -11888,7 +11753,7 @@ function applyStockPermissionState(){
   if(!canAdjust) closeStockAdjust();
 }
 
-function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit='', stockLocation=''){
+function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit='', stockLocation='', stockRowId='', stockNote=''){
   if(!stockPersonalCan('update')){ toast('재고 정리 권한이 없습니다.'); return; }
   if(!stockCanAdjustCurrent()){ toast('기준일 재고는 조회 전용입니다. ‘현재’로 조회한 뒤 재고를 정리해주세요.'); return; }
   const set = (id, value) => { const el=document.getElementById(id); if(el) el.value=value; };
@@ -11898,6 +11763,8 @@ function openStockAdjust(product, lot, origin, price, stock, proddate='', packun
   set('stock-adj-proddate', proddate || '');
   set('stock-adj-packunit', packunit || '');
   set('stock-adj-location', loc);
+  set('stock-adj-row-id', stockRowId);
+  set('stock-adj-stock-note', stockNote);
   set('stock-adj-origin', origin || '');
   set('stock-adj-price', Number(price)||0);
   set('stock-adj-date', localDateString());
@@ -11949,6 +11816,8 @@ async function saveStockAdjust(){
     id: `stock_adjust_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     date,
     type: '재고조정',
+    stockRowId: document.getElementById('stock-adj-row-id')?.value || '',
+    stockNote: document.getElementById('stock-adj-stock-note')?.value || '',
     trader: '재고정리',
     product,
     origin,
@@ -14022,13 +13891,13 @@ function printFilteredProduction(){
       rows+=`<tr>
         ${i===0 ? `<td rowspan="${maxRows}" class="center">${htmlEscape(normProdDate(e.date))}<br><strong>작업 ${htmlEscape(e.job_no || '')}</strong></td>
         <td rowspan="${maxRows}"><strong>${htmlEscape(getProdJobType(e))}</strong>${entryNote ? `<br>${htmlEscape(entryNote)}` : ''}</td>` : ''}
-        <td>${inp ? htmlEscape([inp.product,inp.packunit ? `(${inp.packunit})` : ''].filter(Boolean).join(' ')) : ''}</td>
+        <td>${inp ? htmlEscape([inp.product,inp.packunit ? `(${inp.packunit})` : ''].filter(Boolean).join(' ')) + productionStockNoteHtml(inp) : ''}</td>
         <td>${inp ? htmlEscape(inp.origin || '') : ''}</td>
         <td class="numeric">${inp ? parseAppNumber(inp.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}</td>
         <td class="numeric">${inp && parseAppNumber(inp.price) ? parseAppNumber(inp.price).toLocaleString('ko-KR',{maximumFractionDigits:2}) : ''}</td>
         <td class="numeric">${inp && parseAppNumber(inp.amount) ? Math.round(parseAppNumber(inp.amount)).toLocaleString('ko-KR') : ''}</td>
         <td class="mono">${inp ? htmlEscape(inp.lot || '-') : ''}</td>
-        <td>${out ? htmlEscape([out.product,out.packunit ? `(${out.packunit})` : ''].filter(Boolean).join(' ')) : ''}</td>
+        <td>${out ? htmlEscape([out.product,out.packunit ? `(${out.packunit})` : ''].filter(Boolean).join(' ')) + productionStockNoteHtml(out) : ''}</td>
         <td>${out ? htmlEscape(out.origin || '') : ''}</td>
         <td class="numeric">${out ? parseAppNumber(out.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}</td>
         <td class="numeric">${out && parseAppNumber(out.price) ? Math.ceil(parseAppNumber(out.price)).toLocaleString('ko-KR') : ''}</td>
@@ -14071,7 +13940,7 @@ function exportProductionCSV(){
   }
   const { entries: filtered, exactDate, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('asc');
 
-  const header=['작업일','작업번호','작업유형','작업비고','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호'];
+  const header=['작업일','작업번호','작업유형','작업비고','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','투입재고비고','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호','생산품비고'];
   const rows=[header];
   filtered.forEach(e=>{
     const inputs =e.inputs ||[];
@@ -14093,13 +13962,15 @@ function exportProductionCSV(){
         inp?inp.price||'':'',
         inp?Math.round(inp.amount||0):'',
         inp?inp.lot||'':'',
+        inp?productionStockNote(inp):'',
         out?out.product:'',
         out?out.packunit||'':'',
         out?out.origin||'':'',
         out?out.qty.toFixed(2):'',
         out?Math.ceil(out.price||0):'',
         out?Math.ceil(out.amount||0):'',
-        out?out.lot||'':''
+        out?out.lot||'':'',
+        out?productionStockNote(out):''
       ]);
     }
   });
@@ -14137,7 +14008,7 @@ function printStockReport(){
 function exportStockCSV(){
   const snapshot = getStockExportSnapshot();
   if(!snapshot) return;
-  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고'];
+  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고','관리번호'];
   const rows=snapshot.rows.map(r=>[
     snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',r.proddate||'',r.origin||'',
     Number(r.total_in||0).toFixed(2),
@@ -14147,7 +14018,7 @@ function exportStockCSV(){
     Number(r.stock||0).toFixed(2),
     r.price||'',
     Math.round((Number(r.stock)||0) * (Number(r.price)||0)) || '',
-    r.note||''
+    r.stockNote||r.note||'',r.stockRowId||''
   ]);
   downloadCSV([header,...rows],`재고현황_${snapshot.filters.asOfDate || '현재'}.csv`);
 }
@@ -14722,7 +14593,7 @@ async function doImport(){
 function backupAllData(){
   const KEYS = [
     'dbmt_user_transactions','dbmt_user_prod','dbmt_prices','dbmt_submaterial_usages',
-    'dbmt_schedule_events',
+    'dbmt_schedule_events','dbmt_samsung_vendors',
     'dbmt_employees','dbmt_leaves','dbmt_weekend_work','dbmt_leave_deductions',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_quotations','dbmt_label_templates',
@@ -19901,7 +19772,8 @@ function workOrderStockLabel(s){
     s.origin || '',
     s.proddate ? `생산일 ${s.proddate}` : '',
     `${parseAppNumber(s.stock).toFixed(2)}KG`,
-    s.price ? `${Number(s.price).toLocaleString()}원/KG` : ''
+    s.price ? `${Number(s.price).toLocaleString()}원/KG` : '',
+    s.stockNote || '', s.stockRowId ? `관리번호 ${s.stockRowId}` : ''
   ].filter(Boolean);
   return parts.join(' / ');
 }
@@ -19942,6 +19814,7 @@ function collectWorkOrderForm(){
     sourceStockKey: val('wo-stock-key'),
     sourceStock: stock ? {
       key: stock.key,
+      stockRowId:stock.stockRowId || '', stockNote:stock.stockNote || '',
       product: stock.product || '',
       packunit: stock.packunit || '',
       lot: stock.lot || '',
@@ -21073,583 +20946,11 @@ function renderLabelTemplates(){
 }
 
 // ══════════════════════════════════════════
-// 🏬 삼성웰스토리 관리
-// ══════════════════════════════════════════
+// Archived customer specifications remain available for old records and backups.
 let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || '[]');
-let samsungVendorProductEditTarget = null;
 
-function samsungVendorId(){
-  return 'sw_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-}
-function samsungProductRowId(){
-  return 'swp_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-}
 
-function samsungSpecKey(value){
-  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
-}
 
-function isSameSamsungVendorProduct(row, productId, spec){
-  return String(row.productId) === String(productId) && samsungSpecKey(row.spec) === samsungSpecKey(spec);
-}
-
-function samsungVendorOptionsHtml(selectedId='', placeholder='-- 거래처 선택 --'){
-  return `<option value="">${htmlEscape(placeholder)}</option>` + samsungVendors.map(v =>
-    `<option value="${htmlEscape(v.id)}" ${String(v.id)===String(selectedId)?'selected':''}>${htmlEscape(v.name)}</option>`
-  ).join('');
-}
-
-function samsungProductRowsForVendor(vendorId, productId='', productName=''){
-  const v = samsungVendors.find(x => String(x.id) === String(vendorId));
-  if(!v) return [];
-  const targetId = String(productId || '').trim();
-  const targetName = bulkOutboundIdentityKey(productName || '');
-  return (v.products || [])
-    .map(row => {
-      const lp = (labelProducts || []).find(x => String(x.id) === String(row.productId));
-      return { row, lp };
-    })
-    .filter(({row, lp}) => {
-      if(targetId) return String(row.productId) === targetId;
-      if(targetName && lp) return bulkOutboundIdentityKey(lp.name || '') === targetName;
-      return true;
-    });
-}
-
-function samsungProductOptionLabel(row, lp){
-  const productLabel = lp ? samsungProductLabel(lp) : '(삭제된 품목)';
-  return `${productLabel}${row.spec ? ' / ' + row.spec : ' / 스펙 없음'}`;
-}
-
-function samsungProductOptionsHtml(vendorId, productId='', productName='', selectedRowId=''){
-  if(!vendorId) return '<option value="">-- 삼성 거래처 선택 --</option>';
-  const rows = samsungProductRowsForVendor(vendorId, productId, productName);
-  const selectedId = String(selectedRowId || '').trim();
-  if(selectedId && !rows.some(({row}) => String(row.id) === selectedId)){
-    const v = samsungVendors.find(x => String(x.id) === String(vendorId));
-    const selectedRow = (v?.products || []).find(row => String(row.id) === selectedId);
-    if(selectedRow){
-      const lp = (labelProducts || []).find(x => String(x.id) === String(selectedRow.productId));
-      rows.push({ row: selectedRow, lp });
-    }
-  }
-  if(!rows.length) return '<option value="">-- 등록된 납품품목/스펙 없음 --</option>';
-  return '<option value="">-- 선택 안 함 --</option>' + rows.map(({row, lp}) =>
-    `<option value="${htmlEscape(row.id)}" ${String(row.id)===String(selectedRowId)?'selected':''}>${htmlEscape(samsungProductOptionLabel(row, lp))}</option>`
-  ).join('');
-}
-
-function getSamsungProductMeta(vendorId, productRowId){
-  const v = samsungVendors.find(x => String(x.id) === String(vendorId));
-  if(!v) return null;
-  const row = (v.products || []).find(p => String(p.id) === String(productRowId));
-  if(!row) return null;
-  const lp = (labelProducts || []).find(x => String(x.id) === String(row.productId));
-  return {
-    vendorId: v.id,
-    vendorName: v.name,
-    productRowId: row.id,
-    productId: row.productId || '',
-    productName: lp?.name || '',
-    origin: lp?.origin || '',
-    packunit: lp?.packunit || '',
-    spec: row.spec || '',
-    targetWeekly: parseAppNumber(row.targetWeekly)
-  };
-}
-
-function normalizeSamsungMeta(src){
-  if(!src) return null;
-  const raw = src.samsung && typeof src.samsung === 'object' ? src.samsung : src;
-  const vendorId = raw.vendorId || raw.samsungVendorId || '';
-  const productRowId = raw.productRowId || raw.samsungProductRowId || '';
-  if(!vendorId || !productRowId) return null;
-  const fresh = getSamsungProductMeta(vendorId, productRowId);
-  return {
-    vendorId,
-    vendorName: fresh?.vendorName || raw.vendorName || raw.samsungVendorName || '',
-    productRowId,
-    productId: fresh?.productId || raw.productId || raw.samsungProductId || '',
-    productName: fresh?.productName || raw.productName || raw.samsungProductName || '',
-    origin: fresh?.origin || raw.origin || '',
-    packunit: fresh?.packunit || raw.packunit || '',
-    spec: fresh?.spec || raw.spec || raw.samsungSpec || '',
-    targetWeekly: parseAppNumber(fresh?.targetWeekly ?? raw.targetWeekly)
-  };
-}
-
-function samsungTxnFields(meta){
-  const m = normalizeSamsungMeta(meta);
-  return {
-    samsungVendorId: m?.vendorId || '',
-    samsungVendorName: m?.vendorName || '',
-    samsungProductRowId: m?.productRowId || '',
-    samsungProductId: m?.productId || '',
-    samsungProductName: m?.productName || '',
-    samsungSpec: m?.spec || '',
-    samsung: m ? {...m} : null
-  };
-}
-
-function samsungStockBucketKeyFromValues(meta, product, packunit, origin, lot){
-  return [
-    meta.vendorId,
-    meta.productRowId,
-    String(product || '').trim(),
-    String(packunit || '').trim(),
-    originKey(origin || ''),
-    String(lot || '').trim()
-  ].join('|');
-}
-
-function inferSamsungMetaFromCurrentBuckets(buckets, txn){
-  const product = String(txn.product || '').trim();
-  if(!product) return null;
-  const matches = Object.values(buckets)
-    .filter(row => parseAppNumber(row.stock) > 0.01)
-    .filter(row => samsungStockIdentityMatches(row, product, txn.lot || '', txn.origin || '', txn.packunit || ''));
-  const unique = [];
-  const seen = new Set();
-  matches.forEach(row => {
-    const key = samsungMetaOptionKey(row);
-    if(seen.has(key)) return;
-    seen.add(key);
-    unique.push(row);
-  });
-  return unique.length === 1 ? normalizeSamsungMeta(unique[0]) : null;
-}
-
-function saveSamsungVendors(){
-  localStorage.setItem('dbmt_samsung_vendors', JSON.stringify(samsungVendors));
-  if(typeof gsSaveAppData === 'function') gsSaveAppData();
-}
-
-function findSamsungVendorProduct(vendorId, productRowId){
-  const vendor = samsungVendors.find(x => String(x.id) === String(vendorId));
-  if(!vendor) return null;
-  const row = (vendor.products || []).find(p => String(p.id) === String(productRowId));
-  return row ? { vendor, row } : null;
-}
-
-function hasSamsungVendorProductDuplicate(vendor, productId, spec, ignoreRowId=''){
-  return (vendor?.products || []).some(p =>
-    String(p.id) !== String(ignoreRowId || '') &&
-    isSameSamsungVendorProduct(p, productId, spec)
-  );
-}
-
-function setSamsungVendorProductFormMode(isEdit){
-  const saveBtn = document.getElementById('sw-prod-save-btn');
-  const cancelBtn = document.getElementById('sw-prod-cancel-btn');
-  const vendorEl = document.getElementById('sw-prod-vendor');
-  if(saveBtn) saveBtn.textContent = isEdit ? '✓ 수정 저장' : '+ 품목 추가';
-  if(cancelBtn) cancelBtn.style.display = isEdit ? 'inline-flex' : 'none';
-  if(vendorEl) vendorEl.disabled = !!isEdit;
-}
-
-function clearSamsungVendorProductInputs(keepVendor=true){
-  if(!keepVendor){
-    const vendorEl = document.getElementById('sw-prod-vendor');
-    if(vendorEl) vendorEl.value = '';
-  }
-  ['sw-prod-product','sw-prod-product-id','sw-prod-spec','sw-prod-weekly'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.value = '';
-  });
-}
-
-function cancelSamsungVendorProductEdit(){
-  samsungVendorProductEditTarget = null;
-  clearSamsungVendorProductInputs(true);
-  setSamsungVendorProductFormMode(false);
-}
-
-function addSamsungVendor(){
-  const name = (document.getElementById('sw-vendor-name')?.value || '').trim();
-  const note = (document.getElementById('sw-vendor-note')?.value || '').trim();
-  if(!name){ toast('거래처명을 입력하세요.'); return; }
-  if(samsungVendors.find(v => v.name === name)){ toast('이미 등록된 거래처입니다.'); return; }
-  samsungVendors.push({ id: samsungVendorId(), name, note, products: [] });
-  saveSamsungVendors();
-  document.getElementById('sw-vendor-name').value = '';
-  document.getElementById('sw-vendor-note').value = '';
-  renderSamsung();
-  toast('거래처가 추가되었습니다.');
-}
-
-function deleteSamsungVendor(id){
-  const v = samsungVendors.find(x => x.id === id);
-  if(!v) return;
-  if(!confirm('거래처 "'+v.name+'"를 삭제할까요?\n(등록된 품목도 함께 삭제됩니다)')) return;
-  samsungVendors = samsungVendors.filter(x => x.id !== id);
-  saveSamsungVendors();
-  renderSamsung();
-  toast('삭제 완료');
-}
-
-function addSamsungVendorProduct(){
-  const vendorId = document.getElementById('sw-prod-vendor')?.value || '';
-  if(!vendorId){ toast('거래처를 선택하세요.'); return; }
-  const productId = document.getElementById('sw-prod-product-id')?.value || '';
-  if(!productId){ toast('품목을 검색 목록에서 선택하세요.'); return; }
-  const spec = (document.getElementById('sw-prod-spec')?.value || '').trim();
-  const targetWeekly = parseFloat(document.getElementById('sw-prod-weekly')?.value) || 0;
-  const v = samsungVendors.find(x => x.id === vendorId);
-  if(!v) return;
-  if(!v.products) v.products = [];
-
-  if(samsungVendorProductEditTarget){
-    const found = findSamsungVendorProduct(
-      samsungVendorProductEditTarget.vendorId,
-      samsungVendorProductEditTarget.productRowId
-    );
-    if(!found){ toast('수정할 품목을 찾을 수 없습니다. 다시 선택하세요.'); cancelSamsungVendorProductEdit(); return; }
-    if(hasSamsungVendorProductDuplicate(found.vendor, productId, spec, found.row.id)){
-      toast('이미 등록된 품목/작업스펙 조합입니다.'); return;
-    }
-    found.row.productId = productId;
-    found.row.spec = spec;
-    found.row.targetWeekly = targetWeekly;
-    saveSamsungVendors();
-    cancelSamsungVendorProductEdit();
-    renderSamsung();
-    toast('품목이 수정되었습니다.');
-    return;
-  }
-
-  if(hasSamsungVendorProductDuplicate(v, productId, spec)){
-    toast('이미 등록된 품목/작업스펙 조합입니다.'); return;
-  }
-  v.products.push({ id: samsungProductRowId(), productId, spec, targetWeekly, note: '' });
-  saveSamsungVendors();
-  clearSamsungVendorProductInputs(true);
-  renderSamsung();
-  toast('품목이 추가되었습니다.');
-}
-
-function editSamsungVendorProduct(vendorId, productRowId){
-  const found = findSamsungVendorProduct(vendorId, productRowId);
-  if(!found) return;
-  const lp = (labelProducts || []).find(x => String(x.id) === String(found.row.productId));
-  const vendorEl = document.getElementById('sw-prod-vendor');
-  const productEl = document.getElementById('sw-prod-product');
-  const productIdEl = document.getElementById('sw-prod-product-id');
-  const specEl = document.getElementById('sw-prod-spec');
-  const weeklyEl = document.getElementById('sw-prod-weekly');
-  if(vendorEl) vendorEl.value = found.vendor.id;
-  if(productEl) productEl.value = lp ? bulkProductLabel(lp) : '(삭제된 품목)';
-  if(productIdEl) productIdEl.value = found.row.productId || '';
-  if(specEl) specEl.value = found.row.spec || '';
-  if(weeklyEl) weeklyEl.value = parseAppNumber(found.row.targetWeekly) || '';
-  samsungVendorProductEditTarget = { vendorId: found.vendor.id, productRowId: found.row.id };
-  setSamsungVendorProductFormMode(true);
-  document.getElementById('sw-prod-product')?.scrollIntoView({behavior:'smooth', block:'center'});
-  toast('수정할 내용을 변경 후 [수정 저장]을 누르세요.', 2500);
-}
-
-function deleteSamsungVendorProduct(vendorId, productRowId){
-  const v = samsungVendors.find(x => x.id === vendorId);
-  if(!v || !v.products) return;
-  if(samsungVendorProductEditTarget &&
-     String(samsungVendorProductEditTarget.vendorId) === String(vendorId) &&
-     String(samsungVendorProductEditTarget.productRowId) === String(productRowId)){
-    cancelSamsungVendorProductEdit();
-  }
-  v.products = v.products.filter(p => p.id !== productRowId);
-  saveSamsungVendors();
-  renderSamsung();
-}
-
-function refreshSamsungVendorSelects(){
-  ['sw-prod-vendor','sw-delivery-vendor'].forEach(id => {
-    const sel = document.getElementById(id);
-    if(!sel) return;
-    const cur = sel.value;
-    const ph = id === 'sw-delivery-vendor' ? '<option value="">전체 거래처</option>' : '<option value="">-- 거래처 선택 --</option>';
-    sel.innerHTML = ph + samsungVendors.map(v => '<option value="'+v.id+'">'+htmlEscape(v.name)+'</option>').join('');
-    sel.value = cur;
-  });
-}
-
-function renderSamsungVendors(){
-  const tbody = document.getElementById('sw-vendor-tbody');
-  if(!tbody) return;
-  if(!samsungVendors.length){
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#888;">등록된 거래처가 없습니다.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = samsungVendors.map(v => `
-    <tr>
-      <td><strong>${htmlEscape(v.name)}</strong></td>
-      <td style="text-align:center;">${(v.products||[]).length}</td>
-      <td style="font-size:11px;color:#666;">${htmlEscape(v.note||'')}</td>
-      <td style="text-align:center;"><button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="deleteSamsungVendor('${v.id}')">삭제</button></td>
-    </tr>
-  `).join('');
-}
-
-function samsungProductLabel(lp){
-  return `${lp.name||''}${lp.origin?' / '+lp.origin:''}${lp.storage?' / '+lp.storage:''}${lp.packunit?' / '+lp.packunit:''}`;
-}
-
-function renderSamsungVendorProducts(){
-  const area = document.getElementById('sw-prod-area');
-  if(!area) return;
-  if(!samsungVendors.length){
-    area.innerHTML = '<div style="color:#888;text-align:center;padding:20px;font-size:13px;">먼저 거래처를 등록해주세요.</div>';
-    return;
-  }
-  area.innerHTML = samsungVendors.map(v => {
-    const products = v.products || [];
-    if(!products.length){
-      return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;padding:10px 14px;"><strong>${htmlEscape(v.name)}</strong><span style="color:#aaa;font-size:11px;margin-left:6px;">등록 품목 없음</span></div>`;
-    }
-    const rows = products.map(p => {
-      const lp = (labelProducts||[]).find(x => String(x.id) === String(p.productId));
-      const productLabel = lp ? samsungProductLabel(lp) : '(삭제된 품목)';
-      const price = lp ? (getPrice(lp.name, lp.origin, v.name) || 0) : 0;
-      const priceCell = price
-        ? `<span style="font-family:monospace;">${price.toLocaleString('ko-KR')}원</span>`
-        : `<span style="color:#e74c3c;font-size:11px;">단가표 미등록</span>`;
-      return `<tr>
-        <td>${htmlEscape(productLabel)}</td>
-        <td style="text-align:right;">${priceCell}</td>
-        <td style="text-align:right;">${p.targetWeekly ? p.targetWeekly.toLocaleString('ko-KR')+' KG' : '-'}</td>
-        <td style="font-size:11px;color:#666;">${htmlEscape(p.spec||'')}</td>
-        <td style="text-align:center;white-space:nowrap;">
-          <button class="btn btn-sm" style="background:#2980b9;color:#fff;font-size:11px;padding:2px 7px;margin-right:3px;" onclick="editSamsungVendorProduct(${jsArg(v.id)},${jsArg(p.id)})">수정</button>
-          <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 7px;" onclick="deleteSamsungVendorProduct(${jsArg(v.id)},${jsArg(p.id)})">삭제</button>
-        </td>
-      </tr>`;
-    }).join('');
-    return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-      <div style="background:#eef3fb;padding:8px 14px;font-weight:700;border-bottom:1px solid var(--border);">${htmlEscape(v.name)} <span style="color:#888;font-size:11px;font-weight:400;">— ${products.length}개 품목</span></div>
-      <div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
-        <thead><tr style="background:#fafafa;"><th>품목</th><th style="text-align:right;">단가</th><th style="text-align:right;">예상 주간량</th><th>작업스펙</th><th style="width:96px;text-align:center;">관리</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>
-    </div>`;
-  }).join('');
-}
-
-function getSamsungStockBuckets(){
-  const buckets = {};
-  const txns = (typeof transactions !== 'undefined' && Array.isArray(transactions)) ? transactions : userTransactions;
-  const stockTxns = txns
-    .map((t, idx) => ({t, idx}))
-    .filter(({t}) => ['입고','생산입고','출고','사용'].includes(String(t.type || '')))
-    .sort((a,b) => {
-      const ad = normProdDate(a.t.date || '');
-      const bd = normProdDate(b.t.date || '');
-      const d = ad.localeCompare(bd);
-      return d || (a.idx - b.idx);
-    });
-  stockTxns.forEach(({t}) => {
-    const type = String(t.type || '');
-    const weight = parseAppNumber(t.weight);
-    if(!weight) return;
-    let delta = 0;
-    if(type === '입고' || type === '생산입고') delta = weight;
-    else if(type === '출고' || type === '사용') delta = -weight;
-    else return;
-    let meta = normalizeSamsungMeta(t);
-    if(!meta && type === '사용') meta = inferSamsungMetaFromCurrentBuckets(buckets, t);
-    if(!meta) return;
-    const product = String(t.product || meta.productName || '').trim();
-    const packunit = String(t.packunit || meta.packunit || '').trim();
-    const origin = normalizeOriginName(t.origin || meta.origin || '');
-    const lot = String(t.lot || '').trim();
-    const key = samsungStockBucketKeyFromValues(meta, product, packunit, origin, lot);
-    if(!buckets[key]){
-      buckets[key] = {
-        vendorId: meta.vendorId,
-        vendorName: meta.vendorName,
-        productRowId: meta.productRowId,
-        productId: meta.productId,
-        product,
-        packunit,
-        origin,
-        lot,
-        spec: meta.spec || '',
-        targetWeekly: parseAppNumber(meta.targetWeekly),
-        totalIn: 0,
-        totalOut: 0,
-        stock: 0
-      };
-    }
-    if(delta > 0) buckets[key].totalIn += delta;
-    else buckets[key].totalOut += Math.abs(delta);
-    buckets[key].stock += delta;
-  });
-  return Object.values(buckets)
-    .filter(r => Math.abs(r.stock) > 0.01 || r.totalIn > 0 || r.totalOut > 0)
-    .sort((a,b)=>
-      String(a.vendorName||'').localeCompare(String(b.vendorName||''),'ko') ||
-      String(a.product||'').localeCompare(String(b.product||''),'ko') ||
-      String(a.spec||'').localeCompare(String(b.spec||''),'ko') ||
-      String(a.lot||'').localeCompare(String(b.lot||''),'ko')
-    );
-}
-
-function renderSamsungStock(){
-  const area = document.getElementById('sw-stock-area');
-  if(!area) return;
-  if(!samsungVendors.length){
-    area.innerHTML = '<div style="color:#888;text-align:center;padding:20px;font-size:13px;">먼저 거래처를 등록해주세요.</div>';
-    return;
-  }
-  const samsungRows = getSamsungStockBuckets();
-  area.innerHTML = samsungVendors.map(v => {
-    const rowsForVendor = samsungRows.filter(r => String(r.vendorId) === String(v.id));
-    if(!rowsForVendor.length){
-      return `<div style="margin-bottom:10px;color:#888;font-size:12px;padding:10px 14px;border:1px dashed var(--border);border-radius:6px;">${htmlEscape(v.name)} — 삼성향 생산 재고 없음</div>`;
-    }
-    const rows = rowsForVendor.map(r => {
-      const stock = parseAppNumber(r.stock);
-      const weekly = parseAppNumber(r.targetWeekly);
-      const weeks = weekly > 0 ? (stock / weekly) : null;
-      const stockColor = stock < -0.01 ? '#e74c3c' : (weekly > 0 && stock < weekly ? '#e74c3c' : (weekly > 0 && stock < weekly*2 ? '#e67e22' : '#27ae60'));
-      const weeksHtml = (weeks === null) ? '-' : (() => {
-        const c = weeks < 1 ? '#e74c3c' : (weeks < 2 ? '#e67e22' : '#27ae60');
-        return `<span style="color:${c};font-weight:700;">${weeks.toFixed(1)}주</span>`;
-      })();
-      return `<tr>
-        <td><strong>${htmlEscape(r.product)}</strong><span style="color:#888;font-size:11px;">${r.packunit ? ' / '+htmlEscape(r.packunit) : ''} / ${htmlEscape(r.origin||'-')}</span></td>
-        <td style="font-size:11px;color:#666;">${htmlEscape(r.spec||'-')}</td>
-        <td style="font-family:monospace;font-size:11px;">${htmlEscape(r.lot||'LOT 없음')}</td>
-        <td style="text-align:right;font-family:monospace;color:${stockColor};font-weight:700;">${stock.toLocaleString('ko-KR',{maximumFractionDigits:2})} KG</td>
-        <td style="text-align:right;font-size:11px;">${r.totalIn.toLocaleString('ko-KR',{maximumFractionDigits:2})} KG</td>
-        <td style="text-align:right;font-size:11px;">${r.totalOut.toLocaleString('ko-KR',{maximumFractionDigits:2})} KG</td>
-        <td style="text-align:right;">${weekly ? weekly.toLocaleString('ko-KR')+' KG' : '-'}</td>
-        <td style="text-align:right;font-size:11px;">${weeksHtml}</td>
-      </tr>`;
-    }).join('');
-    return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-      <div style="background:#eef3fb;padding:8px 14px;font-weight:700;border-bottom:1px solid var(--border);">${htmlEscape(v.name)} <span style="color:#888;font-size:11px;font-weight:400;">— LOT ${rowsForVendor.length}개</span></div>
-      <div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
-        <thead><tr style="background:#fafafa;"><th>품목</th><th>작업스펙</th><th>LOT</th><th style="text-align:right;">현재 재고</th><th style="text-align:right;">생산입고</th><th style="text-align:right;">출고/사용</th><th style="text-align:right;">예상 주간량</th><th style="text-align:right;">잔여 주수</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>
-    </div>`;
-  }).join('');
-}
-
-function samsungPeriodKey(dateStr, period){
-  const s = String(dateStr || '');
-  if(s.length < 10) return '?';
-  if(period === 'month') return s.slice(0, 7); // YYYY-MM
-  // 주별: 월요일 시작
-  const d = new Date(s);
-  if(isNaN(d)) return '?';
-  const day = d.getDay(); // 0=일
-  const monOffset = (day === 0 ? -6 : 1 - day);
-  const mon = new Date(d);
-  mon.setDate(d.getDate() + monOffset);
-  const y = mon.getFullYear();
-  const m = String(mon.getMonth()+1).padStart(2,'0');
-  const dd = String(mon.getDate()).padStart(2,'0');
-  return `${y}-${m}-${dd}주`;
-}
-
-function renderSamsungDelivery(){
-  const area = document.getElementById('sw-delivery-area');
-  if(!area) return;
-  if(!samsungVendors.length){
-    area.innerHTML = '<div style="color:#888;text-align:center;padding:20px;font-size:13px;">먼저 거래처를 등록해주세요.</div>';
-    return;
-  }
-  const period = document.getElementById('sw-period')?.value || 'week';
-  const vendorFilterId = document.getElementById('sw-delivery-vendor')?.value || '';
-  const fromMonth = document.getElementById('sw-delivery-from')?.value || '';
-  const toMonth = document.getElementById('sw-delivery-to')?.value || '';
-
-  const vendorPool = vendorFilterId ? samsungVendors.filter(v => v.id === vendorFilterId) : samsungVendors;
-  const vendorNames = vendorPool.map(v => v.name);
-
-  const txns = (typeof transactions !== 'undefined' && Array.isArray(transactions)) ? transactions : [];
-  const outRows = txns.filter(t => t.type === '출고' && vendorNames.includes(t.trader));
-  const filtered = outRows.filter(t => {
-    const date = String(t.date || '');
-    if(date.length < 7) return false;
-    const ym = date.slice(0, 7);
-    if(fromMonth && ym < fromMonth) return false;
-    if(toMonth && ym > toMonth) return false;
-    return true;
-  });
-
-  // vendorAgg[vendorName][periodKey] = { weight, amount, byProduct }
-  const vendorAgg = {};
-  filtered.forEach(t => {
-    const vName = t.trader || '';
-    const pk = samsungPeriodKey(t.date, period);
-    vendorAgg[vName] = vendorAgg[vName] || {};
-    vendorAgg[vName][pk] = vendorAgg[vName][pk] || { weight:0, amount:0, byProduct: {} };
-    const w = parseFloat(t.weight) || 0;
-    const a = parseFloat(t.amount) || 0;
-    vendorAgg[vName][pk].weight += w;
-    vendorAgg[vName][pk].amount += a;
-    const pkey = (t.product||'') + (t.origin?' ('+t.origin+')':'');
-    vendorAgg[vName][pk].byProduct[pkey] = (vendorAgg[vName][pk].byProduct[pkey] || 0) + w;
-  });
-
-  const orderedVendorNames = vendorNames.filter(n => vendorAgg[n]);
-  if(!orderedVendorNames.length){
-    area.innerHTML = '<div style="color:#888;text-align:center;padding:20px;">해당 기간 출고 내역이 없습니다.</div>';
-    return;
-  }
-
-  area.innerHTML = orderedVendorNames.map(vName => {
-    const periods = Object.keys(vendorAgg[vName]).sort();
-    const rows = periods.map(pk => {
-      const d = vendorAgg[vName][pk];
-      const prodList = Object.entries(d.byProduct)
-        .sort((a,b) => b[1]-a[1])
-        .map(([k,w]) => `${htmlEscape(k)}: ${w.toLocaleString('ko-KR',{maximumFractionDigits:2})}KG`)
-        .join(', ');
-      return `<tr>
-        <td><strong>${htmlEscape(pk)}</strong></td>
-        <td style="text-align:right;font-family:monospace;">${d.weight.toLocaleString('ko-KR',{maximumFractionDigits:2})} KG</td>
-        <td style="text-align:right;font-family:monospace;">${d.amount.toLocaleString('ko-KR')} 원</td>
-        <td style="font-size:11px;color:#666;">${prodList}</td>
-      </tr>`;
-    }).join('');
-    const totalW = periods.reduce((s,pk)=>s+vendorAgg[vName][pk].weight, 0);
-    const totalA = periods.reduce((s,pk)=>s+vendorAgg[vName][pk].amount, 0);
-    return `<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-      <div style="background:#eef3fb;padding:8px 14px;font-weight:700;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <span>${htmlEscape(vName)}</span>
-        <span style="font-size:12px;color:#555;font-weight:400;">합계: ${totalW.toLocaleString('ko-KR',{maximumFractionDigits:2})}KG · ${totalA.toLocaleString('ko-KR')}원</span>
-      </div>
-      <div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
-        <thead><tr style="background:#fafafa;"><th>${period==='month'?'월':'주'}</th><th style="text-align:right;">납품량</th><th style="text-align:right;">금액</th><th>품목별 내역</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>
-    </div>`;
-  }).join('');
-}
-
-function renderSamsung(){
-  refreshSamsungVendorSelects();
-  renderSamsungVendors();
-  renderSamsungVendorProducts();
-  renderSamsungStock();
-  renderSamsungDelivery();
-}
-
-function initSamsung(){
-  // 월 필터 기본값 — 최근 3개월
-  const fromEl = document.getElementById('sw-delivery-from');
-  const toEl = document.getElementById('sw-delivery-to');
-  if(fromEl && !fromEl.value){
-    const d = new Date(); d.setMonth(d.getMonth() - 2);
-    fromEl.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-  }
-  if(toEl && !toEl.value){
-    const d = new Date();
-    toEl.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-  }
-  renderSamsung();
-}
 
 </script>
 <script src="company-master.js?v=20260827requiredlogin1"></script>
@@ -21659,9 +20960,9 @@ function initSamsung(){
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
 <script src="trace-integration.js?v=20260827m05preview1"></script>
 <script src="submaterial-usage-print.js?v=20260907a4usage1"></script>
-<script src="stock-report.js?v=20260907stockdate1"></script>
+<script src="stock-report.js?v=20260913rowstock1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
-<script src="m02-auth.js?v=20260908temp1"></script>
+<script src="m02-auth.js?v=20260913rowstock1"></script>
 </body>
 </html>

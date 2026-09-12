@@ -30,7 +30,7 @@ const server=http.createServer((req,res)=>{
         {id:'prod-a',name:'냉장돈등심(치즈용)',kind:'제품',brand:'A',origin:'국내산',meattype:'돼지고기',storage:'냉장',shelfdays:30,itemno:'202502930935',grade:'1',packunit:'5KG'},
         {id:'prod-b',name:'냉장돈등심(치즈용)',kind:'제품',brand:'B',origin:'국내산',meattype:'돼지고기',storage:'냉장',shelfdays:30,itemno:'202502930936',grade:'2',packunit:'10KG'}];
       let stocks=[{key:'raw-1',product:'돈등심 원료',lot:'LOT-111',origin:'국내산',stock:100,price:5000,stockLocation:'가공장',brand:'원료',grade:'1',factoryNo:'F1'},
-        {key:'raw-2',product:'돈등심 원료',lot:'LOT-222',origin:'국내산',stock:55,price:6000,stockLocation:'가공장'},
+        {key:'raw-2',product:'돈등심 원료',lot:'LOT-222',origin:'국내산',stock:55,price:6000,stockLocation:'가공장',stockRowId:'qa-source-row',stockNote:'가상 거래처 / 5mm'},
         {key:'raw-3',product:'돈등심 원료',lot:'LOT-333',origin:'국내산',stock:80,price:5000,stockLocation:'외부창고'}];
       const LBL_DEFAULTS={};window.calls=[];window.alerts=[];window.alert=message=>alerts.push(message);
       const htmlEscape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -69,7 +69,7 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator('#wo-itemno').inputValue(),'202502930936');assert.equal(await page.locator('#wo-temptype').inputValue(),'냉장');
     assert.equal(await page.locator('#wo-lot').inputValue(),'LOT-222');
     await page.locator('#wo-input-weight').fill('100');await page.evaluate(()=>saveWorkOrder());
-    const order=await page.evaluate(()=>workOrders[0]);assert.equal(order.weight,0);assert.equal(order.labelProductId,'prod-b');assert.equal(order.sourceStock.key,'raw-2');
+    const order=await page.evaluate(()=>workOrders[0]);assert.equal(order.weight,0);assert.equal(order.labelProductId,'prod-b');assert.equal(order.sourceStock.key,'raw-2');assert.equal(order.sourceStock.stockRowId,'qa-source-row');assert.equal(order.sourceStock.stockNote,'가상 거래처 / 5mm');
     assert.deepEqual(await page.evaluate(()=>alerts),[],'Work order should save without label weight');
     await page.evaluate(()=>{editWorkOrder('qa-workorder');stocks=[];});
     assert.equal((await page.evaluate(()=>collectWorkOrderForm())).sourceStock.key,'raw-2','Keep historical source snapshot when stock is depleted');

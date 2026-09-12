@@ -94,6 +94,7 @@ const TX_HEADERS = [
   'weight','price','amount','note','_isUser','_isProdUse','_isProdOut','_prodId',
   '_isStockAdjust','stockBefore','stockActual',
   'stockUnitPrice','stockProddate','sourceStockKey','stockLocation','fromLocation','toLocation',
+  'stockRowId','stockNote',
   'updatedAt','deletedAt'
 ];
 const PRICE_HEADERS = ['id','product','origin','trader','price','updatedAt','deletedAt'];

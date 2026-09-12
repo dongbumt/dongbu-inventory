@@ -19,7 +19,7 @@
     const totalAmount = rows.reduce((sum, row) => sum + Math.round(number(row.stock) * number(row.price)), 0);
     const stockRows = rows.map((row, i) => `<tr>
       <td class="center">${i + 1}</td><td>${cell(row.stockLocation)}</td>
-      <td><strong>${cell(row.product)}</strong>${row.packunit ? `<span class="detail">${escapeHtml(row.packunit)}</span>` : ''}</td>
+      <td><strong>${cell(row.product)}</strong>${row.packunit ? `<span class="detail">${escapeHtml(row.packunit)}</span>` : ''}${row.stockNote ? `<span class="detail">비고: ${escapeHtml(row.stockNote)}</span>` : ''}${row.stockRowId ? `<span class="detail">관리번호: ${escapeHtml(row.stockRowId)}</span>` : ''}</td>
       <td>${cell(row.brand)}<span class="detail">${cell(row.grade)}</span></td>
       <td>${cell(row.lot)}<span class="detail">${cell(row.proddate)}</span></td><td>${cell(row.origin)}</td>
       <td class="number">${qty(row.total_in)}</td><td class="number">${qty(row.total_use)}</td>
@@ -70,7 +70,7 @@
   <div class="conditions">지점: ${escapeHtml(filters.location || '전체 지점')} / 상태: ${escapeHtml(filters.status || '전체(소진포함)')} / 검색: ${escapeHtml(filters.query || '전체')} · 중량: KG / 금액: 원</div>
   <table aria-label="기준일 재고현황">
     <colgroup><col style="width:3%"><col style="width:6%"><col style="width:17%"><col style="width:8%"><col style="width:14%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%"><col style="width:3%"></colgroup>
-    <thead><tr><th>No.</th><th>지점</th><th>품목명 / 포장규격</th><th>브랜드 / 등급</th><th>이력번호 / 생산일</th><th>원산지</th><th>총입고</th><th>총사용</th><th>총출고</th><th>조정</th><th>재고</th><th>단가</th><th>재고금액</th><th>상태</th></tr></thead>
+    <thead><tr><th>No.</th><th>지점</th><th>품목 / 포장 / 비고</th><th>브랜드 / 등급</th><th>이력번호 / 생산일</th><th>원산지</th><th>총입고</th><th>총사용</th><th>총출고</th><th>조정</th><th>재고</th><th>단가</th><th>재고금액</th><th>상태</th></tr></thead>
     <tbody>${stockRows || '<tr><td colspan="14" class="center">선택한 기준일과 조회조건에 해당하는 재고가 없습니다.</td></tr>'}</tbody>
   </table>
   ${warning ? `<div class="warning">${escapeHtml(warning)}</div>` : ''}
