@@ -21,7 +21,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20260827m05preview1">
+<link rel="stylesheet" href="styles/main.css?v=20260913stockwidth1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -1262,7 +1262,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <th onclick="stockSort('price')" style="text-align:right;cursor:pointer;user-select:none;">단가 <span id="ss-price"></span></th>
           <th onclick="stockSort('stock_amount')" style="text-align:right;cursor:pointer;user-select:none;">재고금액 <span id="ss-stock_amount"></span></th>
           <th>상태</th>
-          <th style="min-width:200px;">비고 / 관리번호</th>
+          <th class="stock-col-note">비고 / 관리번호</th>
           <th id="stock-manage-head" class="stock-col-manage">관리</th>
         </tr></thead>
         <tbody id="stock-body"></tbody>
@@ -11736,7 +11736,7 @@ function renderStock(){
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
-      <td style="min-width:200px;max-width:320px;white-space:normal;overflow-wrap:anywhere;color:#444;">${htmlEscape(s.stockNote||'')}${s.stockRowId ? `<div style="font-size:10px;color:#777;">${htmlEscape(s.stockRowId)}</div>` : ''}</td>
+      <td class="stock-col-note">${htmlEscape(s.stockNote||'')}${s.stockRowId ? `<div style="font-size:10px;color:#777;">${htmlEscape(s.stockRowId)}</div>` : ''}</td>
       ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})">정리</button></td>` : ''}
     </tr>`;
   }).join('');
