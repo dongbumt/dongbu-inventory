@@ -152,6 +152,20 @@ ERP의 `배송기사근태` 메뉴에서 기사 계정을 설정합니다. 근�
 
 인쇄 검증: `node tools/test-label-print-layout.cjs` (Playwright, `pngjs`, Poppler `pdfinfo`·`pdftoppm`, Python `pypdf` 필요; 필요 시 `PYTHON_PATH`로 Python 경로 지정). 실제 프린터·업무 데이터에 접근하지 않고 두 용지 크기의 PDF 페이지 수, 상하 여백, 머리글·바닥글 제외, 제조원 주소, 인쇄용 팝업의 로딩 완료, 미리보기·재시도·이미지 실패 시 중단을 검사합니다. ERP 본 화면과 라벨전용 화면의 PDF를 203dpi로 렌더링하여 우측 3mm 여유, 테두리 연속성, HACCP의 진한 흑백 표시와 흰 글자 보존도 확인합니다.
 
+### 라벨 PC 원클릭 인쇄 (Edge)
+
+사용자 동의를 받은 **POS-PC의 현재 Windows 사용자**에만 `tools/set-label-edge-silent-printing.ps1 -Action Enable`을 실행합니다. 기본 동작인 `-Action Status`는 조회만 하며 `-Action Restore`는 적용 전 값을 복원합니다. 설정 명령 자체는 라벨을 출력하지 않습니다. 사무실 PC에서는 실행이 차단됩니다.
+
+Microsoft Edge 144 이상에서 공식 `SilentPrintingEnabled` 정책을 사용합니다. **ERP 전용 창에 한정되지 않고 해당 Windows 사용자의 모든 Edge 프로필**에서 인쇄 확인 없이 Windows 기본 프린터·기본 설정으로 출력됩니다. 인쇄 미리보기가 잠깐 보였다 자동으로 닫힐 수 있으며, 웹페이지가 만든 라벨 창 자체를 없애는 기능은 아닙니다. 다른 웹페이지·PDF의 인쇄에도 적용되므로 사용 범위에 대한 동의가 필요합니다. 근거: [Microsoft 자동인쇄 정책](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/SilentPrintingEnabled).
+
+명령은 `DBMT_ERP_LABEL_70x100` / `USB001` 기본 프린터, Edge 버전, 세로 방향과 약 100mm 용지 높이를 확인합니다. 현장 드라이버에서 조회된 72.39×100.08mm 용지값은 첫 1장 검증을 위해 허용하지만, 이를 실제 70mm 폭으로 간주하거나 자동으로 고치지는 않습니다. 브라우저·드라이버·실물 출력은 별도 확인이 필요합니다. 기본 프린터가 나중에 바뀌면 자동인쇄 대상도 바뀝니다.
+
+변경 대상은 `HKCU\Software\Policies\Microsoft\Edge`의 `SilentPrintingEnabled` DWORD 값 하나뿐입니다. 최초 값을 `%LOCALAPPDATA%\DBMT-Label-Setup\edge-silent-printing-backup.json`에 보관하며 재실행 시 덮어쓰지 않습니다. 복원은 원래 없던 값이면 그 값만 제거하고, 원래 있던 값이면 그대로 복구합니다. 적용 후 다른 작업이 정책을 변경했거나 백업 사용자·컴퓨터가 다르면 덮어쓰지 않습니다. HKLM 정책, SM, 프린터 기본값/용지/농도/속도, Edge 사용자 프로필과 업무 데이터는 변경하지 않습니다. 브라우저를 강제 종료하거나 자동으로 인쇄하지도 않습니다.
+
+적용 전 열린 인쇄창을 닫습니다. 적용 후 Edge의 `edge://policy`에서 **정책 다시 로드 → SilentPrintingEnabled = true / 상태 OK**를 확인하고, 기존 라벨 **1장만 재출력**합니다. 확인창이 남거나 위 여백·하단 잘림이 있으면 반복 출력하지 말고 결과를 확인합니다. 필요 시 `-Action Restore` 후 정책을 다시 로드합니다. 레지스트리에 값이 기록된 것만으로 Edge 정책 적용 또는 실물 출력 성공으로 판단하지 않습니다.
+
+검증: Windows PowerShell에서 `tools/test-label-edge-silent-printing.ps1`. 레지스트리·프린터·백업 저장을 모두 테스트 대체 구현으로 바꿔, 실제 PC 설정이나 출력 없이 적용·복원·재실행·안전 조건을 검사합니다.
+
 ### 라벨 생산완료 → 생산일보
 
 라벨전용 화면에서 **생산완료 · 생산일보 전송**을 누르면, 작업지시의 투입 원료·중량과 정상 출력 라벨의 품목·LOT·중량 합계를 생산일보에 등록합니다. 취소 라벨과 재출력 횟수는 생산량에 더하지 않습니다. 작업일은 작업지시 일자이며, 원료 사용과 생산품 입고도 같은 날짜로 함께 반영합니다.
