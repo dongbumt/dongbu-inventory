@@ -34,6 +34,9 @@ for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script
       assert.equal(bounds.width,1280);assert.equal(bounds.height,1024);assert.deepEqual(bounds.outside,[],'All controls inside target monitor');assert.deepEqual(bounds.tiny,[],'44px minimum hit targets');assert.deepEqual(bounds.panelOverflow,[],'No controls overlapping adjacent panels');
       const production=()=>screen.locator('[data-metric="production"]').textContent();
       const visiblePrint=kind=>screen.locator(`button[data-action="print"][data-kind="${kind}"]:visible`);
+      assert.match(await screen.locator('[data-metric="scale"]').textContent(),/2\.48/);
+      assert.match(await screen.locator('[data-applied="outer"]').textContent(),/2\.48/);
+      await screen.getByRole('button',{name:'외포장 고정중량',exact:true}).click();
       assert.equal(await production(),'120 kg');
       await visiblePrint('inner').click();await visiblePrint('inner').click();
       assert.equal(await production(),'120 kg');assert.equal(await screen.locator('[data-metric="inner"]').textContent(),'20장');
@@ -53,6 +56,24 @@ for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script
       await screen.locator('button[data-action="preview"]:visible').first().click();assert(await screen.getByRole('dialog').isVisible());await page.keyboard.press('Escape');
       assert.equal(context.pages().length,1);
       console.log(`PASS ${layout}: inner exclusion, outer accumulation, independent weights/copies, keypad validation, calculator, job retention, outer-only completion, preview`);
+      await screen.locator('.dp-order[data-job="1"]').click();
+      const setScale=async(value,status)=>{
+        await screen.getByRole('button',{name:'계근중량 시연 설정',exact:true}).click();
+        const d=screen.getByRole('dialog');await d.getByLabel('시연 중량',{exact:true}).fill(String(value));await d.getByLabel('시연 수신 상태').selectOption(status);await d.getByRole('button',{name:'시연 적용',exact:true}).click();
+      };
+      assert.equal(await production(),'30 kg');
+      await visiblePrint('outer').click();assert.equal(await production(),'32.48 kg');
+      await screen.getByRole('button',{name:'내포장 계근중량',exact:true}).click();await visiblePrint('inner').click();assert.equal(await production(),'32.48 kg');
+      assert(await screen.getByRole('button',{name:'외포장 매수 늘리기',exact:true}).isDisabled());
+      await setScale(4.2,'stable');assert.match(await screen.locator('[data-applied="outer"]').textContent(),/4\.20/);assert.match(await screen.locator('[data-applied="inner"]').textContent(),/4\.20/);
+      await screen.getByRole('button',{name:'최근 라벨 재출력',exact:true}).click();assert.match(await screen.locator('.dp-status').textContent(),/2\.48 kg/);assert.equal(await production(),'32.48 kg');
+      await visiblePrint('outer').click();assert.equal(await production(),'36.68 kg');
+      for(const [weight,status] of [[3,'moving'],[3,'offline'],[0,'stable']]){
+        await setScale(weight,status);assert(await visiblePrint('outer').isDisabled());assert(await visiblePrint('inner').isDisabled());assert.match(await screen.locator('[data-applied="outer"]').textContent(),/—/);assert.equal(await production(),'36.68 kg');
+      }
+      await screen.getByRole('button',{name:'외포장 고정중량',exact:true}).click();assert(!(await visiblePrint('outer').isDisabled()));assert.match(await screen.getByRole('button',{name:'외포장 중량 수정',exact:true}).textContent(),/5\.00/);
+      await setScale(2.48,'stable');await screen.getByRole('button',{name:'외포장 계근중량',exact:true}).click();
+      console.log(`PASS ${layout}: live sample -> label weight, separate modes, one-per-weigh, inner exclusion, reprint snapshot, moving/offline/zero interlocks, fixed-weight fallback`);
     }
     for(const width of [1024,736,320]){
       await page.setViewportSize({width,height:1024});

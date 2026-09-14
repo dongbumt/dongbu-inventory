@@ -1,14 +1,14 @@
 <div id="dbmt-packaging-proposals" lang="ko" aria-label="내포장·외포장 라벨 터치화면 3안 비교">
-  <section class="dp-proposal" data-layout="split" aria-label="1안 좌우 분리형">
-    <h2>1안 · 좌우 분리형 <span>기존 균형형 유지 · 내포장과 외포장을 나란히</span></h2>
+  <section class="dp-proposal" data-layout="split" aria-label="1안 균형형">
+    <h2>1안 · 균형형 <span>상단 계근중량 + 내포장·외포장 좌우 배치</span></h2>
     <div class="dp-screen"></div>
   </section>
-  <section class="dp-proposal" data-layout="rows" aria-label="2안 위아래 분리형">
-    <h2>2안 · 위아래 분리형 <span>중량부터 출력까지 한 줄로</span></h2>
+  <section class="dp-proposal" data-layout="rows" aria-label="2안 작업 분리형">
+    <h2>2안 · 작업 분리형 <span>왼쪽 계근중량 + 오른쪽 내포장·외포장 위아래 배치</span></h2>
     <div class="dp-screen"></div>
   </section>
-  <section class="dp-proposal" data-layout="dock" aria-label="3안 하단 큰 버튼형">
-    <h2>3안 · 하단 큰 버튼형 <span>설정은 위쪽 · 반복 출력 버튼은 아래쪽</span></h2>
+  <section class="dp-proposal" data-layout="dock" aria-label="3안 계근 집중형">
+    <h2>3안 · 계근 집중형 <span>더 큰 계근중량 + 하단 큰 출력 버튼</span></h2>
     <div class="dp-screen"></div>
   </section>
 </div>
@@ -111,6 +111,48 @@
   #dbmt-packaging-proposals .dp-error { font-size:16px; }
   #dbmt-packaging-proposals .dp-proof { background:var(--dp-paper); border:2px solid var(--dp-ink); padding:16px; display:grid; gap:12px; }
   #dbmt-packaging-proposals .dp-proof > div { border-bottom:1px solid var(--dp-line); padding-bottom:10px; }
+  #dbmt-packaging-proposals .dp-scale-home { min-width:0; }
+  #dbmt-packaging-proposals .dp-job-head .dp-scale-home { width:40%; flex-shrink:0; }
+  #dbmt-packaging-proposals .dp-scale-readout { display:grid; grid-template-columns:1fr auto; align-items:center; gap:4px 10px; width:100%; min-height:100px; background:var(--dp-soft); text-align:left; padding:8px 12px; }
+  #dbmt-packaging-proposals .dp-scale-readout > strong { grid-row:2; grid-column:1/-1; justify-self:end; font-size:clamp(42px,4.68cqi,60px); font-weight:500; line-height:1.1; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  #dbmt-packaging-proposals .dp-scale-readout > strong small { font-size:18px; margin-left:4px; }
+  #dbmt-packaging-proposals .dp-scale-state { grid-row:1; grid-column:2; text-align:right; font-size:clamp(13px,1.17cqi,15px); }
+  #dbmt-packaging-proposals .dp-mode { display:grid; grid-template-columns:1fr 1fr; gap:8px; grid-column:1/-1; }
+  #dbmt-packaging-proposals .dp-mode button { min-height:52px; font-size:clamp(16px,1.4cqi,18px); padding:6px; }
+  #dbmt-packaging-proposals .dp-mode button[aria-pressed="true"] { background:var(--dp-dark); color:var(--dp-paper); border-color:var(--dp-dark); }
+  #dbmt-packaging-proposals .dp-weight { min-height:72px; }
+  #dbmt-packaging-proposals .dp-weight-live { cursor:default; border:2px solid #646d75; }
+  #dbmt-packaging-proposals .dp-weight-live strong { font-size:clamp(31px,3.44cqi,44px); }
+  #dbmt-packaging-proposals .dp-pack { gap:8px; }
+  #dbmt-packaging-proposals .dp-fields { gap:8px; }
+  #dbmt-packaging-proposals .dp-pack-title { font-size:clamp(21px,2.03cqi,26px); }
+  #dbmt-packaging-proposals .dp-rule { margin-top:4px; }
+  #dbmt-packaging-proposals .dp-left > .dp-scale-home:empty { display:none; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-left { grid-template-rows:auto auto minmax(0,1fr); }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-order { min-height:66px; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-scale-readout { min-height:110px; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-fields { gap:8px; align-content:start; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-mode { grid-template-columns:1fr 1fr; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-scale-state { grid-column:2; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-job-head .dp-scale-home { width:48%; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-scale-readout > strong { font-size:clamp(52px,6.1cqi,78px); }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-scale-readout { min-height:124px; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-dock .dp-print { min-height:124px; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-pack-bottom { display:none; }
+  #dbmt-packaging-proposals [data-layout="split"] .dp-pack-bottom .dp-preview { display:none; }
+  #dbmt-packaging-proposals .dp-sim-fields { display:grid; gap:12px; }
+  #dbmt-packaging-proposals .dp-sim-fields label { display:grid; gap:6px; }
+  @container (max-width:900px) {
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-left { grid-template-columns:1fr 1fr; grid-template-rows:auto auto; }
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-left > .dp-calc { grid-column:2; grid-row:1/span 2; }
+    #dbmt-packaging-proposals .dp-job-head .dp-scale-home { width:46%; }
+  }
+  @container (max-width:570px) {
+    #dbmt-packaging-proposals [data-layout="dock"] .dp-pack-head { flex-wrap:wrap; }
+    #dbmt-packaging-proposals .dp-job-head .dp-scale-home, #dbmt-packaging-proposals [data-layout="dock"] .dp-job-head .dp-scale-home { width:100%; }
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-left { grid-template-columns:1fr; grid-template-rows:auto auto auto; }
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-left > .dp-calc { grid-column:1; grid-row:3; }
+  }
   @container (min-width:901px) and (max-width:1199px) {
     #dbmt-packaging-proposals .dp-screen { aspect-ratio:auto; min-height:960px; }
   }
@@ -166,31 +208,39 @@
   const screens=[];
   for(const proposal of root.querySelectorAll('.dp-proposal')){
     const screen=proposal.querySelector('.dp-screen'),layout=proposal.dataset.layout;
-    const state={job:0,records:jobs.map(job=>({production:job.production,inner:job.inner,outer:job.outer,complete:false,last:null,innerSettings:{weight:job.innerWeight,copies:1},outerSettings:{weight:job.outerWeight,copies:1}})),calc:{value:'0',stored:null,op:null,fresh:false},edit:null};
+    const state={job:0,scale:{value:2.48,status:'stable'},records:jobs.map(job=>({production:job.production,inner:job.inner,outer:job.outer,complete:false,last:null,innerSettings:{weight:job.innerWeight,copies:1,mode:'fixed'},outerSettings:{weight:job.outerWeight,copies:1,mode:'scale'}})),calc:{value:'0',stored:null,op:null,fresh:false},edit:null};
     const record=()=>state.records[state.job];
     const settings=kind=>record()[`${kind}Settings`];
     const notify=text=>{screen.querySelector('.dp-status').textContent=text;};
+    const scaleReady=()=>state.scale.status==='stable'&&Number.isFinite(state.scale.value)&&state.scale.value>0;
+    const scaleStatus=()=>({stable:state.scale.value>0?'안정 · 예시':'0 kg · 출력 대기',moving:'흔들림 · 계근 출력 대기',offline:'연결 끊김 · 출력 불가'}[state.scale.status]);
+    const outputWeight=kind=>settings(kind).mode==='scale'?(scaleReady()?state.scale.value:null):settings(kind).weight;
+    const outputCopies=kind=>settings(kind).mode==='scale'?1:settings(kind).copies;
+    function scaleMarkup(){
+      return button(`<span>현재 계근중량</span><strong data-metric="scale">${state.scale.status==='offline'?'—':state.scale.value.toFixed(2)}<small>kg</small></strong><span class="dp-scale-state">${scaleStatus()}</span>`,'scale','dp-scale-readout','aria-label="계근중량 시연 설정"');
+    }
     function printButton(kind){
-      const s=settings(kind);
-      const disabled=kind==='outer'&&record().complete?'disabled':'';
-      return button(`<span>${packName(kind)}라벨출력</span><small>${s.copies}장 · ${kind==='inner'?'생산 집계 제외':`생산 +${number(s.weight*s.copies)} kg`}</small>`,'print','dp-print',`data-kind="${kind}" ${disabled}`);
+      const weight=outputWeight(kind),copies=outputCopies(kind);
+      const disabled=(kind==='outer'&&record().complete)||weight===null?'disabled':'';
+      return button(`<span>${packName(kind)}라벨출력</span><small>${weight===null?'계근중량 확인 대기':`${copies}장 · ${kind==='inner'?'생산 집계 제외':`생산 +${number(weight*copies)} kg`}`}</small>`,'print','dp-print',`data-kind="${kind}" ${disabled}`);
     }
     function packageMarkup(kind){
-      const s=settings(kind),inner=kind==='inner';
+      const s=settings(kind),inner=kind==='inner',scale=s.mode==='scale',weight=outputWeight(kind),copies=outputCopies(kind),lock=scale?'disabled':'';
       return `<section class="dp-panel dp-pack" data-kind="${kind}" aria-label="${packName(kind)} 라벨 설정">
-        <div class="dp-pack-head"><div><div class="dp-pack-title">${packName(kind)} ${inner?'· 진공지':'· 박스'}</div><span class="dp-rule">${inner?'생산량에 포함하지 않음':'외포장 출력만 생산량에 포함'}</span></div></div>
+        <div class="dp-pack-head"><div><div class="dp-pack-title">${packName(kind)} ${inner?'· 진공지':'· 박스'}</div><span class="dp-rule">${inner?'생산량에 포함하지 않음':'외포장 출력만 생산량에 포함'}</span></div>${layout!=='rows'?button('미리보기','preview','dp-preview',`data-kind="${kind}" aria-label="${packName(kind)} 라벨 미리보기"`):''}</div>
         <div class="dp-fields">
-          <div><div class="dp-field-label"><span>1장 중량</span><span class="dp-small">터치 입력</span></div>${button(`<strong>${s.weight.toFixed(2)}</strong><small>kg</small>`,'edit','dp-weight',`data-kind="${kind}" data-field="weight" aria-label="${packName(kind)} 중량 수정"`)}
-            <div class="dp-presets">${(inner?[1,2,5]:[5,10,20]).map(value=>button(`${value} kg`,'preset','',`data-kind="${kind}" data-value="${value}" aria-pressed="${s.weight===value}"`)).join('')}</div>
+          <div class="dp-mode">${button('고정중량','mode','',`data-kind="${kind}" data-mode="fixed" aria-pressed="${!scale}" aria-label="${packName(kind)} 고정중량"`)}${button('계근중량','mode','',`data-kind="${kind}" data-mode="scale" aria-pressed="${scale}" aria-label="${packName(kind)} 계근중량"`)}</div>
+          <div><div class="dp-field-label"><span>라벨 적용 중량</span><span class="dp-small">${scale?'저울에서 자동':'터치 입력'}</span></div>${scale?`<div class="dp-weight dp-weight-live" data-applied="${kind}" role="status" aria-label="${packName(kind)} 라벨 계근중량"><strong>${weight===null?'—':weight.toFixed(2)}</strong><small>kg</small></div>`:button(`<strong>${s.weight.toFixed(2)}</strong><small>kg</small>`,'edit','dp-weight',`data-kind="${kind}" data-field="weight" aria-label="${packName(kind)} 중량 수정"`)}
           </div>
-          <div><div class="dp-field-label"><span>출력 매수</span><span class="dp-small">장</span></div><div class="dp-stepper">${button('−','adjust','dp-adjust',`data-kind="${kind}" data-delta="-1" aria-label="${packName(kind)} 매수 줄이기"`)}${button(s.copies,'edit','dp-count',`data-kind="${kind}" data-field="copies" aria-label="${packName(kind)} 매수 입력"`)}${button('+','adjust','dp-adjust',`data-kind="${kind}" data-delta="1" aria-label="${packName(kind)} 매수 늘리기"`)}</div><div class="dp-effect">${inner?'몇 장을 출력해도 생산량 그대로':`출력 시 생산량 +${number(s.weight*s.copies)} kg`}</div></div>
+          <div><div class="dp-field-label"><span>출력 매수</span><span class="dp-small">${scale?'계근당 1장':'장'}</span></div><div class="dp-stepper">${button('−','adjust','dp-adjust',`data-kind="${kind}" data-delta="-1" aria-label="${packName(kind)} 매수 줄이기" ${lock}`)}${button(copies,'edit','dp-count',`data-kind="${kind}" data-field="copies" aria-label="${packName(kind)} 매수 입력" ${lock}`)}${button('+','adjust','dp-adjust',`data-kind="${kind}" data-delta="1" aria-label="${packName(kind)} 매수 늘리기" ${lock}`)}</div><div class="dp-effect">${weight===null?'저울 상태 확인 필요':scale?'출력 시 안정 중량 사용':inner?'생산량 추가 없음':`생산량 +${number(weight*copies)} kg`}</div></div>
         </div>
         <div class="dp-pack-bottom">${printButton(kind)}${button('라벨 미리보기','preview','dp-preview',`data-kind="${kind}"`)}</div>
       </section>`;
     }
     function renderWork(){
       const job=jobs[state.job],r=record();
-      screen.querySelector('.dp-job').innerHTML=`<div class="dp-job-head"><div><div class="dp-product">${job.name}</div><div class="dp-small">작업 ${String(state.job+1).padStart(2,'0')} · ${job.origin} · LOT ${job.lot}</div></div><span class="dp-small">70 × 100 mm</span></div><div class="dp-metrics"><div><span class="dp-small">원료 투입중량</span><strong>${number(job.input)} kg</strong></div><div><span class="dp-small">외포장 기준 생산량</span><strong data-metric="production">${number(r.production)} kg</strong></div><div><span class="dp-small">외포장 출력 수</span><strong data-metric="outer">${r.outer}장</strong></div></div>`;
+      screen.querySelector('.dp-job').innerHTML=`<div class="dp-job-head"><div><div class="dp-product">${job.name}</div><div class="dp-small">작업 ${String(state.job+1).padStart(2,'0')} · ${job.origin}<br>LOT ${job.lot} · 70 × 100 mm</div></div>${layout==='rows'?'':`<div class="dp-scale-home">${scaleMarkup()}</div>`}</div><div class="dp-metrics"><div><span class="dp-small">원료 투입중량</span><strong>${number(job.input)} kg</strong></div><div><span class="dp-small">외포장 기준 생산량</span><strong data-metric="production">${number(r.production)} kg</strong></div><div><span class="dp-small">외포장 출력 수</span><strong data-metric="outer">${r.outer}장</strong></div></div>`;
+      screen.querySelector('.dp-left > .dp-scale-home').innerHTML=layout==='rows'?scaleMarkup():'';
       screen.querySelector('.dp-pack-area').innerHTML=packageMarkup('inner')+packageMarkup('outer')+`<div class="dp-dock">${printButton('inner')}${printButton('outer')}</div>`;
       const last=r.last;
       screen.querySelector('.dp-bottom').innerHTML=`<div class="dp-last"><span>내포장 인쇄 <strong data-metric="inner">${r.inner}장</strong> · 집계 제외</span><span class="dp-small">${last?`최근 ${packName(last.kind)} · ${number(last.weight)} kg × ${last.copies}장`:'최근 외포장 · '+number(job.outerWeight)+' kg × 1장'}</span>${button('재출력','reprint','','aria-label="최근 라벨 재출력"')}</div><div class="dp-complete"><div><strong>전송 ${number(r.production)} kg</strong><span class="dp-small">외포장 생산량만</span></div>${button(r.complete?'전송 완료 · 시연':'생산완료 · 전송','complete','',r.complete?'disabled':'')}</div>`;
@@ -202,18 +252,18 @@
       closeDialog();focusBefore=document.activeElement;
       const overlay=document.createElement('div');overlay.className='dp-overlay';
       overlay.innerHTML=`<section class="dp-dialog" role="dialog" aria-modal="true" aria-label="${title}"><h3>${title}</h3>${body}<div class="dp-error" role="alert"></div><div class="dp-dialog-actions">${actions}</div></section>`;
-      screen.appendChild(overlay);overlay.querySelector('input,button')?.focus();
+      screen.appendChild(overlay);overlay.querySelector('input,select,button')?.focus();
       overlay.addEventListener('keydown',event=>{
         if(event.key==='Escape'){closeDialog();return;}
         if(event.key!=='Tab')return;
-        const items=[...overlay.querySelectorAll('button:not(:disabled),input:not(:disabled)')];
+        const items=[...overlay.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled)')];
         if(event.shiftKey&&document.activeElement===items[0]){event.preventDefault();items.at(-1).focus();}
         else if(!event.shiftKey&&document.activeElement===items.at(-1)){event.preventDefault();items[0].focus();}
       });
     }
     const calcKeys=['AC','⌫','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='];
     screen.innerHTML=`<header class="dp-top"><span class="dp-brand">동부엠티 ERP · 라벨 출력</span><span class="dp-demo">1280 × 1024 · 시안</span>${button('저울 설정','scale')}${button('전체화면','fullscreen')}</header>
-      <div class="dp-body"><aside class="dp-left"><section class="dp-panel"><div class="dp-heading">작업지시 <span class="dp-small">2건 · 예시</span></div><label class="dp-date"><span class="dp-small">작업일</span><input type="date" value="2026-09-14" aria-label="시안 작업일"></label><div class="dp-orders">${jobs.map((job,i)=>button(`${job.name}<span class="dp-small">투입 ${number(job.input)} kg · ${job.origin}</span>`,'job','dp-order',`data-job="${i}" aria-pressed="${i===0}"`)).join('')}</div></section>
+      <div class="dp-body"><aside class="dp-left"><section class="dp-panel"><div class="dp-heading">작업지시 <span class="dp-small">2건 · 예시</span></div><label class="dp-date"><span class="dp-small">작업일</span><input type="date" value="2026-09-15" aria-label="시안 작업일"></label><div class="dp-orders">${jobs.map((job,i)=>button(`${job.name}<span class="dp-small">투입 ${number(job.input)} kg · ${job.origin}</span>`,'job','dp-order',`data-job="${i}" aria-pressed="${i===0}"`)).join('')}</div></section><div class="dp-scale-home"></div>
       <section class="dp-panel dp-calc" aria-label="터치 계산기"><div class="dp-heading">계산기 <span class="dp-small">독립 계산</span></div><output class="dp-calc-output" aria-label="계산 결과" aria-live="polite">0</output><div class="dp-calc-keys">${calcKeys.map(key=>button(key,'calc',key==='='?'dp-dark':'',`data-key="${key}" aria-label="계산기 ${key}"`)).join('')}</div></section></aside>
       <main class="dp-right"><section class="dp-panel dp-job"></section><div class="dp-pack-area"></div><section class="dp-panel dp-bottom"></section></main></div>
       <footer class="dp-status" role="status" aria-live="polite">시안입니다. 버튼을 눌러도 실제 인쇄·저장·전송은 하지 않습니다.</footer>`;
@@ -224,6 +274,7 @@
       const action=target.dataset.action,kind=target.dataset.kind;
       if(action==='close'){closeDialog();return;}
       if(action==='job'){state.job=Number(target.dataset.job);renderWork();notify('작업을 변경했습니다. 시연 출력 수는 작업별로 유지됩니다.');return;}
+      if(action==='mode'){settings(kind).mode=target.dataset.mode;renderWork();notify(`${packName(kind)} ${settings(kind).mode==='scale'?'계근중량 · 안정 중량으로 1장씩 출력':'고정중량 · 직접 입력값 사용'} 시연`);return;}
       if(action==='preset'){settings(kind).weight=Number(target.dataset.value);renderWork();return;}
       if(action==='adjust'){const s=settings(kind);s.copies=Math.max(1,Math.min(500,s.copies+Number(target.dataset.delta)));renderWork();return;}
       if(action==='edit'){
@@ -245,20 +296,26 @@
         settings(editKind)[field]=value;closeDialog();renderWork();return;
       }
       if(action==='print'){
-        const r=record(),s=settings(kind);if(kind==='outer'&&r.complete)return;
-        r[kind]+=s.copies;r.last={kind,weight:s.weight,copies:s.copies};
-        if(kind==='outer')r.production=Number((r.production+s.weight*s.copies).toFixed(2));
-        renderWork();notify(`${packName(kind)} ${s.copies}장 출력 시연 · ${kind==='inner'?'생산량 변동 없음':`생산량 +${number(s.weight*s.copies)} kg`} · 실제 인쇄 없음`);return;
+        const r=record(),weight=outputWeight(kind),copies=outputCopies(kind);if((kind==='outer'&&r.complete)||weight===null)return;
+        r[kind]+=copies;r.last={kind,weight,copies,mode:settings(kind).mode};
+        if(kind==='outer')r.production=Number((r.production+weight*copies).toFixed(2));
+        renderWork();notify(`${packName(kind)} ${number(weight)} kg × ${copies}장 시연 · ${kind==='inner'?'생산량 변동 없음':`생산량 +${number(weight*copies)} kg`} · 실제 인쇄 없음`);return;
       }
-      if(action==='reprint'){notify('최근 라벨 재출력 시연 · 생산량 및 출력 수 추가 없음 · 실제 인쇄 없음');return;}
+      if(action==='reprint'){const last=record().last;notify(`최근 라벨 ${number(last?last.weight:jobs[state.job].outerWeight)} kg 재출력 시연 · 생산량 및 출력 수 추가 없음 · 실제 인쇄 없음`);return;}
       if(action==='preview'){
-        dialog(`${packName(kind)} 라벨 미리보기 · 시안`,`<div class="dp-proof"><div>${jobs[state.job].name}</div><div>원산지 ${jobs[state.job].origin}</div><div>중량 ${settings(kind).weight.toFixed(2)} kg</div><div>이력번호 ${jobs[state.job].lot}</div><span>주식회사 동부엠티</span></div><div class="dp-small">내용 확인용 시안 · 실제 인쇄 서식은 기존 서식 유지</div>`,button('닫기','close'));return;
+        const weight=outputWeight(kind);
+        dialog(`${packName(kind)} 라벨 미리보기 · 시안`,`<div class="dp-proof"><div>${jobs[state.job].name}</div><div>원산지 ${jobs[state.job].origin}</div><div>중량 ${weight===null?'계근 대기':weight.toFixed(2)+' kg'}</div><div>이력번호 ${jobs[state.job].lot}</div><span>주식회사 동부엠티</span></div><div class="dp-small">내용 확인용 시안 · 실제 라벨 서식 유지 · 계근은 출력 시점의 안정값 사용</div>`,button('닫기','close'));return;
       }
       if(action==='complete'){
         dialog('생산일보 전송 · 시연',`<div>${jobs[state.job].name}</div><div>외포장 생산량 <strong>${number(record().production)} kg</strong></div><div>내포장 ${record().inner}장 · 전송량에서 제외</div><div class="dp-small">실제 ERP에는 전송되지 않습니다.</div>`,button('취소','close')+button('전송 시연','confirm','dp-dark'));return;
       }
       if(action==='confirm'){record().complete=true;closeDialog();renderWork();notify('전송 시연 완료 · 내포장 추가 출력은 계속 가능 · 실제 ERP 변경 없음');return;}
-      if(action==='scale'){dialog('저울 연결 · 시안','<div>A&amp;D FG-150KAL</div><div>COM2 · 2400 · 7E1</div><div class="dp-small">현장 확인값입니다. 이 시안은 저울과 연결되지 않습니다. 중량 표시와 장치 연동은 적용 단계에서 연결합니다.</div>',button('닫기','close'));return;}
+      if(action==='scale'){dialog('계근중량 시연 설정',`<div class="dp-small">A&amp;D FG-150KAL · COM2 / 2400 / 7E1<br>실제 저울 미연결 · 아래 값은 시안용입니다.</div><div class="dp-sim-fields"><label>시연 중량 (kg)<input type="number" min="0" max="150" step="0.02" value="${state.scale.value}" aria-label="시연 중량"></label><label>시연 수신 상태<select aria-label="시연 수신 상태">${[['stable','안정'],['moving','흔들림'],['offline','연결 끊김']].map(([value,label])=>`<option value="${value}" ${state.scale.status===value?'selected':''}>${label}</option>`).join('')}</select></label></div>`,button('취소','close')+button('시연 적용','apply-scale','dp-dark'));return;}
+      if(action==='apply-scale'){
+        const value=Number(screen.querySelector('[aria-label="시연 중량"]').value),status=screen.querySelector('[aria-label="시연 수신 상태"]').value;
+        if(!Number.isFinite(value)||value<0||value>150){screen.querySelector('.dp-error').textContent='시연값은 0~150 kg 범위로 입력하세요.';return;}
+        state.scale={value:Number(value.toFixed(2)),status};closeDialog();renderWork();notify('계근 시연값을 변경했습니다. 실제 저울을 읽거나 설정하지 않았습니다.');return;
+      }
       if(action==='size'){notify('시안 용지 70 × 100 mm · 실제 라벨 크기와 인쇄 설정은 변경하지 않습니다.');return;}
       if(action==='fullscreen'){notify('전체화면 버튼 위치 시안 · 1280×1024 기준 배치입니다.');return;}
       if(action==='calc'){
@@ -285,7 +342,7 @@
   renderDesign();
   if(globalThis.Tweak){
     const tweak=new Tweak({container:root,onChange:renderDesign});
-    tweak.addSelect(designs,'view',{label:'비교할 배치',options:[{label:'3안 모두',value:'all'},{label:'1안 · 좌우 분리형',value:'split'},{label:'2안 · 위아래 분리형',value:'rows'},{label:'3안 · 하단 큰 버튼형',value:'dock'}]});
+    tweak.addSelect(designs,'view',{label:'비교할 배치',options:[{label:'3안 모두',value:'all'},{label:'1안 · 균형형',value:'split'},{label:'2안 · 작업 분리형',value:'rows'},{label:'3안 · 계근 집중형',value:'dock'}]});
     tweak.addSlider(designs,'touch',{label:'일반 버튼 높이 · 1280 기준',min:60,max:64,step:4,unit:'px'});
   }
 })();
