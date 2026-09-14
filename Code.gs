@@ -352,7 +352,7 @@ const DOMAIN_SHEETS = {
   },
   subMaterialItems: {
     name: '부자재품목',
-    headers: ['id','code','name','spec','unit','unitPrice','note'],
+    headers: ['id','code','name','spec','unit','unitPrice','note','certRequired','certDate'],
     toRows: function(arr) {
       return (arr || []).map(function(x) {
         return {
@@ -362,7 +362,9 @@ const DOMAIN_SHEETS = {
           spec:      x.spec || '',
           unit:      x.unit || '',
           unitPrice: (x.unitPrice == null || x.unitPrice === '') ? '' : x.unitPrice,
-          note:      x.note || ''
+          note:      x.note || '',
+          certRequired: x.certRequired === true,
+          certDate:  x.certDate || ''
         };
       });
     },
@@ -375,7 +377,9 @@ const DOMAIN_SHEETS = {
           spec:      String(r.spec || ''),
           unit:      String(r.unit || ''),
           unitPrice: (r.unitPrice === '' || r.unitPrice == null) ? '' : (Number(r.unitPrice) || 0),
-          note:      String(r.note || '')
+          note:      String(r.note || ''),
+          certRequired: r.certRequired === true || String(r.certRequired || '').toLowerCase() === 'true',
+          certDate:  String(r.certDate || '')
         };
       });
     }
@@ -417,14 +421,14 @@ const DOMAIN_SHEETS = {
           unit:      String(r.unit || ''),
           certName:  String(r.certName || ''),
           note:      String(r.note || ''),
-          createdAt: String(r.createdAt || '')
+          createdAt: String(r.createdAt || '').replace(/^'/, '')
         };
       });
     }
   },
   subMaterialCounts: {
     name: '부자재조사',
-    headers: ['id','date','itemId','itemCode','itemName','itemSpec','qty','unit','manager','note','createdAt'],
+    headers: ['id','date','itemId','itemCode','itemName','itemSpec','qty','unit','manager','note','createdAt','lotId','lot','systemQty','adjustmentQty'],
     toRows: function(arr) {
       return (arr || []).map(function(x) {
         return {
@@ -438,7 +442,11 @@ const DOMAIN_SHEETS = {
           unit:      x.unit || '',
           manager:   x.manager || '',
           note:      x.note || '',
-          createdAt: x.createdAt ? "'" + x.createdAt : ''
+          createdAt: x.createdAt ? "'" + String(x.createdAt).replace(/^'/, '') : '',
+          lotId:     String(x.lotId == null ? '' : x.lotId),
+          lot:       x.lot || '',
+          systemQty: (x.systemQty == null || x.systemQty === '') ? '' : x.systemQty,
+          adjustmentQty: (x.adjustmentQty == null || x.adjustmentQty === '') ? '' : x.adjustmentQty
         };
       });
     },
@@ -455,7 +463,11 @@ const DOMAIN_SHEETS = {
           unit:      String(r.unit || ''),
           manager:   String(r.manager || ''),
           note:      String(r.note || ''),
-          createdAt: String(r.createdAt || '')
+          createdAt: String(r.createdAt || '').replace(/^'/, ''),
+          lotId:     String(r.lotId == null ? '' : r.lotId),
+          lot:       String(r.lot || ''),
+          systemQty: (r.systemQty === '' || r.systemQty == null) ? '' : (Number(r.systemQty) || 0),
+          adjustmentQty: (r.adjustmentQty === '' || r.adjustmentQty == null) ? '' : (Number(r.adjustmentQty) || 0)
         };
       });
     }
@@ -1131,7 +1143,7 @@ function getRows(sheetName, headers, ss) {
         // id는 자동 변환 안 함 (도메인별 자연 타입 유지)
         // - 거래내역: Date.now() → number 셀로 저장 → number로 복원
         // - 직원/연차: hrId() → string 셀로 저장 → string으로 복원
-      } else if (['date','proddate','stockProddate'].includes(k)) {
+      } else if (['date','proddate','stockProddate','certDate'].includes(k)) {
         if (v instanceof Date) {
           v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
         } else {

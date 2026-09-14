@@ -106,6 +106,9 @@
     deleteSubMaterialLot:['submaterials','delete'],
     addSubMaterialCount:['submaterials','create'],
     deleteSubMaterialCount:['submaterials','delete'],
+    openSubMaterialCount:['submaterials','view','uiOnly'],
+    closeSubMaterialCount:['submaterials','view','uiOnly'],
+    updateSubMaterialCountPreview:['submaterials','create','uiOnly'],
 
     savePrice:['prices','write'],
     editPrice:['prices','update'],

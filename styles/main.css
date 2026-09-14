@@ -154,6 +154,18 @@
   #stock-table .stock-col-manage{width:42px;max-width:42px;padding-left:3px;padding-right:3px;text-align:center;}
   #stock-table .stock-adjust-btn{min-width:32px;padding:3px 5px;border-radius:5px;background:#3440a0;color:#fff;font-size:10px;}
 
+  #p-submaterials .form-group{min-width:0;}
+  #p-submaterials table{font-size:11px;}
+  #p-submaterials th,#p-submaterials td{padding:7px 5px;}
+  #p-submaterials .btn-sm{padding:4px 7px;font-size:11px;}
+  #sm-stock-lot-wrap th:nth-child(4){width:135px;}
+  #sm-stock-lot-wrap th:nth-child(13){width:100px;}
+  #sm-stock-lot-wrap td:nth-child(13){max-width:140px;overflow-wrap:anywhere;}
+  #sm-stock-lot-wrap td:nth-child(n+6):nth-child(-n+9){white-space:nowrap;}
+  #sm-stock-lot-wrap td:last-child{width:65px;}
+  #sm-stock-lot-wrap td:last-child .btn{margin:2px 0;}
+  #sm-count-modal .edit-modal{max-height:92vh;overflow-y:auto;}
+
   /* 거래처 기준정보: 한 거래처를 기본정보/상세정보 2개 행으로 표시 */
   #traders-table{min-width:985px;table-layout:fixed;}
   #traders-table th{padding:9px 8px;cursor:pointer;user-select:none;white-space:nowrap;}

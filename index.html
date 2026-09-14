@@ -21,7 +21,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20260913stockwidth1">
+<link rel="stylesheet" href="styles/main.css?v=20260914submaterials1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -1447,10 +1447,16 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <button type="button" class="btn btn-primary" id="sm-item-save-btn" onclick="addSubMaterialItem()">+ 품목 등록</button>
       <button type="button" class="btn btn-secondary" id="sm-item-cancel-btn" onclick="cancelSubMaterialItemEdit()" style="display:none;">수정 취소</button>
     </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="form-group" style="max-width:180px;"><label>성적서 관리</label><select id="sm-item-cert-required" onchange="updateSubMaterialCertificateForm()"><option value="false">관리 안 함</option><option value="true">관리함</option></select></div>
+      <div class="form-group" style="max-width:190px;"><label>최근 성적서 날짜</label><input type="date" id="sm-item-cert-date" disabled onchange="updateSubMaterialCertificateForm()"></div>
+      <div id="sm-item-cert-hint" style="flex:1;font-size:12px;color:#666;line-height:1.5;padding-bottom:9px;">성적서를 관리할 품목만 관리함으로 선택하세요.</div>
+    </div>
+    <div id="sm-cert-summary" role="status" aria-live="polite" hidden style="color:#c0392b;font-size:12px;font-weight:700;line-height:1.6;margin-bottom:10px;overflow-wrap:anywhere;"></div>
     <div class="tbl-wrap" style="max-height:220px;">
       <table>
         <thead><tr>
-          <th>고유번호</th><th>품목명</th><th>규격</th><th>단위</th><th style="text-align:right;">단위당 단가</th><th>비고</th><th style="text-align:center;">관리</th>
+          <th>고유번호</th><th>품목명</th><th>규격</th><th>단위</th><th style="text-align:right;">단위당 단가</th><th>성적서 관리</th><th>최근 성적서</th><th>다음 예정</th><th>알림</th><th>비고</th><th style="text-align:center;">관리</th>
         </tr></thead>
         <tbody id="sm-item-body"></tbody>
       </table>
@@ -1460,7 +1466,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   <div class="card">
     <div class="card-title">
       <div class="ct-bar" style="background:#16a085;"></div>
-      부자재 입고 / 성적서 등록
+      부자재 입고
     </div>
     <div class="form-row">
       <div class="form-group"><label>입고일자</label><input type="date" id="sm-in-date" onchange="updateSubMaterialLotPreview()"></div>
@@ -1471,32 +1477,11 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     </div>
     <div class="form-row">
       <div class="form-group"><label>자동 Lot</label><input id="sm-in-lot" readonly style="background:#f8f9fa;font-weight:700;color:#2c3e50;"></div>
-      <div class="form-group"><label>성적서 파일</label><input type="file" id="sm-cert-file" onchange="setSubMaterialCertName()"></div>
-      <div class="form-group" style="flex:2;"><label>성적서명 / 번호</label><input id="sm-cert-name" placeholder="파일 선택 시 파일명이 자동 입력됩니다"></div>
       <div class="form-group" style="flex:2;"><label>비고</label><input id="sm-in-note" placeholder="필요 시 입력"></div>
     </div>
     <div class="btn-row">
       <button type="button" class="btn btn-primary" onclick="addSubMaterialInbound()">💾 입고 등록</button>
       <button type="button" class="btn btn-secondary" onclick="resetSubMaterialInbound()">초기화</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">
-      <div class="ct-bar" style="background:#27ae60;"></div>
-      부자재 재고실사 입력
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>실사일자</label><input type="date" id="sm-count-date"></div>
-      <div class="form-group"><label>품목</label><select id="sm-count-item" onchange="onSubMaterialCountItemSelect()"><option value="">-- 품목 선택 --</option></select></div>
-      <div class="form-group"><label>실제 재고량</label><input type="number" step="0.01" id="sm-count-qty" placeholder="0" style="text-align:right;"></div>
-      <div class="form-group"><label>단위</label><input id="sm-count-unit" placeholder="자동/수기"></div>
-      <div class="form-group"><label>담당자</label><input id="sm-count-manager" placeholder="실사 담당자"></div>
-      <div class="form-group" style="flex:2;"><label>비고</label><input id="sm-count-note" placeholder="예) 월말 실사, 파손품 제외"></div>
-    </div>
-    <div class="btn-row">
-      <button type="button" class="btn btn-primary" onclick="addSubMaterialCount()">💾 실사 저장</button>
-      <button type="button" class="btn btn-secondary" onclick="resetSubMaterialCount()">초기화</button>
     </div>
   </div>
 
@@ -1534,24 +1519,27 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <select id="sm-stock-view" aria-label="부자재 재고 조회 방식" style="width:145px;" onchange="renderSubMaterialStock()">
-          <option value="lot">LOT별 재고</option><option value="item">품목별 재고</option>
+          <option value="lot">LOT별 재고</option><option value="item">품목별 합계</option>
         </select>
         <select id="sm-stock-status" aria-label="부자재 LOT 재고 상태" style="width:130px;" onchange="renderSubMaterialStock()">
           <option value="all">전체 재고</option><option value="available">재고 있음</option><option value="empty">소진</option><option value="negative">음수 재고</option>
         </select>
         <input id="sm-stock-search" aria-label="부자재 재고 검색" placeholder="품목명 / 고유번호 / LOT / 거래처 검색..." style="width:280px;max-width:100%;" oninput="renderSubMaterialStock()">
-        <button type="button" class="btn btn-primary btn-sm" onclick="printSubMaterialCountSheet()">실사입력시트 인쇄</button>
+        <label id="sm-stock-month-label" style="font-size:12px;">입고월 <input type="month" id="sm-filter-month" aria-label="부자재 입고월" style="width:140px;" onchange="renderSubMaterialStock()"></label>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="clearSubMaterialStockFilters()">전체</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="exportSubMaterialsCSV()">CSV</button>
+        <button type="button" class="btn btn-primary btn-sm" id="sm-count-sheet-btn" onclick="printSubMaterialCountSheet()">실사시트 인쇄</button>
       </div>
     </div>
     <div id="sm-stock-lot-note" style="font-size:12px;color:#555;line-height:1.6;margin:0 0 10px;">
-      LOT별 현재고 = 입고수량 − 해당 LOT의 생산 사용수량입니다. 품목 단위 실사 수량은 LOT별로 배분되지 않으므로 ‘품목별 재고’의 관리 재고와 다를 수 있습니다.
+      현재고 = 입고수량 − 사용수량 + 실사조정입니다. 각 LOT의 ‘실사’에서 실제 재고를 입력하세요. 입고월을 비우면 이전 달의 재고도 함께 표시합니다.
     </div>
     <div class="tbl-wrap" id="sm-stock-lot-wrap" style="max-height:420px;">
       <table aria-label="부자재 LOT별 재고현황">
         <thead><tr>
-          <th>입고일자</th><th>고유번호</th><th>품목명</th><th>규격</th><th>입고 LOT</th><th>거래처</th>
-          <th style="text-align:right;">입고수량</th><th style="text-align:right;">사용수량</th><th style="text-align:right;">현재고</th>
-          <th>단위</th><th>상태</th><th>비고</th>
+          <th>입고일자</th><th>품목 / 고유번호</th><th>규격</th><th>입고 LOT</th><th>거래처</th>
+          <th style="text-align:right;">입고수량</th><th style="text-align:right;">사용수량</th><th style="text-align:right;">실사조정</th><th style="text-align:right;">현재고</th>
+          <th>단위</th><th>최근 실사</th><th>상태</th><th>비고</th><th style="text-align:center;">관리</th>
         </tr></thead>
         <tbody id="sm-stock-lot-body"></tbody>
       </table>
@@ -1562,37 +1550,39 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <th>고유번호</th><th>품목명</th><th>규격</th>
           <th style="text-align:right;">총 입고</th>
           <th style="text-align:right;">총 사용</th>
-          <th style="text-align:right;">최근 실사</th>
-          <th style="text-align:right;">실사 후 입고</th>
-          <th style="text-align:right;">실사 후 사용</th>
-          <th style="text-align:right;">관리 재고</th>
-          <th>단위</th><th>최근 실사일</th><th>담당자</th><th>상태</th><th>비고</th><th style="text-align:center;">관리</th>
+          <th style="text-align:right;">LOT 실사조정</th>
+          <th style="text-align:right;">LOT 재고합계</th>
+          <th style="text-align:right;">기존 실사반영 재고</th>
+          <th>단위</th><th>기존 품목 실사일</th><th style="text-align:right;">품목 실사수량</th><th style="text-align:center;">관리</th>
         </tr></thead>
         <tbody id="sm-stock-body"></tbody>
       </table>
     </div>
   </div>
 
-  <div class="card">
-    <div class="section-header">
-      <div class="card-title" style="margin:0;">
-        <div class="ct-bar" style="background:#16a085;"></div>
-        부자재 Lot 목록 <span id="sm-lot-count" style="font-size:12px;font-weight:400;color:#888;"></span>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input type="month" id="sm-filter-month" style="width:145px;font-size:12px;" onchange="renderSubMaterials()">
-        <input id="sm-search" placeholder="품목명 / Lot / 성적서 검색..." style="width:230px;" oninput="renderSubMaterials()">
-        <button class="btn btn-secondary btn-sm" onclick="exportSubMaterialsCSV()">CSV</button>
-      </div>
+</div>
+
+<div id="sm-count-modal" class="edit-modal-bg hidden" role="dialog" aria-modal="true" aria-labelledby="sm-count-title">
+  <div class="edit-modal" style="max-width:660px;">
+    <h3 id="sm-count-title">부자재 LOT 실사 · 재고조정</h3>
+    <input type="hidden" id="sm-count-lot-id">
+    <input type="hidden" id="sm-count-system-qty">
+    <div id="sm-count-target" style="font-size:13px;line-height:1.6;margin-bottom:12px;"></div>
+    <div class="form-row">
+      <div class="form-group"><label>실사일자</label><input type="date" id="sm-count-date" readonly></div>
+      <div class="form-group"><label>현재 전산재고</label><input id="sm-count-system-display" readonly style="background:#f6f7f8;"></div>
+      <div class="form-group"><label>단위</label><input id="sm-count-unit" readonly></div>
     </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr>
-          <th>입고일자</th><th>Lot</th><th>품목명</th><th>규격</th><th>거래처</th>
-          <th style="text-align:right;">수량</th><th>단위</th><th>성적서</th><th>비고</th><th style="text-align:center;">관리</th>
-        </tr></thead>
-        <tbody id="sm-lot-body"></tbody>
-      </table>
+    <div class="form-row">
+      <div class="form-group"><label>실제 재고량</label><input type="number" min="0" step="0.000001" id="sm-count-qty" placeholder="실사한 수량 입력" oninput="updateSubMaterialCountPreview()"></div>
+      <div class="form-group"><label>담당자</label><input id="sm-count-manager" placeholder="실사 담당자"></div>
+    </div>
+    <div class="form-group"><label>비고</label><input id="sm-count-note" placeholder="예) 파손품 제외"></div>
+    <div id="sm-count-difference" role="status" style="font-size:13px;margin:12px 0;"></div>
+    <div id="sm-count-history" style="max-height:180px;overflow:auto;font-size:12px;margin-top:12px;"></div>
+    <div class="em-btns">
+      <button type="button" class="btn btn-secondary" onclick="closeSubMaterialCount()">닫기</button>
+      <button type="button" class="btn btn-primary" id="sm-count-save-btn" onclick="addSubMaterialCount()">실사 저장 · 재고조정</button>
     </div>
   </div>
 </div>
@@ -5060,9 +5050,16 @@ function renderPageById(id, reason='menu'){
         break;
       case 'p-submaterials':
         renderSubMaterials();
-        asyncTask = refreshSubMaterialUsagesFromSupabase().then(changed=>{
-          if(changed && activePageId() === id) renderSubMaterials();
-        });
+        {
+          const request = ++subMaterialCountLoadSeq;
+          const before = JSON.stringify([subMaterialItems,subMaterialLots,subMaterialCounts,subMaterialUsages]);
+          asyncTask = refreshSubMaterialStockSnapshot().then(result=>{
+            if(request !== subMaterialCountLoadSeq || activePageId() !== id || subMaterialCountSaving) return;
+            if(before !== JSON.stringify([subMaterialItems,subMaterialLots,subMaterialCounts,subMaterialUsages])) return;
+            applySubMaterialStockResponse(result);
+            renderSubMaterials();
+          });
+        }
         break;
       case 'p-prices':
         if(reason === 'menu') cancelEditPrice();
@@ -5674,15 +5671,15 @@ function resetDataChangeLogFilters(){
 }
 
 // ── 변경된 보조데이터만 저장 (오래 열린 화면의 전체 덮어쓰기 방지) ──
-function gsSaveAppData(){
-  const changedKeys = recordAppDataChanges();
+function gsSaveAppData(changedKeys=recordAppDataChanges()){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
     if(!changedKeys.length) return;
-    supabaseSaveAppDataKeys(changedKeys).catch(err => {
+    const pending = supabaseSaveAppDataKeys(changedKeys);
+    pending.catch(err => {
       console.error('Supabase appData 저장 오류:', err);
       gsShowSync('⚠ Supabase 보조데이터 저장 실패 — 로컬 데이터는 보존됨', true);
     });
-    return;
+    return pending;
   }
   gsShowSync('⚠ Supabase 연결 전이라 보조데이터는 로컬에만 저장되었습니다', true);
 }
@@ -6005,7 +6002,8 @@ async function supabaseSaveAppDataKeys(keys){
     catch(e){ console.warn('Supabase appData collect failed:', key, e); }
   });
   if(!Object.keys(payload).length) return;
-  await sbRpc('dbmt_erp_save_app_data', {p_token:token,p_payload:payload});
+  const result = await sbRpc('dbmt_erp_save_app_data', {p_token:token,p_payload:payload});
+  if(result?.ok === false) throw new Error(result.message || '보조데이터 저장 권한을 확인해주세요.');
   syncDataChangeLogsSoon();
 }
 
@@ -10830,7 +10828,7 @@ async function saveProdEntry(){
   renderProduction();
   toast('생산일보 저장 완료! 재고에 반영됐습니다.');
   clearProdForm();
-  setTimeout(()=>openSubMaterialUsageModal(entry.id, true), 0);
+  setTimeout(()=>openSubMaterialUsageModal(entry.id), 0);
 }
 
 function clearProdForm(){
@@ -11875,6 +11873,12 @@ let subMaterialUsageDraftRows = [];
 let subMaterialUsageDraftSeq = 0;
 let activeSubMaterialUsageProductionId = '';
 let subMaterialUsageSaving = false;
+let subMaterialCountSaving = false;
+let subMaterialCountLoadSeq = 0;
+let subMaterialCountsRevision = '';
+let subMaterialCountRequestId = '';
+let subMaterialPendingSavePromise = Promise.resolve();
+const subMaterialPendingSaveKeys = new Set();
 
 function subMaterialId(){
   return 'sm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
@@ -11933,7 +11937,127 @@ function saveSubMaterials(){
   localStorage.setItem('dbmt_submaterial_items', JSON.stringify(subMaterialItems));
   localStorage.setItem('dbmt_submaterial_lots', JSON.stringify(subMaterialLots));
   localStorage.setItem('dbmt_submaterial_counts', JSON.stringify(subMaterialCounts));
-  gsSaveAppData();
+  recordAppDataChanges().forEach(key=>subMaterialPendingSaveKeys.add(key));
+  const previous = subMaterialPendingSavePromise;
+  const pending = previous.catch(()=>{}).then(async()=>{
+    if(!subMaterialPendingSaveKeys.size) return;
+    if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1'){
+      gsShowSync('⚠ Supabase 연결 전이라 부자재는 로컬에만 저장되었습니다', true);
+      throw new Error('부자재 변경사항이 서버에 저장되지 않았습니다. 연결 후 다시 저장해주세요.');
+    }
+    await gsSaveAppData([...subMaterialPendingSaveKeys]);
+    if(subMaterialPendingSavePromise === pending) subMaterialPendingSaveKeys.clear();
+  });
+  subMaterialPendingSavePromise = pending;
+  // 저장 버튼은 Promise를 사용하지 않아도 되고, 재고 조회는 실패를 확인해야 한다.
+  pending.catch(()=>{});
+  return pending;
+}
+
+function subMaterialCertificateDateParts(value){
+  const text = String(value || '').trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if(!match) return null;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if(year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(0,0,0,0);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? {year,month,day,text} : null;
+}
+
+function subMaterialCertificateAddMonths(value, months){
+  const parts = subMaterialCertificateDateParts(value);
+  if(!parts || !Number.isInteger(months)) return '';
+  const monthIndex = parts.year * 12 + parts.month - 1 + months;
+  const year = Math.floor(monthIndex / 12), month = monthIndex - year * 12 + 1;
+  if(year < 1 || year > 9999) return '';
+  const monthEnd = new Date(0);
+  monthEnd.setUTCFullYear(year, month, 0);
+  monthEnd.setUTCHours(0,0,0,0);
+  const day = Math.min(parts.day,monthEnd.getUTCDate());
+  return `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+function subMaterialCertificateStatus(item, asOfDate=localDateString()){
+  const certRequired = item?.certRequired === true;
+  const certDate = subMaterialCertificateDateParts(item?.certDate)?.text || '';
+  const state = {certRequired,certDate,dueDate:'',warningDate:'',status:'off',label:'관리 안 함',needsAttention:false};
+  if(!certRequired) return state;
+  if(!certDate) return {...state,status:'missing',label:'날짜 등록 필요',needsAttention:true};
+  const dueDate = subMaterialCertificateAddMonths(certDate,6);
+  const warningDate = subMaterialCertificateAddMonths(dueDate,-1);
+  if(!dueDate || !warningDate) return {...state,status:'missing',label:'날짜 확인 필요',needsAttention:true};
+  const date = subMaterialCertificateDateParts(asOfDate)?.text || localDateString();
+  if(date > dueDate) return {...state,dueDate,warningDate,status:'overdue',label:'기한 경과',needsAttention:true};
+  if(date === dueDate) return {...state,dueDate,warningDate,status:'due_today',label:'오늘 갱신 예정',needsAttention:true};
+  if(date >= warningDate) return {...state,dueDate,warningDate,status:'due_soon',label:'갱신 예정 · 1개월 이내',needsAttention:true};
+  return {...state,dueDate,warningDate,status:'normal',label:'정상',needsAttention:false};
+}
+
+function updateSubMaterialCertificateForm(){
+  const required = document.getElementById('sm-item-cert-required')?.value === 'true';
+  const dateEl = document.getElementById('sm-item-cert-date');
+  if(dateEl){
+    dateEl.disabled = !required;
+    dateEl.max = localDateString();
+  }
+  const hint = document.getElementById('sm-item-cert-hint');
+  if(!hint) return;
+  const state = subMaterialCertificateStatus({certRequired:required,certDate:dateEl?.value || ''});
+  hint.style.color = state.needsAttention ? '#c0392b' : '#666';
+  hint.textContent = !required ? '성적서를 관리할 품목만 관리함으로 선택하세요.'
+    : (state.dueDate ? `다음 예정 ${state.dueDate} · ${state.warningDate}부터 알림 · ${state.label}` : state.label);
+}
+
+function subMaterialCertificateAlertSummary(items, asOfDate=localDateString()){
+  const alerts = (items || []).map(item=>({item,certificate:subMaterialCertificateStatus(item,asOfDate)}))
+    .filter(row=>row.certificate.needsAttention)
+    .sort((a,b)=>String(a.item.name || '').localeCompare(String(b.item.name || ''),'ko'));
+  if(!alerts.length) return '';
+  const labels = alerts.slice(0,5).map(({item,certificate})=>{
+    const name = [item.name || item.code || '이름 없는 품목',item.spec].filter(Boolean).join(' / ');
+    const state = certificate.status === 'missing' ? certificate.label
+      : certificate.status === 'overdue' ? `${certificate.dueDate} 기한 경과`
+      : `${certificate.dueDate} 갱신 예정`;
+    return `${name} (${state})`;
+  });
+  return `성적서 확인 필요 ${alerts.length}개: ${labels.join(', ')}${alerts.length > 5 ? ` 외 ${alerts.length - 5}개` : ''}`;
+}
+
+function renderSubMaterialItems(){
+  const summary = document.getElementById('sm-cert-summary');
+  if(summary){
+    summary.textContent = subMaterialCertificateAlertSummary(subMaterialItems);
+    summary.hidden = !summary.textContent;
+  }
+  const body = document.getElementById('sm-item-body');
+  if(!body) return;
+  body.innerHTML = subMaterialItems.length ? subMaterialItems.slice()
+    .sort((a,b)=>String(a.name || '').localeCompare(String(b.name || ''),'ko'))
+    .map(item=>{
+      const certificate = subMaterialCertificateStatus(item);
+      const alertStyle = certificate.needsAttention ? 'color:#c0392b;font-weight:700;' : 'color:#666;';
+      return `<tr>
+        <td style="font-family:Consolas,'Courier New',monospace;font-weight:700;color:#444;">${htmlEscape(item.code || '')}</td>
+        <td><strong>${htmlEscape(item.name || '')}</strong></td>
+        <td>${htmlEscape(item.spec || '-')}</td>
+        <td>${htmlEscape(item.unit || '-')}</td>
+        <td style="text-align:right;">${item.unitPrice === '' || item.unitPrice == null ? '-' : parseAppNumber(item.unitPrice).toLocaleString('ko-KR')}</td>
+        <td style="white-space:nowrap;">${certificate.certRequired ? '관리함' : '관리 안 함'}</td>
+        <td style="white-space:nowrap;">${htmlEscape(certificate.certDate || '-')}</td>
+        <td style="white-space:nowrap;${alertStyle}">${htmlEscape(certificate.dueDate || '-')}</td>
+        <td style="${alertStyle}">${htmlEscape(certificate.label)}</td>
+        <td>${htmlEscape(item.note || '-')}</td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button class="btn btn-sm" style="background:#6b7280;color:#fff;margin-right:4px;" onclick="editSubMaterialItem(${jsArg(item.id)})">수정</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteSubMaterialItem(${jsArg(item.id)})">삭제</button>
+        </td>
+      </tr>`;
+    }).join('')
+    : '<tr><td colspan="11" style="text-align:center;color:#888;padding:18px;">등록된 부자재 품목이 없습니다.</td></tr>';
+  updateSubMaterialCertificateForm();
 }
 
 function addSubMaterialItem(){
@@ -11945,8 +12069,17 @@ function addSubMaterialItem(){
   const unitPriceRaw = (document.getElementById('sm-item-unit-price')?.value || '').trim();
   const unitPrice = unitPriceRaw === '' ? '' : parseAppNumber(unitPriceRaw);
   const note = (document.getElementById('sm-item-note')?.value || '').trim();
+  const certRequired = document.getElementById('sm-item-cert-required')?.value === 'true';
+  const certDateEl = document.getElementById('sm-item-cert-date');
+  const certDate = (certDateEl?.value || '').trim();
   if(!name){ toast('부자재 품목명을 입력하세요.'); return; }
   if(unitPriceRaw !== '' && unitPrice < 0){ toast('단위당 단가는 0 이상으로 입력하세요.'); return; }
+  if(certDateEl?.validity?.badInput || (certDate && !subMaterialCertificateDateParts(certDate))){
+    toast('최근 성적서 날짜를 올바르게 선택하세요.'); return;
+  }
+  if(certDate && certDate > localDateString()){
+    toast('최근 성적서 날짜는 오늘 이후로 입력할 수 없습니다.'); return;
+  }
   const exists = subMaterialItems.some(i =>
     i.id !== editId &&
     String(i.name || '').trim() === name &&
@@ -11965,6 +12098,8 @@ function addSubMaterialItem(){
     item.unit = unit;
     item.unitPrice = unitPrice;
     item.note = note;
+    item.certRequired = certRequired;
+    item.certDate = certDate;
     subMaterialLots.forEach(lot => {
       if(lot.itemId === item.id){
         lot.itemCode = item.code || lot.itemCode || '';
@@ -11998,7 +12133,7 @@ function addSubMaterialItem(){
   }
 
   const code = nextSubMaterialCode();
-  const item = { id:subMaterialId(), code, name, spec, unit, unitPrice, note };
+  const item = { id:subMaterialId(), code, name, spec, unit, unitPrice, note, certRequired, certDate };
   subMaterialItems.push(item);
   const dateLabel = dataChangeDateLabel(localDateString());
   queueAppDataChangeDetail('subMaterialItems', {
@@ -12014,13 +12149,15 @@ function addSubMaterialItem(){
 }
 
 function clearSubMaterialItemForm(){
-  ['sm-item-name','sm-item-spec','sm-item-unit','sm-item-unit-price','sm-item-note'].forEach(id=>{
+  ['sm-item-name','sm-item-spec','sm-item-unit','sm-item-unit-price','sm-item-note','sm-item-cert-date'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = '';
   });
   const editEl = document.getElementById('sm-item-edit-id'); if(editEl) editEl.value = '';
   const saveBtn = document.getElementById('sm-item-save-btn'); if(saveBtn) saveBtn.textContent = '+ 품목 등록';
   const cancelBtn = document.getElementById('sm-item-cancel-btn'); if(cancelBtn) cancelBtn.style.display = 'none';
   const codeEl = document.getElementById('sm-item-code-preview'); if(codeEl) codeEl.value = nextSubMaterialCode();
+  const certRequiredEl = document.getElementById('sm-item-cert-required'); if(certRequiredEl) certRequiredEl.value = 'false';
+  updateSubMaterialCertificateForm();
 }
 
 function editSubMaterialItem(id){
@@ -12034,6 +12171,9 @@ function editSubMaterialItem(id){
   const unitEl = document.getElementById('sm-item-unit'); if(unitEl) unitEl.value = item.unit || '';
   const priceEl = document.getElementById('sm-item-unit-price'); if(priceEl) priceEl.value = item.unitPrice ?? '';
   const noteEl = document.getElementById('sm-item-note'); if(noteEl) noteEl.value = item.note || '';
+  const certRequiredEl = document.getElementById('sm-item-cert-required'); if(certRequiredEl) certRequiredEl.value = item.certRequired === true ? 'true' : 'false';
+  const certDateEl = document.getElementById('sm-item-cert-date'); if(certDateEl) certDateEl.value = item.certDate || '';
+  updateSubMaterialCertificateForm();
   const saveBtn = document.getElementById('sm-item-save-btn'); if(saveBtn) saveBtn.textContent = '수정 저장';
   const cancelBtn = document.getElementById('sm-item-cancel-btn'); if(cancelBtn) cancelBtn.style.display = '';
   document.getElementById('sm-item-name')?.focus();
@@ -12089,7 +12229,7 @@ function refreshSubMaterialItemOptions(){
       .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko') || String(a.spec||'').localeCompare(String(b.spec||''),'ko'))
       .map(i=>`<option value="${htmlEscape(i.id)}">${htmlEscape(i.code || '')} · ${htmlEscape(i.name)}${i.spec ? ' / ' + htmlEscape(i.spec) : ''}</option>`)
       .join('');
-  ['sm-in-item','sm-count-item'].forEach(id=>{
+  ['sm-in-item'].forEach(id=>{
     const sel = document.getElementById(id);
     if(!sel) return;
     const prev = sel.value;
@@ -12106,19 +12246,6 @@ function onSubMaterialItemSelect(){
   updateSubMaterialLotPreview();
 }
 
-function onSubMaterialCountItemSelect(){
-  const itemId = document.getElementById('sm-count-item')?.value || '';
-  const item = subMaterialItems.find(i => i.id === itemId);
-  const unitEl = document.getElementById('sm-count-unit');
-  if(unitEl && item?.unit && !unitEl.value) unitEl.value = item.unit;
-}
-
-function setSubMaterialCertName(){
-  const file = document.getElementById('sm-cert-file')?.files?.[0];
-  const nameEl = document.getElementById('sm-cert-name');
-  if(file && nameEl && !nameEl.value) nameEl.value = file.name;
-}
-
 function addSubMaterialInbound(){
   ensureSubMaterialCodes();
   const date = document.getElementById('sm-in-date')?.value || today;
@@ -12127,7 +12254,6 @@ function addSubMaterialInbound(){
   const trader = (document.getElementById('sm-in-trader')?.value || '').trim();
   const qty = parseAppNumber(document.getElementById('sm-in-qty')?.value);
   const unit = (document.getElementById('sm-in-unit')?.value || item?.unit || '').trim();
-  const certName = (document.getElementById('sm-cert-name')?.value || '').trim();
   const note = (document.getElementById('sm-in-note')?.value || '').trim();
   if(!date){ toast('입고일자를 선택하세요.'); return; }
   if(!item){ toast('부자재 품목을 선택하세요.'); return; }
@@ -12136,7 +12262,7 @@ function addSubMaterialInbound(){
   const inbound = {
     id:subMaterialId(), date, lot,
     itemId:item.id, itemCode:item.code || '', itemName:item.name, itemSpec:item.spec || '',
-    trader, qty, unit, certName, note, createdAt:new Date().toISOString()
+    trader, qty, unit, note, createdAt:new Date().toISOString()
   };
   subMaterialLots.push(inbound);
   const dateLabel = dataChangeDateLabel(date);
@@ -12153,10 +12279,9 @@ function addSubMaterialInbound(){
 }
 
 function resetSubMaterialInbound(){
-  ['sm-in-trader','sm-in-qty','sm-in-unit','sm-cert-name','sm-in-note'].forEach(id=>{
+  ['sm-in-trader','sm-in-qty','sm-in-unit','sm-in-note'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value = '';
   });
-  const fileEl = document.getElementById('sm-cert-file'); if(fileEl) fileEl.value = '';
   const dateEl = document.getElementById('sm-in-date'); if(dateEl && !dateEl.value) dateEl.value = today;
   updateSubMaterialLotPreview();
 }
@@ -12167,6 +12292,10 @@ function deleteSubMaterialLot(id){
   const linkedUsages = subMaterialUsages.filter(u => String(u.lotId || '') === String(id));
   if(linkedUsages.length){
     toast(`생산에 사용된 LOT입니다. 사용이력 ${linkedUsages.length}건을 먼저 확인해주세요.`);
+    return;
+  }
+  if(subMaterialCounts.some(c => String(c.lotId || '') === String(id))){
+    toast('실사조정 기록이 있는 LOT입니다. 실사 이력을 먼저 확인해주세요.');
     return;
   }
   if(!confirm('선택한 부자재 Lot을 삭제할까요?')) return;
@@ -12182,60 +12311,230 @@ function deleteSubMaterialLot(id){
   renderSubMaterials();
 }
 
-function addSubMaterialCount(){
-  ensureSubMaterialCodes();
-  const date = document.getElementById('sm-count-date')?.value || today;
-  const itemId = document.getElementById('sm-count-item')?.value || '';
-  const item = subMaterialItems.find(i => i.id === itemId);
-  const rawQty = (document.getElementById('sm-count-qty')?.value || '').trim();
-  const qty = parseAppNumber(rawQty);
-  const unit = (document.getElementById('sm-count-unit')?.value || item?.unit || '').trim();
-  const manager = (document.getElementById('sm-count-manager')?.value || '').trim();
-  const note = (document.getElementById('sm-count-note')?.value || '').trim();
-  if(!date){ toast('실사일자를 선택하세요.'); return; }
-  if(!item){ toast('부자재 품목을 선택하세요.'); return; }
-  if(rawQty === '' || qty < 0){ toast('실제 재고량을 입력하세요.'); return; }
-  const count = {
-    id:subMaterialId(), date,
-    itemId:item.id, itemCode:item.code || '', itemName:item.name, itemSpec:item.spec || '',
-    qty, unit, manager, note, createdAt:new Date().toISOString()
+function subMaterialPersonalCan(action){
+  return typeof DBMTAuth === 'object' && DBMTAuth.isPersonal() && DBMTAuth.can('submaterials', action);
+}
+
+function getSubMaterialLotCounts(lotId){
+  return subMaterialCounts.filter(c => c.lotId && String(c.lotId) === String(lotId)).sort((a,b)=>
+    String(b.date || '').localeCompare(String(a.date || '')) ||
+    String(b.createdAt || '').localeCompare(String(a.createdAt || '')) ||
+    String(b.id || '').localeCompare(String(a.id || ''))
+  );
+}
+
+function getSubMaterialLotAdjustmentQty(lotId){
+  return Number(getSubMaterialLotCounts(lotId).reduce((sum,c)=>sum + parseAppNumber(c.adjustmentQty), 0).toFixed(6));
+}
+
+function applySubMaterialStockResponse(result){
+  const changedKeys = [];
+  if(Array.isArray(result.items)){ subMaterialItems = result.items; changedKeys.push('subMaterialItems'); }
+  if(Array.isArray(result.lots)){ subMaterialLots = result.lots; changedKeys.push('subMaterialLots'); }
+  if(Array.isArray(result.counts)){ subMaterialCounts = result.counts; changedKeys.push('subMaterialCounts'); }
+  if(Array.isArray(result.usages)) subMaterialUsages = result.usages;
+  if(result.countsRevision) subMaterialCountsRevision = result.countsRevision;
+  if(typeof dataChangeAppDataSnapshot === 'function'){
+    const snapshot = dataChangeAppDataSnapshot();
+    changedKeys.forEach(key=>{
+      if(dataChangeAppDataSigs) dataChangeAppDataSigs[key] = snapshot[key]?.sig;
+      if(dataChangeAppDataMeta) dataChangeAppDataMeta[key] = snapshot[key];
+      dataChangePendingAppDetails.delete(key);
+    });
+  }
+  if(result.logEntry){
+    dataChangeLogs = [result.logEntry,...dataChangeLogs.filter(row=>row?.id !== result.logEntry.id)];
+    saveDataChangeLogsLocal();
+  }
+}
+
+async function refreshSubMaterialStockSnapshot(){
+  while(true){
+    const pendingSave = subMaterialPendingSavePromise;
+    try{
+      await pendingSave;
+    }catch(error){
+      if(pendingSave !== subMaterialPendingSavePromise) continue;
+      throw error;
+    }
+    if(pendingSave !== subMaterialPendingSavePromise) continue;
+    const result = await sbRpc('dbmt_erp_get_submaterial_stock', {p_token:DBMTAuth.getSessionToken()});
+    if(pendingSave !== subMaterialPendingSavePromise) continue;
+    if(!result?.ok) throw new Error(result?.message || '부자재 재고를 불러오지 못했습니다.');
+    return result;
+  }
+}
+
+function setSubMaterialCountBusy(busy){
+  const modal = document.getElementById('sm-count-modal');
+  if(modal) modal.querySelectorAll('.btn-primary,input:not([readonly]):not([type="hidden"])').forEach(el=>el.disabled = busy || !subMaterialPersonalCan('create'));
+}
+
+async function openSubMaterialCount(lotId){
+  if(!subMaterialPersonalCan('view')){ toast('부자재 실사 조회 권한이 없습니다.'); return; }
+  if(subMaterialCountSaving) return;
+  const request = ++subMaterialCountLoadSeq;
+  subMaterialCountRequestId = subMaterialId();
+  document.getElementById('sm-count-lot-id').value = '';
+  document.getElementById('sm-count-target').textContent = '최신 재고를 불러오는 중입니다.';
+  document.getElementById('sm-count-history').innerHTML = '';
+  document.getElementById('sm-count-modal').classList.remove('hidden');
+  setSubMaterialCountBusy(true);
+  try{
+    const result = await refreshSubMaterialStockSnapshot();
+    if(request !== subMaterialCountLoadSeq) return;
+    applySubMaterialStockResponse(result);
+    renderSubMaterialStock();
+    renderSubMaterialCountForm(lotId);
+  }catch(error){
+    if(request !== subMaterialCountLoadSeq) return;
+    document.getElementById('sm-count-target').textContent = '최신 재고를 불러오지 못했습니다. 창을 닫고 다시 시도해주세요.';
+    toast(error?.message || '부자재 재고 조회에 실패했습니다.');
+  }finally{
+    if(request === subMaterialCountLoadSeq) setSubMaterialCountBusy(false);
+  }
+}
+
+function renderSubMaterialCountForm(lotId){
+  const row = getSubMaterialLotStockRows().find(l => String(l.id) === String(lotId));
+  if(!row){ toast('선택한 입고 LOT을 찾을 수 없습니다.'); return; }
+  if(String(row.date || '') > localDateString()){ toast('입고일 이후에 재고실사를 등록해주세요.'); return; }
+  const canCreate = subMaterialPersonalCan('create');
+  document.getElementById('sm-count-title').textContent = canCreate ? '부자재 LOT 실사 · 재고조정' : '부자재 LOT 실사 이력';
+  const saveButton = document.getElementById('sm-count-save-btn');
+  if(saveButton) saveButton.style.display = canCreate ? '' : 'none';
+  document.getElementById('sm-count-lot-id').value = row.id;
+  document.getElementById('sm-count-date').value = localDateString();
+  document.getElementById('sm-count-system-qty').value = row.stockQty;
+  document.getElementById('sm-count-system-display').value = row.stockQty.toLocaleString('ko-KR',{maximumFractionDigits:6});
+  document.getElementById('sm-count-unit').value = row.unit || '';
+  document.getElementById('sm-count-target').textContent = `${row.itemName} / ${row.itemSpec || '-'} / LOT ${row.lot}`;
+  ['sm-count-qty','sm-count-manager','sm-count-note'].forEach(id=>document.getElementById(id).value = '');
+  const counts = getSubMaterialLotCounts(row.id);
+  document.getElementById('sm-count-history').innerHTML = counts.length ? `<strong>실사 이력</strong>` + counts.map(c=>`
+    <div style="padding:7px 0;border-bottom:1px solid #e1e3e6;">
+      ${htmlEscape(c.date)} · 실제 ${parseAppNumber(c.qty).toLocaleString('ko-KR',{maximumFractionDigits:6})} ${htmlEscape(c.unit || '')}
+      / 조정 ${parseAppNumber(c.adjustmentQty) > 0 ? '+' : ''}${parseAppNumber(c.adjustmentQty).toLocaleString('ko-KR',{maximumFractionDigits:6})}
+      ${htmlEscape(c.manager || '')} ${htmlEscape(c.note || '')}
+      ${subMaterialPersonalCan('delete') ? `<button type="button" class="btn btn-secondary btn-sm" onclick="deleteSubMaterialCount(${jsArg(c.id)})">삭제</button>` : ''}
+    </div>`).join('') : '';
+  updateSubMaterialCountPreview();
+  document.getElementById('sm-count-modal').classList.remove('hidden');
+  document.getElementById('sm-count-qty').focus();
+}
+
+function closeSubMaterialCount(){
+  if(subMaterialCountSaving){ toast('실사 저장이 끝난 뒤 닫아주세요.'); return; }
+  subMaterialCountLoadSeq += 1;
+  document.getElementById('sm-count-modal')?.classList.add('hidden');
+  const lotEl = document.getElementById('sm-count-lot-id');
+  if(lotEl) lotEl.value = '';
+}
+
+function updateSubMaterialCountPreview(){
+  const input = document.getElementById('sm-count-qty');
+  const raw = input?.value.trim() || '';
+  const qty = Number(raw);
+  const output = document.getElementById('sm-count-difference');
+  if(!output) return;
+  if(!subMaterialPersonalCan('create')){ output.textContent = '이 LOT의 실사 이력을 확인할 수 있습니다.'; return; }
+  if(!raw || !Number.isFinite(qty) || qty < 0 || input.validity?.badInput){
+    output.textContent = '실제 재고량을 입력하면 선택한 LOT의 조정수량을 확인할 수 있습니다.';
+    return;
+  }
+  const delta = Number((qty - Number(document.getElementById('sm-count-system-qty').value)).toFixed(6));
+  output.textContent = `조정수량: ${delta > 0 ? '+' : ''}${delta.toLocaleString('ko-KR',{maximumFractionDigits:6})} ${document.getElementById('sm-count-unit').value} · 저장 후 재고: ${qty.toLocaleString('ko-KR',{maximumFractionDigits:6})}`;
+}
+
+async function addSubMaterialCount(){
+  if(subMaterialCountSaving) return;
+  if(!subMaterialPersonalCan('create')){ toast('부자재 실사 등록 권한이 없습니다.'); return; }
+  const lotId = document.getElementById('sm-count-lot-id')?.value || '';
+  const row = getSubMaterialLotStockRows().find(l => String(l.id) === lotId);
+  if(!row){ toast('재고현황에서 실사할 LOT을 선택하세요.'); return; }
+  const date = document.getElementById('sm-count-date').value;
+  if(date !== localDateString()){ toast('실사일자가 바뀌었습니다. 실사창을 다시 열어주세요.'); return; }
+  const input = document.getElementById('sm-count-qty');
+  const rawQty = input.value.trim();
+  const parsedQty = Number(rawQty);
+  if(!rawQty || !Number.isFinite(parsedQty) || parsedQty < 0 || input.validity?.badInput || input.validity?.stepMismatch){
+    toast('실제 재고량을 0 이상의 숫자로 입력하세요. (소수 여섯 자리까지)'); return;
+  }
+  const systemQty = row.stockQty;
+  const previousQty = Number(document.getElementById('sm-count-system-qty').value);
+  if(!Number.isFinite(previousQty) || Math.abs(systemQty - previousQty) > 0.0000001){
+    document.getElementById('sm-count-system-qty').value = systemQty;
+    document.getElementById('sm-count-system-display').value = systemQty.toLocaleString('ko-KR',{maximumFractionDigits:6});
+    updateSubMaterialCountPreview();
+    toast('전산재고가 변경되었습니다. 바뀐 조정수량을 확인한 뒤 다시 저장해주세요.');
+    return;
+  }
+  const qty = Number(parsedQty.toFixed(6));
+  const record = {
+    id:subMaterialCountRequestId || (subMaterialCountRequestId = subMaterialId()), lotId:row.id,
+    qty, expectedSystemQty:systemQty,
+    manager:document.getElementById('sm-count-manager').value.trim(),
+    note:document.getElementById('sm-count-note').value.trim()
   };
-  subMaterialCounts.push(count);
-  const dateLabel = dataChangeDateLabel(date);
-  queueAppDataChangeDetail('subMaterialCounts', {
-    action:'저장',
-    target:`${dateLabel} / ${item.name}`,
-    summary:`부자재 실사 저장: ${dateLabel} / ${item.name}`,
-    refId:count.id
-  });
-  saveSubMaterials();
-  resetSubMaterialCount();
-  renderSubMaterials();
-  toast('부자재 재고실사가 저장되었습니다.');
+  subMaterialCountSaving = true;
+  setSubMaterialCountBusy(true);
+  try{
+    const result = await sbRpc('dbmt_erp_save_submaterial_count', {p_token:DBMTAuth.getSessionToken(),p_record:record});
+    if(!result?.ok){
+      if(result?.code === 'stock_conflict'){
+        applySubMaterialStockResponse(await refreshSubMaterialStockSnapshot());
+        const fresh = getSubMaterialLotStockRows().find(l=>String(l.id) === lotId);
+        if(fresh){
+          document.getElementById('sm-count-system-qty').value = fresh.stockQty;
+          document.getElementById('sm-count-system-display').value = fresh.stockQty.toLocaleString('ko-KR',{maximumFractionDigits:6});
+          updateSubMaterialCountPreview();
+        }
+        renderSubMaterialStock();
+      }
+      throw new Error(result?.message || '실사 저장에 실패했습니다. 다시 확인해주세요.');
+    }
+    applySubMaterialStockResponse(result);
+    subMaterialCountSaving = false;
+    closeSubMaterialCount();
+    renderSubMaterials();
+    toast('선택한 LOT의 실사와 재고조정을 저장했습니다.');
+  }catch(error){
+    toast(error?.message || '실사 저장에 실패했습니다. 입력값을 확인하고 다시 시도해주세요.');
+  }finally{
+    subMaterialCountSaving = false;
+    setSubMaterialCountBusy(false);
+  }
 }
 
-function resetSubMaterialCount(){
-  ['sm-count-qty','sm-count-manager','sm-count-note'].forEach(id=>{
-    const el = document.getElementById(id); if(el) el.value = '';
-  });
-  const dateEl = document.getElementById('sm-count-date'); if(dateEl && !dateEl.value) dateEl.value = today;
-  onSubMaterialCountItemSelect();
-}
-
-function deleteSubMaterialCount(id){
-  const count = subMaterialCounts.find(c => c.id === id);
-  if(!count) return;
-  if(!confirm('최근 실사 기록을 삭제할까요?')) return;
-  const dateLabel = dataChangeDateLabel(count.date);
-  queueAppDataChangeDetail('subMaterialCounts', {
-    action:'삭제',
-    target:`${dateLabel} / ${count.itemName || ''}`,
-    summary:`부자재 실사 삭제: ${dateLabel} / ${count.itemName || count.itemCode || id}`,
-    refId:count.id || id
-  });
-  subMaterialCounts = subMaterialCounts.filter(c => c.id !== id);
-  saveSubMaterials();
-  renderSubMaterials();
+async function deleteSubMaterialCount(id){
+  if(!subMaterialPersonalCan('delete')){ toast('부자재 실사 삭제 권한이 없습니다.'); return; }
+  if(subMaterialCountSaving) return;
+  subMaterialCountSaving = true;
+  setSubMaterialCountBusy(true);
+  try{
+    applySubMaterialStockResponse(await refreshSubMaterialStockSnapshot());
+    const count = subMaterialCounts.find(c => c.id === id);
+    if(!count){ renderSubMaterials(); toast('이미 삭제된 실사 기록입니다.'); return; }
+    if(!confirm(`${count.date || ''} / ${count.itemName || ''}${count.lot ? ' / ' + count.lot : ''} 실사를 삭제하고 해당 조정을 취소할까요?`)) return;
+    const result = await sbRpc('dbmt_erp_delete_submaterial_count', {
+      p_token:DBMTAuth.getSessionToken(),p_count_id:id,p_expected_revision:subMaterialCountsRevision || null
+    });
+    if(!result?.ok){
+      applySubMaterialStockResponse(await refreshSubMaterialStockSnapshot());
+      renderSubMaterialStock();
+      throw new Error(result?.message || '실사 삭제에 실패했습니다. 다시 확인해주세요.');
+    }
+    applySubMaterialStockResponse(result);
+    renderSubMaterials();
+    const selectedLot = document.getElementById('sm-count-lot-id')?.value;
+    if(selectedLot && subMaterialPersonalCan('view')) renderSubMaterialCountForm(selectedLot);
+    toast('실사 기록과 해당 재고조정을 취소했습니다.');
+  }catch(error){
+    toast(error?.message || '실사 삭제에 실패했습니다.');
+  }finally{
+    subMaterialCountSaving = false;
+    setSubMaterialCountBusy(false);
+  }
 }
 
 function subMaterialUsageProductionEntry(productionId){
@@ -12281,7 +12580,7 @@ function getSubMaterialLotUsedQty(lotId, excludeProductionId=''){
 function getSubMaterialLotAvailable(lotId, excludeProductionId=''){
   const lot = subMaterialLots.find(l => String(l.id || '') === String(lotId || ''));
   if(!lot) return 0;
-  return parseAppNumber(lot.qty) - getSubMaterialLotUsedQty(lotId, excludeProductionId);
+  return Number((parseAppNumber(lot.qty) - getSubMaterialLotUsedQty(lotId, excludeProductionId) + getSubMaterialLotAdjustmentQty(lotId)).toFixed(6));
 }
 
 function subMaterialUsageDraftId(){
@@ -12390,13 +12689,18 @@ function renderSubMaterialUsageDraftRows(){
   }).join('');
 }
 
-async function openSubMaterialUsageModal(productionId, skipRefresh=false){
+async function openSubMaterialUsageModal(productionId){
   const entry = subMaterialUsageProductionEntry(productionId);
   if(!entry){
     toast('연결된 생산 작업을 찾을 수 없습니다.');
     return;
   }
-  if(!skipRefresh) await refreshSubMaterialUsagesFromSupabase(true);
+  try{
+    applySubMaterialStockResponse(await refreshSubMaterialStockSnapshot());
+  }catch(error){
+    toast(error?.message || '최신 부자재 재고를 불러오지 못했습니다. 다시 시도해주세요.');
+    return;
+  }
   activeSubMaterialUsageProductionId = String(productionId || '');
   const existing = getProductionSubMaterialUsages(activeSubMaterialUsageProductionId);
   subMaterialUsageDraftRows = existing.length
@@ -12657,10 +12961,10 @@ function getSubMaterialStockRows(){
         (String(l.itemName||'') === String(item.name||'') && String(l.itemSpec||'') === String(item.spec||''))
       );
       const counts = subMaterialCounts
-        .filter(c =>
+        .filter(c => !c.lotId && (
           c.itemId === item.id || c.itemCode === item.code ||
           (String(c.itemName||'') === String(item.name||'') && String(c.itemSpec||'') === String(item.spec||''))
-        )
+        ))
         .sort((a,b)=>
           String(b.date||'').localeCompare(String(a.date||'')) ||
           String(b.createdAt||'').localeCompare(String(a.createdAt||'')) ||
@@ -12679,9 +12983,15 @@ function getSubMaterialStockRows(){
           .reduce((sum,u)=>sum + parseAppNumber(u.qty), 0)
         : 0;
       const latestQty = latest ? parseAppNumber(latest.qty) : null;
-      const managedQty = latest ? latestQty + inAfterCount - usedAfterCount : totalIn - totalUsed;
+      const lotIds = new Set(lots.map(l => String(l.id)));
+      const lotCounts = subMaterialCounts.filter(c => c.lotId && lotIds.has(String(c.lotId)));
+      const totalAdjusted = Number(lotCounts.reduce((sum,c)=>sum + parseAppNumber(c.adjustmentQty), 0).toFixed(6));
+      const adjustedAfterCount = lotCounts.filter(c => !latest || subMaterialRecordIsAfterCount(c, latest))
+        .reduce((sum,c)=>sum + parseAppNumber(c.adjustmentQty), 0);
+      const lotStockQty = Number((totalIn - totalUsed + totalAdjusted).toFixed(6));
+      const managedQty = latest ? Number((latestQty + inAfterCount - usedAfterCount + adjustedAfterCount).toFixed(6)) : lotStockQty;
       return {
-        item, totalIn, totalUsed, latest, latestQty, inAfterCount, usedAfterCount, managedQty,
+        item, totalIn, totalUsed, totalAdjusted, lotStockQty, latest, latestQty, inAfterCount, usedAfterCount, managedQty,
         unit: latest?.unit || item.unit || lots.find(l=>l.unit)?.unit || '',
         status: latest ? (inAfterCount > 0 || usedAfterCount > 0 ? '실사 후 변동' : '실사완료') : '실사필요'
       };
@@ -12701,11 +13011,13 @@ function getSubMaterialLotStockRows(){
       subMaterialItems.find(item => lot.itemCode && String(item.code) === String(lot.itemCode));
     const totalIn = roundQty(parseAppNumber(lot.qty));
     const totalUsed = roundQty(usedByLot.get(String(lot.id || '')) || 0);
-    const stockQty = roundQty(totalIn - totalUsed);
+    const totalAdjusted = getSubMaterialLotAdjustmentQty(lot.id);
+    const latestCount = getSubMaterialLotCounts(lot.id)[0] || null;
+    const stockQty = roundQty(totalIn - totalUsed + totalAdjusted);
     return {
       ...lot, itemCode:lot.itemCode || item?.code || '', itemName:lot.itemName || item?.name || '',
       itemSpec:lot.itemSpec || item?.spec || '', unit:lot.unit || item?.unit || '',
-      totalIn, totalUsed, stockQty,
+      totalIn, totalUsed, totalAdjusted, latestCount, stockQty,
       status:stockQty < 0 ? '음수 재고' : (stockQty > 0 ? '재고 있음' : '소진')
     };
   }).sort((a,b)=>
@@ -12716,173 +13028,138 @@ function getSubMaterialLotStockRows(){
   );
 }
 
+function getFilteredSubMaterialLotStockRows(){
+  const query = (document.getElementById('sm-stock-search')?.value || '').trim().toLowerCase();
+  const month = document.getElementById('sm-filter-month')?.value || '';
+  const status = document.getElementById('sm-stock-status')?.value || 'all';
+  return getSubMaterialLotStockRows().filter(row => {
+    if(month && !String(row.date || '').startsWith(month)) return false;
+    if(status === 'available' && row.stockQty <= 0) return false;
+    if(status === 'empty' && row.stockQty !== 0) return false;
+    if(status === 'negative' && row.stockQty >= 0) return false;
+    return !query || [row.itemCode,row.itemName,row.itemSpec,row.lot,row.trader,row.note,row.latestCount?.note]
+      .some(v=>String(v || '').toLowerCase().includes(query));
+  });
+}
+
+function getFilteredSubMaterialStockRows(){
+  const query = (document.getElementById('sm-stock-search')?.value || '').trim().toLowerCase();
+  return getSubMaterialStockRows().filter(row => !query ||
+    [row.item.code,row.item.name,row.item.spec,row.latest?.note].some(v=>String(v || '').toLowerCase().includes(query))
+  );
+}
+
+function clearSubMaterialStockFilters(){
+  ['sm-stock-search','sm-filter-month'].forEach(id=>{const el=document.getElementById(id);if(el) el.value='';});
+  const status = document.getElementById('sm-stock-status');
+  if(status) status.value = 'all';
+  renderSubMaterialStock();
+}
+
 function renderSubMaterialStock(){
   const lotView = document.getElementById('sm-stock-view')?.value !== 'item';
-  const stockQ = (document.getElementById('sm-stock-search')?.value || '').toLowerCase().trim();
   const lotWrap = document.getElementById('sm-stock-lot-wrap');
   const itemWrap = document.getElementById('sm-stock-item-wrap');
   const lotNote = document.getElementById('sm-stock-lot-note');
   const statusEl = document.getElementById('sm-stock-status');
   const searchEl = document.getElementById('sm-stock-search');
+  const monthLabel = document.getElementById('sm-stock-month-label');
+  const countSheetButton = document.getElementById('sm-count-sheet-btn');
   if(lotWrap) lotWrap.style.display = lotView ? '' : 'none';
   if(itemWrap) itemWrap.style.display = lotView ? 'none' : '';
-  if(lotNote) lotNote.style.display = lotView ? '' : 'none';
   if(statusEl) statusEl.style.display = lotView ? '' : 'none';
+  if(monthLabel) monthLabel.style.display = lotView ? '' : 'none';
+  if(countSheetButton) countSheetButton.style.display = lotView ? '' : 'none';
   if(searchEl) searchEl.placeholder = lotView ? '품목명 / 고유번호 / LOT / 거래처 검색...' : '품목명 / 고유번호 / 규격 검색...';
-  const stockCountEl = document.getElementById('sm-stock-count');
+  if(lotNote) lotNote.textContent = lotView
+    ? '현재고 = 입고수량 − 사용수량 + 실사조정입니다. 각 LOT의 ‘실사’에서 실제 재고를 입력하세요. 입고월을 비우면 이전 달의 재고도 함께 표시합니다.'
+    : 'LOT 재고합계는 입고·사용·LOT 실사로 계산합니다. 기존 실사반영 재고는 과거 품목 단위 실사 기준이며, 차이를 LOT에 임의로 배분하지 않아 두 합계가 다를 수 있습니다.';
+  const countEl = document.getElementById('sm-stock-count');
+  const qty = value => Number(value).toLocaleString('ko-KR',{maximumFractionDigits:6});
+  const canCreate = subMaterialPersonalCan('create');
+  const canDelete = subMaterialPersonalCan('delete');
+  const canView = subMaterialPersonalCan('view');
   if(lotView){
-    const status = statusEl?.value || 'all';
-    const rows = getSubMaterialLotStockRows().filter(row => {
-      if(status === 'available' && row.stockQty <= 0) return false;
-      if(status === 'empty' && row.stockQty !== 0) return false;
-      if(status === 'negative' && row.stockQty >= 0) return false;
-      return !stockQ || [row.itemCode, row.itemName, row.itemSpec, row.lot, row.trader, row.note]
-        .some(value => String(value || '').toLowerCase().includes(stockQ));
-    });
-    if(stockCountEl) stockCountEl.textContent = `(LOT ${rows.length}건)`;
+    const rows = getFilteredSubMaterialLotStockRows();
+    if(countEl) countEl.textContent = `(LOT ${rows.length}건)`;
     const body = document.getElementById('sm-stock-lot-body');
-    const qty = value => value.toLocaleString('ko-KR', {maximumFractionDigits:6});
     if(body) body.innerHTML = rows.length ? rows.map(row=>`<tr>
       <td style="white-space:nowrap;">${htmlEscape(row.date || '-')}</td>
-      <td>${htmlEscape(row.itemCode || '-')}</td>
-      <td><strong>${htmlEscape(row.itemName || '-')}</strong></td>
+      <td><strong>${htmlEscape(row.itemName || '-')}</strong><div style="color:#777;font-size:10px;">${htmlEscape(row.itemCode || '')}</div></td>
       <td>${htmlEscape(row.itemSpec || '-')}</td>
-      <td style="font-family:Consolas,'Courier New',monospace;">${htmlEscape(row.lot || '-')}</td>
+      <td style="font-family:Consolas,'Courier New',monospace;overflow-wrap:anywhere;">${htmlEscape(row.lot || '-')}</td>
       <td>${htmlEscape(row.trader || '-')}</td>
       <td style="text-align:right;">${qty(row.totalIn)}</td>
       <td style="text-align:right;">${qty(row.totalUsed)}</td>
+      <td style="text-align:right;">${row.totalAdjusted > 0 ? '+' : ''}${qty(row.totalAdjusted)}</td>
       <td style="text-align:right;font-weight:800;">${qty(row.stockQty)}</td>
       <td>${htmlEscape(row.unit || '-')}</td>
-      <td style="white-space:nowrap;font-weight:700;">${htmlEscape(row.status)}</td>
+      <td style="font-size:10px;">${htmlEscape(row.latestCount?.date || '-')}</td>
+      <td style="font-weight:700;${row.stockQty < 0 ? 'color:#c0392b;' : ''}">${htmlEscape(row.status)}</td>
       <td>${htmlEscape(row.note || '-')}</td>
-    </tr>`).join('') : '<tr><td colspan="12" style="text-align:center;color:#888;padding:20px;">조건에 맞는 부자재 LOT 재고가 없습니다.</td></tr>';
+      <td style="text-align:center;">
+        ${canView ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openSubMaterialCount(${jsArg(row.id)})">${canCreate ? '실사' : '이력'}</button>` : ''}
+        ${canDelete ? `<button type="button" class="btn btn-secondary btn-sm" onclick="deleteSubMaterialLot(${jsArg(row.id)})">삭제</button>` : ''}
+      </td>
+    </tr>`).join('') : '<tr><td colspan="14" style="text-align:center;color:#888;padding:20px;">조건에 맞는 부자재 LOT 재고가 없습니다.</td></tr>';
     return;
   }
-
-  let stockRows = getSubMaterialStockRows();
-  if(stockQ) stockRows = stockRows.filter(r =>
-    [r.item.code, r.item.name, r.item.spec, r.status, r.latest?.note]
-      .some(v => String(v || '').toLowerCase().includes(stockQ))
-  );
-  if(stockCountEl) stockCountEl.textContent = `(품목 ${stockRows.length}건)`;
-  const stockBody = document.getElementById('sm-stock-body');
-  if(stockBody){
-    stockBody.innerHTML = stockRows.length ? stockRows.map(r=>{
-      const statusColor = r.status === '실사필요' ? '#e74c3c' : (r.status === '실사 후 변동' ? '#d35400' : '#27ae60');
-      return `<tr>
-        <td style="font-family:Consolas,'Courier New',monospace;font-weight:700;color:#2c3e50;">${htmlEscape(r.item.code || '')}</td>
-        <td><strong>${htmlEscape(r.item.name || '')}</strong></td>
-        <td>${htmlEscape(r.item.spec || '-')}</td>
-        <td style="text-align:right;">${r.totalIn.toLocaleString('ko-KR')}</td>
-        <td style="text-align:right;">${r.totalUsed.toLocaleString('ko-KR')}</td>
-        <td style="text-align:right;">${r.latest ? r.latestQty.toLocaleString('ko-KR') : '-'}</td>
-        <td style="text-align:right;">${r.latest ? r.inAfterCount.toLocaleString('ko-KR') : '-'}</td>
-        <td style="text-align:right;">${r.latest ? r.usedAfterCount.toLocaleString('ko-KR') : '-'}</td>
-        <td style="text-align:right;font-weight:800;color:#2c3e50;">${r.managedQty.toLocaleString('ko-KR')}</td>
-        <td>${htmlEscape(r.unit || '-')}</td>
-        <td style="white-space:nowrap;">${r.latest ? htmlEscape(r.latest.date || '') : '-'}</td>
-        <td>${htmlEscape(r.latest?.manager || '-')}</td>
-        <td><span style="background:${statusColor};color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;">${htmlEscape(r.status)}</span></td>
-        <td>${htmlEscape(r.latest?.note || '-')}</td>
-        <td style="text-align:center;white-space:nowrap;">${r.latest ? `<button class="btn btn-sm btn-danger" onclick="deleteSubMaterialCount('${r.latest.id}')">실사삭제</button>` : '-'}</td>
-      </tr>`;
-    }).join('')
-    : '<tr><td colspan="15" style="text-align:center;color:#888;padding:20px;">표시할 부자재 재고현황이 없습니다.</td></tr>';
-  }
+  const rows = getFilteredSubMaterialStockRows();
+  if(countEl) countEl.textContent = `(품목 ${rows.length}건)`;
+  const body = document.getElementById('sm-stock-body');
+  if(body) body.innerHTML = rows.length ? rows.map(row=>`<tr>
+    <td>${htmlEscape(row.item.code || '')}</td><td><strong>${htmlEscape(row.item.name || '')}</strong></td>
+    <td>${htmlEscape(row.item.spec || '-')}</td>
+    <td style="text-align:right;">${qty(row.totalIn)}</td><td style="text-align:right;">${qty(row.totalUsed)}</td>
+    <td style="text-align:right;">${qty(row.totalAdjusted)}</td><td style="text-align:right;font-weight:800;">${qty(row.lotStockQty)}</td>
+    <td style="text-align:right;">${row.latest ? qty(row.managedQty) : '-'}</td>
+    <td>${htmlEscape(row.unit || '-')}</td>
+    <td>${htmlEscape(row.latest?.date || '-')}<div style="font-size:10px;color:#777;">${htmlEscape(row.latest?.manager || '')}</div></td>
+    <td style="text-align:right;">${row.latest ? qty(row.latestQty) : '-'}</td>
+    <td>${row.latest && canDelete ? `<button class="btn btn-secondary btn-sm" onclick="deleteSubMaterialCount(${jsArg(row.latest.id)})">기존 실사삭제</button>` : '-'}</td>
+  </tr>`).join('') : '<tr><td colspan="12" style="text-align:center;color:#888;padding:20px;">표시할 부자재 품목이 없습니다.</td></tr>';
 }
 
 function renderSubMaterials(){
   ensureSubMaterialCodes();
   const inDate = document.getElementById('sm-in-date');
-  if(inDate && !inDate.value) inDate.value = today;
-  const countDate = document.getElementById('sm-count-date');
-  if(countDate && !countDate.value) countDate.value = today;
-  const filterMonth = document.getElementById('sm-filter-month');
-  if(filterMonth && !filterMonth.value) filterMonth.value = today.slice(0,7);
+  if(inDate && !inDate.value) inDate.value = localDateString();
   refreshSubMaterialItemOptions();
   updateSubMaterialLotPreview();
-
-  const itemBody = document.getElementById('sm-item-body');
-  if(itemBody){
-    itemBody.innerHTML = subMaterialItems.length ? subMaterialItems
-      .slice()
-      .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'))
-      .map(i=>`<tr>
-        <td style="font-family:Consolas,'Courier New',monospace;font-weight:700;color:#2c3e50;">${htmlEscape(i.code || '')}</td>
-        <td><strong>${htmlEscape(i.name)}</strong></td>
-        <td>${htmlEscape(i.spec || '-')}</td>
-        <td>${htmlEscape(i.unit || '-')}</td>
-        <td style="text-align:right;">${i.unitPrice === '' || i.unitPrice == null ? '-' : parseAppNumber(i.unitPrice).toLocaleString('ko-KR')}</td>
-        <td>${htmlEscape(i.note || '-')}</td>
-        <td style="text-align:center;white-space:nowrap;">
-          <button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:4px;" onclick="editSubMaterialItem('${i.id}')">수정</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteSubMaterialItem('${i.id}')">삭제</button>
-        </td>
-      </tr>`).join('')
-      : '<tr><td colspan="7" style="text-align:center;color:#888;padding:18px;">등록된 부자재 품목이 없습니다.</td></tr>';
-  }
-
+  renderSubMaterialItems();
   renderSubMaterialStock();
-
-  const q = (document.getElementById('sm-search')?.value || '').toLowerCase().trim();
-  const ym = filterMonth?.value || '';
-  let rows = subMaterialLots.slice();
-  if(ym) rows = rows.filter(r => String(r.date || '').startsWith(ym));
-  if(q) rows = rows.filter(r =>
-    [r.itemCode, r.itemName, r.itemSpec, r.lot, r.trader, r.certName, r.note]
-      .some(v => String(v || '').toLowerCase().includes(q))
-  );
-  rows.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || String(b.lot||'').localeCompare(String(a.lot||'')));
-  const countEl = document.getElementById('sm-lot-count');
-  if(countEl) countEl.textContent = `(${rows.length}건)`;
-  const lotBody = document.getElementById('sm-lot-body');
-  if(lotBody){
-    lotBody.innerHTML = rows.length ? rows.map(r=>`<tr>
-      <td style="white-space:nowrap;">${htmlEscape(r.date || '')}</td>
-      <td style="font-family:Consolas,'Courier New',monospace;font-size:11px;">${htmlEscape(r.lot || '')}</td>
-      <td><strong>${htmlEscape(r.itemName || '')}</strong></td>
-      <td>${htmlEscape(r.itemSpec || '-')}</td>
-      <td>${htmlEscape(r.trader || '-')}</td>
-      <td style="text-align:right;">${parseAppNumber(r.qty).toLocaleString('ko-KR')}</td>
-      <td>${htmlEscape(r.unit || '-')}</td>
-      <td>${r.certName ? `<span style="background:#eef7ff;color:#2471a3;border:1px solid #cfe6ff;border-radius:999px;padding:2px 7px;font-size:11px;">${htmlEscape(r.certName)}</span>` : '-'}</td>
-      <td>${htmlEscape(r.note || '-')}</td>
-      <td style="text-align:center;"><button class="btn btn-sm btn-danger" onclick="deleteSubMaterialLot('${r.id}')">삭제</button></td>
-    </tr>`).join('')
-    : '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">등록된 부자재 Lot이 없습니다.</td></tr>';
-  }
   renderSubMaterialUsageHistory();
 }
 
 function exportSubMaterialsCSV(){
-  const stockHeader = ['구분','고유번호','품목명','규격','총입고','총사용','최근실사','실사후입고','실사후사용','관리재고','단위','최근실사일','담당자','상태','비고'];
-  const stockRows = getSubMaterialStockRows().map(r=>[
-    '재고현황', r.item.code, r.item.name, r.item.spec, r.totalIn, r.totalUsed,
-    r.latest ? r.latestQty : '', r.latest ? r.inAfterCount : '',
-    r.latest ? r.usedAfterCount : '', r.managedQty,
-    r.unit, r.latest?.date || '', r.latest?.manager || '', r.status, r.latest?.note || ''
+  if(document.getElementById('sm-stock-view')?.value === 'item'){
+    const header = ['고유번호','품목명','규격','총입고','총사용','LOT 실사조정','LOT 재고합계','기존 실사반영 재고','단위','기존 품목 실사일','품목 실사수량','담당자','비고'];
+    const rows = getFilteredSubMaterialStockRows().map(r=>[
+      r.item.code,r.item.name,r.item.spec,r.totalIn,r.totalUsed,r.totalAdjusted,r.lotStockQty,r.latest ? r.managedQty : '',
+      r.unit,r.latest?.date || '',r.latest ? r.latestQty : '',r.latest?.manager || '',r.latest?.note || ''
+    ]);
+    downloadCSV([header,...rows], '부자재_품목별_재고합계.csv');
+    return;
+  }
+  const header = ['입고일자','입고 LOT','고유번호','품목명','규격','거래처','입고수량','사용수량','실사조정','현재고','단위','최근 실사일','상태','비고'];
+  const rows = getFilteredSubMaterialLotStockRows().map(r=>[
+    r.date,r.lot,r.itemCode,r.itemName,r.itemSpec,r.trader,r.totalIn,r.totalUsed,r.totalAdjusted,r.stockQty,r.unit,r.latestCount?.date || '',r.status,r.note
   ]);
-  const blank = [''];
-  const header = ['입고일자','Lot','품목고유번호','품목명','규격','거래처','수량','단위','성적서','비고'];
-  const rows = subMaterialLots
-    .slice()
-    .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')))
-    .map(r=>[r.date,r.lot,r.itemCode,r.itemName,r.itemSpec,r.trader,r.qty,r.unit,r.certName,r.note]);
-  downloadCSV([stockHeader, ...stockRows, blank, header, ...rows], '부자재_재고_Lot_목록.csv');
+  downloadCSV([header,...rows], '부자재_LOT별_재고현황.csv');
 }
 
 function printSubMaterialCountSheet(){
   ensureSubMaterialCodes();
-  const rows = getSubMaterialStockRows();
-  if(!rows.length){ toast('출력할 부자재 품목이 없습니다.'); return; }
+  const rows = getFilteredSubMaterialLotStockRows();
+  if(!rows.length){ toast('출력할 부자재 LOT이 없습니다.'); return; }
   const printedAt = localDateString();
   const bodyRows = rows.map((r, idx)=>`
     <tr>
       <td>${idx + 1}</td>
-      <td class="code">${htmlEscape(r.item.code || '')}</td>
-      <td class="name">${htmlEscape(r.item.name || '')}</td>
-      <td>${htmlEscape(r.item.spec || '')}</td>
-      <td class="num">${r.managedQty.toLocaleString('ko-KR')}</td>
+      <td class="code">${htmlEscape(r.itemCode || '')}</td>
+      <td class="name">${htmlEscape(r.itemName || '')}<div style="font-size:9px;font-weight:400;">${htmlEscape(r.itemSpec || '')}</div></td>
+      <td class="code" style="overflow-wrap:anywhere;">${htmlEscape(r.lot || '')}</td>
+      <td class="num">${r.stockQty.toLocaleString('ko-KR',{maximumFractionDigits:6})}</td>
       <td>${htmlEscape(r.unit || '')}</td>
       <td></td>
       <td></td>
@@ -12914,16 +13191,16 @@ function printSubMaterialCountSheet(){
       .code{font-family:Consolas,'Courier New',monospace;font-weight:700;}
       .num{text-align:right;}
       .note{font-size:10px;color:#555;margin-top:5px;}
-      col.no{width:4%} col.code{width:8%} col.name{width:18%} col.spec{width:13%}
-      col.book{width:9%} col.unit{width:6%} col.actual{width:10%} col.diff{width:9%}
-      col.note{width:16%} col.chk{width:7%}
+      col.no{width:4%} col.code{width:8%} col.name{width:18%} col.spec{width:17%}
+      col.book{width:9%} col.unit{width:5%} col.actual{width:9%} col.diff{width:8%}
+      col.note{width:16%} col.chk{width:6%}
     </style></head><body>
     <div class="sheet">
       <div class="top">
         <div style="width:260px;"></div>
         <div style="flex:1;text-align:center;">
           <h1>부자재 재고 실사 입력시트</h1>
-          <div style="font-size:11px;color:#555;">출력일: ${htmlEscape(printedAt)} / 등록품목 ${rows.length}건</div>
+          <div style="font-size:11px;color:#555;">출력일: ${htmlEscape(printedAt)} / 조회 LOT ${rows.length}건</div>
         </div>
         <div class="meta">
           <div class="label">실사일</div><div></div><div class="label">담당자</div><div></div>
@@ -12936,12 +13213,12 @@ function printSubMaterialCountSheet(){
           <col class="unit"><col class="actual"><col class="diff"><col class="note"><col class="chk">
         </colgroup>
         <thead><tr>
-          <th>No</th><th>고유번호</th><th>품목명</th><th>규격</th><th>관리재고</th>
+          <th>No</th><th>고유번호</th><th>품목명 / 규격</th><th>입고 LOT</th><th>현재고</th>
           <th>단위</th><th>실제재고</th><th>차이</th><th>비고</th><th>확인</th>
         </tr></thead>
         <tbody>${bodyRows}</tbody>
       </table>
-      <div class="note">※ 실제재고와 차이는 실사 후 수기로 작성하고, 시스템에는 부자재 재고실사 입력란에 실제 재고량을 저장합니다.</div>
+      <div class="note">※ 실제재고와 차이는 실사 후 수기로 작성하고, 부자재 재고현황에서 해당 LOT의 ‘실사’ 버튼을 눌러 실제 재고량을 저장합니다.</div>
     </div>
     </body></html>`);
   w.document.close();
@@ -20964,6 +21241,6 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="stock-report.js?v=20260913rowstock1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
-<script src="m02-auth.js?v=20260913rowstock1"></script>
+<script src="m02-auth.js?v=20260914submaterials1"></script>
 </body>
 </html>
