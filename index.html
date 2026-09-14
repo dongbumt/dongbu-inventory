@@ -13241,14 +13241,14 @@ function loadShipLog(){
   dayOuts.forEach((o,i)=>{
     rows+=`<tr>
       <td style="text-align:center">${i+1}</td>
-      <td>${o.product}</td><td>${o.trader||''}</td>
+      <td>${o.product}</td><td>${htmlEscape(o.origin||'-')}</td><td>${o.trader||''}</td>
       <td>${o.proddate||'-'}</td>
       <td style="font-family:var(--font-mono);font-size:10px">${o.lot||'-'}</td>
       <td style="text-align:right;font-weight:500">${o.weight.toFixed(2)}</td>
     </tr>`;
   });
   for(let i=dayOuts.length;i<10;i++){
-    rows+=`<tr><td style="text-align:center;color:var(--color-text-tertiary)">${i+1}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+    rows+=`<tr><td style="text-align:center;color:var(--color-text-tertiary)">${i+1}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
   }
   document.getElementById('shiplog-preview').innerHTML=`
   <div class="invoice-preview">
@@ -13264,7 +13264,7 @@ function loadShipLog(){
     </div>
     <table style="margin-bottom:12px">
       <thead><tr style="background:var(--color-background-secondary)">
-        <th style="text-align:center;width:30px">No</th><th>제품명</th><th>거래처</th><th>제조일자</th><th>LOT</th><th style="text-align:right">수량(KG)</th>
+        <th style="text-align:center;width:30px">No</th><th>제품명</th><th style="width:80px">원산지</th><th>거래처</th><th>제조일자</th><th>LOT</th><th style="text-align:right">수량(KG)</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -14154,7 +14154,7 @@ function exportShipLogExcel(){
   for(let i=0;i<dayOuts.length;i+=10) pages.push(dayOuts.slice(i,i+10));
   const totalPages=pages.length;
   const [yr,mo,da]=date.split('-');
-  const pagesHTML=pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages)).join('<div style="page-break-after:always"></div>');
+  const pagesHTML=pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages)).join('');
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8"><title>완제품 출고일지 ${yr}-${mo}-${da}</title>
@@ -14225,9 +14225,9 @@ function buildShipLogPageHTML(date,items,pageNo,totalPages){
     const lb=b+'font-family:monospace;font-size:10px;word-break:break-all;';
     if(o){
       const pd=o.proddate?o.proddate.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$1-$2-$3'):'';
-      itemRows+=`<tr style="height:22px"><td style="${nb}">${(pageNo-1)*10+i+1}</td><td style="${b}">${o.product||''}</td><td style="${b}">${o.trader||''}</td><td style="${b}">${pd}</td><td style="${lb}">${o.lot||''}</td><td style="text-align:right;${b}">${o.weight!=null?o.weight.toFixed(2):''}</td></tr>`;
+      itemRows+=`<tr style="height:22px"><td style="${nb}">${(pageNo-1)*10+i+1}</td><td style="${b}">${o.product||''}</td><td style="${b}overflow-wrap:anywhere;">${htmlEscape(o.origin||'-')}</td><td style="${b}">${o.trader||''}</td><td style="${b}">${pd}</td><td style="${lb}">${o.lot||''}</td><td style="text-align:right;${b}">${o.weight!=null?o.weight.toFixed(2):''}</td></tr>`;
     }else{
-      itemRows+=`<tr style="height:22px"><td style="${nb};color:#ccc">${(pageNo-1)*10+i+1}</td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${lb}"></td><td style="${b}"></td></tr>`;
+      itemRows+=`<tr style="height:22px"><td style="${nb};color:#ccc">${(pageNo-1)*10+i+1}</td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${lb}"></td><td style="${b}"></td></tr>`;
     }
   }
   const checkRows=['보관상태','포장상태','표시사항','배송차량점검'].map((it, idx)=>`<tr style="height:22px"><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;">${it}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:100px;"></td>${idx===0?'<td rowspan="4" style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:80px;height:88px;text-align:center;vertical-align:middle;color:#999;">서명</td>':''}</tr>`).join('');
@@ -14251,6 +14251,7 @@ function buildShipLogPageHTML(date,items,pageNo,totalPages){
     <thead><tr style="background:#1a252f;">
       <th style="color:#fff;padding:6px 4px;font-size:11px;border:1px solid #1a252f;text-align:center;width:36px;">No</th>
       <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;">제품명</th>
+      <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;width:70px;">원산지</th>
       <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;">거래처</th>
       <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;width:90px;">제조일자</th>
       <th style="color:#fff;padding:6px 8px;font-size:11px;border:1px solid #1a252f;text-align:left;">LOT</th>
