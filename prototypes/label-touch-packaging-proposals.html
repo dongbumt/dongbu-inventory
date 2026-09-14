@@ -1,0 +1,292 @@
+<div id="dbmt-packaging-proposals" lang="ko" aria-label="내포장·외포장 라벨 터치화면 3안 비교">
+  <section class="dp-proposal" data-layout="split" aria-label="1안 좌우 분리형">
+    <h2>1안 · 좌우 분리형 <span>기존 균형형 유지 · 내포장과 외포장을 나란히</span></h2>
+    <div class="dp-screen"></div>
+  </section>
+  <section class="dp-proposal" data-layout="rows" aria-label="2안 위아래 분리형">
+    <h2>2안 · 위아래 분리형 <span>중량부터 출력까지 한 줄로</span></h2>
+    <div class="dp-screen"></div>
+  </section>
+  <section class="dp-proposal" data-layout="dock" aria-label="3안 하단 큰 버튼형">
+    <h2>3안 · 하단 큰 버튼형 <span>설정은 위쪽 · 반복 출력 버튼은 아래쪽</span></h2>
+    <div class="dp-screen"></div>
+  </section>
+</div>
+<style>
+  #dbmt-packaging-proposals { --dp-paper:#fff; --dp-back:#eff0f2; --dp-soft:#f5f6f7; --dp-ink:#272c31; --dp-muted:#555e65; --dp-line:#bfc5ca; --dp-dark:#343a40; color-scheme:light; color:var(--dp-ink); font-family:"Malgun Gothic","Segoe UI",sans-serif; display:grid; gap:32px; }
+  #dbmt-packaging-proposals * { box-sizing:border-box; }
+  #dbmt-packaging-proposals [hidden] { display:none !important; }
+  #dbmt-packaging-proposals .dp-proposal { container-type:inline-size; min-width:0; }
+  #dbmt-packaging-proposals h2 { margin:0 0 12px; font-size:20px; font-weight:500; }
+  #dbmt-packaging-proposals h2 span { margin-left:14px; font-size:14px; font-weight:400; color:var(--dp-muted); }
+  #dbmt-packaging-proposals .dp-screen { --dp-target:5cqi; aspect-ratio:5/4; width:100%; min-width:0; background:var(--dp-back); border:1px solid var(--dp-line); border-radius:8px; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:0; position:relative; font-size:clamp(16px,1.56cqi,20px); line-height:1.35; }
+  #dbmt-packaging-proposals button, #dbmt-packaging-proposals input, #dbmt-packaging-proposals select { font:inherit; color:var(--dp-ink); background:var(--dp-paper); border:1px solid var(--dp-line); border-radius:7px; min-height:max(44px,var(--dp-target)); min-width:0; touch-action:manipulation; }
+  #dbmt-packaging-proposals button { cursor:pointer; padding:8px 10px; font-weight:500; }
+  #dbmt-packaging-proposals button:active { filter:brightness(.93); }
+  #dbmt-packaging-proposals button:disabled { opacity:.5; cursor:default; }
+  #dbmt-packaging-proposals input, #dbmt-packaging-proposals select { padding:8px; width:100%; }
+  #dbmt-packaging-proposals .dp-dark { background:var(--dp-dark); color:var(--dp-paper); border-color:var(--dp-dark); }
+  #dbmt-packaging-proposals .dp-top { display:flex; align-items:center; gap:12px; padding:8px 12px; background:var(--dp-paper); border-bottom:1px solid var(--dp-line); border-radius:8px 8px 0 0; }
+  #dbmt-packaging-proposals .dp-brand { font-size:clamp(18px,1.87cqi,24px); font-weight:500; }
+  #dbmt-packaging-proposals .dp-demo { margin-left:auto; color:var(--dp-muted); font-size:clamp(13px,1.17cqi,15px); }
+  #dbmt-packaging-proposals .dp-body { display:grid; grid-template-columns:29% minmax(0,1fr); gap:12px; padding:12px; min-height:0; }
+  #dbmt-packaging-proposals .dp-left { display:grid; grid-template-rows:auto minmax(0,1fr); gap:12px; min-width:0; min-height:0; }
+  #dbmt-packaging-proposals .dp-panel { background:var(--dp-paper); border:1px solid var(--dp-line); border-radius:8px; padding:12px; min-width:0; min-height:0; }
+  #dbmt-packaging-proposals .dp-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; font-weight:500; }
+  #dbmt-packaging-proposals .dp-small { font-size:clamp(13px,1.17cqi,15px); color:var(--dp-muted); }
+  #dbmt-packaging-proposals .dp-date { display:grid; gap:6px; margin-bottom:8px; }
+  #dbmt-packaging-proposals .dp-orders { display:grid; gap:8px; }
+  #dbmt-packaging-proposals .dp-order { text-align:left; display:grid; gap:6px; min-height:max(66px,6.1cqi); }
+  #dbmt-packaging-proposals .dp-order[aria-pressed="true"] { background:#e8ebed; border:2px solid #646d75; padding:7px 9px; }
+  #dbmt-packaging-proposals .dp-calc { display:grid; grid-template-rows:auto minmax(60px,.85fr) minmax(0,5fr); gap:8px; }
+  #dbmt-packaging-proposals .dp-calc .dp-heading { margin:0; }
+  #dbmt-packaging-proposals .dp-calc-output { font-size:clamp(30px,3.44cqi,44px); font-variant-numeric:tabular-nums; display:flex; align-items:center; justify-content:flex-end; padding:8px; background:var(--dp-soft); border:1px solid var(--dp-line); border-radius:7px; overflow-wrap:anywhere; }
+  #dbmt-packaging-proposals .dp-calc-keys { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:repeat(5,minmax(0,1fr)); gap:6px; min-height:0; }
+  #dbmt-packaging-proposals .dp-calc-keys button { padding:3px; font-size:clamp(22px,2.18cqi,28px); min-height:44px; }
+  #dbmt-packaging-proposals .dp-calc-keys [data-key="0"] { grid-column:span 2; }
+  #dbmt-packaging-proposals .dp-right { display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:12px; min-height:0; min-width:0; }
+  #dbmt-packaging-proposals .dp-job-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  #dbmt-packaging-proposals .dp-product { font-size:clamp(23px,2.5cqi,32px); font-weight:500; margin-bottom:6px; }
+  #dbmt-packaging-proposals .dp-metrics { display:grid; grid-template-columns:1fr 1.3fr 1fr; gap:12px; padding-top:8px; margin-top:8px; border-top:1px solid var(--dp-line); }
+  #dbmt-packaging-proposals .dp-metrics > div { display:grid; gap:5px; }
+  #dbmt-packaging-proposals .dp-metrics strong { font-size:clamp(21px,2.1cqi,27px); font-weight:500; font-variant-numeric:tabular-nums; }
+  #dbmt-packaging-proposals .dp-pack-area { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; min-height:0; }
+  #dbmt-packaging-proposals .dp-pack { display:flex; flex-direction:column; gap:10px; min-height:0; }
+  #dbmt-packaging-proposals .dp-pack[data-kind="outer"] { border:2px solid #646d75; padding:11px; }
+  #dbmt-packaging-proposals .dp-pack-title { font-size:clamp(23px,2.18cqi,28px); font-weight:500; }
+  #dbmt-packaging-proposals .dp-pack-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  #dbmt-packaging-proposals .dp-rule { display:block; margin-top:6px; font-size:clamp(15px,1.33cqi,17px); color:var(--dp-muted); }
+  #dbmt-packaging-proposals .dp-fields { display:grid; gap:10px; }
+  #dbmt-packaging-proposals .dp-field-label { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  #dbmt-packaging-proposals .dp-weight { width:100%; background:var(--dp-soft); display:flex; align-items:baseline; justify-content:center; gap:8px; min-height:clamp(68px,7.03cqi,90px); }
+  #dbmt-packaging-proposals .dp-weight strong { font-size:clamp(31px,3.44cqi,44px); font-weight:500; font-variant-numeric:tabular-nums; }
+  #dbmt-packaging-proposals .dp-weight small { font-size:clamp(14px,1.4cqi,18px); }
+  #dbmt-packaging-proposals .dp-presets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px; }
+  #dbmt-packaging-proposals .dp-presets [aria-pressed="true"] { background:#e0e4e7; border-color:#646d75; }
+  #dbmt-packaging-proposals .dp-stepper { display:grid; grid-template-columns:max(44px,var(--dp-target)) minmax(0,1fr) max(44px,var(--dp-target)); gap:8px; }
+  #dbmt-packaging-proposals .dp-stepper .dp-count { font-size:clamp(24px,2.34cqi,30px); font-variant-numeric:tabular-nums; }
+  #dbmt-packaging-proposals .dp-stepper .dp-adjust { font-size:28px; }
+  #dbmt-packaging-proposals .dp-effect { font-size:clamp(15px,1.4cqi,18px); margin-top:4px; min-height:1.35em; }
+  #dbmt-packaging-proposals .dp-pack-bottom { display:grid; gap:8px; margin-top:auto; }
+  #dbmt-packaging-proposals .dp-print { display:grid; align-content:center; justify-items:center; gap:6px; width:100%; min-height:clamp(90px,8.28cqi,106px); font-size:clamp(22px,2.03cqi,26px); border:2px solid #646d75; }
+  #dbmt-packaging-proposals .dp-print small { font-size:clamp(14px,1.33cqi,17px); font-weight:400; }
+  #dbmt-packaging-proposals .dp-print[data-kind="inner"] { background:#e5e8ea; }
+  #dbmt-packaging-proposals .dp-print[data-kind="outer"] { background:var(--dp-dark); color:var(--dp-paper); border-color:var(--dp-dark); }
+  #dbmt-packaging-proposals .dp-preview { min-height:44px; }
+  #dbmt-packaging-proposals .dp-last { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:clamp(14px,1.25cqi,16px); }
+  #dbmt-packaging-proposals .dp-last button { min-height:max(44px,var(--dp-target)); }
+  #dbmt-packaging-proposals .dp-dock { display:none; grid-column:1/-1; gap:12px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #dbmt-packaging-proposals .dp-bottom { display:grid; grid-template-columns:1fr 1.12fr; gap:16px; align-items:center; }
+  #dbmt-packaging-proposals .dp-last { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 10px; }
+  #dbmt-packaging-proposals .dp-last > span { grid-column:1; }
+  #dbmt-packaging-proposals .dp-last > button { grid-column:2; grid-row:1/span 2; }
+  #dbmt-packaging-proposals .dp-complete { display:flex; align-items:center; justify-content:space-between; gap:10px; border-left:1px solid var(--dp-line); padding-left:16px; }
+  #dbmt-packaging-proposals .dp-complete strong { display:block; font-size:clamp(19px,1.87cqi,24px); font-weight:500; }
+  #dbmt-packaging-proposals .dp-complete button { border:2px solid #646d75; padding-inline:16px; }
+  #dbmt-packaging-proposals .dp-status { padding:8px 12px; border-top:1px solid var(--dp-line); background:var(--dp-paper); border-radius:0 0 8px 8px; font-size:clamp(13px,1.17cqi,15px); min-height:38px; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-pack-area { grid-template-columns:1fr; grid-template-rows:repeat(2,minmax(0,1fr)); }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-pack { display:grid; grid-template-columns:minmax(0,1fr) 32%; grid-template-rows:auto minmax(0,1fr); gap:10px 12px; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-pack-head { grid-column:1; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-fields { grid-column:1; grid-template-columns:1fr 1fr; gap:12px; align-items:center; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-pack-bottom { grid-column:2; grid-row:1/span 2; margin:0; grid-template-rows:minmax(0,1fr) auto; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-presets { display:none; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-print { min-height:140px; font-size:clamp(21px,1.87cqi,24px); }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-print span { max-width:7em; }
+  #dbmt-packaging-proposals [data-layout="rows"] .dp-stepper { gap:5px; grid-template-columns:44px minmax(0,1fr) 44px; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-pack-area { grid-template-rows:minmax(0,1fr) auto; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-pack { gap:10px; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-pack-bottom .dp-print { display:none; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-pack-bottom { display:grid; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-presets { display:none; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-dock { display:grid; }
+  #dbmt-packaging-proposals [data-layout="dock"] .dp-dock .dp-print { min-height:clamp(112px,11.56cqi,148px); font-size:clamp(24px,2.34cqi,30px); }
+  #dbmt-packaging-proposals .dp-overlay { position:absolute; inset:0; z-index:10; background:#272c3188; display:grid; place-items:center; padding:16px; border-radius:8px; }
+  #dbmt-packaging-proposals .dp-dialog { width:min(100%,500px); background:var(--dp-paper); color:var(--dp-ink); border:1px solid var(--dp-line); border-radius:10px; padding:18px; display:grid; gap:14px; }
+  #dbmt-packaging-proposals .dp-dialog h3 { margin:0; font-size:24px; font-weight:500; }
+  #dbmt-packaging-proposals .dp-dialog input { font-size:32px; text-align:right; min-height:64px; }
+  #dbmt-packaging-proposals .dp-keypad { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  #dbmt-packaging-proposals .dp-keypad button { min-height:64px; font-size:26px; }
+  #dbmt-packaging-proposals .dp-dialog-actions { display:flex; gap:10px; }
+  #dbmt-packaging-proposals .dp-dialog-actions button { flex:1; min-height:64px; }
+  #dbmt-packaging-proposals .dp-error { font-size:16px; }
+  #dbmt-packaging-proposals .dp-proof { background:var(--dp-paper); border:2px solid var(--dp-ink); padding:16px; display:grid; gap:12px; }
+  #dbmt-packaging-proposals .dp-proof > div { border-bottom:1px solid var(--dp-line); padding-bottom:10px; }
+  @container (min-width:901px) and (max-width:1199px) {
+    #dbmt-packaging-proposals .dp-screen { aspect-ratio:auto; min-height:960px; }
+  }
+  @container (max-width:900px) {
+    #dbmt-packaging-proposals .dp-screen { aspect-ratio:auto; }
+    #dbmt-packaging-proposals .dp-body { grid-template-columns:1fr; }
+    #dbmt-packaging-proposals .dp-left { grid-template-columns:1fr 1fr; grid-template-rows:auto; }
+    #dbmt-packaging-proposals .dp-calc { grid-template-rows:auto 64px auto; }
+    #dbmt-packaging-proposals .dp-calc-keys { grid-template-rows:repeat(5,48px); }
+    #dbmt-packaging-proposals .dp-right { grid-template-rows:auto auto auto; }
+    #dbmt-packaging-proposals .dp-pack { min-height:480px; }
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-pack { min-height:240px; }
+    #dbmt-packaging-proposals [data-layout="dock"] .dp-pack { min-height:340px; }
+    #dbmt-packaging-proposals .dp-top { flex-wrap:wrap; }
+    #dbmt-packaging-proposals h2 span { display:block; margin:5px 0 0; }
+  }
+  @container (max-width:570px) {
+    #dbmt-packaging-proposals .dp-left, #dbmt-packaging-proposals .dp-pack-area, #dbmt-packaging-proposals .dp-dock { grid-template-columns:1fr; }
+    #dbmt-packaging-proposals .dp-body { padding:8px; gap:8px; }
+    #dbmt-packaging-proposals .dp-job-head, #dbmt-packaging-proposals .dp-complete, #dbmt-packaging-proposals .dp-last { align-items:stretch; flex-direction:column; }
+    #dbmt-packaging-proposals .dp-metrics { grid-template-columns:1fr; }
+    #dbmt-packaging-proposals .dp-demo { margin-left:0; }
+    #dbmt-packaging-proposals .dp-bottom { grid-template-columns:1fr; }
+    #dbmt-packaging-proposals .dp-complete { border-left:0; padding-left:0; border-top:1px solid var(--dp-line); padding-top:12px; }
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-pack { grid-template-columns:1fr; grid-template-rows:auto auto auto; }
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-pack-bottom { grid-column:1; grid-row:3; }
+    #dbmt-packaging-proposals [data-layout="rows"] .dp-fields { grid-template-columns:1fr; }
+    #dbmt-packaging-proposals .dp-pack { min-height:0; }
+    #dbmt-packaging-proposals .dp-dialog { padding:12px; }
+    #dbmt-packaging-proposals .dp-overlay { align-items:start; padding:10px; }
+  }
+</style>
+<script>
+(() => {
+  const root=document.getElementById('dbmt-packaging-proposals');
+  if(!root) return;
+  // Isolated proposal state: no persistence, production services or device calls.
+  const designs={view:'all',touch:64};
+  const jobs=[
+    {name:'돈등심(작업)',origin:'미국산',lot:'903112100182',input:200,production:120,inner:18,outer:6,innerWeight:1,outerWeight:20},
+    {name:'LA갈비(작업)',origin:'미국산',lot:'803150900111',input:50.68,production:30,inner:10,outer:6,innerWeight:1,outerWeight:5}
+  ];
+  const number=n=>Number(n.toFixed(2)).toLocaleString('ko-KR');
+  const packName=kind=>kind==='inner'?'내포장':'외포장';
+  const button=(text,action,cls='',attrs='')=>`<button type="button" class="${cls}" data-action="${action}" ${attrs}>${text}</button>`;
+  function calculate(left,right,op){
+    if(op==='+') return left+right;
+    if(op==='−') return left-right;
+    if(op==='×') return left*right;
+    if(op==='÷') return right===0?NaN:left/right;
+    return right;
+  }
+  const screens=[];
+  for(const proposal of root.querySelectorAll('.dp-proposal')){
+    const screen=proposal.querySelector('.dp-screen'),layout=proposal.dataset.layout;
+    const state={job:0,records:jobs.map(job=>({production:job.production,inner:job.inner,outer:job.outer,complete:false,last:null,innerSettings:{weight:job.innerWeight,copies:1},outerSettings:{weight:job.outerWeight,copies:1}})),calc:{value:'0',stored:null,op:null,fresh:false},edit:null};
+    const record=()=>state.records[state.job];
+    const settings=kind=>record()[`${kind}Settings`];
+    const notify=text=>{screen.querySelector('.dp-status').textContent=text;};
+    function printButton(kind){
+      const s=settings(kind);
+      const disabled=kind==='outer'&&record().complete?'disabled':'';
+      return button(`<span>${packName(kind)}라벨출력</span><small>${s.copies}장 · ${kind==='inner'?'생산 집계 제외':`생산 +${number(s.weight*s.copies)} kg`}</small>`,'print','dp-print',`data-kind="${kind}" ${disabled}`);
+    }
+    function packageMarkup(kind){
+      const s=settings(kind),inner=kind==='inner';
+      return `<section class="dp-panel dp-pack" data-kind="${kind}" aria-label="${packName(kind)} 라벨 설정">
+        <div class="dp-pack-head"><div><div class="dp-pack-title">${packName(kind)} ${inner?'· 진공지':'· 박스'}</div><span class="dp-rule">${inner?'생산량에 포함하지 않음':'외포장 출력만 생산량에 포함'}</span></div></div>
+        <div class="dp-fields">
+          <div><div class="dp-field-label"><span>1장 중량</span><span class="dp-small">터치 입력</span></div>${button(`<strong>${s.weight.toFixed(2)}</strong><small>kg</small>`,'edit','dp-weight',`data-kind="${kind}" data-field="weight" aria-label="${packName(kind)} 중량 수정"`)}
+            <div class="dp-presets">${(inner?[1,2,5]:[5,10,20]).map(value=>button(`${value} kg`,'preset','',`data-kind="${kind}" data-value="${value}" aria-pressed="${s.weight===value}"`)).join('')}</div>
+          </div>
+          <div><div class="dp-field-label"><span>출력 매수</span><span class="dp-small">장</span></div><div class="dp-stepper">${button('−','adjust','dp-adjust',`data-kind="${kind}" data-delta="-1" aria-label="${packName(kind)} 매수 줄이기"`)}${button(s.copies,'edit','dp-count',`data-kind="${kind}" data-field="copies" aria-label="${packName(kind)} 매수 입력"`)}${button('+','adjust','dp-adjust',`data-kind="${kind}" data-delta="1" aria-label="${packName(kind)} 매수 늘리기"`)}</div><div class="dp-effect">${inner?'몇 장을 출력해도 생산량 그대로':`출력 시 생산량 +${number(s.weight*s.copies)} kg`}</div></div>
+        </div>
+        <div class="dp-pack-bottom">${printButton(kind)}${button('라벨 미리보기','preview','dp-preview',`data-kind="${kind}"`)}</div>
+      </section>`;
+    }
+    function renderWork(){
+      const job=jobs[state.job],r=record();
+      screen.querySelector('.dp-job').innerHTML=`<div class="dp-job-head"><div><div class="dp-product">${job.name}</div><div class="dp-small">작업 ${String(state.job+1).padStart(2,'0')} · ${job.origin} · LOT ${job.lot}</div></div><span class="dp-small">70 × 100 mm</span></div><div class="dp-metrics"><div><span class="dp-small">원료 투입중량</span><strong>${number(job.input)} kg</strong></div><div><span class="dp-small">외포장 기준 생산량</span><strong data-metric="production">${number(r.production)} kg</strong></div><div><span class="dp-small">외포장 출력 수</span><strong data-metric="outer">${r.outer}장</strong></div></div>`;
+      screen.querySelector('.dp-pack-area').innerHTML=packageMarkup('inner')+packageMarkup('outer')+`<div class="dp-dock">${printButton('inner')}${printButton('outer')}</div>`;
+      const last=r.last;
+      screen.querySelector('.dp-bottom').innerHTML=`<div class="dp-last"><span>내포장 인쇄 <strong data-metric="inner">${r.inner}장</strong> · 집계 제외</span><span class="dp-small">${last?`최근 ${packName(last.kind)} · ${number(last.weight)} kg × ${last.copies}장`:'최근 외포장 · '+number(job.outerWeight)+' kg × 1장'}</span>${button('재출력','reprint','','aria-label="최근 라벨 재출력"')}</div><div class="dp-complete"><div><strong>전송 ${number(r.production)} kg</strong><span class="dp-small">외포장 생산량만</span></div>${button(r.complete?'전송 완료 · 시연':'생산완료 · 전송','complete','',r.complete?'disabled':'')}</div>`;
+      for(const item of screen.querySelectorAll('.dp-order')) item.setAttribute('aria-pressed',String(Number(item.dataset.job)===state.job));
+    }
+    let focusBefore;
+    function closeDialog(){screen.querySelector('.dp-overlay')?.remove();state.edit=null;if(focusBefore?.isConnected)focusBefore.focus();}
+    function dialog(title,body,actions){
+      closeDialog();focusBefore=document.activeElement;
+      const overlay=document.createElement('div');overlay.className='dp-overlay';
+      overlay.innerHTML=`<section class="dp-dialog" role="dialog" aria-modal="true" aria-label="${title}"><h3>${title}</h3>${body}<div class="dp-error" role="alert"></div><div class="dp-dialog-actions">${actions}</div></section>`;
+      screen.appendChild(overlay);overlay.querySelector('input,button')?.focus();
+      overlay.addEventListener('keydown',event=>{
+        if(event.key==='Escape'){closeDialog();return;}
+        if(event.key!=='Tab')return;
+        const items=[...overlay.querySelectorAll('button:not(:disabled),input:not(:disabled)')];
+        if(event.shiftKey&&document.activeElement===items[0]){event.preventDefault();items.at(-1).focus();}
+        else if(!event.shiftKey&&document.activeElement===items.at(-1)){event.preventDefault();items[0].focus();}
+      });
+    }
+    const calcKeys=['AC','⌫','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='];
+    screen.innerHTML=`<header class="dp-top"><span class="dp-brand">동부엠티 ERP · 라벨 출력</span><span class="dp-demo">1280 × 1024 · 시안</span>${button('저울 설정','scale')}${button('전체화면','fullscreen')}</header>
+      <div class="dp-body"><aside class="dp-left"><section class="dp-panel"><div class="dp-heading">작업지시 <span class="dp-small">2건 · 예시</span></div><label class="dp-date"><span class="dp-small">작업일</span><input type="date" value="2026-09-14" aria-label="시안 작업일"></label><div class="dp-orders">${jobs.map((job,i)=>button(`${job.name}<span class="dp-small">투입 ${number(job.input)} kg · ${job.origin}</span>`,'job','dp-order',`data-job="${i}" aria-pressed="${i===0}"`)).join('')}</div></section>
+      <section class="dp-panel dp-calc" aria-label="터치 계산기"><div class="dp-heading">계산기 <span class="dp-small">독립 계산</span></div><output class="dp-calc-output" aria-label="계산 결과" aria-live="polite">0</output><div class="dp-calc-keys">${calcKeys.map(key=>button(key,'calc',key==='='?'dp-dark':'',`data-key="${key}" aria-label="계산기 ${key}"`)).join('')}</div></section></aside>
+      <main class="dp-right"><section class="dp-panel dp-job"></section><div class="dp-pack-area"></div><section class="dp-panel dp-bottom"></section></main></div>
+      <footer class="dp-status" role="status" aria-live="polite">시안입니다. 버튼을 눌러도 실제 인쇄·저장·전송은 하지 않습니다.</footer>`;
+    renderWork();
+    screen.addEventListener('change',event=>{if(event.target.matches('input[type="date"]'))notify('날짜 선택 시연입니다. 작업목록은 예시 데이터입니다.');});
+    screen.addEventListener('click',event=>{
+      const target=event.target.closest('button[data-action]');if(!target||target.disabled)return;
+      const action=target.dataset.action,kind=target.dataset.kind;
+      if(action==='close'){closeDialog();return;}
+      if(action==='job'){state.job=Number(target.dataset.job);renderWork();notify('작업을 변경했습니다. 시연 출력 수는 작업별로 유지됩니다.');return;}
+      if(action==='preset'){settings(kind).weight=Number(target.dataset.value);renderWork();return;}
+      if(action==='adjust'){const s=settings(kind);s.copies=Math.max(1,Math.min(500,s.copies+Number(target.dataset.delta)));renderWork();return;}
+      if(action==='edit'){
+        const field=target.dataset.field;
+        dialog(`${packName(kind)} ${field==='weight'?'1장 중량 (kg)':'출력 매수 (장)'}`,`<input type="text" inputmode="decimal" value="${settings(kind)[field]}" aria-label="라벨 숫자 입력"><div class="dp-keypad">${['7','8','9','4','5','6','1','2','3','.','0','⌫'].map(key=>button(key,'key','','data-key="'+key+'"')).join('')}</div>`,button('취소','close')+button('적용','apply','dp-dark'));
+        state.edit={kind,field,fresh:true};screen.querySelector('.dp-dialog input').select();return;
+      }
+      if(action==='key'){
+        const input=screen.querySelector('.dp-dialog input'),key=target.dataset.key;
+        if(state.edit.fresh){input.value='';state.edit.fresh=false;}
+        if(key==='⌫')input.value=input.value.slice(0,-1);
+        else if(input.value.length<9&&(key!=='.'||!input.value.includes('.')))input.value+=key;
+        return;
+      }
+      if(action==='apply'){
+        const {kind:editKind,field}=state.edit,text=screen.querySelector('.dp-dialog input').value,value=Number(text);
+        const valid=Number.isFinite(value)&&value>0&&(field==='copies'?Number.isInteger(value)&&value<=500:/^\d+(\.\d{1,2})?$/.test(text)&&value<=1000);
+        if(!valid){screen.querySelector('.dp-error').textContent=field==='copies'?'매수는 1~500 사이의 정수로 입력하세요.':'중량은 0 초과, 1,000 kg 이하, 소수 둘째 자리까지 입력하세요.';return;}
+        settings(editKind)[field]=value;closeDialog();renderWork();return;
+      }
+      if(action==='print'){
+        const r=record(),s=settings(kind);if(kind==='outer'&&r.complete)return;
+        r[kind]+=s.copies;r.last={kind,weight:s.weight,copies:s.copies};
+        if(kind==='outer')r.production=Number((r.production+s.weight*s.copies).toFixed(2));
+        renderWork();notify(`${packName(kind)} ${s.copies}장 출력 시연 · ${kind==='inner'?'생산량 변동 없음':`생산량 +${number(s.weight*s.copies)} kg`} · 실제 인쇄 없음`);return;
+      }
+      if(action==='reprint'){notify('최근 라벨 재출력 시연 · 생산량 및 출력 수 추가 없음 · 실제 인쇄 없음');return;}
+      if(action==='preview'){
+        dialog(`${packName(kind)} 라벨 미리보기 · 시안`,`<div class="dp-proof"><div>${jobs[state.job].name}</div><div>원산지 ${jobs[state.job].origin}</div><div>중량 ${settings(kind).weight.toFixed(2)} kg</div><div>이력번호 ${jobs[state.job].lot}</div><span>주식회사 동부엠티</span></div><div class="dp-small">내용 확인용 시안 · 실제 인쇄 서식은 기존 서식 유지</div>`,button('닫기','close'));return;
+      }
+      if(action==='complete'){
+        dialog('생산일보 전송 · 시연',`<div>${jobs[state.job].name}</div><div>외포장 생산량 <strong>${number(record().production)} kg</strong></div><div>내포장 ${record().inner}장 · 전송량에서 제외</div><div class="dp-small">실제 ERP에는 전송되지 않습니다.</div>`,button('취소','close')+button('전송 시연','confirm','dp-dark'));return;
+      }
+      if(action==='confirm'){record().complete=true;closeDialog();renderWork();notify('전송 시연 완료 · 내포장 추가 출력은 계속 가능 · 실제 ERP 변경 없음');return;}
+      if(action==='scale'){dialog('저울 연결 · 시안','<div>A&amp;D FG-150KAL</div><div>COM2 · 2400 · 7E1</div><div class="dp-small">현장 확인값입니다. 이 시안은 저울과 연결되지 않습니다. 중량 표시와 장치 연동은 적용 단계에서 연결합니다.</div>',button('닫기','close'));return;}
+      if(action==='size'){notify('시안 용지 70 × 100 mm · 실제 라벨 크기와 인쇄 설정은 변경하지 않습니다.');return;}
+      if(action==='fullscreen'){notify('전체화면 버튼 위치 시안 · 1280×1024 기준 배치입니다.');return;}
+      if(action==='calc'){
+        const c=state.calc,key=target.dataset.key,format=n=>Number.isFinite(n)?String(Number(n.toPrecision(10))):'오류';
+        if(key==='AC'){Object.assign(c,{value:'0',stored:null,op:null,fresh:false});}
+        else{
+          if(!Number.isFinite(Number(c.value)))Object.assign(c,{value:'0',stored:null,op:null,fresh:false});
+          if(/^[0-9.]$/.test(key)){
+            if(c.fresh){c.value='0';c.fresh=false;}
+            if(key==='.'){if(!c.value.includes('.'))c.value+='.';}
+            else if(c.value.replace(/[-.]/g,'').length<10)c.value=c.value==='0'?key:c.value+key;
+          }else if(key==='⌫'){c.value=c.value.slice(0,-1)||'0';if(c.value==='-')c.value='0';}
+          else if(key==='%')c.value=format(Number(c.value)/100);
+          else if(key==='='){if(c.op&&c.stored!==null)c.value=format(calculate(c.stored,Number(c.value),c.op));c.op=null;c.stored=null;c.fresh=true;}
+          else{if(c.op&&!c.fresh)c.value=format(calculate(c.stored,Number(c.value),c.op));c.stored=Number(c.value);c.op=key;c.fresh=true;}
+        }
+        screen.querySelector('.dp-calc-output').textContent=c.value;
+      }
+    });
+    screen.addEventListener('input',event=>{if(event.target.matches('.dp-dialog input')&&state.edit)state.edit.fresh=false;});
+    screens.push({proposal,screen});
+  }
+  function renderDesign(){for(const {proposal,screen} of screens){proposal.hidden=designs.view!=='all'&&proposal.dataset.layout!==designs.view;screen.style.setProperty('--dp-target',`${designs.touch/12.8}cqi`);}}
+  renderDesign();
+  if(globalThis.Tweak){
+    const tweak=new Tweak({container:root,onChange:renderDesign});
+    tweak.addSelect(designs,'view',{label:'비교할 배치',options:[{label:'3안 모두',value:'all'},{label:'1안 · 좌우 분리형',value:'split'},{label:'2안 · 위아래 분리형',value:'rows'},{label:'3안 · 하단 큰 버튼형',value:'dock'}]});
+    tweak.addSlider(designs,'touch',{label:'일반 버튼 높이 · 1280 기준',min:60,max:64,step:4,unit:'px'});
+  }
+})();
+</script>
