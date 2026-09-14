@@ -11,14 +11,19 @@ const entry={id:'prod_label_qa',date:'2026/09/10',job_no:'1',job_type:'생산',k
   _labelCompletion:{workOrderId:order.id,lockedInputCount:1,completedAt:'2026-09-10T01:00:00Z'},
   inputs:[{product:'돈등심 원료',lot:'RAW-LOT',qty:100,price:5000,amount:500000,origin:'국내산',stockLocation:'가공장',sourceStockKey:'qa-stock'}],
   outputs:[{product:'냉장돈등심',productId:'qa-product',labelProductId:'qa-product',lot:'OUT-LOT',qty:12.35,price:40486,amount:500003,origin:'국내산',proddate:'2026-09-10'}]};
-const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':'text/css');res.end(fs.readFileSync(file));});
+const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}const mime={'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'};res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));});
 (async()=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url=`http://127.0.0.1:${server.address().port}`;
   const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
     const context=await browser.newContext({viewport:{width:1366,height:1000}});let calls=[],fail=true,completed=false,deleted=false,currentProductionId=entry.id,serverLogs=structuredClone(logs),resubmits=[];
     const status=()=>completed?[{workOrderId:order.id,productionId:currentProductionId,date:entry.date,jobNo:'1',completedAt:'2026-09-10T01:00:00Z',deleted}]:[];
-    await context.addInitScript(()=>window.print=()=>{});
+    await context.addInitScript(()=>{window.__printedLabels=[];window.print=()=>{
+      if(window.parent!==window){
+        window.parent.__printedLabels.push([...document.querySelectorAll('.print-label')].map(el=>el.textContent));
+        setTimeout(()=>window.dispatchEvent(new Event('afterprint')),0);
+      }
+    };});
     await context.route('https://**/*',async route=>{
       const fn=route.request().url().split('/').pop(),body=route.request().postDataJSON();
       let result={};
@@ -47,7 +52,8 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     assert.match(await page.locator('#completion-status').textContent(),/2026\/09\/10 #1/);
     await page.evaluate(()=>completeProduction());assert.equal(calls.length,2);
     await page.screenshot({path:path.join(artifacts,'label-completed.png'),fullPage:true});
-    const popupPromise=page.waitForEvent('popup');await page.locator('#history-body button[data-act="reprint"]').first().click();const popup=await popupPromise;await popup.waitForSelector('.print-label');await popup.close();await page.waitForFunction(()=>!state.loading);
+    await page.locator('#history-body button[data-act="reprint"]').first().click();await page.waitForFunction(()=>!state.loading&&__printedLabels.length===1);
+    assert.equal(context.pages().length,1,'Completed-label reprint must not open a popup');
     assert.equal(await page.locator('#metric-output').textContent(),'12.35 kg');
     await page.reload();await page.locator('#app-password').fill('0927');await page.locator('#connect-btn').click();await page.waitForFunction(()=>!state.loading);assert(await page.locator('#complete-production-btn').isDisabled());assert.deepEqual(errors,[]);
     console.log('PASS: completion UI, failure/retry, void exclusion, duplicate guard, completed lock, reprint, browser restart');
@@ -59,7 +65,8 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.locator('#history-body button[data-act="void"][data-id="a"]').click();await page.waitForFunction(()=>!state.loading);
     assert.equal(await page.locator('#metric-output').textContent(),'7.35 kg');
     await page.locator('#print-weight').selectOption('custom');await page.locator('#print-weight-custom').fill('9');
-    const correctedPopup=page.waitForEvent('popup');await page.locator('#print-btn').click();const corrected=await correctedPopup;await corrected.waitForSelector('.print-label');await corrected.close();await page.waitForFunction(()=>!state.loading);
+    await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading&&__printedLabels.length===1);
+    assert.equal(context.pages().length,1,'Corrected output must not open a popup');
     assert.equal(await page.locator('#metric-output').textContent(),'16.35 kg');assert.equal(await page.evaluate(()=>state.logs.length),4);
     await page.screenshot({path:path.join(artifacts,'label-reopened.png'),fullPage:true});
     fail=true;await page.locator('#complete-production-btn').click();await page.waitForFunction(()=>!state.loading);

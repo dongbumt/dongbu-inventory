@@ -9,7 +9,8 @@ const block=(start,end)=>index.slice(index.indexOf(start),index.indexOf(end,inde
 const server=http.createServer((req,res)=>{
   const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');
   if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
-  res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'application/octet-stream');res.end(fs.readFileSync(file));
+  const mime={'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'};
+  res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));
 });
 (async()=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base=`http://127.0.0.1:${server.address().port}`;
@@ -91,7 +92,12 @@ const server=http.createServer((req,res)=>{
     console.log('PASS: workorder popup selection, lot changes, optional weight, source snapshot, shared picker regression, ERP label weight');
 
     const context=await browser.newContext({viewport:{width:1366,height:900}});const saved=[];let failSave=false;
-    await context.addInitScript(()=>{window.print=()=>{};});
+    await context.addInitScript(()=>{window.__printedLabels=[];window.print=()=>{
+      if(window.parent!==window){
+        window.parent.__printedLabels.push([...document.querySelectorAll('.print-label')].map(el=>el.textContent));
+        setTimeout(()=>window.dispatchEvent(new Event('afterprint')),0);
+      }
+    };});
     await context.route('https://**/*',async route=>{
       if(route.request().url().endsWith('/dbmt_label_print_save_logs')){
         if(failSave){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"mock save failure"}'});return;}
@@ -104,23 +110,26 @@ const server=http.createServer((req,res)=>{
     await label.locator('#print-btn').click();assert.equal(saved.length,0);assert.match(await label.locator('#status').textContent(),/중량/);
     await label.locator('#print-weight').selectOption('5');await label.locator('#print-copies').fill('2');
     let event=label.waitForEvent('popup');await label.locator('#preview-btn').click();let popup=await event;await popup.waitForSelector('.print-label');assert.match(await popup.locator('.print-label').textContent(),/5\.00/);await popup.close();assert.equal(saved.length,0);
-    event=label.waitForEvent('popup');await label.locator('#print-btn').click();popup=await event;await popup.waitForSelector('.print-label');assert.equal(await popup.locator('.print-label').count(),2);await popup.close();
+    await label.locator('#print-btn').click();await label.waitForFunction(()=>!state.loading);
+    assert.equal(await label.evaluate(()=>__printedLabels.length),1,await label.locator('#status').textContent());
+    assert.equal((await label.evaluate(()=>__printedLabels[0])).length,2);assert.equal(context.pages().length,1,'Printing must not open a popup');
     assert.equal(saved[0].p_logs.length,2);assert.ok(saved[0].p_logs.every(log=>log.labelWeight===5&&log.workOrderSnapshot.weight===5));
     assert.equal(await label.locator('#metric-output').textContent(),'10 kg');assert.equal(await label.locator('#metric-yield').textContent(),'10.0%');
     assert.equal(await label.evaluate(()=>state.workOrders[0].weight),0,'Printing must not mutate workorder weight');
     await label.locator('#print-weight').selectOption('custom');await label.locator('#print-weight-custom').fill('7.35');await label.locator('#print-copies').fill('1');
     await label.evaluate(()=>renderAll());assert.equal(await label.locator('#print-weight-custom').inputValue(),'7.35');
-    event=label.waitForEvent('popup');await label.locator('#print-btn').click();popup=await event;await popup.waitForSelector('.print-label');assert.match(await popup.locator('.print-label').textContent(),/7\.35/);await popup.close();
+    await label.locator('#print-btn').click();await label.waitForFunction(()=>!state.loading&&__printedLabels.length===2);assert.match((await label.evaluate(()=>__printedLabels[1]))[0],/7\.35/);
     assert.equal(saved[1].p_logs[0].labelWeight,7.35);assert.equal(await label.locator('#metric-output').textContent(),'17.35 kg');
     const firstId=saved[0].p_logs[0].id;await label.locator('#print-weight').selectOption('20');
-    event=label.waitForEvent('popup');await label.evaluate(id=>reprintLog(id),firstId);popup=await event;await popup.waitForSelector('.print-label');assert.match(await popup.locator('.print-label').textContent(),/5\.00/);await popup.close();
+    await label.evaluate(id=>reprintLog(id),firstId);assert.match((await label.evaluate(()=>__printedLabels[2]))[0],/5\.00/);
     assert.equal(await label.locator('#metric-output').textContent(),'17.35 kg');
     await label.evaluate(()=>selectOrder('legacy'));assert.equal(await label.locator('#print-weight').inputValue(),'7.25');
     await label.evaluate(()=>selectOrder('qa-workorder'));assert.equal(await label.locator('#print-weight').inputValue(),'','No weight carryover between jobs');
     await label.locator('#print-weight').selectOption('custom');
     for(const invalid of ['', '0','-1','1.234']){await label.locator('#print-weight-custom').fill(invalid);const count=saved.length;await label.locator('#print-btn').click();assert.equal(saved.length,count);}
     failSave=true;await label.locator('#print-weight-custom').fill('3.75');const count=await label.evaluate(()=>state.logs.length);
-    event=label.waitForEvent('popup');await label.locator('#print-btn').click();popup=await event;await label.waitForFunction(()=>!state.loading);assert.equal(await label.evaluate(()=>state.logs.length),count);assert.equal(popup.isClosed(),true);
+    await label.locator('#print-btn').click();await label.waitForFunction(()=>!state.loading);assert.equal(await label.evaluate(()=>state.logs.length),count);
+    assert.equal(await label.evaluate(()=>__printedLabels.length),3,'Failed save must not print');assert.equal(await label.locator('iframe[data-dbmt-label-print]').count(),0);
     await label.screenshot({path:path.join(artifacts,'label-weight.png'),fullPage:true});
     console.log('PASS: selected/custom/legacy weights, preview, logs, mixed-weight totals, immutable reprints, invalid values, failed-save rollback');
     console.log(`Artifacts: ${artifacts}`);

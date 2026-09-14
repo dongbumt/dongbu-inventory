@@ -514,7 +514,7 @@
   </main>
 
   <script src="label-weight.js?v=20260910workorder1"></script>
-  <script src="label-print-document.js?v=20260914print2"></script>
+  <script src="label-print-document.js?v=20260914print3"></script>
   <script src="company-master.js?v=20260813m01"></script>
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -966,12 +966,6 @@
       if(!weight){ setStatus('라벨 1장 중량을 선택하거나 0보다 큰 값을 소수 둘째 자리까지 입력하세요.', 'warn'); return; }
       const size = $('print-size').value || row.labelSize || '7x10';
       const printRow = {...row, weight, labelSize:size};
-      const win = window.open('', '_blank', 'width=420,height=720');
-      if(!win){
-        setStatus('팝업이 차단되어 출력창을 열 수 없습니다.', 'err');
-        return;
-      }
-
       const count = printCount();
       const batchId = `LPB-${compactDateTime()}-${hashText(`${row.id}-${Date.now()}`).slice(0, 5)}`;
       const records = Array.from({length: count}, (_, index) => makePrintLog(printRow, batchId, index + 1));
@@ -980,15 +974,21 @@
       renderAll();
       setLoading(true);
       setStatus('출력이력 저장 중...', 'warn');
+      let logsSaved = false;
       try {
         await saveLogs();
-        writePrintDocument(win, records, size);
-        setStatus(`출력 저장됨: ${records.length}장`, 'ok');
+        logsSaved = true;
+        setStatus('라벨 인쇄 준비 중...', 'warn');
+        await writePrintDocument(null, records, size);
+        setStatus(`출력 요청 처리됨: ${records.length}장 · 실제 출력을 확인해주세요.`, 'ok');
       } catch(err) {
-        state.logs = previousLogs;
-        win.close();
-        renderAll();
-        setStatus(`출력 저장 실패: ${err.message || err}`, 'err');
+        if(!logsSaved){
+          state.logs = previousLogs;
+          renderAll();
+          setStatus(`출력 저장 실패: ${err.message || err}`, 'err');
+        } else {
+          setStatus(`출력이력은 저장됐습니다. ${err.message || err} 실제 출력 여부를 확인한 뒤 필요하면 이력에서 재출력해주세요.`, 'err');
+        }
       } finally {
         setLoading(false);
       }
@@ -1021,26 +1021,27 @@
         setStatus('출력이력을 찾을 수 없습니다.', 'err');
         return;
       }
-      const win = window.open('', '_blank', 'width=420,height=720');
-      if(!win){
-        setStatus('팝업이 차단되어 출력창을 열 수 없습니다.', 'err');
-        return;
-      }
       const previousLogs = state.logs.map(item => ({...item}));
       log.reprintCount = toNumber(log.reprintCount) + 1;
       log.lastReprintedAt = new Date().toISOString();
       renderHistory();
       setLoading(true);
       setStatus('재출력 기록 저장 중...', 'warn');
+      let logsSaved = false;
       try {
         await saveLogs();
-        writePrintDocument(win, [log], log.sizeKey || log.workOrderSnapshot?.labelSize || '7x10');
-        setStatus(`재출력 저장됨: ${log.code}`, 'ok');
+        logsSaved = true;
+        setStatus('라벨 재출력 준비 중...', 'warn');
+        await writePrintDocument(null, [log], log.sizeKey || log.workOrderSnapshot?.labelSize || '7x10');
+        setStatus(`재출력 요청 처리됨: ${log.code} · 실제 출력을 확인해주세요.`, 'ok');
       } catch(err) {
-        state.logs = previousLogs;
-        win.close();
-        renderAll();
-        setStatus(`재출력 저장 실패: ${err.message || err}`, 'err');
+        if(!logsSaved){
+          state.logs = previousLogs;
+          renderAll();
+          setStatus(`재출력 저장 실패: ${err.message || err}`, 'err');
+        } else {
+          setStatus(`재출력 기록은 저장됐습니다. ${err.message || err} 실제 출력 여부를 먼저 확인해주세요.`, 'err');
+        }
       } finally {
         setLoading(false);
       }
@@ -1158,6 +1159,7 @@
         const data = labelDataFromLog(log);
         return `<section class="print-label">${buildLabelBody(data)}</section>`;
       }).join('');
+      if(!win&&!preview) return DBMTLabelPrint.printHidden({labelsHtml:labels,sizeKey});
       const doc = DBMTLabelPrint.createDocument({labelsHtml:labels,sizeKey,preview});
       DBMTLabelPrint.write(win,doc);
     }

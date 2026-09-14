@@ -1,7 +1,7 @@
 /* Shared print-only document. Does not change label contents, print logs or ERP data. */
 (function(global){
   'use strict';
-  function createDocument({labelsHtml='',sizeKey='7x10',preview=false}={}){
+  function createDocument({labelsHtml='',sizeKey='7x10',preview=false,autoPrint=true}={}){
     const width=sizeKey==='10x10'?100:70;
     const height=100;
     // Keep the working left/top origin. Reserve 3 mm on the right for the
@@ -77,17 +77,22 @@ ${preview?'<div class="preview-watermark">미리보기</div>':''}
         new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(new Error('load timeout')),10000);})
       ]);
       if(images.some(img=>!img.complete||!img.naturalWidth)) throw new Error('image unavailable');
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      // Off-screen frames may throttle animation frames. Images/fonts are ready;
+      // force layout and yield without depending on a visible frame's RAF.
+      document.getElementById('label-print-pages').getBoundingClientRect();
+      await new Promise(resolve=>window.parent===window?requestAnimationFrame(()=>requestAnimationFrame(resolve)):setTimeout(resolve,0));
       status.textContent='준비 완료 · 용지 ${width} × ${height} mm / 배율 100% / 여백 없음 / 머리글·바닥글 해제';
       if(andPrint) window.print();
+      return true;
     }catch(error){
       status.textContent='인증 마크 또는 글꼴을 불러오지 못해 인쇄를 중단했습니다. 인터넷 연결을 확인한 뒤 이 창의 인쇄 버튼을 다시 눌러주세요.';
+      return false;
     }finally{
       clearTimeout(timer);busy=false;button.disabled=false;
     }
   }
   button.addEventListener('click',()=>prepare(true));
-  setTimeout(()=>prepare(${preview?'false':'true'}),0);
+  window.DBMTLabelPrintReady=new Promise(resolve=>setTimeout(()=>resolve(prepare(${!preview&&autoPrint?'true':'false'})),0));
 })();
 <\/script></body></html>`;
   }
@@ -100,5 +105,73 @@ ${preview?'<div class="preview-watermark">미리보기</div>':''}
       if(win.closed){global.clearInterval(cleanup);global.URL.revokeObjectURL(url);}
     },1000);
   }
-  global.DBMTLabelPrint={createDocument,write};
+  let hiddenPrintQueue=Promise.resolve();
+  let activeHiddenFrame=null;
+  function printHidden(options={}){
+    // One native print request at a time, including calls from different buttons.
+    const task=hiddenPrintQueue.then(()=>new Promise((resolve,reject)=>{
+      if(activeHiddenFrame?.isConnected){
+        reject(new Error('이전 인쇄 요청이 아직 열려 있습니다. 인쇄창을 닫고 실제 출력을 확인해주세요. 계속되면 화면을 새로고침해주세요.'));
+        return;
+      }
+      const frame=global.document.createElement('iframe');
+      frame.dataset.dbmtLabelPrint='true';
+      frame.title='라벨 인쇄 자료';
+      frame.setAttribute('aria-hidden','true');
+      frame.tabIndex=-1;
+      // Keep a rendered browsing context, but no popup, focus change or UI space.
+      // display:none/visibility:hidden can suppress print layout in some browsers.
+      frame.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;z-index:-1;';
+      let settled=false,started=false,loadHandled=false;
+      let prepareTimer,printTimer;
+      function dispose(){
+        global.clearTimeout(prepareTimer);global.clearTimeout(printTimer);
+        frame.remove();
+        if(activeHiddenFrame===frame) activeHiddenFrame=null;
+      }
+      function fail(error,retainFrame=false){
+        if(settled) return;
+        settled=true;
+        global.clearTimeout(prepareTimer);global.clearTimeout(printTimer);
+        if(!retainFrame) dispose();
+        reject(error);
+      }
+      function afterPrint(){
+        if(!started) return;
+        global.clearTimeout(printTimer);
+        // afterprint also fires on cancellation: it is NOT proof of physical output.
+        // Defer removal until the browser has returned from its print lifecycle.
+        global.setTimeout(()=>{
+          dispose();
+          if(!settled){settled=true;resolve();}
+        },0);
+      }
+      frame.addEventListener('load',async()=>{
+        if(loadHandled||settled) return;
+        const win=frame.contentWindow;
+        if(win.location.href!=='about:srcdoc') return;
+        loadHandled=true;
+        try{
+          if(!win.DBMTLabelPrintReady||!await win.DBMTLabelPrintReady){
+            throw new Error('라벨 이미지나 글꼴을 준비하지 못해 인쇄하지 않았습니다. 연결을 확인한 뒤 출력이력에서 재출력해주세요.');
+          }
+          if(settled) return;
+          global.clearTimeout(prepareTimer);
+          win.addEventListener('afterprint',afterPrint,{once:true});
+          started=true;
+          printTimer=global.setTimeout(()=>fail(new Error('인쇄 종료 알림을 받지 못했습니다. 중복 출력하지 말고 실제 출력과 인쇄창을 확인한 뒤 화면을 새로고침해주세요.'),true),120000);
+          win.print();
+        }catch(error){fail(error);}
+      });
+      prepareTimer=global.setTimeout(()=>fail(new Error('인쇄 자료 준비 시간이 초과됐습니다. 출력이력에서 재출력해주세요.')),15000);
+      try{
+        frame.srcdoc=createDocument({...options,preview:false,autoPrint:false});
+        activeHiddenFrame=frame;
+        global.document.body.appendChild(frame);
+      }catch(error){fail(error);}
+    }));
+    hiddenPrintQueue=task.catch(()=>{});
+    return task;
+  }
+  global.DBMTLabelPrint={createDocument,write,printHidden};
 })(window);
