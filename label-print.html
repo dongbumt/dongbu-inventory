@@ -393,6 +393,7 @@
       .topbar, .shell { display: none; }
     }
   </style>
+  <link rel="stylesheet" href="label-touch.css?v=20260915touch1">
 </head>
 <body>
   <header class="topbar">
@@ -654,6 +655,7 @@
     }
 
     async function connect(){
+      if(state.loading) return;
       const pin = $('app-password').value.trim();
       if(!/^\d{4}$/.test(pin)){
         setStatus('숫자 4자리 PIN을 입력하세요.', 'warn');
@@ -664,6 +666,7 @@
     }
 
     async function refreshData(){
+      if(state.loading) return;
       const pin = $('app-password').value.trim() || state.pin;
       if(!/^\d{4}$/.test(pin)){
         setStatus('숫자 4자리 PIN을 입력하세요.', 'warn');
@@ -727,7 +730,7 @@
 
     function setLoading(isLoading){
       state.loading = isLoading;
-      ['connect-btn','reload-btn','print-btn','preview-btn'].forEach(id => {
+      ['connect-btn','reload-btn','print-btn','preview-btn','app-password'].forEach(id => {
         const el = $(id);
         if(el) el.disabled = isLoading;
       });
@@ -735,6 +738,7 @@
       $('print-weight-custom').disabled = isLoading || !selectedOrder() || $('print-weight-custom').hidden;
       ['print-size','print-copies'].forEach(id=>$(id).disabled=isLoading);
       renderCompletion();
+      if(window.DBMTLabelTouch?.ready) window.DBMTLabelTouch.renderHistory();
     }
 
     async function saveLogs(){
@@ -774,11 +778,12 @@
       button.textContent = completed ? '생산일보 전송 완료' : (reopened ? '생산완료 · 생산일보 재전송' : '생산완료 · 생산일보 전송');
       $('completion-status').textContent = completed
         ? `${completed.date || ''} #${completed.jobNo || ''} 생산일보에 등록되었습니다. 원료·생산품목·중량 등은 ERP에서 수정할 수 있습니다.`
-        : (reopened ? '생산일보가 삭제되어 전송 전 상태로 돌아왔습니다. 기존 출력이력은 유지됩니다. 잘못 출력한 라벨을 삭제하고 필요한 라벨을 출력한 뒤 재전송하세요.' : '출력 생산량을 생산일보·재고에 반영합니다. 완료 후에는 기존 라벨 재출력만 가능합니다.');
+        : (reopened ? '생산일보가 삭제되어 전송 전 상태로 돌아왔습니다. 기존 출력이력은 유지됩니다. 잘못 출력한 라벨을 삭제하고 필요한 라벨을 출력한 뒤 재전송하세요.' : '외포장만 생산일보·재고에 반영합니다. 내포장은 생산 집계에서 제외됩니다.');
       $('print-btn').disabled = state.loading || !row || !!completed;
       for(const id of ['print-weight','print-weight-custom','print-copies','print-size']){
         $(id).disabled = state.loading || !row || !!completed || (id==='print-weight-custom' && $(id).hidden);
       }
+      window.DBMTLabelTouch?.sync();
     }
 
     async function completeProduction(){
@@ -789,7 +794,7 @@
       const previous = completionRecordFor(row.id);
       if(!logs.length){ setStatus('출력한 라벨이 없습니다.', 'warn'); return; }
       const weight = logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
-      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 출력 생산 ${kg(weight)} (${logs.length}장)\n\n생산일보와 재고에 반영할까요?\n완료 후에는 추가 출력·라벨 삭제가 제한됩니다.`)) return;
+      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장)\n\n생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
       setLoading(true);
       setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
       try {
@@ -842,7 +847,7 @@
               <span class="order-title">${html(title)}</span>
               <span class="order-sub">${html(sub)}</span>
             </span>
-            <span class="order-badge">${completionFor(row.id) ? '완료 · ' : ''}${kg(activeWeight)}</span>
+            <span class="order-badge">${completionFor(row.id) ? '완료 · ' : ''}${activeWeight ? kg(activeWeight) : '0 kg'}</span>
           </button>`;
       }).join('');
       list.querySelectorAll('.order-row').forEach(btn => {
@@ -871,6 +876,7 @@
     }
 
     function renderSelected(){
+      window.DBMTLabelTouch?.remember();
       const row = selectedOrder();
       DBMTLabelWeight.sync('print-weight', row, ()=>{
         $('metric-label-weight').textContent = kg(DBMTLabelWeight.value('print-weight'));
@@ -904,13 +910,14 @@
       $('print-size').value = size;
       $('metric-input').textContent = kg(inputWeight);
       $('metric-label-weight').textContent = kg(labelWeight);
-      $('metric-output').textContent = kg(outputWeight);
+      $('metric-output').textContent = outputWeight ? kg(outputWeight) : '0 kg';
       $('metric-loss').textContent = inputWeight ? kg(lossWeight) : '-';
       $('metric-yield').textContent = pct(yieldRate);
       $('active-count').textContent = `${active.length.toLocaleString('ko-KR')}장`;
     }
 
     function renderHistory(){
+      if(window.DBMTLabelTouch?.ready){ window.DBMTLabelTouch.renderHistory(); return; }
       const row = selectedOrder();
       const body = $('history-body');
       if(!row){
@@ -950,25 +957,39 @@
     }
 
     function printCount(){
-      const n = parseInt($('print-copies').value || '1', 10);
-      return Math.max(1, Math.min(Number.isFinite(n) ? n : 1, 500));
+      const n = Number($('print-copies').value);
+      return Number.isInteger(n) && n>=1 && n<=500 ? n : 0;
     }
 
-    async function printSelectedLabels(){
+    async function printSelectedLabels(kind='outer'){
+      if(kind!=='inner') kind='outer';
       if(state.loading) return;
       const row = selectedOrder();
-      if(row && completionFor(row.id)){ setStatus('생산완료된 작업입니다. 기존 라벨은 출력이력에서 재출력하세요.', 'warn'); return; }
+      if(kind==='outer' && row && completionFor(row.id)){ setStatus('생산완료된 작업입니다. 기존 라벨은 출력이력에서 재출력하세요.', 'warn'); return; }
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
         return;
       }
-      const weight = DBMTLabelWeight.value('print-weight');
+      if(!state.pin){ setStatus('먼저 라벨전용 화면에 연결하세요.', 'warn'); return; }
+      const weight = window.DBMTLabelTouch?.weight(kind) ?? DBMTLabelWeight.value('print-weight');
       if(!weight){ setStatus('라벨 1장 중량을 선택하거나 0보다 큰 값을 소수 둘째 자리까지 입력하세요.', 'warn'); return; }
       const size = $('print-size').value || row.labelSize || '7x10';
       const printRow = {...row, weight, labelSize:size};
-      const count = printCount();
+      const count = window.DBMTLabelTouch?.copies(kind) ?? printCount();
+      if(!count){ setStatus('출력 매수는 1~500 사이의 정수로 입력하세요.', 'warn'); return; }
       const batchId = `LPB-${compactDateTime()}-${hashText(`${row.id}-${Date.now()}`).slice(0, 5)}`;
       const records = Array.from({length: count}, (_, index) => makePrintLog(printRow, batchId, index + 1));
+      // Inner packaging is intentionally never submitted to labelPrintLogs.
+      // Thus all saved logs (including legacy ones) remain outer production.
+      if(kind==='inner'){
+        setLoading(true);
+        try {
+          await writePrintDocument(null, records, size);
+          setStatus(`내포장 ${count}장 출력 요청 · 생산이력·재고에는 반영하지 않습니다. 실제 출력을 확인해주세요.`, 'ok');
+        } catch(err){ setStatus(`내포장 인쇄 확인 필요: ${err.message || err} 실제 출력 여부를 먼저 확인해주세요.`, 'err'); }
+        finally { setLoading(false); }
+        return;
+      }
       const previousLogs = state.logs.slice();
       state.logs = [...records, ...state.logs];
       renderAll();
@@ -994,18 +1015,20 @@
       }
     }
 
-    async function previewSelectedLabel(){
+    async function previewSelectedLabel(kind='outer'){
+      if(kind!=='inner') kind='outer';
       if(state.loading) return;
       const row = selectedOrder();
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
         return;
       }
-      const weight = DBMTLabelWeight.value('print-weight');
+      const weight = window.DBMTLabelTouch?.weight(kind) ?? DBMTLabelWeight.value('print-weight');
       if(!weight){ setStatus('미리보기할 라벨 1장 중량을 선택하거나 입력하세요.', 'warn'); return; }
       const size = $('print-size').value || row.labelSize || '7x10';
       const sample = makePrintLog({...row, weight, labelSize:size}, 'PREVIEW', 1);
       sample.code = 'PREVIEW-0001';
+      if(window.DBMTLabelTouch?.ready){ window.DBMTLabelTouch.preview(sample); return; }
       const win = window.open('', '_blank', 'width=420,height=720');
       if(!win){
         setStatus('팝업이 차단되어 미리보기를 열 수 없습니다.', 'err');
@@ -1015,15 +1038,25 @@
     }
 
     async function reprintLog(id){
+      return reprintLogs([id]);
+    }
+
+    async function reprintLogs(ids){
       if(state.loading) return;
-      const log = state.logs.find(item => String(item.id) === String(id));
-      if(!log){
+      const selected = new Set(ids.map(String));
+      const records = logsForOrder(state.selectedId).filter(item=>selected.has(String(item.id)) && item.status!=='void');
+      if(!records.length || records.length!==selected.size){
         setStatus('출력이력을 찾을 수 없습니다.', 'err');
         return;
       }
+      if(records.some(log=>!['7x10','10x10'].includes(log.sizeKey||log.workOrderSnapshot?.labelSize||'7x10'))){
+        setStatus('선택 이력의 라벨 크기를 확인하세요.', 'err'); return;
+      }
       const previousLogs = state.logs.map(item => ({...item}));
-      log.reprintCount = toNumber(log.reprintCount) + 1;
-      log.lastReprintedAt = new Date().toISOString();
+      records.forEach(log=>{
+        log.reprintCount = toNumber(log.reprintCount) + 1;
+        log.lastReprintedAt = new Date().toISOString();
+      });
       renderHistory();
       setLoading(true);
       setStatus('재출력 기록 저장 중...', 'warn');
@@ -1032,8 +1065,11 @@
         await saveLogs();
         logsSaved = true;
         setStatus('라벨 재출력 준비 중...', 'warn');
-        await writePrintDocument(null, [log], log.sizeKey || log.workOrderSnapshot?.labelSize || '7x10');
-        setStatus(`재출력 요청 처리됨: ${log.code} · 실제 출력을 확인해주세요.`, 'ok');
+        for(const size of ['7x10','10x10']){
+          const group=records.filter(log=>(log.sizeKey || log.workOrderSnapshot?.labelSize || '7x10')===size);
+          if(group.length) await writePrintDocument(null, group, size);
+        }
+        setStatus(`외포장 ${records.length}장 재출력 요청 · 생산량 추가 없음 · 실제 출력을 확인해주세요.`, 'ok');
       } catch(err) {
         if(!logsSaved){
           state.logs = previousLogs;
@@ -1316,5 +1352,7 @@
     }
 
   </script>
+  <script src="label-scale.js?v=20260915touch1"></script>
+  <script src="label-touch.js?v=20260915touch1"></script>
 </body>
 </html>

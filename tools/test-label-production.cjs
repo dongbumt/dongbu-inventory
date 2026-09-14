@@ -1,6 +1,7 @@
 /* Real DOM + isolated RPC fixtures. No production data, real logins, or printer jobs. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),os=require('node:os');
 const {chromium}=require('playwright');
+const {setOuter}=require('./label-touch-test-helpers.cjs');
 const repo=path.resolve(__dirname,'..'),index=fs.readFileSync(path.join(repo,'index.html'),'utf8');
 const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-label-completion-'));
 const block=(start,end)=>{const at=index.indexOf(start);assert(at>=0,start);const stop=index.indexOf(end,at);assert(stop>at,end);return index.slice(at,stop);};
@@ -52,19 +53,20 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     assert.match(await page.locator('#completion-status').textContent(),/2026\/09\/10 #1/);
     await page.evaluate(()=>completeProduction());assert.equal(calls.length,2);
     await page.screenshot({path:path.join(artifacts,'label-completed.png'),fullPage:true});
-    await page.locator('#history-body button[data-act="reprint"]').first().click();await page.waitForFunction(()=>!state.loading&&__printedLabels.length===1);
+    await page.locator('#reprint-open').click();await page.locator('#history-body button[data-act="reprint"]:enabled').first().click();await page.waitForFunction(()=>!state.loading&&__printedLabels.length===1);await page.locator('[data-close="history-dialog"]').click();
     assert.equal(context.pages().length,1,'Completed-label reprint must not open a popup');
     assert.equal(await page.locator('#metric-output').textContent(),'12.35 kg');
     await page.reload();await page.locator('#app-password').fill('0927');await page.locator('#connect-btn').click();await page.waitForFunction(()=>!state.loading);assert(await page.locator('#complete-production-btn').isDisabled());assert.deepEqual(errors,[]);
     console.log('PASS: completion UI, failure/retry, void exclusion, duplicate guard, completed lock, reprint, browser restart');
     deleted=true;await page.locator('#reload-btn').click();await page.waitForFunction(()=>!state.loading);
-    assert(await page.locator('#print-btn').isEnabled());assert(await page.locator('#complete-production-btn').isEnabled());
+    assert(await page.locator('#outer-weight-btn').isEnabled());assert(await page.locator('#complete-production-btn').isEnabled());
+    assert(await page.locator('#print-btn').isDisabled(),'Reopened work still needs a valid label weight');
     assert(await page.locator('#print-weight').isEnabled());assert.equal(await page.locator('#history-body button[data-act="void"]:enabled').count(),2);
     assert.match(await page.locator('#completion-status').textContent(),/전송 전 상태/);assert.match(await page.locator('#complete-production-btn').textContent(),/재전송/);
     assert.equal(await page.evaluate(()=>state.logs.length),3,'Reopening must preserve print history');
-    await page.locator('#history-body button[data-act="void"][data-id="a"]').click();await page.waitForFunction(()=>!state.loading);
+    await page.locator('#reprint-open').click();await page.locator('#history-body button[data-act="void"][data-id="a"]').click();await page.waitForFunction(()=>!state.loading);await page.locator('[data-close="history-dialog"]').click();
     assert.equal(await page.locator('#metric-output').textContent(),'7.35 kg');
-    await page.locator('#print-weight').selectOption('custom');await page.locator('#print-weight-custom').fill('9');
+    await setOuter(page,9);
     await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading&&__printedLabels.length===1);
     assert.equal(context.pages().length,1,'Corrected output must not open a popup');
     assert.equal(await page.locator('#metric-output').textContent(),'16.35 kg');assert.equal(await page.evaluate(()=>state.logs.length),4);

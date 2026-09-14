@@ -1,6 +1,7 @@
 // Real local DOM/iframe flow. All RPCs and native printing are mocked.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {chromium}=require('playwright');
+const {setOuter}=require('./label-touch-test-helpers.cjs');
 const repo=path.resolve(__dirname,'..');
 const server=http.createServer((req,res)=>{
   const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');
@@ -56,7 +57,7 @@ const server=http.createServer((req,res)=>{
       window.__originalOpen=window.open;window.__openCalls=0;
       window.open=()=>{window.__openCalls++;return null;};
     });
-    await page.locator('#print-weight').selectOption('5');await page.locator('#print-copies').fill('2');
+    await setOuter(page,5,2);
     imageDelay=250;
     await page.evaluate(()=>{printSelectedLabels();printSelectedLabels();});
     await page.waitForFunction(()=>!state.loading);
@@ -72,7 +73,7 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator('#metric-output').textContent(),'10 kg');
     imageDelay=0;
     const originalId=await page.evaluate(()=>state.logs[0].id);
-    await page.locator('#print-weight').selectOption('20');
+    await setOuter(page,20);
     await page.evaluate(id=>reprintLog(id),originalId);
     requests=await page.evaluate(()=>__requests);
     assert.equal(requests.length,2);assert.match(requests[1].text,/5\.00/);
@@ -86,7 +87,7 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.evaluate(()=>state.logs.length),2);assert.equal(await page.locator('iframe[data-dbmt-label-print]').count(),0);
     assert.match(await page.locator('#status').textContent(),/출력 저장 실패/);
     failSave=false;failImage=true;
-    await page.locator('#print-copies').fill('1');
+    await setOuter(page,undefined,1);
     await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading);
     assert.equal(await page.evaluate(()=>__requests.length),2,'Missing certification image must not print');
     assert.equal(await page.evaluate(()=>state.logs.length),3,'A committed print log must survive image preparation failure');
@@ -136,12 +137,12 @@ const server=http.createServer((req,res)=>{
     await page.waitForFunction(()=>document.querySelectorAll('iframe[data-dbmt-label-print]').length===0);
     console.log('PASS: serialized native requests, synchronous/asynchronous afterprint, safe timeout, no automatic retry and late cleanup');
 
-    // Only explicit preview opens a visible window, and it never auto-prints.
+    // Explicit preview stays in-page and never auto-prints.
     await page.evaluate(()=>{window.open=__originalOpen;__printMode='async';});
-    const popupPromise=page.waitForEvent('popup');await page.locator('#preview-btn').click();const popup=await popupPromise;
-    await popup.waitForFunction(()=>document.getElementById('label-print-status')?.textContent.startsWith('준비 완료'));
-    assert(await popup.locator('.preview-watermark').isVisible());assert.equal(await popup.evaluate(()=>__topPrints),0);
-    await popup.close();assert.equal(context.pages().length,1);assert.deepEqual(errors,[]);
+    const beforePreview=await page.evaluate(()=>__requests.length);await page.locator('#preview-btn').click();
+    await page.frameLocator('#label-preview-frame').locator('.print-label').waitFor();
+    assert.equal(await page.evaluate(()=>__requests.length),beforePreview);assert.equal(await page.evaluate(()=>__topPrints),0);
+    await page.locator('#label-preview-close').click();assert.equal(context.pages().length,1);assert.deepEqual(errors,[]);
     console.log('PASS: explicit preview preserved, no automatic preview printing, no page errors');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
