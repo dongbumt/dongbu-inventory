@@ -3,9 +3,48 @@
   'use strict';
   let ready=false,current='',historyPage=0,historyOrder='',lastFocus=null,previewReturn=false;
   const jobs=new Map(),selected=new Set();
+  const productStorage='dbmt_label_output_products_v1';
+  let productChoices=new Map(),pendingProduct='',productPage=0;
+  try{const saved=JSON.parse(localStorage.getItem(productStorage)||'[]');if(Array.isArray(saved))productChoices=new Map(saved.filter(e=>Array.isArray(e)&&typeof e[0]==='string'&&typeof e[1]==='string'));}catch(e){/* Optional station preference; printing does not depend on storage. */}
   const byId=id=>document.getElementById(id);
   const button=(text,attrs='')=>`<button type="button" ${attrs}>${text}</button>`;
   const name=kind=>kind==='inner'?'내포장':'외포장';
+  const chosenProduct=()=>productChoices.get(String(selectedOrder()?.id||''))||'';
+  const registeredProduct=id=>id?state.labelProducts.find(p=>String(p.id)===String(id)):null;
+  function printOrder(){
+    const row=selectedOrder(),id=chosenProduct(),product=id&&registeredProduct(id);
+    if(id&&!product)return null;
+    try{return DBMTLabelProducts.compose(row,product||null);}catch(e){return null;}
+  }
+  function productError(){
+    if(!selectedOrder())return '';
+    if(chosenProduct()&&!registeredProduct(chosenProduct()))return '선택했던 생산품목이 삭제되었습니다. 생산품목 변경에서 다시 선택하세요.';
+    try{DBMTLabelProducts.compose(selectedOrder(),registeredProduct(chosenProduct())||null);return '';}catch(e){return e.message;}
+  }
+  function productDetail(row){
+    return [row.productCode,row.packunit&&`포장 ${row.packunit}`,row.origin,row.storage||row.temptype].filter(Boolean).join(' · ');
+  }
+  function renderProducts(){
+    const row=selectedOrder();if(!row)return;
+    const query=byId('product-search').value.trim().toLowerCase();
+    const list=state.labelProducts.filter(p=>p.id&&p.name&&[p.name,p.productCode,p.packunit,p.brand,p.nationalPartCode,p.nationalPartName,p.origin,p.storage,p.meattype].join(' ').toLowerCase().includes(query))
+      .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')||String(a.packunit||'').localeCompare(String(b.packunit||''),'ko')||String(a.productCode||a.id).localeCompare(String(b.productCode||b.id)));
+    const pages=Math.max(1,Math.ceil(list.length/6));productPage=Math.min(productPage,pages-1);
+    byId('product-default').textContent=`작업지시 기본품목 · ${row.product||'-'}`;
+    byId('product-default').setAttribute('aria-pressed',String(!pendingProduct));
+    byId('product-list').innerHTML=list.slice(productPage*6,productPage*6+6).map(p=>button(`<strong>${html(p.name)}</strong><small>${html(productDetail(p))}</small>`,`data-product="${html(p.id)}" aria-pressed="${pendingProduct===String(p.id)}"`)).join('')||'<p class="empty">등록 품목이 없거나 검색 결과가 없습니다. ERP 품목관리에서 먼저 등록해주세요.</p>';
+    byId('product-page').textContent=`${productPage+1} / ${pages} · ${list.length}품목`;
+    byId('product-prev').disabled=productPage===0;byId('product-next').disabled=productPage===pages-1;
+    let effective=null,error='';
+    try{if(pendingProduct&&!registeredProduct(pendingProduct))throw new Error('선택한 품목을 찾을 수 없습니다.');effective=DBMTLabelProducts.compose(row,registeredProduct(pendingProduct)||null);}catch(e){error=e.message;}
+    byId('product-selection-detail').textContent=effective?`${effective.product} · ${productDetail(effective)}\n품목보고번호 ${effective.itemno||'미등록'} · 제조 ${effective.mfgdate||row.date} / 소비기한 ${effective.expdate||'미등록'}\n원료·LOT·작업일·원산지·등급 및 라벨 중량 유지 / 매수는 1장으로 설정` : error;
+    byId('product-apply').disabled=!effective||state.loading;
+  }
+  function renderProductTotals(){
+    const groups=DBMTLabelProducts.group(logsForOrder(state.selectedId));
+    byId('product-totals-list').innerHTML=groups.map(g=>`<div class="product-total-row"><span><strong>${html(g.name)}</strong><small>${html([g.code,g.packunit,g.origin,`LOT ${g.lot}`].filter(Boolean).join(' · '))}</small></span><b>${g.count}장<br>${kg(g.weight)}</b></div>`).join('')||'<p class="empty">외포장 출력이력이 없습니다.</p>';
+    byId('product-totals-summary').textContent=`${groups.length}개 품목 구분 · ${groups.reduce((sum,g)=>sum+g.count,0)}장 · ${kg(groups.reduce((sum,g)=>sum+g.weight,0))} / 내포장·삭제 이력 제외`;
+  }
   function settings(){
     const row=selectedOrder(),key=String(row?.id||'');
     if(!jobs.has(key))jobs.set(key,{inner:{weight:1,copies:1,mode:'fixed'},outer:{weight:DBMTLabelWeight.valid(row?.weight)?Number(row.weight):0,copies:1,mode:'fixed'},size:row?.labelSize||'7x10'});
@@ -36,6 +75,7 @@
   function sync(){
     if(!ready||!byId('scale-value'))return;
     const row=selectedOrder(),s=settings(),live=scale.status();
+    const effective=printOrder(),selectionError=productError();
     if(current!==String(row?.id||''))restore();
     byId('scale-value').textContent=live.value===null?'—':live.value.toFixed(2);
     byId('scale-state').textContent=live.message;
@@ -54,9 +94,9 @@
       byId(`${kind}-copies-btn`).disabled=locked||set.mode==='scale';
       byId(`${kind}-copies-help`).textContent=set.mode==='scale'?'계근당 1장':'매수';
       const print=byId(kind==='outer'?'print-btn':'inner-print-btn');
-      print.disabled=locked||!w||!n;
+      print.disabled=locked||!w||!n||!!selectionError;
       print.innerHTML=`<span>${name(kind)}라벨출력</span><small>${!w?'중량 확인 필요':kind==='inner'?`${n}장 · 생산 집계 제외`:`${n}장 · 생산 +${kg(w*n)}`}</small>`;
-      byId(kind==='outer'?'preview-btn':'inner-preview-btn').disabled=state.loading||!row||!w;
+      byId(kind==='outer'?'preview-btn':'inner-preview-btn').disabled=state.loading||!row||!w||!!selectionError;
     }
     byId('print-size').disabled=state.loading||!row; // Shared physical media; inner printing remains available after completion.
     byId('reprint-open').disabled=state.loading||!row;
@@ -65,7 +105,10 @@
     byId('touch-output').textContent=byId('metric-output').textContent;
     byId('outer-total').textContent=byId('active-count').textContent;
     byId('metric-label-weight').textContent=weight('outer')?kg(weight('outer')):'—';
-    byId('selected-meta').textContent=row?`${row.product||''} · ${row.origin||''} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'연결 후 작업지시를 선택하세요.';
+    byId('selected-name').textContent=selectionError?'생산품목 확인 필요':effective?.product||'작업지시를 선택하세요';
+    byId('selected-meta').textContent=selectionError|| (row?`${productDetail(effective||row)} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'연결 후 작업지시를 선택하세요.');
+    byId('product-open').disabled=state.loading||!row||!state.pin;
+    byId('product-totals-open').disabled=state.loading||!row;
     byId('work-order-open').disabled=state.loading||!state.pin;
     byId('current-work-title').textContent=row?(row.title||row.product):'작업지시를 선택하세요';
     byId('current-work-meta').textContent=row?`${row.date||''} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'먼저 PIN으로 연결하세요.';
@@ -94,7 +137,7 @@
     byId('history-meta').textContent=row?`${row.date||''} · LOT ${row.lot||row.sourceStock?.lot||'-'} · 과거 라벨 내용으로 재출력`:'';
     byId('history-body').innerHTML=logs.slice(historyPage*4,historyPage*4+4).map(log=>{
       const id=String(log.id),voided=log.status==='void';
-      return `<div class="touch-history-row"><label class="history-choice"><input type="checkbox" data-log="${html(id)}" aria-label="${html(log.code||id)} 선택" ${selected.has(id)?'checked':''} ${voided||state.loading?'disabled':''}><span><strong>${html(log.code||id)}</strong><small>${html(formatTime(log.printedAt))} · ${voided?'삭제됨':`재출력 ${toNumber(log.reprintCount)}회`}</small></span><b>${kg(log.labelWeight)}</b></label><div class="history-actions">${button('미리보기',`data-act="preview" data-id="${html(id)}"`)}${button('재출력',`data-act="reprint" data-id="${html(id)}" ${voided||state.loading?'disabled':''}`)}${button('삭제',`data-act="void" data-id="${html(id)}" ${voided||state.loading||completionFor(row.id)?'disabled':''}`)}</div></div>`;
+      return `<div class="touch-history-row"><label class="history-choice"><input type="checkbox" data-log="${html(id)}" aria-label="${html(log.code||id)} 선택" ${selected.has(id)?'checked':''} ${voided||state.loading?'disabled':''}><span><strong>${html(log.workOrderSnapshot?.product||log.product||'품목 없음')}${log.workOrderSnapshot?.packunit?' / '+html(log.workOrderSnapshot.packunit):''}</strong><small>${html(log.code||id)}</small><small>${html(formatTime(log.printedAt))} · ${voided?'삭제됨':`재출력 ${toNumber(log.reprintCount)}회`}</small></span><b>${kg(log.labelWeight)}</b></label><div class="history-actions">${button('미리보기',`data-act="preview" data-id="${html(id)}"`)}${button('재출력',`data-act="reprint" data-id="${html(id)}" ${voided||state.loading?'disabled':''}`)}${button('삭제',`data-act="void" data-id="${html(id)}" ${voided||state.loading||completionFor(row.id)?'disabled':''}`)}</div></div>`;
     }).join('')||'<p class="empty">이 작업의 외포장 출력이력이 없습니다.</p>';
     byId('history-page').textContent=`${historyPage+1} / ${pages}`;
     byId('history-prev').disabled=historyPage===0||state.loading;
@@ -129,6 +172,7 @@
     const left=document.querySelector('.left'),shell=document.querySelector('.shell'),right=document.querySelector('.right');
     const col=document.createElement('aside');col.className='touch-left';shell.insertBefore(col,left);
     col.innerHTML='<section class="panel touch-current-work"><span>현재 작업지시</span><strong id="current-work-title"></strong><small id="current-work-meta"></small><span id="current-work-state"></span>'+button('작업지시 변경','id="work-order-open"')+'</section>';
+    col.querySelector('.touch-current-work').insertAdjacentHTML('beforeend',button('품목별 생산현황','id="product-totals-open"'));
     const calc=document.createElement('section');calc.className='panel touch-calc';calc.setAttribute('aria-label','터치 계산기');
     calc.innerHTML='<div class="calc-title">계산기 <small>독립 계산</small></div><output id="calc-output" aria-live="polite">0</output><div class="calc-keys">'+['AC','⌫','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='].map(k=>button(k,`data-calc="${k}" aria-label="계산기 ${k}"`)).join('')+'</div>';col.append(calc);
     document.querySelector('.brand').textContent='동부엠티 ERP · 라벨 출력';
@@ -138,6 +182,8 @@
     byId('selected-size').hidden=true;summary.append(byId('selected-size'));summary.querySelector('.panel-head').remove();
     const title=summary.querySelector('.selected-title');title.insertAdjacentHTML('beforeend','<small id="selected-meta"></small>');
     const head=document.createElement('div');head.className='touch-job-head';title.before(head);head.append(title);
+    const productButton=document.createElement('button');productButton.type='button';productButton.id='product-open';productButton.setAttribute('aria-label','생산품목 / 스펙 변경');
+    productButton.innerHTML='<small class="product-change-caption">다음 출력품목 · 변경 ▾</small>';title.before(productButton);productButton.append(title);byId('selected-date').hidden=true;
     head.insertAdjacentHTML('beforeend',button('<span>현재 계근중량</span><small id="scale-state">저울 미연결</small><strong><span id="scale-value">—</span><small>kg</small></strong>','id="scale-readout" class="scale-readout"'));
     // Remove the small legacy on-screen editor, but keep its form values as the
     // single outer-weight source for the existing print/save workflow.
@@ -164,9 +210,27 @@
     document.body.insertAdjacentHTML('beforeend',`<dialog id="work-order-dialog" class="touch-dialog work-order-dialog" aria-labelledby="work-order-title"><h2 id="work-order-title">작업지시 선택</h2><p>작업을 누르면 전환됩니다. 검색하거나 닫기만 하면 현재 작업은 유지됩니다.</p><div id="work-order-content"></div><footer>${button('현재 작업 유지 · 닫기','data-close="work-order-dialog"')}</footer></dialog>
       <dialog id="cancel-transfer-dialog" class="touch-dialog" aria-labelledby="cancel-transfer-title"><h2 id="cancel-transfer-title">생산일보 전송을 취소할까요?</h2><p id="cancel-transfer-target"></p><ul><li>연결된 생산일보를 삭제하고 원료·생산품 재고 반영과 부자재 사용을 함께 취소합니다.</li><li>사무실에서 해당 생산일보에 추가·수정한 내용도 취소됩니다. 재전송 시 출력이력 기준으로 새 생산일보를 만듭니다.</li><li>기존 라벨 출력이력은 유지됩니다. 잘못 출력한 외포장 이력은 재출력 목록에서 삭제한 뒤 다시 출력하세요.</li><li>출고·재투입·이동 또는 다른 작업지시에 연결된 생산품은 먼저 연결 내역을 정리해야 합니다.</li></ul><p id="cancel-transfer-error" role="alert"></p><footer>${button('돌아가기','data-close="cancel-transfer-dialog"')}${button('생산일보 삭제 · 전송 취소','id="cancel-transfer-confirm" class="dark"')}</footer></dialog>`);
     byId('work-order-content').append(left);
+    document.body.insertAdjacentHTML('beforeend',`<dialog id="product-dialog" class="touch-dialog product-dialog" aria-labelledby="product-dialog-title"><h2 id="product-dialog-title">생산품목 / 스펙 변경</h2><p>등록된 품목을 선택한 뒤 적용하세요. 기존 출력이력은 바뀌지 않습니다.</p><div class="product-search"><input id="product-search" type="search" placeholder="품목명, 스펙, 제품코드 검색" aria-label="생산품목 검색">${button('지움','id="product-search-clear"')}</div>${button('작업지시 기본품목','id="product-default"')}<div id="product-list"></div><nav class="history-pager">${button('이전','id="product-prev"')}<span id="product-page"></span>${button('다음','id="product-next"')}</nav><p id="product-selection-detail"></p><footer>${button('현재 품목 유지 · 닫기','data-close="product-dialog"')}${button('다음 출력부터 적용','id="product-apply" class="dark"')}</footer></dialog>
+      <dialog id="product-totals-dialog" class="touch-dialog history-dialog" aria-labelledby="product-totals-title"><h2 id="product-totals-title">품목별 외포장 생산현황</h2><p id="product-totals-summary"></p><div id="product-totals-list"></div><footer>${button('닫기','data-close="product-totals-dialog"')}</footer></dialog>`);
     ready=true;wire();renderAll();setInterval(()=>sync(),500);
   }
   function wire(){
+    byId('product-open').onclick=()=>{pendingProduct=chosenProduct();productPage=0;byId('product-search').value='';renderProducts();openDialog('product-dialog');};
+    byId('product-search').oninput=()=>{productPage=0;renderProducts();};
+    byId('product-search-clear').onclick=()=>{byId('product-search').value='';productPage=0;renderProducts();};
+    byId('product-prev').onclick=()=>{productPage--;renderProducts();};byId('product-next').onclick=()=>{productPage++;renderProducts();};
+    byId('product-default').onclick=()=>{pendingProduct='';renderProducts();};
+    byId('product-list').onclick=e=>{const b=e.target.closest('[data-product]');if(b){pendingProduct=b.dataset.product;renderProducts();}};
+    byId('product-dialog').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeDialog('product-dialog');}});
+    byId('product-apply').onclick=()=>{
+      if(state.loading||!selectedOrder()||(pendingProduct&&!registeredProduct(pendingProduct)))return;
+      const key=String(selectedOrder().id);pendingProduct?productChoices.set(key,pendingProduct):productChoices.delete(key);
+      try{localStorage.setItem(productStorage,JSON.stringify([...productChoices].slice(-2000)));}catch(e){/* Current selection stays in memory. */}
+      settings().inner.copies=settings().outer.copies=1;byId('print-copies').value=1;
+      closeDialog('product-dialog');renderAll();
+      setStatus(`다음 출력품목: ${printOrder()?.product||'-'} · 기존 이력 유지 · 매수 1장. 중량·품목보고번호·소비기한은 미리보기로 확인하세요.${completionFor(key)?' 전송 완료 상태에서는 내포장만 새로 출력할 수 있습니다.':''}`,'ok');
+    };
+    byId('product-totals-open').onclick=()=>{renderProductTotals();openDialog('product-totals-dialog');};
     byId('work-order-open').onclick=()=>{renderOrders();openDialog('work-order-dialog');};
     byId('work-order-dialog').addEventListener('keydown',e=>{
       if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeDialog('work-order-dialog');}
@@ -240,6 +304,6 @@
       byId('calc-output').textContent=calc.value;
     };
   }
-  window.DBMTLabelTouch={get ready(){return ready;},remember,sync,weight,copies,renderHistory,preview,closeOrders:()=>closeDialog('work-order-dialog')};
+  window.DBMTLabelTouch={get ready(){return ready;},remember,sync,weight,copies,renderHistory,preview,printOrder,productError,closeOrders:()=>closeDialog('work-order-dialog')};
   document.addEventListener('DOMContentLoaded',init);
 })();

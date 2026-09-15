@@ -393,7 +393,7 @@
       .topbar, .shell { display: none; }
     }
   </style>
-  <link rel="stylesheet" href="label-touch.css?v=20260915touch2">
+  <link rel="stylesheet" href="label-touch.css?v=20260915touch3">
 </head>
 <body>
   <header class="topbar">
@@ -794,7 +794,9 @@
       const previous = completionRecordFor(row.id);
       if(!logs.length){ setStatus('출력한 라벨이 없습니다.', 'warn'); return; }
       const weight = logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
-      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장)\n\n생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
+      const groups=window.DBMTLabelProducts?.group(logs)||[];
+      const detail=groups.map(g=>`${g.name}${g.packunit?' / '+g.packunit:''}: ${g.count}장 · ${kg(g.weight)}`).join('\n');
+      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장)\n${detail}\n\n원료 투입은 한 번만, 생산품목별로 생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
       setLoading(true);
       setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
       try {
@@ -996,7 +998,8 @@
     async function printSelectedLabels(kind='outer'){
       if(kind!=='inner') kind='outer';
       if(state.loading) return;
-      const row = selectedOrder();
+      const row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
+      if(window.DBMTLabelTouch?.productError()){setStatus(window.DBMTLabelTouch.productError(),'warn');return;}
       if(kind==='outer' && row && completionFor(row.id)){ setStatus('생산완료된 작업입니다. 기존 라벨은 출력이력에서 재출력하세요.', 'warn'); return; }
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
@@ -1050,7 +1053,8 @@
     async function previewSelectedLabel(kind='outer'){
       if(kind!=='inner') kind='outer';
       if(state.loading) return;
-      const row = selectedOrder();
+      const row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
+      if(window.DBMTLabelTouch?.productError()){setStatus(window.DBMTLabelTouch.productError(),'warn');return;}
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
         return;
@@ -1170,6 +1174,7 @@
 
     function snapshotOrder(row){
       return {
+        ...(row.productSelectionVersion===1?{productSelectionVersion:1}:{}),
         id: row.id || '',
         date: row.date || '',
         title: row.title || '',
@@ -1181,7 +1186,7 @@
         nationalPartCode: row.nationalPartCode || '',
         nationalPartName: row.nationalPartName || '',
         taxType: row.taxType || '면세',
-        packunit: state.labelProducts.find(p=>String(p.id)===String(row.labelProductId))?.packunit || row.packunit || '',
+        packunit: row.productSelectionVersion===1?(row.packunit||''):(state.labelProducts.find(p=>String(p.id)===String(row.labelProductId))?.packunit || row.packunit || ''),
         origin: row.origin || '',
         grade: row.grade || '',
         mfgdate: row.mfgdate || row.date || '',
@@ -1385,6 +1390,7 @@
 
   </script>
   <script src="label-scale.js?v=20260915touch1"></script>
-  <script src="label-touch.js?v=20260915touch2"></script>
+  <script src="label-product-selection.js?v=20260915touch3"></script>
+  <script src="label-touch.js?v=20260915touch3"></script>
 </body>
 </html>

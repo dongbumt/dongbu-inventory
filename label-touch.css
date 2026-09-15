@@ -16,6 +16,26 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label #current-work-meta{font-size:15px;overflow-wrap:anywhere}
 .touch-label #current-work-state{border-top:1px solid var(--line);padding-top:10px}
 .touch-label #work-order-open{min-height:72px;font-size:22px;background:#e8ebed}
+.touch-label #product-open{width:100%;text-align:left;padding:6px 8px;border:1px solid var(--line);background:#f6f7f8}
+.touch-label .product-change-caption{display:block;font-size:14px;margin-bottom:3px;color:var(--muted)}
+.touch-label #product-open #selected-name{font-size:25px;margin-bottom:3px}
+.touch-label #product-open #selected-meta{font-size:13px;margin:0}
+.touch-label .product-dialog{width:min(94vw,920px)}
+.touch-label .product-dialog[open]{height:min(920px,94dvh);display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr) auto auto auto;gap:8px;overflow:hidden}
+.touch-label .product-dialog h2,.touch-label .product-dialog p,.touch-label .product-dialog footer,.touch-label .product-dialog nav{margin:0}
+.touch-label .product-dialog>p{font-size:16px}
+.touch-label .product-search{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.touch-label #product-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.touch-label #product-list button{flex-shrink:0;text-align:left;min-height:78px;padding:10px 12px}
+.touch-label #product-list strong{display:block;font-size:22px;overflow-wrap:anywhere}
+.touch-label #product-list small{display:block;font-size:16px;margin-top:4px}
+.touch-label #product-list [aria-pressed=true],.touch-label #product-default[aria-pressed=true]{border:2px solid #343a40;background:#e8ebed}
+.touch-label #product-selection-detail{white-space:pre-line;background:#f3f4f5;border-radius:6px;padding:8px;font-size:15px;overflow-wrap:anywhere}
+.touch-label #product-totals-list{display:grid;gap:8px}
+.touch-label .product-total-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--line);border-radius:6px}
+.touch-label .product-total-row strong,.touch-label .product-total-row small{display:block;overflow-wrap:anywhere}
+.touch-label .product-total-row small{font-size:14px;color:var(--muted);margin-top:6px}
+.touch-label .product-total-row b{font-size:24px;white-space:nowrap;text-align:right}
 .touch-label .left{grid-template-rows:auto auto minmax(0,1fr)}
 .touch-label .panel{box-shadow:none}
 .touch-label .panel-head{font-size:19px;padding:10px 12px;min-height:42px;background:white}
