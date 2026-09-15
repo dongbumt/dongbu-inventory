@@ -122,12 +122,17 @@ ${preview?'<div class="preview-watermark">미리보기</div>':''}
       // Keep a rendered browsing context, but no popup, focus change or UI space.
       // display:none/visibility:hidden can suppress print layout in some browsers.
       frame.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;z-index:-1;';
-      let settled=false,started=false,loadHandled=false;
+      let settled=false,started=false,loadHandled=false,fullscreenSession=null;
       let prepareTimer,printTimer;
       function dispose(){
         global.clearTimeout(prepareTimer);global.clearTimeout(printTimer);
         frame.remove();
         if(activeHiddenFrame===frame) activeHiddenFrame=null;
+        if(fullscreenSession){
+          // Screen recovery is optional and must not change print accounting.
+          try{global.DBMTLabelFullscreen?.afterPrint(fullscreenSession);}catch(e){}
+          fullscreenSession=null;
+        }
       }
       function fail(error,retainFrame=false){
         if(settled) return;
@@ -160,6 +165,7 @@ ${preview?'<div class="preview-watermark">미리보기</div>':''}
           win.addEventListener('afterprint',afterPrint,{once:true});
           started=true;
           printTimer=global.setTimeout(()=>fail(new Error('인쇄 종료 알림을 받지 못했습니다. 중복 출력하지 말고 실제 출력과 인쇄창을 확인한 뒤 화면을 새로고침해주세요.'),true),120000);
+          try{fullscreenSession=global.DBMTLabelFullscreen?.beforePrint()||null;}catch(e){}
           win.print();
         }catch(error){fail(error);}
       });

@@ -212,7 +212,7 @@
     byId('work-order-content').append(left);
     document.body.insertAdjacentHTML('beforeend',`<dialog id="product-dialog" class="touch-dialog product-dialog" aria-labelledby="product-dialog-title"><h2 id="product-dialog-title">생산품목 / 스펙 변경</h2><p>등록된 품목을 선택한 뒤 적용하세요. 기존 출력이력은 바뀌지 않습니다.</p><div class="product-search"><input id="product-search" type="search" placeholder="품목명, 스펙, 제품코드 검색" aria-label="생산품목 검색">${button('지움','id="product-search-clear"')}</div>${button('작업지시 기본품목','id="product-default"')}<div id="product-list"></div><nav class="history-pager">${button('이전','id="product-prev"')}<span id="product-page"></span>${button('다음','id="product-next"')}</nav><p id="product-selection-detail"></p><footer>${button('현재 품목 유지 · 닫기','data-close="product-dialog"')}${button('다음 출력부터 적용','id="product-apply" class="dark"')}</footer></dialog>
       <dialog id="product-totals-dialog" class="touch-dialog history-dialog" aria-labelledby="product-totals-title"><h2 id="product-totals-title">품목별 외포장 생산현황</h2><p id="product-totals-summary"></p><div id="product-totals-list"></div><footer>${button('닫기','data-close="product-totals-dialog"')}</footer></dialog>`);
-    ready=true;wire();renderAll();setInterval(()=>sync(),500);
+    ready=true;wire();renderAll();window.DBMTLabelFullscreen?.sync();setInterval(()=>sync(),500);
   }
   function wire(){
     byId('product-open').onclick=()=>{pendingProduct=chosenProduct();productPage=0;byId('product-search').value='';renderProducts();openDialog('product-dialog');};
@@ -289,7 +289,7 @@
     byId('scale-open').onclick=byId('scale-readout').onclick=()=>openDialog('scale-dialog');
     byId('scale-connect').onclick=async()=>{try{await scale.connect();}catch(e){setStatus(e.message,'warn');}sync();};
     byId('scale-disconnect').onclick=async()=>{await scale.disconnect();sync();};
-    byId('fullscreen-btn').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch(e){setStatus('전체화면은 키보드 F11로도 사용할 수 있습니다.','warn');}};
+    byId('fullscreen-btn').onclick=()=>window.DBMTLabelFullscreen?.toggle();
     const calc={value:'0',stored:null,op:null,fresh:false};
     function result(a,b,op){return op==='+'?a+b:op==='−'?a-b:op==='×'?a*b:op==='÷'?(b===0?NaN:a/b):b;}
     const format=n=>Number.isFinite(n)?String(Number(n.toPrecision(10))):'오류';

@@ -1,5 +1,5 @@
 /* 1280 x 1024 operator layout: selected proposal 2. Print document is separate. */
-body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--blue:#343a40;--green:#343a40;--soft-blue:#e8ebed;--soft-green:#f1f3f4;font-size:18px;line-height:1.35;display:grid;grid-template-rows:80px minmax(0,1fr) auto;height:100dvh;min-height:800px}
+body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--blue:#343a40;--green:#343a40;--soft-blue:#e8ebed;--soft-green:#f1f3f4;font-size:18px;line-height:1.35;display:grid;grid-template-rows:80px minmax(0,1fr) auto;height:100dvh;min-height:0}
 .touch-label [hidden]{display:none!important}
 .touch-label button,.touch-label input,.touch-label select,.touch-label a{min-height:52px;font-size:18px;touch-action:manipulation}
 .touch-label button{padding:8px 12px;white-space:normal}
@@ -9,7 +9,7 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label .connect input{width:110px}
 .touch-label .connect a{display:flex;align-items:center;color:var(--text)}
 .touch-label .shell{height:auto;min-height:0;grid-template-columns:29% minmax(0,1fr);gap:12px;padding:12px;overflow:hidden}
-.touch-label .touch-left{display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;min-height:0;min-width:0}
+.touch-label .touch-left{display:grid;grid-template-rows:max-content minmax(360px,1fr);gap:12px;min-height:0;min-width:0;overflow-y:auto}
 .touch-label .touch-current-work{display:grid;gap:10px;padding:16px;align-content:start}
 .touch-label .touch-current-work>span{font-size:16px;color:var(--muted)}
 .touch-label #current-work-title{font-size:25px;line-height:1.3;overflow-wrap:anywhere}
@@ -49,7 +49,9 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label .order-title{font-size:20px;padding-right:64px}
 .touch-label .order-sub{font-size:13px}
 .touch-label .order-badge{position:absolute;right:10px;top:10px;font-size:13px;background:#eef0f2;color:#343a40;padding:4px}
-.touch-label .right{grid-template-rows:auto minmax(540px,1fr) auto;gap:12px;overflow-y:auto}
+/* Never sacrifice the product/scale panel to the print controls' minimum height.
+   A shorter browser viewport scrolls the column instead of clipping its contents. */
+.touch-label .right{grid-template-rows:max-content minmax(540px,1fr) max-content;gap:12px;overflow-y:auto;align-content:start}
 .touch-label .touch-job-head{display:grid;grid-template-columns:minmax(0,1fr) 42%;gap:12px;align-items:center}
 .touch-label .selected-title{display:block;margin:0}
 .touch-label #selected-name{display:block;font-size:27px;white-space:normal;overflow-wrap:anywhere;line-height:1.25;margin-bottom:6px}
@@ -143,6 +145,37 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label #number-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
 .touch-label #number-keys button{min-height:64px;font-size:26px}
 .touch-label #number-error{font-size:16px;color:#b42318}
-@media(max-width:1150px){body.touch-label{min-height:1000px;grid-template-rows:auto minmax(0,1fr) auto}.touch-label .brand{font-size:20px}.touch-label .connect button,.touch-label .connect a{font-size:16px}.touch-label .topbar{flex-wrap:wrap}.touch-label .touch-pack{grid-template-columns:minmax(0,1fr) 29%}.touch-label .pack-heading strong{font-size:22px}.touch-label .pack-actions button:first-child{font-size:21px}.touch-label .pack-actions button:first-child small{font-size:14px}.touch-label .touch-weight strong{font-size:34px}.touch-label .touch-bottom{grid-template-columns:1fr}.touch-label .touch-history-open{justify-content:flex-start}.touch-label #completion-status{grid-column:1}.touch-label .scale-readout>strong{font-size:44px}.touch-label .filters{grid-template-columns:1fr 48px 48px}.touch-label .order-title{font-size:18px}}
+@media(max-width:1150px){body.touch-label{grid-template-rows:auto minmax(0,1fr) auto}.touch-label .brand{font-size:20px}.touch-label .connect button,.touch-label .connect a{font-size:16px}.touch-label .topbar{flex-wrap:wrap}.touch-label .touch-pack{grid-template-columns:minmax(0,1fr) 29%}.touch-label .pack-heading strong{font-size:22px}.touch-label .pack-actions button:first-child{font-size:21px}.touch-label .pack-actions button:first-child small{font-size:14px}.touch-label .touch-weight strong{font-size:34px}.touch-label .touch-bottom{grid-template-columns:1fr}.touch-label .touch-history-open{justify-content:flex-start}.touch-label #completion-status{grid-column:1}.touch-label .scale-readout>strong{font-size:44px}.touch-label .filters{grid-template-columns:1fr 48px 48px}.touch-label .order-title{font-size:18px}}
+/* 1280 x 1024 monitors have less page height with Edge's tabs/taskbar visible. */
+@media(min-width:901px) and (max-height:950px){
+  body.touch-label{grid-template-rows:auto minmax(0,1fr) auto}
+  .touch-label .shell{padding:8px;gap:8px}
+  .touch-label .right{grid-template-rows:max-content minmax(472px,1fr) max-content;gap:8px}
+  .touch-label .panel-body{padding:8px}
+  .touch-label .scale-readout{min-height:80px;padding:6px 10px}
+  .touch-label .scale-readout>strong{font-size:42px}
+  .touch-label #product-open #selected-name{font-size:23px}
+  .touch-label .summary-grid{margin-top:4px;padding-top:4px;gap:8px}
+  .touch-label .metric strong{font-size:22px}
+  .touch-label .touch-pack-area{gap:8px}
+  .touch-label .touch-pack{padding:8px;gap:4px 8px}
+  .touch-label .touch-pack[data-package=outer]{padding:7px}
+  .touch-label .pack-heading strong{font-size:22px}
+  .touch-label .pack-heading small{font-size:14px}
+  .touch-label .pack-fields{gap:6px}
+  .touch-label .pack-fields label{font-size:16px;margin-bottom:4px}
+  .touch-label .weight-modes button{min-height:44px}
+  .touch-label .touch-weight{min-height:64px}
+  .touch-label .touch-weight strong{font-size:36px}
+  .touch-label .touch-stepper button{min-height:64px}
+  .touch-label .pack-actions{grid-template-rows:minmax(120px,1fr) 48px;gap:6px}
+  .touch-label .pack-actions button{min-height:48px}
+  .touch-label .touch-bottom{padding:6px 8px}
+  .touch-label .touch-left{gap:8px}
+  .touch-label .touch-current-work{padding:12px;gap:6px}
+  .touch-label #current-work-state{padding-top:6px}
+  .touch-label #work-order-open{min-height:60px}
+  .touch-label .touch-calc{padding:8px;gap:6px;grid-template-rows:auto 50px minmax(0,1fr)}
+}
 @media(max-width:900px){body.touch-label{height:auto;min-height:100dvh;display:block}.touch-label .shell{overflow:visible;grid-template-columns:1fr}.touch-label .touch-left{grid-template-columns:1fr 1fr;grid-template-rows:440px}.touch-label .right{grid-template-rows:auto auto auto}.touch-label .touch-pack{min-height:268px}.touch-label .touch-pack-area{grid-template-rows:auto auto}.touch-label .touch-bottom{grid-template-columns:1fr 1fr}.touch-label #completion-status{grid-column:1/-1}}
 @media(max-width:570px){.touch-label .shell{padding:8px}.touch-label .touch-left{grid-template-columns:1fr;grid-template-rows:auto 410px}.touch-label .touch-job-head,.touch-label .summary-grid,.touch-label .touch-bottom{grid-template-columns:1fr}.touch-label .summary-grid{grid-template-columns:1fr 1fr}.touch-label #selected-name{font-size:24px}.touch-label .touch-pack{grid-template-columns:1fr;grid-template-rows:auto auto auto}.touch-label .pack-actions{grid-column:1;grid-row:3}.touch-label .pack-fields{grid-template-columns:1fr}.touch-label .weight-modes{grid-column:1}.touch-label #completion-status{grid-column:1}.touch-label .touch-dialog{padding:12px}.touch-label .touch-history-row{grid-template-columns:1fr}.touch-label .history-choice{grid-template-columns:28px minmax(0,1fr)}.touch-label .history-choice b{grid-column:2}.touch-label .history-actions{justify-content:stretch}.touch-label .history-actions button{flex:1}.touch-label #label-preview-frame{zoom:.85}.touch-label .connect{justify-content:flex-start}.touch-label .preview-stage{justify-content:flex-start} .touch-label .work-order-dialog .order-title{padding-right:0}.touch-label .work-order-dialog .order-badge{position:static;justify-self:start}}
