@@ -393,7 +393,7 @@
       .topbar, .shell { display: none; }
     }
   </style>
-  <link rel="stylesheet" href="label-touch.css?v=20260915touch1">
+  <link rel="stylesheet" href="label-touch.css?v=20260915touch2">
 </head>
 <body>
   <header class="topbar">
@@ -697,7 +697,7 @@
           $('date-filter').value = '';
         }
         const visibleRows = filteredOrders();
-        const exists = visibleRows.some(row => String(row.id) === String(state.selectedId));
+        const exists = state.workOrders.some(row => String(row.id) === String(state.selectedId));
         state.selectedId = exists ? state.selectedId : (visibleRows[0]?.id || '');
         renderAll();
         setStatus(`연결됨: 작업지시 ${state.workOrders.length}건, 출력이력 ${state.logs.length}건`, 'ok');
@@ -810,6 +810,34 @@
       } finally { setLoading(false); }
     }
 
+    async function cancelProductionTransfer(workOrderId, productionId){
+      if(state.loading) return false;
+      const completed = completionFor(workOrderId);
+      if(!state.pin || String(state.selectedId)!==String(workOrderId) || !completed || completed.productionId!==productionId){
+        setStatus('전송 상태가 변경되었습니다. 새로고침 후 다시 확인해주세요.', 'warn');
+        return false;
+      }
+      setLoading(true);
+      setStatus('전송 취소 및 연결된 재고 반영 취소 중...', 'warn');
+      try {
+        const result = await sbRpc('dbmt_label_cancel_production', {
+          p_pin:state.pin,p_work_order_id:String(workOrderId),p_production_id:productionId
+        });
+        const cancelled = result?.completions?.find(item=>String(item.workOrderId)===String(workOrderId));
+        if(result?.ok!==true || !Array.isArray(result.completions) || cancelled?.productionId!==productionId || cancelled.deleted!==true){
+          throw new Error(result?.message || '서버의 전송 취소 상태를 확인하지 못했습니다.');
+        }
+        state.completions=result.completions;
+        renderAll();
+        setStatus('전송 취소 완료. 생산일보와 연결된 원료·생산품 재고 및 부자재 사용을 취소했습니다. 출력이력은 유지되며 수정 후 재전송할 수 있습니다.', 'ok');
+        return true;
+      } catch(err){
+        // Never unlock optimistically. Retry targets this exact journal generation.
+        setStatus(`전송 취소 확인 실패: ${err.message || err} (새로고침으로 상태를 확인하거나 다시 시도하세요.)`, 'err');
+        return false;
+      } finally { setLoading(false); }
+    }
+
     function filteredOrders(){
       const search = $('search-filter')?.value.trim().toLowerCase() || '';
       const date = $('date-filter')?.value || '';
@@ -825,13 +853,13 @@
 
     function renderOrders(){
       const rows = filteredOrders();
-      if(rows.length && !rows.some(row => String(row.id) === String(state.selectedId))){
+      if(rows.length && !selectedOrder()){
         state.selectedId = rows[0].id;
       }
       $('order-count').textContent = `${rows.length}건`;
       const list = $('order-list');
       if(!rows.length){
-        state.selectedId = '';
+        if(!selectedOrder()) state.selectedId = '';
         list.innerHTML = `<div class="empty">${state.workOrders.length ? '조건에 맞는 작업지시가 없습니다.' : '작업지시가 없습니다.'}</div>`;
         return;
       }
@@ -842,7 +870,7 @@
         const sub = `${row.date || '-'} / ${row.product || '-'} / LOT ${row.lot || row.sourceStock?.lot || '-'}`;
         const active = String(row.id) === String(state.selectedId) ? ' active' : '';
         return `
-          <button class="order-row${active}" type="button" data-id="${html(row.id)}">
+          <button class="order-row${active}" type="button" data-id="${html(row.id)}" aria-pressed="${!!active}">
             <span class="order-main">
               <span class="order-title">${html(title)}</span>
               <span class="order-sub">${html(sub)}</span>
@@ -851,7 +879,11 @@
           </button>`;
       }).join('');
       list.querySelectorAll('.order-row').forEach(btn => {
-        btn.addEventListener('click', () => selectOrder(btn.dataset.id));
+        btn.addEventListener('click', () => {
+          if(state.loading) return;
+          selectOrder(btn.dataset.id);
+          window.DBMTLabelTouch?.closeOrders();
+        });
       });
     }
 
@@ -1353,6 +1385,6 @@
 
   </script>
   <script src="label-scale.js?v=20260915touch1"></script>
-  <script src="label-touch.js?v=20260915touch1"></script>
+  <script src="label-touch.js?v=20260915touch2"></script>
 </body>
 </html>

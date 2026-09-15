@@ -12,9 +12,9 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
   const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}}),page=await context.newPage(),errors=[];
-    let saves=0,completeIds=[],fail=false,logs=[],done=false;
+    let saves=0,completeIds=[],fail=false,logs=[],done=false,cancelled=false,cancelMode='',cancelCalls=0,generation=1;
     const order={id:'a',title:'돈등심 작업',product:'돈등심(작업)',date:'2026-09-15',mfgdate:'2026-09-15',expdate:'2027-09-14',lot:'903112100182',origin:'미국산',inputWeight:100,weight:20};
-    const completion=()=>done?[{workOrderId:'a',productionId:'qa-production',date:'2026-09-15',jobNo:'1',deleted:false}]:[];
+    const completion=()=>done?[{workOrderId:'a',productionId:'qa-production-'+generation,date:'2026-09-15',jobNo:String(generation),deleted:cancelled}]:[];
     await context.route('https://**/*',async route=>{
       const name=route.request().url().split('/').pop(),body=route.request().postDataJSON();let result={};
       if(name==='dbmt_label_print_get_data')result={appData:{workOrders:[order,{...order,id:'b',product:'LA갈비(작업)',title:'LA갈비 작업',lot:'OTHER-LOT',weight:5},{...order,id:'c'},{...order,id:'d'}],labelProducts:[],labelPrintLogs:logs},completions:completion()};
@@ -22,6 +22,14 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
         if(fail){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA save fail"}'});return;}
         saves++;logs=body.p_logs;result={ok:true,logs,completions:completion()};
       }else if(name==='dbmt_label_complete_production'){completeIds=body.p_log_ids;done=true;result={ok:true,completions:completion()};}
+      else if(name==='dbmt_label_cancel_production'){
+        cancelCalls++;assert.equal(body.p_work_order_id,'a');assert.equal(body.p_production_id,'qa-production-'+generation);assert.equal(body.p_pin,'0000');
+        if(cancelMode==='reject'){await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({message:'출고에 연결된 생산품은 삭제할 수 없습니다.'})});return;}
+        if(cancelMode==='malformed')result={ok:true,completions:[]};
+        else {cancelled=true;if(cancelMode==='lost'){await route.abort();return;}result={ok:true,productionId:body.p_production_id,completions:completion()};}
+      }else if(name==='dbmt_label_resubmit_production'){
+        assert.equal(body.p_previous_production_id,'qa-production-'+generation);assert(cancelled);generation++;cancelled=false;result={ok:true,completions:completion()};
+      }
       await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
     });
     await context.addInitScript(()=>{
@@ -47,6 +55,14 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       await page.screenshot({path:path.join(dir,`layout-${width}.png`),fullPage:true});
     }
     await layout(1280);
+    assert.equal(await page.locator('.shell #order-list').count(),0,'Work list moved out of operator workspace');
+    await page.locator('#work-order-open').click();await page.locator('#search-filter').fill('LA갈비');assert.equal(await page.evaluate(()=>state.selectedId),'a');
+    await page.locator('#search-filter').fill('no-such-work');assert.equal(await page.evaluate(()=>state.selectedId),'a');
+    await page.locator('[data-close=work-order-dialog]').click();assert.equal(await page.evaluate(()=>state.selectedId),'a');
+    await page.locator('#reload-btn').click();await wait();assert.equal(await page.evaluate(()=>state.selectedId),'a','Reload preserves current work even when popup filter excludes it');
+    await page.locator('#work-order-open').click();await page.locator('#clear-search-btn').click();await page.locator('#work-order-dialog').screenshot({path:path.join(dir,'orders.png')});
+    await page.locator('#order-list [data-id=b]').click();assert(!(await page.locator('#work-order-dialog').evaluate(d=>d.open)));assert.equal(await page.evaluate(()=>state.selectedId),'b');
+    await page.locator('#work-order-open').click();await page.locator('#order-list [data-id=a]').click();
     assert.equal(await page.evaluate(()=>__portRequests),0,'Never auto-probe office computer');
     await edit('inner','weight',2);await edit('inner','copies',3);await page.locator('#inner-print-btn').click();await wait();
     assert.equal(saves,0);assert.equal(logs.length,0);assert.equal(await page.evaluate(()=>__prints[0].count),3);
@@ -72,9 +88,37 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.locator('#complete-production-btn').click();await wait();assert.equal(completeIds.length,6);assert(await page.locator('#print-btn').isDisabled());assert(await page.locator('#inner-print-btn').isEnabled());
     const saved=saves;await page.locator('#inner-print-btn').click();await wait();assert.equal(saves,saved);assert.equal(await production(),'27.48 kg');
     await page.locator('#reprint-open').click();await page.locator('#history-body input').first().check();await page.locator('#history-print').click();await wait();assert.equal(await production(),'27.48 kg');await page.locator('[data-close=history-dialog]').click();
+    await page.locator('#cancel-transfer-open').click();await page.locator('[data-close=cancel-transfer-dialog]').click();assert.equal(cancelCalls,0,'Dismissing confirmation must not delete anything');
+    const original=JSON.stringify(logs);
+    await page.locator('#cancel-transfer-open').click();
+    await page.locator('#cancel-transfer-dialog').screenshot({path:path.join(dir,'cancel-confirm.png')});
+    assert(await page.locator('#cancel-transfer-open').isVisible());
+    for(const mode of ['reject','malformed','lost']){
+      cancelMode=mode;await page.locator('#cancel-transfer-confirm').click();await wait();assert(await page.locator('#print-btn').isDisabled(),'Failure/ambiguous success never unlocks optimistically');assert(await page.locator('#cancel-transfer-error').textContent());
+    }
+    cancelMode='';await page.locator('#cancel-transfer-confirm').click();await wait();assert(await page.locator('#print-btn').isEnabled());assert.equal(JSON.stringify(logs),original);assert(!(await page.locator('#cancel-transfer-dialog').evaluate(d=>d.open)));
+    await page.locator('#reprint-open').click();assert(await page.locator('#history-body [data-act=void]').first().isEnabled());await page.locator('[data-close=history-dialog]').click();
+    await page.reload();await page.locator('#app-password').fill('0000');await page.locator('#connect-btn').click();await wait();assert(await page.locator('#print-btn').isEnabled(),'Cancellation survives restart');
+    await edit('outer','weight',5);await page.locator('#print-btn').click();await wait();assert.equal(await production(),'32.48 kg');
+    await page.locator('#complete-production-btn').click();await wait();assert.equal(generation,2);assert(await page.locator('#print-btn').isDisabled());
+    // Many orders scroll inside the popup, not the operator workspace. Filters
+    // and Escape keep both the selected job and its already-entered weights.
+    const originalOrders=await page.evaluate(()=>state.workOrders);
+    await page.evaluate(()=>{const sample=state.workOrders[0];state.workOrders.push(...Array.from({length:35},(_,i)=>({...sample,id:'extra-'+i,title:'추가 작업 '+i})));});
+    for(const width of [1280,360]){
+      await page.setViewportSize({width,height:1024});await page.locator('#work-order-open').click();
+      assert(await page.locator('#order-list').evaluate(el=>el.scrollHeight>el.clientHeight));
+      assert(await page.locator('[data-close=work-order-dialog]').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));
+      assert(!(await page.locator('#work-order-dialog').evaluate(el=>el.scrollWidth>el.clientWidth)));
+      await page.locator('#search-filter').fill('OTHER-LOT');assert.equal(await page.evaluate(()=>state.selectedId),'a');
+      await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>DBMTLabelTouch.weight('outer')),5);
+      await page.locator('#work-order-open').click();await page.locator('#clear-search-btn').click();await page.locator('[data-close=work-order-dialog]').click();
+    }
+    await page.evaluate(rows=>{state.workOrders=rows;renderAll();},originalOrders);
+    await page.setViewportSize({width:1280,height:1024});await page.screenshot({path:path.join(dir,'completed-1280.png'),fullPage:true});
     for(const k of ['2','.','5','×','4','='])await page.getByRole('button',{name:`계산기 ${k}`,exact:true}).click();assert.equal(await page.locator('#calc-output').textContent(),'10');
     await layout(1024);await layout(736);await layout(360);
-    await page.reload();await page.locator('#app-password').fill('0000');await page.locator('#connect-btn').click();await wait();await page.evaluate(()=>selectOrder('a'));assert.equal(await production(),'27.48 kg');assert(await page.locator('#print-btn').isDisabled());assert.equal(await page.evaluate(()=>__portRequests),0);
-    assert.deepEqual(errors,[]);assert.equal(context.pages().length,1);console.log('PASS: real layout 2, inner exclusion/no RPC, outer accounting, selected historical reprint, actual inline preview, keypad, calculator, per-job weights, completion/reload, 7E1 serial framing/stale/unstable/disconnect, save failure, no popup.');console.log('Artifacts: '+dir);
+    await page.reload();await page.locator('#app-password').fill('0000');await page.locator('#connect-btn').click();await wait();await page.evaluate(()=>selectOrder('a'));assert.equal(await production(),'32.48 kg');assert(await page.locator('#print-btn').isDisabled());assert.equal(await page.evaluate(()=>__portRequests),0);
+    assert.deepEqual(errors,[]);assert.equal(context.pages().length,1);console.log('PASS: touch layout, work selection popup/filter isolation, cancel confirmation/no-op/failure/ambiguous retry/reload/resubmit, preserved labels, inner/outer accounting, reprint, actual preview, keypad, calculator, serial, no print popup.');console.log('Artifacts: '+dir);
   }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;server.close();});

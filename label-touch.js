@@ -66,10 +66,20 @@
     byId('outer-total').textContent=byId('active-count').textContent;
     byId('metric-label-weight').textContent=weight('outer')?kg(weight('outer')):'—';
     byId('selected-meta').textContent=row?`${row.product||''} · ${row.origin||''} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'연결 후 작업지시를 선택하세요.';
+    byId('work-order-open').disabled=state.loading||!state.pin;
+    byId('current-work-title').textContent=row?(row.title||row.product):'작업지시를 선택하세요';
+    byId('current-work-meta').textContent=row?`${row.date||''} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'먼저 PIN으로 연결하세요.';
+    const completed=row&&completionFor(row.id);
+    byId('current-work-state').textContent=completed?'생산일보 전송 완료':row&&completionRecordFor(row.id)?.deleted?'전송 취소 · 수정 가능':row?'라벨 출력 중':'연결 대기';
+    byId('cancel-transfer-open').hidden=!completed;
+    byId('cancel-transfer-open').disabled=state.loading||!completed;
+    byId('complete-production-btn').hidden=!!completed;
+    byId('cancel-transfer-confirm').disabled=state.loading;
+    document.querySelectorAll('#cancel-transfer-dialog [data-close]').forEach(b=>b.disabled=state.loading);
     document.querySelectorAll('#history-body button,#history-body input').forEach(el=>{if(state.loading)el.disabled=true;});
     document.querySelectorAll('#order-list button,#date-filter,#today-btn,#all-btn,#search-filter,#clear-search-btn').forEach(el=>el.disabled=state.loading);
   }
-  function closeDialog(id){const d=byId(id);if(d.open)d.close();if(lastFocus?.isConnected)lastFocus.focus();}
+  function closeDialog(id){const d=byId(id);if(!d.open)return;d.close();if(lastFocus?.isConnected&&!lastFocus.hidden)lastFocus.focus();else byId('work-order-open').focus();}
   function openDialog(id){lastFocus=document.activeElement;byId(id).showModal();}
   function renderHistory(){
     if(!ready)return;
@@ -117,7 +127,8 @@
   function init(){
     document.body.classList.add('touch-label');
     const left=document.querySelector('.left'),shell=document.querySelector('.shell'),right=document.querySelector('.right');
-    const col=document.createElement('aside');col.className='touch-left';shell.insertBefore(col,left);col.append(left);
+    const col=document.createElement('aside');col.className='touch-left';shell.insertBefore(col,left);
+    col.innerHTML='<section class="panel touch-current-work"><span>현재 작업지시</span><strong id="current-work-title"></strong><small id="current-work-meta"></small><span id="current-work-state"></span>'+button('작업지시 변경','id="work-order-open"')+'</section>';
     const calc=document.createElement('section');calc.className='panel touch-calc';calc.setAttribute('aria-label','터치 계산기');
     calc.innerHTML='<div class="calc-title">계산기 <small>독립 계산</small></div><output id="calc-output" aria-live="polite">0</output><div class="calc-keys">'+['AC','⌫','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='].map(k=>button(k,`data-calc="${k}" aria-label="계산기 ${k}"`)).join('')+'</div>';col.append(calc);
     document.querySelector('.brand').textContent='동부엠티 ERP · 라벨 출력';
@@ -144,15 +155,34 @@
     const complete=byId('complete-production-btn'),notice=byId('completion-status');
     complete.parentElement.remove();complete.removeAttribute('style');notice.removeAttribute('style');
     bottom.innerHTML='<div class="touch-history-open"><span>외포장 <b id="outer-total">0장</b></span>'+button('재출력','id="reprint-open"')+'</div><div class="touch-transfer"><span>생산량 <b id="touch-output">—</b></span></div>';
-    bottom.querySelector('.touch-transfer').append(complete);bottom.append(notice);bottom.querySelector('.touch-history-open').prepend(media);right.append(bottom);
+    bottom.querySelector('.touch-transfer').append(complete);bottom.querySelector('.touch-transfer').insertAdjacentHTML('beforeend',button('전송 취소 · 수정하기','id="cancel-transfer-open" hidden'));bottom.append(notice);bottom.querySelector('.touch-history-open').prepend(media);right.append(bottom);
     document.querySelector('.history-wrap').remove();
     document.body.insertAdjacentHTML('beforeend',`<dialog id="history-dialog" class="touch-dialog history-dialog"><h2 id="history-title">외포장 출력이력</h2><p id="history-meta"></p><span id="history-count" hidden></span><div id="history-body"></div><nav class="history-pager">${button('이전','id="history-prev"')}<span id="history-page"></span>${button('다음','id="history-next"')}</nav><footer>${button('닫기','data-close="history-dialog"')}${button('선택 0장 재출력','id="history-print" class="dark"')}</footer><p class="dialog-notice" role="status"></p></dialog>
       <dialog id="label-preview-dialog" class="touch-dialog preview-dialog"><h2 id="label-preview-title"></h2><div class="preview-stage"><iframe id="label-preview-frame" title="실제 인쇄 라벨" sandbox="allow-same-origin"></iframe></div>${button('닫기','id="label-preview-close"')}</dialog>
       <dialog id="number-dialog" class="touch-dialog number-dialog"><h2 id="number-title"></h2><input id="number-input" inputmode="decimal" aria-label="라벨 숫자 입력"><div id="number-keys">${['7','8','9','4','5','6','1','2','3','.','0','⌫'].map(k=>button(k,`data-number="${k}"`)).join('')}</div><p id="number-error" role="alert"></p><footer>${button('취소','data-close="number-dialog"')}${button('적용','id="number-apply" class="dark"')}</footer></dialog>
       <dialog id="scale-dialog" class="touch-dialog"><h2>저울 연결</h2><p>A&amp;D FG-150KAL · COM2 / 2400 / 7E1</p><p>SM을 종료한 뒤 연결을 누르고 <b>COM2</b>를 선택하세요. 브라우저를 다시 열면 연결 버튼으로 재연결하세요.</p><p>저울 표시값을 그대로 사용합니다. 용기무게는 저울에서 설정하고, 첫 출력 전 표시 중량과 일치하는지 확인하세요.</p><p id="scale-dialog-status" role="status"></p><footer>${button('연결','id="scale-connect"')}${button('연결 해제','id="scale-disconnect"')}${button('닫기','data-close="scale-dialog"')}</footer></dialog>`);
+    document.body.insertAdjacentHTML('beforeend',`<dialog id="work-order-dialog" class="touch-dialog work-order-dialog" aria-labelledby="work-order-title"><h2 id="work-order-title">작업지시 선택</h2><p>작업을 누르면 전환됩니다. 검색하거나 닫기만 하면 현재 작업은 유지됩니다.</p><div id="work-order-content"></div><footer>${button('현재 작업 유지 · 닫기','data-close="work-order-dialog"')}</footer></dialog>
+      <dialog id="cancel-transfer-dialog" class="touch-dialog" aria-labelledby="cancel-transfer-title"><h2 id="cancel-transfer-title">생산일보 전송을 취소할까요?</h2><p id="cancel-transfer-target"></p><ul><li>연결된 생산일보를 삭제하고 원료·생산품 재고 반영과 부자재 사용을 함께 취소합니다.</li><li>사무실에서 해당 생산일보에 추가·수정한 내용도 취소됩니다. 재전송 시 출력이력 기준으로 새 생산일보를 만듭니다.</li><li>기존 라벨 출력이력은 유지됩니다. 잘못 출력한 외포장 이력은 재출력 목록에서 삭제한 뒤 다시 출력하세요.</li><li>출고·재투입·이동 또는 다른 작업지시에 연결된 생산품은 먼저 연결 내역을 정리해야 합니다.</li></ul><p id="cancel-transfer-error" role="alert"></p><footer>${button('돌아가기','data-close="cancel-transfer-dialog"')}${button('생산일보 삭제 · 전송 취소','id="cancel-transfer-confirm" class="dark"')}</footer></dialog>`);
+    byId('work-order-content').append(left);
     ready=true;wire();renderAll();setInterval(()=>sync(),500);
   }
   function wire(){
+    byId('work-order-open').onclick=()=>{renderOrders();openDialog('work-order-dialog');};
+    byId('work-order-dialog').addEventListener('keydown',e=>{
+      if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeDialog('work-order-dialog');}
+    });
+    byId('cancel-transfer-open').onclick=()=>{
+      const row=selectedOrder(),done=row&&completionFor(row.id);if(state.loading||!done)return;
+      const dialog=byId('cancel-transfer-dialog');dialog.dataset.workOrderId=String(row.id);dialog.dataset.productionId=done.productionId;
+      byId('cancel-transfer-target').textContent=`${row.title||row.product} · ${done.date||''} #${done.jobNo||''} 생산일보`;
+      byId('cancel-transfer-error').textContent='';openDialog('cancel-transfer-dialog');
+    };
+    byId('cancel-transfer-dialog').addEventListener('cancel',e=>{if(state.loading)e.preventDefault();});
+    byId('cancel-transfer-confirm').onclick=async()=>{
+      const dialog=byId('cancel-transfer-dialog');
+      if(await cancelProductionTransfer(dialog.dataset.workOrderId,dialog.dataset.productionId))closeDialog('cancel-transfer-dialog');
+      else byId('cancel-transfer-error').textContent=byId('status').textContent;
+    };
     byId('inner-print-btn').onclick=()=>printSelectedLabels('inner');byId('inner-preview-btn').onclick=()=>previewSelectedLabel('inner');
     byId('reprint-open').onclick=()=>{selected.clear();historyPage=0;renderHistory();openDialog('history-dialog');};
     byId('history-prev').onclick=()=>{historyPage--;renderHistory();};byId('history-next').onclick=()=>{historyPage++;renderHistory();};
@@ -210,6 +240,6 @@
       byId('calc-output').textContent=calc.value;
     };
   }
-  window.DBMTLabelTouch={get ready(){return ready;},remember,sync,weight,copies,renderHistory,preview};
+  window.DBMTLabelTouch={get ready(){return ready;},remember,sync,weight,copies,renderHistory,preview,closeOrders:()=>closeDialog('work-order-dialog')};
   document.addEventListener('DOMContentLoaded',init);
 })();
