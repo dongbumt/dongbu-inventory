@@ -32,6 +32,8 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       }
       await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
     });
+    // The link test must not run the real ERP or contact its backend.
+    await context.route('**/index.html',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>ERP link fixture</title><p>ERP</p>'}));
     await context.addInitScript(()=>{
       window.__prints=[];window.__portOptions=null;window.__portRequests=0;window.__portClosed=0;
       window.print=()=>{if(parent!==window){parent.__prints.push({count:document.querySelectorAll('.print-label').length,text:document.querySelector('#label-print-pages').textContent});setTimeout(()=>dispatchEvent(new Event('afterprint')),0);}};
@@ -76,6 +78,13 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.evaluate(()=>selectOrder('b'));await page.locator('#reprint-open').click();assert.match(await page.locator('#history-body').textContent(),/이 작업의 외포장 출력이력이 없습니다/);await page.locator('[data-close=history-dialog]').click();
     await page.evaluate(()=>selectOrder('a'));assert.equal(await page.evaluate(()=>DBMTLabelTouch.weight('outer')),5);assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),5);
     await page.locator('#scale-open').click();await page.locator('#scale-connect').click();await page.waitForFunction(()=>__portOptions);assert.deepEqual(await page.evaluate(()=>__portOptions),{baudRate:2400,dataBits:7,stopBits:1,parity:'even',flowControl:'none'});await page.locator('[data-close=scale-dialog]').click();
+    const originalUrl=page.url();
+    const labelState=()=>page.evaluate(()=>({id:state.selectedId,pin:state.pin,logs:state.logs,innerWeight:DBMTLabelTouch.weight('inner'),outerWeight:DBMTLabelTouch.weight('outer'),copies:DBMTLabelTouch.copies('outer'),portRequests:__portRequests,portClosed:__portClosed,printCount:__prints.length}));
+    const beforeErp=await labelState();
+    const [erpPage]=await Promise.all([context.waitForEvent('page'),page.locator('.connect a[href="index.html"]').click()]);
+    await erpPage.waitForLoadState();assert.equal(erpPage.url(),base+'/index.html');assert.equal(await erpPage.evaluate(()=>window.opener),null);
+    assert.equal(page.url(),originalUrl,'ERP must not replace the connected label screen');assert.deepEqual(await labelState(),beforeErp,'Keep work, weights, logs and serial connection when opening ERP');
+    await erpPage.close();await page.bringToFront();console.log('PASS: ERP opens separately without navigating/reloading the label page or disconnecting the scale.');
     await page.locator('[data-kind=outer][data-mode=scale]').click();assert(await page.locator('#print-btn').isDisabled());
     await page.evaluate(()=>__send('ST,+00002.'));assert(await page.locator('#print-btn').isDisabled());await page.evaluate(()=>__send('48 kg\r\n'));await page.waitForFunction(()=>!document.getElementById('print-btn').disabled);
     assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),1);await page.locator('#print-btn').click();await wait();assert.equal(await production(),'27.48 kg');assert.equal(logs.at(0).labelWeight,2.48);
