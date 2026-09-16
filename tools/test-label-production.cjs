@@ -147,6 +147,12 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await erp.locator('#prod-in-1 button.btn-danger').click();await erp.locator('#prod-out-1 button.btn-danger').click();
     await erp.locator('#prod-out-price-2').fill('');await erp.locator('button[onclick="saveProdEntry()"]').click();await erp.waitForFunction(()=>modalIds.length===2);
     assert.equal(await erp.evaluate(()=>userProdEntries[0].inputs.length),1);assert.equal(await erp.evaluate(()=>userProdEntries[0].outputs.length),1);assert.equal(await erp.evaluate(()=>userProdEntries[0].outputs[0].price),20000,'Use the ordinary automatic price calculation');
+    await erp.evaluate(()=>{labelProducts[0].isActive=false;openEditProdEntry('prod_label_qa');});
+    assert.equal(await erp.locator('#prod-out-product-id-1').inputValue(),'qa-product','Inactive historical output stays selected');
+    await erp.locator('#prod-note').fill('사용안함 품목의 과거 기록 수정');
+    await erp.evaluate(()=>saveProdEntry());await erp.waitForFunction(()=>modalIds.length===3);
+    assert.equal(await erp.evaluate(()=>userProdEntries[0].outputs[0].productId),'qa-product');
+    assert.equal(await erp.evaluate(()=>userProdEntries[0].note),'사용안함 품목의 과거 기록 수정');
     await erp.evaluate(async()=>{
       const normal={id:'normal',inputs:[],outputs:[]};userProdEntries.push(normal);userTransactions.push({id:'normal-tx',_prodId:'normal'});
       remoteProduction={ok:true,productionIds:['prod_label_qa','prod_label_remote'],entries:[{...userProdEntries[0],id:'prod_label_remote'}],transactions:[{id:'remote-tx',_prodId:'prod_label_remote',weight:12.35}]};
