@@ -31,6 +31,8 @@ const common = {
 };
 const incoming = (id, weight, note) => ({...common, date: '2026-09-13', type: '생산입고',
   _isProdOut: true, _prodId: 'qa-production', weight, stockRowId: id, stockNote: note});
+const trackedInbound = (id, weight, price) => ({...common, date: '2026-09-13', type: '입고',
+  weight, price, amount: weight * price, stockRowId: id, stockTrackingVersion: '1'});
 const consume = (id, weight, type = '출고', extra = {}) => ({...common, date: '2026-09-14', type,
   weight, price: type === '출고' ? 9000 : common.price, stockUnitPrice: common.price, stockRowId: id, ...extra});
 
@@ -95,6 +97,18 @@ function testLogic() {
   assert.equal(row(legacy, 'row-A').stock, 30);
   assert.equal(row(legacy, 'row-B').stock, 70);
 
+  // From the rollout onward, ordinary inbound rows receive the same permanent
+  // source ID as production rows. A selected source cannot spill into another
+  // batch that happens to have the same product and LOT at a different cost.
+  const inbound = harness([
+    trackedInbound('stock-A', 0.34, 13839),
+    trackedInbound('stock-B', 7.8, 14238),
+    consume('stock-B', 7.8, '사용', {price: 14238, stockUnitPrice: 14238}),
+    consume('stock-A', 0.34, '사용', {price: 13839, stockUnitPrice: 13839})
+  ]);
+  assert.equal(row(inbound, 'stock-A').stock, 0, 'The earlier residual remains tied to its inbound source');
+  assert.equal(row(inbound, 'stock-B').stock, 0, 'The later batch is consumed only by its own source ID');
+
   const edit = harness([incoming('row-A', 30, '옛 비고'), incoming('row-B', 70, '유지'), consume('row-A', 20, '출고', {stockNote: '옛 비고'})]);
   const beforeKeys = Object.keys(edit.getStockMap()).sort();
   edit.userTransactions[0].stockNote = '삼성웰스토리 / 거래처 수정 / 3mm';
@@ -103,7 +117,7 @@ function testLogic() {
   assert.deepEqual(Object.keys(edit.getStockMap()).sort(), beforeKeys, 'Changing notes and row order must preserve stock keys');
   assert.equal(row(edit, 'row-A').stock, 10);
   assert.equal(row(edit, 'row-A').stockNote, '삼성웰스토리 / 거래처 수정 / 3mm', 'The production note is authoritative over stale outbound snapshots');
-  console.log('PASS: independent production rows, blank/duplicate notes, exact outbound/use/transfer/adjustment allocation, overdraw isolation, legacy isolation, date cutoffs and note edits');
+  console.log('PASS: independent production and inbound rows, blank/duplicate notes, exact outbound/use/transfer/adjustment allocation, overdraw isolation, legacy isolation, date cutoffs and note edits');
 }
 
 async function testTransactionFlows(page, artifacts) {

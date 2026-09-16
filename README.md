@@ -122,11 +122,13 @@ ERP의 `배송기사근태` 메뉴에서 기사 계정을 설정합니다. 근�
 
 기존 관리번호가 없는 생산품과 과거 출고는 **기존 합산 재고를 유지**합니다. 과거 출고를 새 생산 행에 임의로 배분하거나 잔량을 다시 입고하지 않습니다. 기존 생산일보를 수정할 때도 원래 행에는 번호를 소급 부여하지 않으며, 새로 추가한 생산 행부터 행별 관리가 적용됩니다.
 
+새로 저장하는 일반 **입고**도 입고 건마다 고유 재고원본 번호를 발급합니다. 따라서 같은 품목·LOT라도 단가나 입고일이 다른 두 입고를 각각 선택해 출고·생산 투입할 수 있으며, 선택한 원본 번호가 거래에 저장됩니다. 이후 연결된 입고의 품목·LOT·원산지·규격·보관장소·단가는 변경할 수 없고, 이미 출고·사용한 중량보다 입고중량을 줄일 수도 없습니다. 관리번호가 없는 기존 입고·생산·출고 기록은 변환하거나 재계산하지 않고 기존 합산 방식으로 유지됩니다.
+
 삼성웰스토리 전용 메뉴·생산/출고 입력란·별도 재고/납품 집계는 제거했습니다. 기존 생산·출고·매출 기록과 삼성 거래처/작업스펙 원본은 보존하며, 과거 생산품의 삼성 거래처와 스펙은 개별 비고에 표시합니다. 삼성 거래처 원본은 전체 데이터 백업에도 포함합니다.
 
-서버 설치: 기존 38번까지 적용한 뒤 **`supabase/schema-rpc-39-production-stock-rows.sql`**을 적용합니다. Supabase CLI에서는 동일 내용의 `supabase/migrations/20260913090000_production_stock_rows.sql`을 사용합니다. 서버를 먼저 갱신한 후 새 화면을 배포해야 라벨 생산완료의 행번호 생성과 실사 조정의 행별 저장, 서버 검증까지 함께 적용됩니다. Apps Script 연동은 수정된 `Code.gs`를 함께 배포합니다. 기존 업무 데이터의 일괄 변환이나 삭제는 수행하지 않습니다.
+서버 설치: 기존 38번까지 적용한 뒤 **`supabase/schema-rpc-39-production-stock-rows.sql`**, 이어서 **`supabase/schema-rpc-44-stock-source-tracking.sql`**을 적용합니다. Supabase CLI에서는 `supabase/migrations/20260913090000_production_stock_rows.sql`, `supabase/migrations/20260917090000_stock_source_tracking.sql` 순서입니다. 서버를 먼저 갱신한 후 새 화면을 배포해야 라벨 생산완료의 행번호 생성과 신규 입고 재고원본·서버 검증까지 함께 적용됩니다. Apps Script 연동은 수정된 `Code.gs`를 함께 배포합니다. 기존 업무 데이터의 일괄 변환이나 삭제는 수행하지 않습니다.
 
-검증: `node tools/test-production-row-stock.cjs --browser`, `node tools/test-stock-report.cjs`, `node tools/test-label-production.cjs`, `node tools/test-workorder-label.cjs`. 가상 자료로 같은 조건의 생산 30/70kg 분리, 한 행 20kg 출고 후 10/70kg 유지, 비고 수정·행 순서 변경, 재투입·이동·조정, 과거 재고 유지와 삼성 입력 제거를 확인합니다. 브라우저 검증에는 Playwright가 필요합니다. `node tools/test-mobile-stock-rows.cjs`는 모바일 집계를 검사하고, `tools/check-production-stock-rows-db.ps1`은 연결된 DB에서 스키마와 가상 거래를 트랜잭션 안에서 검증한 뒤 **항상 전체 롤백**합니다.
+검증: `node tools/test-production-row-stock.cjs --browser`, `node tools/test-stock-report.cjs`, `node tools/test-label-production.cjs`, `node tools/test-workorder-label.cjs`. 가상 자료로 같은 조건의 생산 30/70kg 분리, 신규 입고원본 두 건의 개별 출고·사용, 비고 수정·행 순서 변경, 재투입·이동·조정, 과거 재고 유지와 삼성 입력 제거를 확인합니다. 브라우저 검증에는 Playwright가 필요합니다. `node tools/test-mobile-stock-rows.cjs`는 모바일 집계를 검사하고, `tools/check-production-stock-rows-db.ps1`, `tools/check-stock-source-tracking-db.ps1`은 연결된 DB에서 스키마와 가상 거래를 트랜잭션 안에서 검증한 뒤 **항상 전체 롤백**합니다.
 
 ## 부자재 관리 · 성적서와 LOT별 실사
 

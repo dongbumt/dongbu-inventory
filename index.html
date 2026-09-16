@@ -8907,7 +8907,11 @@ async function addTransaction(){
       t.fromLocation = type === '재고이동' ? fromLocation : '';
       t.toLocation = type === '재고이동' ? toLocation : '';
       t.sourceStockKey = selectedStock ? selectedStock.key : '';
-      t.stockRowId = selectedStock ? (selectedStock.stockRowId || '') : '';
+      // 신규 입고는 생산품과 같은 영구 재고원본 번호를 부여한다. 이미 저장된
+      // 입고를 수정할 때는 번호를 유지해, 이후 출고/생산 투입의 원본 연결이 끊기지 않는다.
+      const retainedInboundStockRowId = type === '입고' && t.type === '입고' ? String(t.stockRowId || '') : '';
+      t.stockRowId = selectedStock ? (selectedStock.stockRowId || '') : (retainedInboundStockRowId || (type === '입고' ? makeAppId('stock') : ''));
+      t.stockTrackingVersion = t.stockRowId ? '1' : '';
       t.stockNote = selectedStock ? (selectedStock.stockNote || '') : (t.stockNote || '');
 
       savedTxn = t;
@@ -8945,7 +8949,10 @@ async function addTransaction(){
       fromLocation: type === '재고이동' ? fromLocation : '',
       toLocation: type === '재고이동' ? toLocation : '',
       sourceStockKey: selectedStock ? selectedStock.key : '',
-      stockRowId:selectedStock?.stockRowId || '', stockNote:selectedStock?.stockNote || '',
+      // 과거 행은 건드리지 않고, 지금부터 추가하는 입고만 개별 재고원본으로 관리한다.
+      stockRowId:selectedStock?.stockRowId || (type === '입고' ? makeAppId('stock') : ''),
+      stockTrackingVersion:(selectedStock?.stockRowId || type === '입고') ? '1' : '',
+      stockNote:selectedStock?.stockNote || '',
       _isUser:true
     };
     userTransactions.push(newItem);
@@ -9375,6 +9382,8 @@ async function saveBulkInbound(){
       livestockProcessEndDate:tr.querySelector('.bulk-in-livestock-process-end-date')?.value || '',
       livestockProcessCompanies:tr.querySelector('.bulk-in-livestock-process-companies')?.value || '',
       livestockQueriedAt:tr.querySelector('.bulk-in-livestock-queried-at')?.value || '',
+      // 일괄 입고의 각 행도 서로 다른 재고원본이다. 같은 LOT/단가라도 합쳐서 차감하지 않는다.
+      stockRowId: makeAppId('stock'), stockTrackingVersion:'1',
       _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
     });
   });
