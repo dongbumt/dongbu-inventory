@@ -8169,18 +8169,14 @@ function getStockMap(asOfDate=''){
   };
 
   const stockTxns = userTransactions
-    .map((t, idx)=>({t, idx, date:stockLedgerDateKey(t.date)}))
+    .map((t, idx)=>({t, idx, date:cutoff ? stockLedgerDateKey(t.date) : ''}))
     .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동'].includes(x.t.type))
     .filter(x=>!cutoff || (x.date && x.date <= cutoff))
     .sort((a,b)=>{
-      const ad = a.date || String(a.t.date||'').replace(/\//g,'-');
-      const bd = b.date || String(b.t.date||'').replace(/\//g,'-');
+      const ad = cutoff ? a.date : String(a.t.date||'').replace(/\//g,'-');
+      const bd = cutoff ? b.date : String(b.t.date||'').replace(/\//g,'-');
       const d = ad.localeCompare(bd);
-      // A date-only ledger has no reliable intraday sequence: the server's ID
-      // order can place sales before production. Establish that day's stock first.
-      const aInbound = ['입고','생산입고'].includes(a.t.type) ? 0 : 1;
-      const bInbound = ['입고','생산입고'].includes(b.t.type) ? 0 : 1;
-      return d || (aInbound - bInbound) || (a.idx - b.idx);
+      return d || (a.idx - b.idx);
     });
 
   stockTxns.forEach(({t})=>{
@@ -8263,16 +8259,25 @@ function getStockMap(asOfDate=''){
     } else {
       let remaining = weight;
       const origin = normalizeOriginName(t.origin||'');
+      let candidates = Object.values(map).filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(stockLocation) : sameStockIdentity(s, product, lot, origin, packunit, '', '', stockLocation)));
+      candidates = candidates.filter(s=>s.stock>0.01);
       const preferredStockPrice = selectedStockPrice || (t.type==='사용' ? unitPrice : 0);
-      // A saved production date/cost is an identity constraint, not a preference.
-      // Never consume another batch when the selected batch is missing/exhausted.
-      // Legacy records without those fields retain their broader matching behavior.
-      const candidates = Object.values(map)
-        .filter(s=>matchesRow(s) && (stockRowId
-          ? stockLocationKey(s.stockLocation) === stockLocationKey(stockLocation)
-          : sameStockIdentity(s, product, lot, origin, packunit, preferredStockPrice, stockProddate, stockLocation)))
-        .filter(s=>s.stock>0.01)
-        .sort((a,b)=>String(a.source||'').localeCompare(String(b.source||'')) || (a.price||0)-(b.price||0) || String(a.proddate||'').localeCompare(String(b.proddate||'')));
+      if(stockProddate){
+        const exactDate = candidates.filter(s=>stockDateKey(s.proddate || '') === stockProddate);
+        if(exactDate.length) candidates = exactDate;
+      }
+      if(preferredStockPrice){
+        const exact = candidates.filter(s=>stockPriceKey(s.price) === stockPriceKey(preferredStockPrice));
+        if(exact.length) {
+          const rest = candidates.filter(s=>stockPriceKey(s.price) !== stockPriceKey(preferredStockPrice))
+            .sort((a,b)=>String(a.source||'').localeCompare(String(b.source||'')) || (a.price||0)-(b.price||0));
+          candidates = [...exact, ...rest];
+        } else {
+          candidates = candidates.sort((a,b)=>String(a.source||'').localeCompare(String(b.source||'')) || (a.price||0)-(b.price||0));
+        }
+      } else {
+        candidates = candidates.sort((a,b)=>String(a.source||'').localeCompare(String(b.source||'')) || (a.price||0)-(b.price||0));
+      }
       candidates.forEach(s=>{
         if(remaining <= 0) return;
         const used = Math.min(remaining, Math.max(0, s.stock));
@@ -8282,9 +8287,7 @@ function getStockMap(asOfDate=''){
         remaining -= used;
       });
       if(remaining > 0.01){
-        // Keep a shortage visible against its original stock cost (not a manually
-        // overridden production input cost), without rewriting the saved record.
-        const fallback = ensureBucket(product, lot, origin, preferredStockPrice, packunit, stockProddate, stockLocation, stockRowId);
+        const fallback = ensureBucket(product, lot, origin, t.type==='사용' ? unitPrice : (selectedStockPrice || 0), packunit, stockProddate, stockLocation, stockRowId);
         applyBucketProductMeta(fallback, t);
         if(t.type==='출고') fallback.total_out += remaining;
         else fallback.total_use += remaining;

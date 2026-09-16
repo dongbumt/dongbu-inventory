@@ -53,65 +53,6 @@ function row(ctx, id, location = '가공장', asOf = '') {
   assert.equal(found.length, 1, `Expected one bucket for row ${id || '(legacy)'} at ${location}`);
   return found[0];
 }
-function testProductionDateAllocation() {
-  // Regression: equal LOT/product with different production dates and costs.
-  // Server date/id sorting can put a numeric outbound ID before a production ID.
-  const base = {product:'가상 설깃 생산품',origin:'호주산',lot:'QA-SAME-LOT',packunit:'5KG',stockLocation:'가공장'};
-  const aug = {...base,id:'tx_aug',date:'2026-08-18',type:'생산입고',weight:290.34,price:13839};
-  const augSale = {...base,id:'100',date:'2026-08-19',type:'출고',weight:290,price:16000,stockUnitPrice:13839,stockProddate:'2026-08-18'};
-  const sept = {...base,id:'tx_sept',date:'2026-09-03',type:'생산입고',weight:7.8,price:14238};
-  const septSale = {...base,id:'200',date:'2026-09-03',type:'출고',weight:7.8,price:16000,stockUnitPrice:14238,stockProddate:'2026-09-03'};
-  const value = (ctx,date,price,asOf='') => buckets(ctx,asOf).find(s=>s.proddate===date && s.price===price);
-  const approx = (actual,expected) => assert(Math.abs(actual-expected)<1e-8, `${actual} != ${expected}`);
-  const permutations = rows => rows.length ? rows.flatMap((r,i)=>permutations(rows.filter((_,j)=>i!==j)).map(rest=>[r,...rest])) : [[]];
-  for(const rows of permutations([aug,augSale,septSale,sept])){
-    const ctx = harness(rows), before = JSON.stringify(ctx.userTransactions);
-    approx(value(ctx,'2026-08-18',13839).stock,.34);
-    approx(value(ctx,'2026-09-03',14238).stock,0);
-    approx(value(ctx,'2026-08-18',13839).total_out,290);
-    approx(value(ctx,'2026-09-03',14238).total_out,7.8);
-    approx(value(ctx,'2026-08-18',13839,'2026-09-03').stock,.34);
-    approx(value(ctx,'2026-09-03',14238,'2026-09-03').stock,0);
-    approx(value(ctx,'2026-08-18',13839,'2026-08-19').stock,.34);
-    assert.equal(value(ctx,'2026-09-03',14238,'2026-08-19'),undefined);
-    assert.equal(JSON.stringify(ctx.userTransactions),before,'Calculation never rewrites saved transactions');
-  }
-  // Date priority must also hold when legacy dates are unpadded or slash-delimited.
-  const normalized = harness([aug,augSale,{...septSale,date:'2026/9/3'},{...sept,date:'2026/9/3'}]);
-  approx(value(normalized,'2026-08-18',13839).stock,.34);
-  approx(value(normalized,'2026-09-03',14238).stock,0);
-
-  const reused = harness([aug,augSale,septSale,sept,{...augSale,id:'300',date:'2026-09-16',type:'사용',weight:.34,price:13839}]);
-  approx(value(reused,'2026-08-18',13839).stock,0);
-  approx(value(reused,'2026-08-18',13839).total_use,.34);
-  approx(value(reused,'2026-09-03',14238).stock,0);
-  // Do not silently correct already-saved bad selections by consuming another lot.
-  const wrongSavedUse = {...septSale,id:'wrong-existing',date:'2026-09-16',type:'사용',weight:.34,price:14238};
-  const preserved = harness([aug,augSale,septSale,sept,wrongSavedUse]);
-  approx(value(preserved,'2026-08-18',13839).stock,.34);
-  approx(value(preserved,'2026-09-03',14238).stock,-.34);
-  assert.equal(preserved.userTransactions[4].stockProddate,'2026-09-03');
-  assert.equal(preserved.userTransactions[4].price,14238);
-
-  for(const type of ['출고','사용','재고이동']){
-    const qty = {...septSale,type,weight:8.8,price:type==='출고'?16000:99999,fromLocation:'가공장',toLocation:'물류창고'};
-    const ctx = harness([aug,augSale,qty,sept]);
-    approx(value(ctx,'2026-08-18',13839).stock,.34);
-    approx(value(ctx,'2026-09-03',14238).stock,-1,'Shortage remains on selected date/cost');
-  }
-  const otherCost = {...sept,id:'tx_same_date_other_cost',price:15000,weight:10};
-  const sameDateCost = harness([aug,augSale,otherCost,{...septSale,weight:8.8},sept]);
-  approx(value(sameDateCost,'2026-09-03',14238).stock,-1);
-  approx(value(sameDateCost,'2026-09-03',15000).stock,10);
-  const missing = harness([aug,augSale,{...septSale,weight:1}]);
-  approx(value(missing,'2026-08-18',13839).stock,.34);
-  approx(value(missing,'2026-09-03',14238).stock,-1);
-  const future = harness([aug,augSale,septSale,{...sept,date:'2026-09-04',proddate:'2026-09-03'}]);
-  approx(value(future,'2026-09-03',14238,'2026-09-03').stock,-7.8);
-  approx(value(future,'2026-08-18',13839,'2026-09-03').stock,.34);
-  approx(value(future,'2026-09-03',14238).stock,0);
-  console.log('PASS: 24 order permutations, same-day intake first, exact date/cost shortages, historical cutoffs, re-input, saved incorrect selection preserved');
-}
 function testLogic() {
   for (const notes of [['삼성웰스토리 / 3mm', '일반 / 5mm'], ['같은 비고', '같은 비고'], ['', '']]) {
     const ctx = harness([incoming('row-A', 30, notes[0]), incoming('row-B', 70, notes[1])]);
@@ -435,7 +376,6 @@ async function testBrowser() {
 async function main() {
   for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) new vm.Script(match[1]);
   testLogic();
-  testProductionDateAllocation();
   if (process.argv.includes('--browser')) await testBrowser();
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
