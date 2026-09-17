@@ -1007,9 +1007,10 @@
       }
       if(!state.pin){ setStatus('먼저 라벨전용 화면에 연결하세요.', 'warn'); return; }
       const weight = window.DBMTLabelTouch?.weight(kind) ?? DBMTLabelWeight.value('print-weight');
-      if(!weight){ setStatus('라벨 1장 중량을 선택하거나 0보다 큰 값을 소수 둘째 자리까지 입력하세요.', 'warn'); return; }
+      const weightOmitted = kind==='inner' && !!window.DBMTLabelTouch?.isWeightOmitted?.(kind);
+      if(!weight&&!weightOmitted){ setStatus('라벨 1장 중량을 선택하거나 0보다 큰 값을 소수 둘째 자리까지 입력하세요.', 'warn'); return; }
       const size = $('print-size').value || row.labelSize || '7x10';
-      const printRow = {...row, weight, labelSize:size};
+      const printRow = {...row, weight, weightOmitted, labelSize:size};
       const count = window.DBMTLabelTouch?.copies(kind) ?? printCount();
       if(!count){ setStatus('출력 매수는 1~500 사이의 정수로 입력하세요.', 'warn'); return; }
       const batchId = `LPB-${compactDateTime()}-${hashText(`${row.id}-${Date.now()}`).slice(0, 5)}`;
@@ -1020,7 +1021,7 @@
         setLoading(true);
         try {
           await writePrintDocument(null, records, size);
-          setStatus(`내포장 ${count}장 출력 요청 · 생산이력·재고에는 반영하지 않습니다. 실제 출력을 확인해주세요.`, 'ok');
+          setStatus(`내포장 ${count}장 출력 요청${weightOmitted?' · 중량 미표기':''} · 생산이력·재고에는 반영하지 않습니다. 실제 출력을 확인해주세요.`, 'ok');
         } catch(err){ setStatus(`내포장 인쇄 확인 필요: ${err.message || err} 실제 출력 여부를 먼저 확인해주세요.`, 'err'); }
         finally { setLoading(false); }
         return;
@@ -1060,9 +1061,10 @@
         return;
       }
       const weight = window.DBMTLabelTouch?.weight(kind) ?? DBMTLabelWeight.value('print-weight');
-      if(!weight){ setStatus('미리보기할 라벨 1장 중량을 선택하거나 입력하세요.', 'warn'); return; }
+      const weightOmitted = kind==='inner' && !!window.DBMTLabelTouch?.isWeightOmitted?.(kind);
+      if(!weight&&!weightOmitted){ setStatus('미리보기할 라벨 1장 중량을 선택하거나 입력하세요.', 'warn'); return; }
       const size = $('print-size').value || row.labelSize || '7x10';
-      const sample = makePrintLog({...row, weight, labelSize:size}, 'PREVIEW', 1);
+      const sample = makePrintLog({...row, weight, weightOmitted, labelSize:size}, 'PREVIEW', 1);
       sample.code = 'PREVIEW-0001';
       if(window.DBMTLabelTouch?.ready){ window.DBMTLabelTouch.preview(sample); return; }
       const win = window.open('', '_blank', 'width=420,height=720');
@@ -1165,6 +1167,7 @@
         product: row.product || '',
         lot: row.lot || row.sourceStock?.lot || '',
         labelWeight: toNumber(row.weight),
+        weightOmitted: !!row.weightOmitted,
         inputWeight: toNumber(row.inputWeight),
         sizeKey: row.labelSize || '7x10',
         reprintCount: 0,
@@ -1245,7 +1248,8 @@
         grade: row.grade || '',
         mfgdate: formatDate(row.mfgdate || row.date || ''),
         expdate: formatDate(row.expdate || ''),
-        weight: toNumber(log.labelWeight || row.weight).toFixed(2),
+        weight: log.weightOmitted ? '' : toNumber(log.labelWeight || row.weight).toFixed(2),
+        weightOmitted: !!log.weightOmitted,
         itemno: row.itemno || '',
         lot: row.lot || log.lot || '',
         ingredients: row.ingredients || `${inferMeatType(row.product || log.product || '', '')} 100%`,
@@ -1293,8 +1297,9 @@
         + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;">'
         +   '<span style="font-size:6pt;font-weight:900;margin-right:3pt;">중량:</span>'
         +   '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;padding-left:5pt;">'
-        +     '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+html(d.weight||'0.00')+'</span>'
-        +     '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>'
+        +     (d.weightOmitted ? ''
+          : '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+html(d.weight||'0.00')+'</span>'
+            + '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>')
         +   '</div>'
         + '</div>'
         + '<div style="flex:9;'+pad+'font-size:6pt;">'

@@ -68,6 +68,13 @@
     if(s.mode==='scale'){const live=scale.status();return live.ready?live.value:0;}
     return kind==='outer'?DBMTLabelWeight.value('print-weight'):(DBMTLabelWeight.valid(s.weight)?s.weight:0);
   }
+  // Only inner packaging may deliberately omit the net weight.  Keep this
+  // separate from an invalid/empty value so outer labels and production totals
+  // always continue to require a positive, recorded weight.
+  function isWeightOmitted(kind){
+    const s=settings()[kind];
+    return kind==='inner'&&s.mode==='fixed'&&Number(s.weight)===0;
+  }
   function copies(kind){
     const s=settings()[kind],n=s.mode==='scale'?1:kind==='outer'?Number(byId('print-copies').value):s.copies;
     return Number.isInteger(n)&&n>=1&&n<=500?n:0;
@@ -84,19 +91,19 @@
     byId('scale-disconnect').disabled=!live.connected||state.loading;
     byId('scale-dialog-status').textContent=live.message;
     for(const kind of ['inner','outer']){
-      const set=s[kind],w=weight(kind),n=copies(kind),locked=state.loading||!row||(kind==='outer'&&!!completionFor(row.id));
-      byId(`${kind}-weight-btn`).innerHTML=`<strong>${w?w.toFixed(2):'—'}</strong><small>kg</small>`;
+      const set=s[kind],w=weight(kind),weightOmitted=isWeightOmitted(kind),n=copies(kind),locked=state.loading||!row||(kind==='outer'&&!!completionFor(row.id));
+      byId(`${kind}-weight-btn`).innerHTML=weightOmitted?'<strong>미표기</strong><small>중량 없음</small>':`<strong>${w?w.toFixed(2):'—'}</strong><small>kg</small>`;
       byId(`${kind}-weight-btn`).disabled=locked||set.mode==='scale';
-      byId(`${kind}-weight-help`).textContent=set.mode==='scale'?'저울 안정 중량 자동 적용':'터치하여 중량 입력';
+      byId(`${kind}-weight-help`).textContent=set.mode==='scale'?'저울 안정 중량 자동 적용':weightOmitted?'0 kg · 중량 미표기로 출력':'터치하여 중량 입력';
       byId(`${kind}-copies-btn`).textContent=n||'—';
       document.querySelectorAll(`[data-kind="${kind}"][data-mode]`).forEach(el=>{el.setAttribute('aria-pressed',String(el.dataset.mode===set.mode));el.disabled=locked;});
       document.querySelectorAll(`[data-kind="${kind}"][data-copy]`).forEach(el=>el.disabled=locked||set.mode==='scale');
       byId(`${kind}-copies-btn`).disabled=locked||set.mode==='scale';
       byId(`${kind}-copies-help`).textContent=set.mode==='scale'?'계근당 1장':'매수';
       const print=byId(kind==='outer'?'print-btn':'inner-print-btn');
-      print.disabled=locked||!w||!n||!!selectionError;
-      print.innerHTML=`<span>${name(kind)}라벨출력</span><small>${!w?'중량 확인 필요':kind==='inner'?`${n}장 · 생산 집계 제외`:`${n}장 · 생산 +${kg(w*n)}`}</small>`;
-      byId(kind==='outer'?'preview-btn':'inner-preview-btn').disabled=state.loading||!row||!w||!!selectionError;
+      print.disabled=locked||(!w&&!weightOmitted)||!n||!!selectionError;
+      print.innerHTML=`<span>${name(kind)}라벨출력</span><small>${!w&&!weightOmitted?'중량 확인 필요':kind==='inner'?`${n}장 · ${weightOmitted?'중량 미표기 · ':''}생산 집계 제외`:`${n}장 · 생산 +${kg(w*n)}`}</small>`;
+      byId(kind==='outer'?'preview-btn':'inner-preview-btn').disabled=state.loading||!row||(!w&&!weightOmitted)||!!selectionError;
     }
     byId('print-size').disabled=state.loading||!row; // Shared physical media; inner printing remains available after completion.
     byId('reprint-open').disabled=state.loading||!row;
@@ -158,14 +165,14 @@
     openDialog('label-preview-dialog');
   }
   function edit(kind,field){
-    const s=settings()[kind],value=field==='copies'?copies(kind):s.weight;
+    const s=settings()[kind],value=field==='copies'?copies(kind):(isWeightOmitted(kind)?0:s.weight);
     byId('number-title').textContent=`${name(kind)} ${field==='weight'?'1장 중량 (kg)':'출력 매수'}`;
-    byId('number-input').value=value||'';byId('number-error').textContent='';
+    byId('number-input').value=value===0?'0':(value||'');byId('number-error').textContent='';
     byId('number-dialog').dataset.kind=kind;byId('number-dialog').dataset.field=field;
     byId('number-dialog').dataset.fresh='true';openDialog('number-dialog');byId('number-input').select();
   }
   function packageHtml(kind){
-    return `<section class="touch-pack panel" data-package="${kind}"><div class="pack-heading"><strong>${name(kind)} · ${kind==='inner'?'진공지':'박스'}</strong><small>${kind==='inner'?'생산이력·재고에 반영하지 않음':'외포장 출력만 생산량에 포함'}</small></div><div class="pack-fields"><div class="weight-modes">${button('고정중량',`data-kind="${kind}" data-mode="fixed"`)}${button('계근중량',`data-kind="${kind}" data-mode="scale"`)}</div><div><label>라벨 적용 중량</label>${button('',`id="${kind}-weight-btn" class="touch-weight" data-edit="weight" data-kind="${kind}" aria-label="${name(kind)} 중량 수정"`)}<small id="${kind}-weight-help"></small></div><div><label id="${kind}-copies-help">매수</label><div class="touch-stepper">${button('−',`data-copy="-1" data-kind="${kind}" aria-label="${name(kind)} 매수 줄이기"`)}${button('1',`id="${kind}-copies-btn" data-edit="copies" data-kind="${kind}" aria-label="${name(kind)} 매수 입력"`)}${button('+',`data-copy="1" data-kind="${kind}" aria-label="${name(kind)} 매수 늘리기"`)}</div></div></div><div class="pack-actions" id="${kind}-actions"></div></section>`;
+    return `<section class="touch-pack panel" data-package="${kind}"><div class="pack-heading"><strong>${name(kind)} · ${kind==='inner'?'진공지':'박스'}</strong><small>${kind==='inner'?'생산이력·재고에 반영하지 않음':'외포장 출력만 생산량에 포함'}</small></div><div class="pack-fields"><div class="weight-modes">${button('고정중량',`data-kind="${kind}" data-mode="fixed"`)}${button('계근중량',`data-kind="${kind}" data-mode="scale"`)}</div><div><label>라벨 적용 중량${kind==='inner'?' (0 = 미표기)':''}</label>${button('',`id="${kind}-weight-btn" class="touch-weight" data-edit="weight" data-kind="${kind}" aria-label="${name(kind)} 중량 수정"`)}<small id="${kind}-weight-help"></small></div><div><label id="${kind}-copies-help">매수</label><div class="touch-stepper">${button('−',`data-copy="-1" data-kind="${kind}" aria-label="${name(kind)} 매수 줄이기"`)}${button('1',`id="${kind}-copies-btn" data-edit="copies" data-kind="${kind}" aria-label="${name(kind)} 매수 입력"`)}${button('+',`data-copy="1" data-kind="${kind}" aria-label="${name(kind)} 매수 늘리기"`)}</div></div></div><div class="pack-actions" id="${kind}-actions"></div></section>`;
   }
   function init(){
     document.body.classList.add('touch-label');
@@ -276,8 +283,9 @@
     };
     byId('number-apply').onclick=()=>{
       const d=byId('number-dialog'),kind=d.dataset.kind,field=d.dataset.field,raw=byId('number-input').value.trim(),value=Number(raw);
-      const valid=field==='weight'?DBMTLabelWeight.valid(raw)&&value<=1000:Number.isInteger(value)&&value>=1&&value<=500;
-      if(!valid){byId('number-error').textContent=field==='weight'?'0 초과 1,000 kg 이하, 소수 둘째 자리까지 입력하세요.':'1~500 사이 정수로 입력하세요.';return;}
+      const zeroWeight=kind==='inner'&&field==='weight'&&/^0(?:\.0{1,2})?$/.test(raw);
+      const valid=field==='weight'?(zeroWeight||(DBMTLabelWeight.valid(raw)&&value<=1000)):Number.isInteger(value)&&value>=1&&value<=500;
+      if(!valid){byId('number-error').textContent=field==='weight'?(kind==='inner'?'0은 중량 미표기 출력입니다. 그 외에는 0 초과 1,000 kg 이하, 소수 둘째 자리까지 입력하세요.':'0 초과 1,000 kg 이하, 소수 둘째 자리까지 입력하세요.'):'1~500 사이 정수로 입력하세요.';return;}
       settings()[kind][field]=value;
       if(kind==='outer'){
         if(field==='weight'){byId('print-weight').value='custom';byId('print-weight-custom').value=value;byId('print-weight-custom').hidden=false;}
@@ -304,6 +312,6 @@
       byId('calc-output').textContent=calc.value;
     };
   }
-  window.DBMTLabelTouch={get ready(){return ready;},remember,sync,weight,copies,renderHistory,preview,printOrder,productError,closeOrders:()=>closeDialog('work-order-dialog')};
+  window.DBMTLabelTouch={get ready(){return ready;},remember,sync,weight,isWeightOmitted,copies,renderHistory,preview,printOrder,productError,closeOrders:()=>closeDialog('work-order-dialog')};
   document.addEventListener('DOMContentLoaded',init);
 })();

@@ -214,7 +214,7 @@
 (() => {
   /* PROPOSAL-LABEL-JS:START */
 
-  // Actual label renderer and unchanged logo bytes. Source SHA-256: 015b11b56bcdab5376066009a6761d6da0491aabb0fd2026a4d2cc36fc72c19c
+  // Actual label renderer and unchanged logo bytes. Source SHA-256: 9e0c455b7c8be2baffe169baa48a62685f51cc925d8deb595563c636043e284d
   const actualLabelPreview=(()=>{
     const DEFAULTS = {
       licenseno: '제2025-0293093호',
@@ -260,8 +260,9 @@
         + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;">'
         +   '<span style="font-size:6pt;font-weight:900;margin-right:3pt;">중량:</span>'
         +   '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;padding-left:5pt;">'
-        +     '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+html(d.weight||'0.00')+'</span>'
-        +     '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>'
+        +     (d.weightOmitted ? ''
+          : '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+html(d.weight||'0.00')+'</span>'
+            + '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>')
         +   '</div>'
         + '</div>'
         + '<div style="flex:9;'+pad+'font-size:6pt;">'

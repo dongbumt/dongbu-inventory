@@ -66,8 +66,13 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.locator('#order-list [data-id=b]').click();assert(!(await page.locator('#work-order-dialog').evaluate(d=>d.open)));assert.equal(await page.evaluate(()=>state.selectedId),'b');
     await page.locator('#work-order-open').click();await page.locator('#order-list [data-id=a]').click();
     assert.equal(await page.evaluate(()=>__portRequests),0,'Never auto-probe office computer');
-    await edit('inner','weight',2);await edit('inner','copies',3);await page.locator('#inner-print-btn').click();await wait();
-    assert.equal(saves,0);assert.equal(logs.length,0);assert.equal(await page.evaluate(()=>__prints[0].count),3);
+    // Inner packaging can deliberately use 0kg: it prints with the weight
+    // omitted, and must never create production history or inventory output.
+    await edit('inner','weight',0);assert(await page.evaluate(()=>DBMTLabelTouch.isWeightOmitted('inner')));assert(await page.locator('#inner-print-btn').isEnabled());
+    await edit('inner','copies',3);await page.locator('#inner-preview-btn').click();const innerPreview=page.frameLocator('#label-preview-frame');await innerPreview.locator('.print-label').waitFor();assert.doesNotMatch(await innerPreview.locator('.print-label').textContent(),/0\.00|Kg/);await page.locator('#label-preview-close').click();
+    await page.locator('#inner-print-btn').click();await wait();
+    assert.equal(saves,0);assert.equal(logs.length,0);assert.equal(await page.evaluate(()=>__prints[0].count),3);assert.doesNotMatch(await page.evaluate(()=>__prints[0].text),/0\.00|Kg/);
+    await edit('outer','weight',0);assert.match(await page.locator('#number-error').textContent(),/0 초과/);await page.locator('[data-close=number-dialog]').click();
     await edit('outer','weight',5);await edit('outer','copies',5);await page.locator('#print-btn').click();await wait();assert.equal(saves,1);assert.equal(logs.length,5);assert.equal(await production(),'25 kg');
     await page.locator('#reprint-open').click();await page.locator('#history-body input').first().check();await page.locator('#history-next').click();await page.locator('#history-body input').first().check();
     await page.locator('#history-body [data-act=preview]').first().click();const frame=page.frameLocator('#label-preview-frame');await frame.locator('.print-label').waitFor();assert.match(await frame.locator('.print-label').textContent(),/5\.00/);assert.equal(await frame.locator('img').count(),2);
