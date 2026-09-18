@@ -1639,6 +1639,9 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="form-group"><label>출고일 선택</label>
         <select id="ship-date" onchange="syncShipRangeToDate();loadShipLog()"><option value="">-- 날짜 선택 --</option></select>
       </div>
+      <div class="form-group"><label>거래처</label>
+        <select id="ship-trader" onchange="loadShipLog()"><option value="">전체 거래처</option></select>
+      </div>
       <div class="form-group"><label>기간 시작</label>
         <input type="date" id="ship-from" style="width:145px;font-size:12px;">
       </div>
@@ -13552,7 +13555,20 @@ function loadInvoiceByDate(){
 function initShipDates(){
   const dates=[...new Set(transactions.filter(t=>t.type==='출고').map(t=>t.date))].sort((a,b)=>String(b||'').localeCompare(String(a||'')));
   const sel=document.getElementById('ship-date');
+  const traderSel=document.getElementById('ship-trader');
+  const savedDate = sel.value;
+  const savedTrader = traderSel?.value || '';
   sel.innerHTML='<option value="">-- 날짜 선택 --</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  if(savedDate) sel.value = savedDate;
+  const traders=[...new Set(transactions
+    .filter(t=>t.type==='출고')
+    .map(t=>String(t.trader||'').trim())
+    .filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'ko'));
+  if(traderSel){
+    traderSel.innerHTML='<option value="">전체 거래처</option>'+traders.map(t=>`<option value="${htmlEscape(t)}">${htmlEscape(t)}</option>`).join('');
+    if(savedTrader && traders.includes(savedTrader)) traderSel.value = savedTrader;
+  }
   const baseDate = sel.value || dates[0] || localDateString();
   const fromEl = document.getElementById('ship-from');
   const toEl = document.getElementById('ship-to');
@@ -13567,11 +13583,18 @@ function syncShipRangeToDate(){
   if(fromEl) fromEl.value = date;
   if(toEl) toEl.value = date;
 }
+function getShipLogSelectedTrader(){
+  return String(document.getElementById('ship-trader')?.value || '').trim();
+}
+function getShipLogOuts(date, trader=getShipLogSelectedTrader()){
+  return transactions.filter(t=>t.type==='출고'&&t.date===date&&(!trader||String(t.trader||'').trim()===trader));
+}
 function loadShipLog(){
   const date=document.getElementById('ship-date').value;
   if(!date){document.getElementById('shiplog-preview').innerHTML='';return;}
-  const dayOuts=transactions.filter(t=>t.type==='출고'&&t.date===date);
-  if(!dayOuts.length){document.getElementById('shiplog-preview').innerHTML='<div class="alert alert-info">해당 날짜에 출고 내역이 없습니다.</div>';return;}
+  const trader=getShipLogSelectedTrader();
+  const dayOuts=getShipLogOuts(date,trader);
+  if(!dayOuts.length){document.getElementById('shiplog-preview').innerHTML=`<div class="alert alert-info">${trader ? `${htmlEscape(trader)} 거래처의 ` : ''}해당 날짜 출고 내역이 없습니다.</div>`;return;}
   const [yr,mo,da]=date.split('-');
   let rows='';
   dayOuts.forEach((o,i)=>{
@@ -13593,7 +13616,7 @@ function loadShipLog(){
       <div style="display:flex;gap:16px;font-size:10px"><span>작성</span><span>승인</span></div>
     </div>
     <div style="display:flex;gap:16px;margin-bottom:8px;font-size:10px">
-      <span>담당부서: 생산팀</span><span>출고일: ${yr}년 ${mo}월 ${da}일</span>
+       <span>담당부서: 생산팀</span><span>출고일: ${yr}년 ${mo}월 ${da}일</span>${trader?`<span>거래처: ${htmlEscape(trader)}</span>`:''}
     </div>
     <div style="font-size:10px;color:var(--color-text-secondary);margin-bottom:10px">
       냉장고/냉동고에서 완제품을 출고 당일 꺼낸 후, 출고 직전 최종 상태를 점검하고 적합 여부를 기록한다.
@@ -14484,13 +14507,14 @@ function exportInvoiceRange(){
 function exportShipLogExcel(){
   const date=document.getElementById('ship-date').value;
   if(!date){alert('먼저 출고일을 선택하세요.');return;}
-  const dayOuts=transactions.filter(t=>t.type==='출고'&&t.date===date);
-  if(!dayOuts.length){alert('출고 내역이 없습니다.');return;}
+  const trader=getShipLogSelectedTrader();
+  const dayOuts=getShipLogOuts(date,trader);
+  if(!dayOuts.length){alert(trader ? `${trader} 거래처의 출고 내역이 없습니다.` : '출고 내역이 없습니다.');return;}
   const pages=[];
   for(let i=0;i<dayOuts.length;i+=10) pages.push(dayOuts.slice(i,i+10));
   const totalPages=pages.length;
   const [yr,mo,da]=date.split('-');
-  const pagesHTML=pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages)).join('');
+  const pagesHTML=pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages,trader)).join('');
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8"><title>완제품 출고일지 ${yr}-${mo}-${da}</title>
@@ -14514,30 +14538,32 @@ function getShipLogPrintRange(){
 }
 
 function getShipLogDatesInRange(start, end){
+  const trader=getShipLogSelectedTrader();
   return [...new Set(transactions
-    .filter(t => t.type === '출고' && t.date >= start && t.date <= end)
+    .filter(t => t.type === '출고' && t.date >= start && t.date <= end && (!trader || String(t.trader||'').trim() === trader))
     .map(t => t.date)
     .filter(Boolean))]
     .sort((a,b)=>String(a||'').localeCompare(String(b||'')));
 }
 
-function buildShipLogPrintPages(date){
-  const dayOuts = transactions.filter(t=>t.type==='출고'&&t.date===date);
+function buildShipLogPrintPages(date, trader=getShipLogSelectedTrader()){
+  const dayOuts = getShipLogOuts(date,trader);
   const pages = [];
   for(let i=0;i<dayOuts.length;i+=10) pages.push(dayOuts.slice(i,i+10));
   const totalPages = pages.length;
-  return pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages));
+  return pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages,trader));
 }
 
 function exportShipLogRange(){
   const range = getShipLogPrintRange();
   if(!range) return;
+  const trader=getShipLogSelectedTrader();
   const dates = getShipLogDatesInRange(range.start, range.end);
   if(!dates.length){
-    alert('선택한 기간에 출고 내역이 없습니다.');
+    alert(trader ? `${trader} 거래처의 선택한 기간 출고 내역이 없습니다.` : '선택한 기간에 출고 내역이 없습니다.');
     return;
   }
-  const pagesHTML = dates.flatMap(date => buildShipLogPrintPages(date)).join('');
+  const pagesHTML = dates.flatMap(date => buildShipLogPrintPages(date,trader)).join('');
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html lang="ko"><head>
     <meta charset="UTF-8"><title>완제품 출고일지 ${range.start}~${range.end}</title>
@@ -14549,7 +14575,7 @@ function exportShipLogRange(){
   w.document.close();setTimeout(()=>{w.print();},500);
 }
 
-function buildShipLogPageHTML(date,items,pageNo,totalPages){
+function buildShipLogPageHTML(date,items,pageNo,totalPages,trader=''){
   const [yr,mo,da]=date.split('-');
   const dateStr=`${yr}년 ${mo}월 ${da}일`;
   const pageLabel=totalPages>1?` (${pageNo}/${totalPages}페이지)`:'';
@@ -14580,6 +14606,7 @@ function buildShipLogPageHTML(date,items,pageNo,totalPages){
   <div style="display:flex;gap:12px;margin-bottom:6px;font-size:11px;">
     <div style="border:1px solid #bbb;padding:4px 10px;border-radius:4px;"><span style="color:#888;margin-right:6px;">담당부서</span><strong>생산팀</strong></div>
     <div style="border:1px solid #bbb;padding:4px 10px;border-radius:4px;"><span style="color:#888;margin-right:6px;">출고일</span><strong>${dateStr}</strong></div>
+    ${trader?`<div style="border:1px solid #bbb;padding:4px 10px;border-radius:4px;"><span style="color:#888;margin-right:6px;">거래처</span><strong>${htmlEscape(trader)}</strong></div>`:''}
   </div>
   <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:5px 10px;font-size:10px;color:#795548;margin-bottom:10px;">※ 냉장고/냉동고에서 완제품을 출고 당일 꺼낸 후, 출고 직전 최종 상태를 점검하고 적합 여부를 기록한다.</div>
   <div style="font-size:11px;font-weight:700;color:#1a252f;margin-bottom:4px;">▶ 기본정보</div>
