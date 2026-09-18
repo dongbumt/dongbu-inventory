@@ -19,7 +19,7 @@
     const totalAmount = rows.reduce((sum, row) => sum + Math.round(number(row.stock) * number(row.price)), 0);
     const stockRows = rows.map((row, i) => `<tr>
       <td class="center">${i + 1}</td><td>${cell(row.stockLocation)}</td>
-      <td><strong>${cell(row.product)}</strong>${row.packunit ? `<span class="detail">${escapeHtml(row.packunit)}</span>` : ''}${row.stockNote ? `<span class="detail">비고: ${escapeHtml(row.stockNote)}</span>` : ''}${row.stockRowId ? `<span class="detail">관리번호: ${escapeHtml(row.stockRowId)}</span>` : ''}</td>
+      <td><strong>${cell(row.product)}</strong>${row.packunit ? `<span class="detail">${escapeHtml(row.packunit)}</span>` : ''}${row.stockNote ? `<span class="detail">비고: ${escapeHtml(row.stockNote)}</span>` : ''}</td>
       <td>${cell(row.brand)}<span class="detail">${cell(row.grade)}</span></td>
       <td>${cell(row.lot)}<span class="detail">${cell(row.proddate)}</span></td><td>${cell(row.origin)}</td>
       <td class="number">${qty(row.total_in)}</td><td class="number">${qty(row.total_use)}</td>

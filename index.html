@@ -163,7 +163,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="txn-product-picker-table-wrap txn-stock-picker-table-wrap">
       <table class="txn-product-picker-table txn-stock-picker-table">
         <thead><tr id="tsp-result-head">
-          <th>품목명</th><th>포장단위</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th>
+          <th>품목명</th><th>브랜드</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th>
         </tr></thead>
         <tbody id="tsp-result-body"></tbody>
       </table>
@@ -1262,7 +1262,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <th onclick="stockSort('price')" style="text-align:right;cursor:pointer;user-select:none;">단가 <span id="ss-price"></span></th>
           <th onclick="stockSort('stock_amount')" style="text-align:right;cursor:pointer;user-select:none;">재고금액 <span id="ss-stock_amount"></span></th>
           <th>상태</th>
-          <th class="stock-col-note">비고 / 관리번호</th>
+          <th class="stock-col-note">비고</th>
           <th id="stock-manage-head" class="stock-col-manage">관리</th>
         </tr></thead>
         <tbody id="stock-body"></tbody>
@@ -7635,7 +7635,7 @@ function refreshTxnStockPickerColumns(){
   table.classList.toggle('production-input', productionInput);
   head.innerHTML = productionInput
     ? '<th>품목명</th><th>브랜드</th><th>등급</th><th>공장넘버</th><th>포장단위</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>현재고</th>'
-    : '<th>품목명</th><th>포장단위</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th>';
+    : '<th>품목명</th><th>브랜드</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th>';
 }
 
 function refreshTxnStockPickerFilterOptions(){
@@ -7760,7 +7760,7 @@ function renderTxnStockPicker(resetSelection=false){
   body.innerHTML = filtered.map((stock,index)=>{
     const meta = txnStockPickerProductMeta(stock);
     const cells = productionInput
-      ? `<td><strong>${htmlEscape(stock.product || '-')}</strong>${stock.stockNote ? `<div style="font-size:11px;color:#555;white-space:normal;">${htmlEscape(stock.stockNote)}</div>` : ''}${stock.stockRowId ? `<div style="font-size:10px;color:#777;overflow-wrap:anywhere;">관리번호 ${htmlEscape(stock.stockRowId)}</div>` : ''}</td>
+      ? `<td><strong>${htmlEscape(stock.product || '-')}</strong>${stock.stockNote ? `<div style="font-size:11px;color:#555;white-space:normal;">${htmlEscape(stock.stockNote)}</div>` : ''}</td>
     <td>${htmlEscape(meta.brand || '-')}</td>
     <td>${htmlEscape(meta.grade || '-')}</td>
     <td>${htmlEscape(meta.factoryNo || '-')}</td>
@@ -7770,8 +7770,8 @@ function renderTxnStockPicker(resetSelection=false){
     <td>${htmlEscape(stock.proddate || '-')}</td>
     <td class="txn-stock-picker-number">${stock.price ? `${Number(stock.price).toLocaleString('ko-KR')}원` : '-'}</td>
     <td class="txn-stock-picker-number"><strong>${Number(stock.stock || 0).toFixed(2)} KG</strong></td>`
-      : `<td><strong>${htmlEscape(stock.product || '-')}</strong>${stock.stockNote ? `<div style="font-size:11px;color:#555;white-space:normal;">${htmlEscape(stock.stockNote)}</div>` : ''}${stock.stockRowId ? `<div style="font-size:10px;color:#777;overflow-wrap:anywhere;">관리번호 ${htmlEscape(stock.stockRowId)}</div>` : ''}</td>
-    <td>${htmlEscape(stock.packunit || '-')}</td>
+      : `<td><strong>${htmlEscape(stock.product || '-')}</strong>${stock.stockNote ? `<div style="font-size:11px;color:#555;white-space:normal;">${htmlEscape(stock.stockNote)}</div>` : ''}</td>
+    <td>${htmlEscape(meta.brand || '-')}</td>
     <td class="txn-stock-picker-lot">${htmlEscape(stock.lot || 'LOT 없음')}</td>
     <td>${htmlEscape(normalizeOriginName(stock.origin) || '-')}</td>
     <td>${htmlEscape(stock.proddate || '-')}</td>
@@ -7795,7 +7795,7 @@ function syncTxnStockPickerSelection(scrollIntoView=true){
   const summary = document.getElementById('tsp-selected-summary');
   const confirmButton = document.getElementById('tsp-confirm');
   if(summary) summary.textContent = stock
-    ? `${stock.product || '-'} · ${stock.lot ? 'LOT ' + stock.lot : 'LOT 없음'} · ${normalizeStockLocation(stock.stockLocation)} · ${Number(stock.stock || 0).toFixed(2)} KG${stock.stockNote ? ' · '+stock.stockNote : ''}${stock.stockRowId ? ' · 관리번호 '+stock.stockRowId : ''}`
+    ? `${stock.product || '-'} · ${stock.lot ? 'LOT ' + stock.lot : 'LOT 없음'} · ${normalizeStockLocation(stock.stockLocation)} · ${Number(stock.stock || 0).toFixed(2)} KG${stock.stockNote ? ' · '+stock.stockNote : ''}`
     : '선택된 재고 없음';
   if(confirmButton) confirmButton.disabled = !stock;
   if(scrollIntoView && txnStockPickerIndex >= 0){
@@ -7994,7 +7994,6 @@ function onOutProductChange(){
       <div style="font-family:monospace;font-size:11px;font-weight:700;color:var(--green)">${s.lot ? htmlEscape(s.lot) : 'LOT 없음'}</div>
       <div style="color:#666;font-size:10px;">${htmlEscape(s.origin||'')}${locText}${s.packunit ? ' · 포장 '+htmlEscape(s.packunit) : ''}${prodDate ? ' · 생산일 '+htmlEscape(prodDate) : ''}${priceText} · <strong>${Number(s.stock||0).toFixed(2)} KG</strong></div>
       ${s.stockNote ? `<div style="color:#444;font-size:11px;">${htmlEscape(s.stockNote)}</div>` : ''}
-      ${s.stockRowId ? `<div style="color:#777;font-size:10px;">${htmlEscape(s.stockRowId)}</div>` : ''}
     </div>`;
   }).join('');
   autoFillTxnPrice();
@@ -8844,7 +8843,7 @@ async function addTransaction(){
       );
       if(candidates.length === 1) selectedStock = candidates[0];
       else if(candidates.length > 1){
-        alert('같은 이력번호의 재고가 여러 행 있습니다.\n생산일·비고·관리번호를 확인하고 출고할 행을 직접 선택해주세요.');
+        alert('같은 이력번호의 재고가 여러 행 있습니다.\n생산일·비고를 확인하고 출고할 행을 직접 선택해주세요.');
         return;
       }
     }
@@ -9605,7 +9604,7 @@ function bulkOutboundStockLabel(s){
   const loc = s.stockLocation ? ` / ${s.stockLocation}` : '';
   const prod = s.proddate ? ` / 생산일 ${s.proddate}` : '';
   const price = s.price ? ` / 원가 ${Number(s.price).toLocaleString('ko-KR')}` : '';
-  return `${s.product}${pack}${loc} / ${s.origin||'-'} / ${s.lot ? 'LOT ' + s.lot : 'LOT 없음'}${prod}${price} / ${Number(s.stock||0).toFixed(2)}KG${s.stockNote ? ' / '+s.stockNote : ''}${s.stockRowId ? ' / 관리번호 '+s.stockRowId : ''}`;
+  return `${s.product}${pack}${loc} / ${s.origin||'-'} / ${s.lot ? 'LOT ' + s.lot : 'LOT 없음'}${prod}${price} / ${Number(s.stock||0).toFixed(2)}KG${s.stockNote ? ' / '+s.stockNote : ''}`;
 }
 
 function bulkOutboundSearchText(s){
@@ -11782,7 +11781,7 @@ function renderStock(){
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
-      <td class="stock-col-note">${htmlEscape(s.stockNote||'')}${s.stockRowId ? `<div style="font-size:10px;color:#777;">${htmlEscape(s.stockRowId)}</div>` : ''}</td>
+      <td class="stock-col-note">${htmlEscape(s.stockNote||'')}</td>
       ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})">정리</button></td>` : ''}
     </tr>`;
   }).join('');
@@ -14333,7 +14332,7 @@ function printStockReport(){
 function exportStockCSV(){
   const snapshot = getStockExportSnapshot();
   if(!snapshot) return;
-  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고','관리번호'];
+  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고'];
   const rows=snapshot.rows.map(r=>[
     snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',r.proddate||'',r.origin||'',
     Number(r.total_in||0).toFixed(2),
@@ -14343,7 +14342,7 @@ function exportStockCSV(){
     Number(r.stock||0).toFixed(2),
     r.price||'',
     Math.round((Number(r.stock)||0) * (Number(r.price)||0)) || '',
-    r.stockNote||r.note||'',r.stockRowId||''
+    r.stockNote||r.note||''
   ]);
   downloadCSV([header,...rows],`재고현황_${snapshot.filters.asOfDate || '현재'}.csv`);
 }
@@ -20099,7 +20098,7 @@ function workOrderStockLabel(s){
     s.proddate ? `생산일 ${s.proddate}` : '',
     `${parseAppNumber(s.stock).toFixed(2)}KG`,
     s.price ? `${Number(s.price).toLocaleString()}원/KG` : '',
-    s.stockNote || '', s.stockRowId ? `관리번호 ${s.stockRowId}` : ''
+    s.stockNote || ''
   ].filter(Boolean);
   return parts.join(' / ');
 }

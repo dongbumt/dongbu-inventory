@@ -120,6 +120,29 @@ function testLogic() {
   console.log('PASS: independent production and inbound rows, blank/duplicate notes, exact outbound/use/transfer/adjustment allocation, overdraw isolation, legacy isolation, date cutoffs and note edits');
 }
 
+function testPublicStockPresentation() {
+  const pickerColumns = section('function refreshTxnStockPickerColumns()', 'function refreshTxnStockPickerFilterOptions()');
+  const pickerRows = section('function renderTxnStockPicker(', 'function syncTxnStockPickerSelection(');
+  const pickerSummary = section('function syncTxnStockPickerSelection(', 'function setTxnStockPickerIndex(');
+  const stockRender = section('function renderStock(){', 'function stockPersonalCan(');
+  const stockReport = fs.readFileSync(path.join(repo, 'stock-report.js'), 'utf8');
+  const mobileAdmin = fs.readFileSync(path.join(repo, 'mobile-admin.html'), 'utf8');
+
+  assert.match(pickerColumns, /: '<th>품목명<\/th><th>브랜드<\/th><th>이력번호<\/th>/,
+    'The normal transaction stock picker shows brand instead of package unit');
+  assert.match(pickerRows, /<td>\$\{htmlEscape\(meta\.brand \|\| '-'\)\}<\/td>/,
+    'The normal transaction stock picker renders the selected stock brand');
+  assert.doesNotMatch(pickerRows, /관리번호/, 'The stock picker must not expose its internal row ID');
+  assert.doesNotMatch(pickerSummary, /관리번호/, 'The selected stock summary must not expose its internal row ID');
+  assert.doesNotMatch(source('bulkOutboundStockLabel'), /관리번호/, 'Outbound stock labels must not expose internal row IDs');
+  assert.doesNotMatch(source('workOrderStockLabel'), /관리번호/, 'Work-order stock labels must not expose internal row IDs');
+  assert.doesNotMatch(stockRender, /비고 \/ 관리번호|\$\{s\.stockRowId \?/, 'The desktop stock list shows notes only, never its internal row ID');
+  assert.doesNotMatch(stockReport, /관리번호:/, 'The A4 stock report must not expose internal row IDs');
+  assert.doesNotMatch(mobileAdmin, /관리번호 \$\{text\(row\.stockRowId\)\}/, 'The mobile stock list must not expose internal row IDs');
+  assert.doesNotMatch(html, /'비고','관리번호'/, 'The stock CSV must not export internal row IDs');
+  console.log('PASS: stock picker uses brand and all public stock views keep internal row IDs hidden');
+}
+
 async function testTransactionFlows(page, artifacts) {
   await page.evaluate(markup => {
     const template = document.createElement('template'); template.innerHTML = markup;
@@ -390,6 +413,7 @@ async function testBrowser() {
 async function main() {
   for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) new vm.Script(match[1]);
   testLogic();
+  testPublicStockPresentation();
   if (process.argv.includes('--browser')) await testBrowser();
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
