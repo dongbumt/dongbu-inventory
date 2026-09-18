@@ -1637,7 +1637,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     </div>
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group"><label>출고일 선택</label>
-        <select id="ship-date" onchange="syncShipRangeToDate();loadShipLog()"><option value="">-- 날짜 선택 --</option></select>
+        <select id="ship-date" onchange="syncShipRangeToDate();refreshShipLogTraders();loadShipLog()"><option value="">-- 날짜 선택 --</option></select>
       </div>
       <div class="form-group"><label>거래처</label>
         <select id="ship-trader" onchange="loadShipLog()"><option value="">전체 거래처</option></select>
@@ -13555,20 +13555,10 @@ function loadInvoiceByDate(){
 function initShipDates(){
   const dates=[...new Set(transactions.filter(t=>t.type==='출고').map(t=>t.date))].sort((a,b)=>String(b||'').localeCompare(String(a||'')));
   const sel=document.getElementById('ship-date');
-  const traderSel=document.getElementById('ship-trader');
   const savedDate = sel.value;
-  const savedTrader = traderSel?.value || '';
   sel.innerHTML='<option value="">-- 날짜 선택 --</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
   if(savedDate) sel.value = savedDate;
-  const traders=[...new Set(transactions
-    .filter(t=>t.type==='출고')
-    .map(t=>String(t.trader||'').trim())
-    .filter(Boolean))]
-    .sort((a,b)=>a.localeCompare(b,'ko'));
-  if(traderSel){
-    traderSel.innerHTML='<option value="">전체 거래처</option>'+traders.map(t=>`<option value="${htmlEscape(t)}">${htmlEscape(t)}</option>`).join('');
-    if(savedTrader && traders.includes(savedTrader)) traderSel.value = savedTrader;
-  }
+  refreshShipLogTraders(sel.value);
   const baseDate = sel.value || dates[0] || localDateString();
   const fromEl = document.getElementById('ship-from');
   const toEl = document.getElementById('ship-to');
@@ -13582,6 +13572,18 @@ function syncShipRangeToDate(){
   const toEl = document.getElementById('ship-to');
   if(fromEl) fromEl.value = date;
   if(toEl) toEl.value = date;
+}
+function refreshShipLogTraders(date=document.getElementById('ship-date')?.value || ''){
+  const traderSel=document.getElementById('ship-trader');
+  if(!traderSel) return;
+  const savedTrader=String(traderSel.value||'').trim();
+  const traders=[...new Set(transactions
+    .filter(t=>t.type==='출고'&&(!date||t.date===date))
+    .map(t=>String(t.trader||'').trim())
+    .filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'ko'));
+  traderSel.innerHTML='<option value="">전체 거래처</option>'+traders.map(t=>`<option value="${htmlEscape(t)}">${htmlEscape(t)}</option>`).join('');
+  traderSel.value=traders.includes(savedTrader)?savedTrader:'';
 }
 function getShipLogSelectedTrader(){
   return String(document.getElementById('ship-trader')?.value || '').trim();
