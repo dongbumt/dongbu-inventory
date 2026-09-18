@@ -6871,9 +6871,6 @@ function renderScheduleCalendar(){
   `).join('');
 
   const cells = [];
-  for(let i=0; i<startDay; i++){
-    cells.push('<div style="background:#f8f9fa;min-height:128px;"></div>');
-  }
   const renderCalendarDay = (date, day, isOutsideMonth=false) => {
     const isToday = date === today;
     const weekday = new Date(`${date}T12:00:00`).getDay();
@@ -6907,6 +6904,12 @@ function renderScheduleCalendar(){
       </div>
     `;
   };
+  const previousMonth = new Date(year, mon - 2, 1);
+  const previousLastDate = new Date(year, mon - 1, 0).getDate();
+  for(let day=previousLastDate - startDay + 1; day<=previousLastDate; day++){
+    const date = `${previousMonth.getFullYear()}-${String(previousMonth.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    cells.push(renderCalendarDay(date, day, true));
+  }
   for(let day=1; day<=lastDate; day++){
     const date = `${year}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     cells.push(renderCalendarDay(date, day));
