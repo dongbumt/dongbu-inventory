@@ -227,7 +227,7 @@ begin
     from (select (e-'qty') || jsonb_build_object('qty',sum(public.dbmt_safe_numeric(e->>'qty'))) as row
       from jsonb_array_elements(v_outputs) e group by e-'qty') g;
   select ceil(v_cost / sum(public.dbmt_safe_numeric(e->>'qty'))) into v_price from jsonb_array_elements(v_outputs) e;
-  select jsonb_agg(e || jsonb_build_object('price',v_price,'amount',ceil(v_price*public.dbmt_safe_numeric(e->>'qty')))) into v_outputs from jsonb_array_elements(v_outputs) e;
+  select jsonb_agg(e || jsonb_build_object('price',v_price,'amount',round(v_price*public.dbmt_safe_numeric(e->>'qty')))) into v_outputs from jsonb_array_elements(v_outputs) e;
   v_id := 'prod_label_' || replace(extensions.gen_random_uuid()::text,'-','');
   select coalesce(max(case when raw->>'job_no' ~ '^[0-9]{1,8}$' then (raw->>'job_no')::integer else 0 end),0)+1
     into v_job from public.production_entries where work_date=v_date and deleted_at is null;

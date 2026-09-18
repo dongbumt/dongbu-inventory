@@ -126,7 +126,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     assert.equal(await erp.locator('#prod-input-rows button:disabled,#prod-output-rows button:disabled').count(),0);
     await erp.locator('#prod-date').fill('2026-09-09');await erp.locator('#prod-job-no').fill('7');await erp.locator('#prod-note').fill('수정 테스트');await erp.locator('#prod-job-type').selectOption('묶음');
     await erp.evaluate(()=>selectProdInputStock(1,'수정 원료','NEW-RAW','국내산','',90,'입고',4000));
-    await erp.evaluate(()=>selectProdOutProduct(1,1));await erp.locator('#prod-out-lot-1').fill('NEW-OUT');await erp.locator('#prod-out-qty-1').fill('42');await erp.locator('#prod-out-price-1').fill('22000');await erp.locator('#prod-out-origin-1').fill('미국산');
+    await erp.evaluate(()=>selectProdOutProduct(1,1));await erp.locator('#prod-out-lot-1').fill('NEW-OUT');await erp.locator('#prod-out-qty-1').fill('10.72');await erp.locator('#prod-out-price-1').fill('6285');await erp.locator('#prod-out-origin-1').fill('미국산');
     await erp.locator('button[onclick="addProdInputRow()"]').click();assert(await erp.locator('#prod-in-qty-2').isEnabled());
     await erp.evaluate(()=>selectProdInputStock(2,'추가 돈등심','ADD-LOT','국내산','',10,'입고',6000));
     await erp.locator('#prod-output-add-btn').click();await erp.evaluate(()=>selectProdOutProduct(2,0));await erp.locator('#prod-out-qty-2').fill('3');await erp.locator('#prod-out-price-2').fill('2000');
@@ -136,14 +136,14 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await erp.waitForFunction(()=>modalIds.length===1);
     const saved=await erp.evaluate(()=>({entry:userProdEntries[0],requests,modalIds,transactions:userTransactions}));
     assert.equal(saved.entry.inputs[0].product,'수정 원료');assert.equal(saved.entry.inputs[0].qty,90);assert.equal(saved.entry.inputs[1].qty,10);
-    assert.equal(saved.entry.outputs[0].product,'수정 생산품');assert.equal(saved.entry.outputs[0].lot,'NEW-OUT');assert.equal(saved.entry.outputs[0].qty,42);assert.equal(saved.entry.outputs[0].price,22000);assert.equal(saved.entry.outputs[0].amount,924000);
+    assert.equal(saved.entry.outputs[0].product,'수정 생산품');assert.equal(saved.entry.outputs[0].lot,'NEW-OUT');assert.equal(saved.entry.outputs[0].qty,10.72);assert.equal(saved.entry.outputs[0].price,6285);assert.equal(saved.entry.outputs[0].amount,67375,'10.72kg × 6,285원 is rounded to the nearest won, not rounded upward');
     assert.equal(saved.entry.date,'2026/09/09');assert.equal(saved.entry.job_no,'7');assert.equal(saved.entry.note,'수정 테스트');assert.equal(saved.entry.job_type,'묶음');assert.deepEqual(saved.entry._labelCompletion,entry._labelCompletion);assert.deepEqual(saved.modalIds,[entry.id]);
     assert.equal(saved.requests[1].body.p_transaction_rows.length,4);assert.equal(saved.transactions.length,4);assert(saved.transactions.every(row=>row.date==='2026-09-09'&&row.note.includes('수정 테스트')));
     assert.equal(saved.transactions.find(row=>row._isProdOut&&row.product==='수정 생산품').proddate,'2026-09-10','Preserve historical manufactured date');
     assert(await erp.locator('#prod-date').isEnabled());assert(await erp.locator('#prod-output-add-btn').isEnabled());assert(await erp.locator('#prod-label-notice').isHidden());
     assert.equal(await erp.evaluate(()=>_editProdId),null);
     await erp.evaluate(()=>openEditProdEntry('prod_label_qa'));assert.equal(await erp.locator('#prod-in-qty-2').inputValue(),'10');assert(await erp.locator('#prod-in-qty-2').isEnabled());
-    assert.equal(await erp.locator('#prod-out-qty-1').inputValue(),'42');
+    assert.equal(await erp.locator('#prod-out-qty-1').inputValue(),'10.72');
     await erp.locator('#prod-in-1 button.btn-danger').click();await erp.locator('#prod-out-1 button.btn-danger').click();
     await erp.locator('#prod-out-price-2').fill('');await erp.locator('button[onclick="saveProdEntry()"]').click();await erp.waitForFunction(()=>modalIds.length===2);
     assert.equal(await erp.evaluate(()=>userProdEntries[0].inputs.length),1);assert.equal(await erp.evaluate(()=>userProdEntries[0].outputs.length),1);assert.equal(await erp.evaluate(()=>userProdEntries[0].outputs[0].price),20000,'Use the ordinary automatic price calculation');

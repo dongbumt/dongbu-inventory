@@ -75,7 +75,7 @@ begin
     public.dbmt_safe_numeric(e->>'qty')*public.dbmt_safe_numeric(e->>'price')) order by n),'[]'::jsonb)
     into v_inputs from jsonb_array_elements(p_entry->'inputs') with ordinality r(e,n);
   select coalesce(jsonb_agg(e || jsonb_build_object('amount',
-    ceil(public.dbmt_safe_numeric(e->>'qty')*public.dbmt_safe_numeric(e->>'price'))) order by n),'[]'::jsonb)
+    round(public.dbmt_safe_numeric(e->>'qty')*public.dbmt_safe_numeric(e->>'price'))) order by n),'[]'::jsonb)
     into v_outputs from jsonb_array_elements(p_entry->'outputs') with ordinality r(e,n);
   v_entry := p_entry || jsonb_build_object('inputs',v_inputs,'outputs',v_outputs,
     '_labelCompletion',v_completion.baseline->'_labelCompletion');

@@ -10777,7 +10777,9 @@ async function saveProdEntry(){
       nationalPartCode:o.nationalPartCode, nationalPartName:o.nationalPartName,
       taxType:o.taxType,
       grade:o.grade || '',
-      packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.ceil(price*o.qty), origin:o.origin,
+      // Amounts are shown and saved as whole won: round a weight × unit-price
+      // result instead of always rounding it upward.
+      packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin,
       stockRowId:o.stockRowId, note:o.note, ...(o.samsung ? {samsung:o.samsung} : {})
     };
   });
@@ -11252,7 +11254,7 @@ function renderProduction(){
     const totalInAmt=inputs.reduce((s,i)=>s+i.amount,0);
     const totalInQty=inputs.reduce((s,i)=>s+i.qty,0);
     const totalOutQty=outputs.reduce((s,o)=>s+o.qty,0);
-    const totalOutAmt=outputs.reduce((s,o)=>s+o.amount,0);
+    const totalOutAmt=outputs.reduce((s,o)=>s+Math.round(parseAppNumber(o.qty)*parseAppNumber(o.price)),0);
     const lossKg=totalInQty-totalOutQty;
     const lossRate=totalInQty>0?(lossKg/totalInQty*100):0;
     const lossColor=lossRate>5?'var(--color-text-danger)':lossRate>2?'#633806':'var(--color-text-secondary)';
@@ -11282,7 +11284,7 @@ function renderProduction(){
         ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}${productionStockNoteHtml(out)}</td><td>${out.origin||''}</td>
            <td style="text-align:right">${out.qty.toFixed(2)}</td>
            <td style="text-align:right">${out.price?Math.ceil(out.price).toLocaleString():'-'}</td>
-           <td style="text-align:right;font-weight:500">${out.amount?Math.ceil(out.amount).toLocaleString():'-'}</td>
+           <td style="text-align:right;font-weight:500">${out.amount?Math.round(parseAppNumber(out.qty)*parseAppNumber(out.price)).toLocaleString():'-'}</td>
            <td style="font-family:var(--font-mono);font-size:11px">${out.lot||'-'}</td>`
         :'<td colspan="6"></td>';
       html+='<td></td>'; // 관리열(소계행에서 처리)
@@ -14224,7 +14226,7 @@ function printFilteredProduction(){
         <td>${out ? htmlEscape(out.origin || '') : ''}</td>
         <td class="numeric">${out ? parseAppNumber(out.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}</td>
         <td class="numeric">${out && parseAppNumber(out.price) ? Math.ceil(parseAppNumber(out.price)).toLocaleString('ko-KR') : ''}</td>
-        <td class="numeric">${out && parseAppNumber(out.amount) ? Math.ceil(parseAppNumber(out.amount)).toLocaleString('ko-KR') : ''}</td>
+        <td class="numeric">${out && parseAppNumber(out.amount) ? Math.round(parseAppNumber(out.qty)*parseAppNumber(out.price)).toLocaleString('ko-KR') : ''}</td>
         <td class="mono">${out ? htmlEscape(out.lot || '-') : ''}</td>
       </tr>`;
     }
@@ -14291,7 +14293,7 @@ function exportProductionCSV(){
         out?out.origin||'':'',
         out?out.qty.toFixed(2):'',
         out?Math.ceil(out.price||0):'',
-        out?Math.ceil(out.amount||0):'',
+        out?Math.round(parseAppNumber(out.qty)*parseAppNumber(out.price)):'',
         out?out.lot||'':'',
         out?productionStockNote(out):''
       ]);
