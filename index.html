@@ -6874,14 +6874,13 @@ function renderScheduleCalendar(){
   for(let i=0; i<startDay; i++){
     cells.push('<div style="background:#f8f9fa;min-height:128px;"></div>');
   }
-  for(let day=1; day<=lastDate; day++){
-    const date = `${year}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const renderCalendarDay = (date, day, isOutsideMonth=false) => {
     const isToday = date === today;
-    const weekday = new Date(year, mon-1, day).getDay();
+    const weekday = new Date(`${date}T12:00:00`).getDay();
     const holiday = getKoreanHoliday(date);
     const isSunday = weekday === 0;
     const isSaturday = weekday === 6;
-    const dayColor = (isSunday || holiday) ? '#c0392b' : (isSaturday ? '#2980b9' : '#2c3e50');
+    const dayColor = isOutsideMonth ? '#8b949e' : ((isSunday || holiday) ? '#c0392b' : (isSaturday ? '#2980b9' : '#2c3e50'));
     const dayEvents = scheduleEvents
       .filter(e => e.date === date)
       .sort((a,b)=>String(a.text||'').localeCompare(String(b.text||''),'ko'));
@@ -6897,8 +6896,8 @@ function renderScheduleCalendar(){
         <div style="font-size:12px;color:#d35400;font-weight:900;line-height:1.25;white-space:nowrap;">생산량 ${prodInputQty.toFixed(2)} KG</div>
       </div>
     ` : '';
-    cells.push(`
-      <div style="background:${holiday?'#fff8f8':'#fff'};min-height:128px;padding:7px;display:flex;flex-direction:column;gap:5px;">
+    return `
+      <div data-schedule-date="${date}" data-schedule-outside-month="${isOutsideMonth ? 'true' : 'false'}" style="background:${isOutsideMonth?'#fafbfc':holiday?'#fff8f8':'#fff'};min-height:128px;padding:7px;display:flex;flex-direction:column;gap:5px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span ${canCreateSchedule ? `onclick="selectScheduleDate('${date}')" title="이 날짜에 일정 입력"` : ''} style="font-weight:800;font-size:12px;color:${isToday?'#fff':dayColor};background:${isToday?dayColor:'transparent'};border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:${canCreateSchedule?'pointer':'default'};">${day}</span>
           ${holiday ? `<span style="font-size:10px;color:#c0392b;font-weight:800;text-align:right;">${htmlEscape(holiday)}</span>` : (dayEvents.length ? `<span style="font-size:10px;color:#777;">${dayEvents.length}건</span>` : '')}
@@ -6906,7 +6905,17 @@ function renderScheduleCalendar(){
         <div style="flex:1;">${eventHtml}</div>
         ${prodHtml}
       </div>
-    `);
+    `;
+  };
+  for(let day=1; day<=lastDate; day++){
+    const date = `${year}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    cells.push(renderCalendarDay(date, day));
+  }
+  const trailingDays = (7 - ((startDay + lastDate) % 7)) % 7;
+  const nextMonth = new Date(year, mon, 1);
+  for(let day=1; day<=trailingDays; day++){
+    const date = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    cells.push(renderCalendarDay(date, day, true));
   }
   cal.innerHTML = head + cells.join('');
 }
