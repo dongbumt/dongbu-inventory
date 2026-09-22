@@ -4,12 +4,13 @@ import json
 import os
 import sys
 import uuid
+from decimal import Decimal
 
 import psycopg
 from psycopg.types.json import Jsonb
 
 
-def fixture_tests(conn):
+def fixture_tests(conn, allow_price_correction=False):
     suffix = uuid.uuid4().hex[:12]
     uid = lambda kind: 'qa_' + kind + '_' + suffix
     role = conn.execute("insert into public.erp_roles(code,name) values(%s,'Stock source QA') returning id", (uid('role'),)).fetchone()[0]
@@ -70,7 +71,20 @@ def fixture_tests(conn):
     changed = copy.deepcopy(first)
     changed['price'] = 15000
     changed['amount'] = changed['price'] * changed['weight']
-    reject(lambda: rpc('dbmt_erp_save_transactions', token, [changed], []), '단가는 변경')
+    if allow_price_correction:
+        linked_before = conn.execute("select id,raw from public.transactions where id<>%s and raw->>'stockRowId'=%s order by id", (first['id'], source_a)).fetchall()
+        assert rpc('dbmt_erp_save_transactions', token, [changed], [])['ok']
+        assert conn.execute('select price,amount,weight from public.transactions where id=%s', (first['id'],)).fetchone() == (15000, 5100, Decimal('0.34'))
+        assert conn.execute("select id,raw from public.transactions where id<>%s and raw->>'stockRowId'=%s order by id", (first['id'], source_a)).fetchall() == linked_before
+        assert conn.execute('select price from public.transactions where id=%s', (second['id'],)).fetchone()[0] == 14238
+        altered_identity = dict(changed, lot='QA-OTHER-LOT')
+        reject(lambda: rpc('dbmt_erp_save_transactions', token, [altered_identity], []), '보관장소는 변경')
+        reject(lambda: rpc('dbmt_erp_save_transactions', token, [dict(changed, stockRowId='')], []), '해제할 수 없습니다')
+        conn.execute("update public.erp_role_permissions set can_update=false where role_id=%s and menu_code='transactions'", (role,))
+        assert rpc('dbmt_erp_save_transactions', token, [changed], [])['ok'] is False
+        conn.execute("update public.erp_role_permissions set can_update=true where role_id=%s and menu_code='transactions'", (role,))
+    else:
+        reject(lambda: rpc('dbmt_erp_save_transactions', token, [changed], []), '단가는 변경')
     reduced = copy.deepcopy(second)
     reduced['weight'] = 7
     reduced['amount'] = reduced['weight'] * reduced['price']
@@ -96,9 +110,9 @@ def main():
         with conn.transaction(force_rollback=True):
             conn.execute('set local role postgres')
             conn.execute(sql)
-            fixture_tests(conn)
+            fixture_tests(conn, allow_price_correction='--allow-price-correction' in sys.argv)
     print(json.dumps(dict(ok=True, schemaApplied=False, allChangesRolledBack=True,
-                          tests='tracked inbound sources, exact out/use linkage, unknown/collision rejection, linked price/weight guard, legacy preservation')))
+                          tests='tracked sources, exact linkage, collision/identity/quantity/deletion guards, price correction permission and snapshot preservation, legacy preservation')))
 
 
 if __name__ == '__main__':

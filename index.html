@@ -8310,11 +8310,15 @@ function getStockMap(asOfDate=''){
     }
   });
   const productionNotes = new Map();
+  const inboundPrices = new Map();
   stockTxns.forEach(({t})=>{
     if(t.type === '생산입고' && t.stockRowId) productionNotes.set(String(t.stockRowId), String(t.stockNote || ''));
+    if(t.type === '입고' && t.stockRowId) inboundPrices.set(String(t.stockRowId), getTxnUnitPrice(t));
   });
   Object.values(map).forEach(bucket=>{
     if(bucket.stockRowId && productionNotes.has(bucket.stockRowId)) bucket.stockNote = productionNotes.get(bucket.stockRowId);
+    // 이동 당시 단가가 남아 있어도 현재 재고 평가는 정정한 입고원본 단가를 따른다.
+    if(bucket.stockRowId && inboundPrices.has(bucket.stockRowId)) bucket.price = inboundPrices.get(bucket.stockRowId);
   });
   // 과거 재고행은 품목 스냅샷이 없을 수 있다. 영구 ID/제품코드 또는 유일하게
   // 식별되는 품목만 마스터와 연결해 브랜드·등급을 보완한다.
@@ -8887,6 +8891,7 @@ async function addTransaction(){
     // 수정 모드: 기존 항목 업데이트
     const t=userTransactions.find(x=>String(x.id)===String(_editTxnId));
     if(t){
+      const retainedInboundStockRowId = type === '입고' && t.type === '입고' ? String(t.stockRowId || '') : '';
       t.date=date; t.type=type; t.product=product; t.origin=origin; t.packunit=managedProduct?.packunit || packunit;
       if(transactionProductMeta){
         t.labelProductId=transactionProductMeta.id || transactionProductMeta.labelProductId || transactionProductMeta.productId || '';
@@ -8921,10 +8926,8 @@ async function addTransaction(){
       t.fromLocation = type === '재고이동' ? fromLocation : '';
       t.toLocation = type === '재고이동' ? toLocation : '';
       t.sourceStockKey = selectedStock ? selectedStock.key : '';
-      // 신규 입고는 생산품과 같은 영구 재고원본 번호를 부여한다. 이미 저장된
-      // 입고를 수정할 때는 번호를 유지해, 이후 출고/생산 투입의 원본 연결이 끊기지 않는다.
-      const retainedInboundStockRowId = type === '입고' && t.type === '입고' ? String(t.stockRowId || '') : '';
-      t.stockRowId = selectedStock ? (selectedStock.stockRowId || '') : (retainedInboundStockRowId || (type === '입고' ? makeAppId('stock') : ''));
+      // 수정은 기존 원본 번호를 유지한다. 번호 없는 과거 입고도 기존 집계에 남긴다.
+      t.stockRowId = selectedStock ? (selectedStock.stockRowId || '') : retainedInboundStockRowId;
       t.stockTrackingVersion = t.stockRowId ? '1' : '';
       t.stockNote = selectedStock ? (selectedStock.stockNote || '') : (t.stockNote || '');
 
@@ -8979,8 +8982,9 @@ async function addTransaction(){
   try{
     await saveTransactionRows(savedTxn, null, null, {action: wasEditTxn ? '수정' : '저장'});
   }catch(err){
-    showTransactionSaveStatus('거래내역 저장 실패 — 서버 권한 또는 로그인 상태를 확인해주세요.');
-    toast(String(err?.message || err || '거래내역 저장에 실패했습니다.'));
+    const reason = String(err?.message || err || '잠시 후 다시 시도해주세요.');
+    showTransactionSaveStatus(`거래내역 저장 실패 — ${reason}`, true);
+    toast(reason);
     return;
   }
   clearTransactionForm({resetType:true});
@@ -8991,13 +8995,16 @@ async function addTransaction(){
   toast(wasEditTxn ? '거래내역 수정 완료!' : '거래내역 추가 완료!');
 }
 
-function showTransactionSaveStatus(message){
+function showTransactionSaveStatus(message, isError=false){
   const el = document.getElementById('t-save-status');
   if(!el) return;
   el.textContent = message || '';
+  el.style.background = isError ? '#f5f5f5' : '#eafaf1';
+  el.style.borderColor = isError ? '#aaa' : '#abebc6';
+  el.style.color = isError ? '#8b2424' : '#1e8449';
   el.style.display = message ? 'block' : 'none';
   clearTimeout(el._t);
-  if(message){
+  if(message && !isError){
     el._t = setTimeout(()=>{ el.style.display='none'; }, 9000);
   }
 }

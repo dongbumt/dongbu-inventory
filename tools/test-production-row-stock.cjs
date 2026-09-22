@@ -109,6 +109,23 @@ function testLogic() {
   assert.equal(row(inbound, 'stock-A').stock, 0, 'The earlier residual remains tied to its inbound source');
   assert.equal(row(inbound, 'stock-B').stock, 0, 'The later batch is consumed only by its own source ID');
 
+  const corrected = harness([trackedInbound('purchase-A', 100, 5100), trackedInbound('purchase-B', 20, 5200),
+    consume('purchase-A', 10, '출고', {price:9000,stockUnitPrice:5100}),
+    consume('purchase-A', 15, '사용', {price:5100,stockUnitPrice:5100}),
+    consume('purchase-A', 30, '재고이동', {price:5100,stockUnitPrice:5100,fromLocation:'가공장',toLocation:'물류창고'})]);
+  const correctedKeys = Object.keys(corrected.getStockMap()).sort();
+  const linkedSnapshots = JSON.stringify(corrected.userTransactions.slice(2));
+  corrected.userTransactions[0].price = 4900;
+  corrected.userTransactions[0].amount = 490000;
+  corrected.invalidateStockMap();
+  assert.deepEqual(Object.keys(corrected.getStockMap()).sort(), correctedKeys);
+  assert.equal(row(corrected, 'purchase-A').stock, 45);
+  assert.equal(row(corrected, 'purchase-A', '물류창고').stock, 30);
+  assert.equal(row(corrected, 'purchase-A').price, 4900);
+  assert.equal(row(corrected, 'purchase-A', '물류창고').price, 4900);
+  assert.equal(row(corrected, 'purchase-B').price, 5200);
+  assert.equal(JSON.stringify(corrected.userTransactions.slice(2)), linkedSnapshots, 'Purchase correction preserves historical sale/use/move snapshots');
+
   const edit = harness([incoming('row-A', 30, '옛 비고'), incoming('row-B', 70, '유지'), consume('row-A', 20, '출고', {stockNote: '옛 비고'})]);
   const beforeKeys = Object.keys(edit.getStockMap()).sort();
   edit.userTransactions[0].stockNote = '삼성웰스토리 / 거래처 수정 / 3mm';

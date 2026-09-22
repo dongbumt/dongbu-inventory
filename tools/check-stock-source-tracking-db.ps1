@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([switch]$AllowPriceCorrection)
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskNames = @('PGHOST','PGPORT','PGUSER','PGPASSWORD','PGDATABASE')
@@ -19,11 +19,13 @@ try {
     if(-not $match.Success){ throw 'Missing Supabase connection field.' }
     [Environment]::SetEnvironmentVariable($name, $match.Groups[1].Value)
   }
-  $schema = Get-Content -LiteralPath (Join-Path $taskRoot 'supabase/schema-rpc-44-stock-source-tracking.sql') -Encoding UTF8 -Raw
+  $schemaFile = if($AllowPriceCorrection){'supabase/schema-rpc-45-inbound-price-correction.sql'}else{'supabase/schema-rpc-44-stock-source-tracking.sql'}
+  $schema = Get-Content -LiteralPath (Join-Path $taskRoot $schemaFile) -Encoding UTF8 -Raw
+  $testArgs = @(if($AllowPriceCorrection){'--allow-price-correction'})
   $previousEncoding = $OutputEncoding
   try {
     $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-    $schema | python (Join-Path $PSScriptRoot 'check-stock-source-tracking-db.py')
+    $schema | python (Join-Path $PSScriptRoot 'check-stock-source-tracking-db.py') @testArgs
     if($LASTEXITCODE -ne 0){ throw 'Stock-source tracking verification failed; all changes were rolled back.' }
   } finally { $OutputEncoding = $previousEncoding }
 } finally {
