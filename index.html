@@ -21,7 +21,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20260914submaterials1">
+<link rel="stylesheet" href="styles/main.css?v=20260922productionnotes1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -10427,7 +10427,7 @@ function addProdInputRow(){
 
   const row = document.createElement('div');
   row.id = `prod-in-${id}`;
-  row.style.cssText = 'display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end;';
+  row.className = 'production-entry-row production-input-row';
   row.innerHTML = `
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:var(--orange);">재고품목 선택 #${id}</label>
@@ -10458,11 +10458,11 @@ function addProdInputRow(){
       <label style="font-size:11px;font-weight:700;color:var(--blue);">단가(원/KG)</label>
       <input type="number" id="prod-in-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
-    <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-in-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
-    <div class="form-group" style="grid-column:1 / -1;">
+    <div class="form-group production-entry-note">
       <label style="font-size:11px;font-weight:700;color:#666;">선택 재고 비고</label>
       <input id="prod-in-stock-note-${id}" readonly placeholder="선택한 재고의 비고" style="font-size:12px;background:#f8f9fa;">
     </div>
+    <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-in-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
   `;
   document.getElementById('prod-input-rows').appendChild(row);
 }
@@ -10561,7 +10561,7 @@ function addProdOutputRow(stockRowId=makeAppId('prodrow')){
   const id = ++prodOutputRowCount;
   const row = document.createElement('div');
   row.id = `prod-out-${id}`;
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 0.75fr 0.8fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:10px;align-items:end;padding-bottom:8px;border-bottom:1px dashed #edf0f2;';
+  row.className = 'production-entry-row production-output-row';
   row.innerHTML = `
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:var(--green);">생산품목 #${id}</label>
@@ -10593,11 +10593,11 @@ function addProdOutputRow(stockRowId=makeAppId('prodrow')){
       <label style="font-size:11px;font-weight:700;color:#666;">단가(원/KG)</label>
       <input type="number" id="prod-out-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
-    <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-out-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
-    <div class="form-group" style="grid-column:1 / -1;">
+    <div class="form-group production-entry-note">
       <label style="font-size:11px;font-weight:700;color:#666;">생산품 비고</label>
       <input id="prod-out-note-${id}" placeholder="예: 3mm 슬라이스 / 납품처 / 작업 용도" style="font-size:12px;background:#fff;">
     </div>
+    <button class="btn btn-sm btn-danger" onclick="document.getElementById('prod-out-${id}').remove()" style="margin-bottom:0;padding:9px 10px;">✕</button>
   `;
   document.getElementById('prod-output-rows').appendChild(row);
   const outOriginEl = document.getElementById(`prod-out-origin-${id}`);
