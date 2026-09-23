@@ -58,8 +58,9 @@
     el('title').textContent=`${dates[0].replaceAll('-','.')} ~ ${dates[20].replaceAll('-','.')} · 3주`;
     const visible=state.rows.filter(row=>row.date>=dates[0] && row.date<=dates[20]);
     const pending=visible.filter(row=>row.status==='planned');
-    const unknown=pending.filter(row=>row.qty===null).length;
-    el('summary').textContent=`예정 ${pending.length}건 · 완료 ${visible.length-pending.length}건 · 예정수량 ${quantity(pending.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG${unknown?' · 수량 미정 '+unknown+'건':''}`;
+    const completed=visible.filter(row=>row.status==='completed');
+    const unknown=visible.filter(row=>row.qty===null).length;
+    el('summary').textContent=`예정 ${pending.length}건 · 완료 ${completed.length}건 · 예정수량 ${quantity(pending.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG · 완료수량 ${quantity(completed.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG${unknown?' · 수량 미정 '+unknown+'건':''}`;
     const byDate=new Map();
     state.rows.forEach(row=>{if(!byDate.has(row.date)) byDate.set(row.date,[]);byDate.get(row.date).push(row);});
     const head=['일','월','화','수','목','금','토'].map((day,i)=>`<div class="ps-weekday ${i===0?'ps-sunday':i===6?'ps-saturday':''}">${day}</div>`).join('');
@@ -72,9 +73,10 @@
           ${row.trader||row.note?`<span>${[row.trader,row.note].filter(Boolean).map(esc).join(' · ')}</span>`:''}<span class="ps-item-state">${row.status==='completed'?'✓ 완료':'생산 예정'}</span>
         </button>${can('delete')?`<button type="button" class="ps-item-delete" data-action="delete" data-id="${esc(row.id)}" aria-label="${esc(row.product)} 일정 삭제" title="삭제" ${state.saving?'disabled':''}>×</button>`:''}</div>`).join('');
       const pendingRows=rows.filter(row=>row.status==='planned');
+      const completedRows=rows.filter(row=>row.status==='completed');
       return `<div class="ps-day ${el('date').value===date?'selected':''}" data-date="${date}">
         <div class="ps-day-head"><button type="button" class="ps-date ${date===todayText()?'today':''} ${i%7===0?'ps-sunday':i%7===6?'ps-saturday':''}" data-action="date" data-date="${date}" aria-label="${date} 생산예정 추가" ${!can('create')||state.saving?'disabled':''}>${Number(date.slice(5,7))}/${Number(date.slice(-2))}</button><span class="ps-holiday">${esc(holiday)}</span></div>
-        ${items}${pendingRows.some(row=>row.qty!==null)?`<div class="ps-day-total">예정 ${quantity(pendingRows.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG</div>`:''}</div>`;
+        ${items}${rows.some(row=>row.qty!==null)?`<div class="ps-day-total"><span>예정 ${quantity(pendingRows.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG</span><span>완료 ${quantity(completedRows.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG</span></div>`:''}</div>`;
     }).join('');
   }
   async function load(){

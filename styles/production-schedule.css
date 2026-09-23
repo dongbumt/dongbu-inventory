@@ -33,5 +33,6 @@
 .ps-item-main span{display:block;font-size:11px;color:#656b73;margin-top:3px;white-space:pre-wrap;}
 .ps-item-state{font-size:10px!important;}
 .ps-item-delete{position:absolute;right:3px;top:4px;border:0;background:transparent;color:#777;padding:0 3px;font-size:16px;cursor:pointer;}
-.ps-day-total{font-size:10px;color:#777;text-align:right;margin-top:6px;}
+.ps-day-total{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:3px 8px;font-size:10px;color:#777;text-align:right;margin-top:6px;}
+.ps-day-total span{white-space:nowrap;}
 @media(max-width:850px){.ps-editor{grid-template-columns:repeat(2,minmax(0,1fr));}.ps-note{grid-column:1/-1;}.ps-editor>#ps-save{grid-column:2;}.ps-product{grid-column:auto;}}
