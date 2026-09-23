@@ -22,6 +22,7 @@ try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20260922productionnotes1">
+<link rel="stylesheet" href="styles/production-schedule.css?v=20260923plan1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -390,6 +391,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">생산관리</button>
     <div class="nav-group-items">
       <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">🏭 생산일보</div>
+      <div class="nav-tab" onclick="showPage('p-production-schedule',this)" id="nav-production-schedule">📅 생산일정</div>
       <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산 로스율</div>
       <div class="nav-tab" onclick="showPage('p-production-board',this)" id="nav-production-board">📌 생산현황 보드</div>
       <div class="nav-tab" onclick="window.open('production-board.html?v=20260831board9','_blank');" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
@@ -468,6 +470,35 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     </div>
     <div id="sch-permission-note" class="m02-note" style="display:none;margin-bottom:12px;">일정 등록은 개인 사용자 로그인이 필요합니다.</div>
     <div id="sch-calendar" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:#dce3ea;border:1px solid #dce3ea;border-radius:8px;overflow:hidden;"></div>
+  </div>
+</div>
+
+<div class="tab-panel" id="p-production-schedule">
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#666;"></div>생산일정</div>
+      <div class="ps-toolbar">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.moveMonth(-1)">‹ 이전달</button>
+        <input type="month" id="ps-month" aria-label="생산일정 조회 월" onchange="DBMTProductionSchedule.load()">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.moveMonth(1)">다음달 ›</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.today()">오늘</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.load()">새로고침</button>
+      </div>
+    </div>
+    <div class="ps-summary"><strong id="ps-title"></strong><span id="ps-summary"></span></div>
+    <p class="ps-guide">날짜를 눌러 생산예정 품목을 추가하고, 등록한 품목을 눌러 수정하세요. 생산 실적은 생산일보에서 기록합니다.</p>
+    <form id="ps-editor" class="ps-editor" onsubmit="event.preventDefault();DBMTProductionSchedule.save()" hidden>
+      <div class="ps-editor-heading"><strong id="ps-editor-title">생산예정 추가</strong><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.reset()">입력 초기화</button></div>
+      <div class="form-group"><label for="ps-date">생산예정일</label><input type="date" id="ps-date" required></div>
+      <div class="form-group ps-product"><label for="ps-product">생산예정 품목</label><input id="ps-product" list="ps-products" maxlength="200" placeholder="품목명 검색 또는 입력" required autocomplete="off"><datalist id="ps-products"></datalist></div>
+      <div class="form-group"><label for="ps-qty">예정수량(KG)</label><input type="number" id="ps-qty" min="0.01" max="999999999" step="0.01" placeholder="미정"></div>
+      <div class="form-group"><label for="ps-trader">거래처(선택)</label><input id="ps-trader" list="sales-trader-list" maxlength="200" placeholder="거래처"></div>
+      <div class="form-group"><label for="ps-status">상태</label><select id="ps-status"><option value="planned">예정</option><option value="completed">완료</option></select></div>
+      <div class="form-group ps-note"><label for="ps-note">비고(선택)</label><input id="ps-note" maxlength="500" placeholder="규격·포장단위·작업 요청사항"></div>
+      <button type="submit" id="ps-save" class="btn btn-primary">+ 일정 추가</button>
+    </form>
+    <div id="ps-message" class="ps-message" role="status" aria-live="polite"></div>
+    <div class="ps-calendar-wrap"><div id="ps-calendar" class="ps-calendar" aria-label="생산일정 달력"></div></div>
   </div>
 </div>
 
@@ -5016,6 +5047,9 @@ function renderPageById(id, reason='menu'){
     switch(id){
       case 'p-schedule':
         renderScheduleCalendar();
+        break;
+      case 'p-production-schedule':
+        asyncTask = DBMTProductionSchedule.init();
         break;
       case 'p-company-master':
         if(typeof initCompanyMasterPage === 'function') asyncTask = initCompanyMasterPage();
@@ -21343,6 +21377,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="stock-report.js?v=20260913rowstock1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
-<script src="m02-auth.js?v=20260914submaterials1"></script>
+<script src="production-schedule.js?v=20260923plan1"></script>
+<script src="m02-auth.js?v=20260923plan1"></script>
 </body>
 </html>

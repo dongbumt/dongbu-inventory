@@ -15,6 +15,7 @@
     'nav-traders':'traders',
     'nav-transactions':'transactions',
     'nav-production':'production',
+    'nav-production-schedule':'production_schedule',
     'nav-prod-loss':'production_loss',
     'nav-production-board':'production_board',
     'nav-stock':'stock',
@@ -287,6 +288,7 @@
   function getSessionToken(){ return isPersonal() ? sessionToken() : ''; }
 
   function notifyPermissionSurfaces(){
+    if(window.DBMTProductionSchedule) window.DBMTProductionSchedule.applyPermissions();
     if(typeof window.applySchedulePermissionState === 'function') window.applySchedulePermissionState();
     if(typeof window.renderScheduleCalendar === 'function' && document.getElementById('p-schedule')?.classList.contains('active')){
       window.renderScheduleCalendar();
