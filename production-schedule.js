@@ -69,8 +69,8 @@
       const outside=!date.startsWith(month), holiday=typeof getKoreanHoliday==='function'?getKoreanHoliday(date):'';
       const items=rows.map(row=>`<div class="ps-item ${row.status==='completed'?'completed':''} ${can('delete')?'has-delete':''}" data-plan-id="${esc(row.id)}">
         <button type="button" class="ps-item-main" data-action="edit" data-id="${esc(row.id)}" ${!can('update')||state.saving?'disabled':''} title="생산일정 수정">
-          <strong>${esc(row.product)}</strong><span>${row.qty===null?'수량 미정':quantity(row.qty)+' KG'}${row.trader?' · '+esc(row.trader):''}</span>
-          ${row.note?`<span>${esc(row.note)}</span>`:''}<span class="ps-item-state">${row.status==='completed'?'✓ 완료':'생산 예정'}</span>
+          <strong>${esc(row.product)} ${row.qty===null?'수량 미정':quantity(row.qty)+' KG'}</strong>
+          ${row.trader||row.note?`<span>${[row.trader,row.note].filter(Boolean).map(esc).join(' · ')}</span>`:''}<span class="ps-item-state">${row.status==='completed'?'✓ 완료':'생산 예정'}</span>
         </button>${can('delete')?`<button type="button" class="ps-item-delete" data-action="delete" data-id="${esc(row.id)}" aria-label="${esc(row.product)} 일정 삭제" title="삭제" ${state.saving?'disabled':''}>×</button>`:''}</div>`).join('');
       const pendingRows=rows.filter(row=>row.status==='planned');
       return `<div class="ps-day ${outside?'outside':''} ${el('date').value===date?'selected':''}" data-date="${date}">
