@@ -17,13 +17,11 @@
 .ps-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:#dce3ea;border:1px solid #dce3ea;border-radius:8px;overflow:hidden;min-width:660px;}
 .ps-weekday{background:#f5f6f7;color:#555;text-align:center;font-size:12px;font-weight:800;padding:8px 4px;}
 .ps-day{background:#fff;min-height:142px;padding:7px;min-width:0;}
-.ps-day.outside{background:#fafbfc;}
 .ps-day.selected{box-shadow:inset 0 0 0 2px #8c959f;}
 .ps-day-head{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:6px;}
-.ps-date{border:0;background:transparent;font:inherit;font-size:12px;font-weight:800;color:#333;width:26px;height:26px;border-radius:50%;cursor:pointer;flex-shrink:0;}
+.ps-date{border:0;background:transparent;font:inherit;font-size:12px;font-weight:800;color:#333;min-width:26px;padding:0 6px;height:26px;border-radius:13px;cursor:pointer;flex-shrink:0;}
 .ps-date.today{background:#555;color:white;}
 .ps-date:disabled{cursor:default;}
-.ps-day.outside .ps-date:not(.today){color:#9299a1;}
 .ps-holiday{font-size:10px;color:#a53a3a;text-align:right;}
 .ps-sunday{color:#a53a3a;}.ps-saturday{color:#356c9a;}
 .ps-item{position:relative;border:1px solid #dfe2e5;border-radius:6px;background:#f6f7f8;margin:0 0 5px;}

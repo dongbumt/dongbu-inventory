@@ -22,7 +22,7 @@ try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20260922productionnotes1">
-<link rel="stylesheet" href="styles/production-schedule.css?v=20260923plan1">
+<link rel="stylesheet" href="styles/production-schedule.css?v=20260923plan3">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -478,10 +478,10 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="section-header">
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#666;"></div>생산일정</div>
       <div class="ps-toolbar">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.moveMonth(-1)">‹ 이전달</button>
-        <input type="month" id="ps-month" aria-label="생산일정 조회 월" onchange="DBMTProductionSchedule.load()">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.moveMonth(1)">다음달 ›</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.today()">오늘</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.moveWeek(-1)">‹ 이전 주</button>
+        <input type="date" id="ps-anchor-date" aria-label="생산일정 기준일" title="기준일이 포함된 주부터 3주 표시" onchange="DBMTProductionSchedule.load()">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.moveWeek(1)">다음 주 ›</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.today()">오늘 기준</button>
         <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.load()">새로고침</button>
       </div>
     </div>
@@ -21377,7 +21377,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="stock-report.js?v=20260913rowstock1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
-<script src="production-schedule.js?v=20260923plan2"></script>
+<script src="production-schedule.js?v=20260923plan3"></script>
 <script src="m02-auth.js?v=20260923plan1"></script>
 </body>
 </html>
