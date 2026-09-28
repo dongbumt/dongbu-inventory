@@ -393,7 +393,7 @@
       .topbar, .shell { display: none; }
     }
   </style>
-  <link rel="stylesheet" href="label-touch.css?v=20260916touch4">
+  <link rel="stylesheet" href="label-touch.css?v=20260928history1">
 </head>
 <body>
   <header class="topbar">
@@ -1153,6 +1153,31 @@
       }
     }
 
+    async function voidAllLogsForOrder(orderId, reason){
+      if(state.loading || String(selectedOrder()?.id) !== String(orderId)) return;
+      if(completionFor(orderId)){ setStatus('생산완료된 라벨은 삭제할 수 없습니다.', 'warn'); return; }
+      const active=activeLogsForOrder(orderId);
+      if(!active.length){ setStatus('삭제할 외포장 라벨이 없습니다.', 'warn'); return; }
+      const ids=new Set(active.map(log=>String(log.id)));
+      const previousLogs=state.logs;
+      const voidedAt=new Date().toISOString();
+      state.logs=state.logs.map(log=>ids.has(String(log.id))
+        ? {...log,status:'void',voidedAt,voidReason:String(reason||'').trim()||'전체삭제'} : log);
+      renderAll();
+      setLoading(true);
+      setStatus(`외포장 라벨 ${active.length}장 삭제 처리 저장 중...`, 'warn');
+      try{
+        await saveLogs();
+        setStatus(`이 작업의 외포장 라벨 ${active.length}장 삭제 처리됨 · 이력은 보존됩니다.`, 'ok');
+      }catch(err){
+        state.logs=previousLogs;
+        renderAll();
+        setStatus(`전체삭제 실패: ${err.message||err}`, 'err');
+      }finally{
+        setLoading(false);
+      }
+    }
+
     function makePrintLog(row, batchId, copyNo){
       const now = new Date().toISOString();
       const code = makeLabelCode(row, copyNo);
@@ -1397,6 +1422,6 @@
   <script src="label-scale.js?v=20260915touch1"></script>
   <script src="label-product-selection.js?v=20260915touch3"></script>
   <script src="label-fullscreen.js?v=20260916touch4"></script>
-  <script src="label-touch.js?v=20260916touch4"></script>
+  <script src="label-touch.js?v=20260928history1"></script>
 </body>
 </html>

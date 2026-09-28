@@ -112,6 +112,13 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label .touch-dialog footer button{flex:1;min-height:64px}
 .touch-label .dark{background:#343a40;color:#fff}
 .touch-label .history-dialog{width:min(94vw,920px)}
+.touch-label .history-dialog[open]{display:flex;flex-direction:column;max-height:94dvh;overflow:hidden;gap:6px}
+.touch-label .history-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.touch-label .history-heading h2{margin:0}
+.touch-label #history-body{max-height:640px;min-height:0;flex:0 1 auto;overflow-y:auto;overscroll-behavior:contain}
+.touch-label .history-dialog .history-pager{margin-top:0}
+.touch-label .history-dialog footer{margin-top:4px}
+.touch-label .history-dialog .dialog-notice{margin:0}
 .touch-label .work-order-dialog{width:min(94vw,920px)}
 .touch-label .work-order-dialog[open]{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;height:min(850px,94dvh);overflow:hidden}
 .touch-label .work-order-dialog>p{margin:0 0 12px;font-size:16px}
