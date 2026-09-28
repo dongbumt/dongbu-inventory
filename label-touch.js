@@ -1,8 +1,7 @@
 /* Selected touch layout 2. Shares production log/print functions with label-print.html. */
 (function(){
   'use strict';
-  let ready=false,current='',historyPage=0,historyOrder='',lastFocus=null,previewReturn=false;
-  const HISTORY_PAGE_SIZE=10;
+  let ready=false,current='',historyPage=0,historyPageSize=6,historyOrder='',lastFocus=null,previewReturn=false;
   const jobs=new Map(),selected=new Set();
   const productStorage='dbmt_label_output_products_v1';
   let productChoices=new Map(),pendingProduct='',productPage=0;
@@ -131,12 +130,27 @@
     document.querySelectorAll('#order-list button,#date-filter,#today-btn,#all-btn,#search-filter,#clear-search-btn').forEach(el=>el.disabled=state.loading);
   }
   function closeDialog(id){const d=byId(id);if(!d.open)return;d.close();if(lastFocus?.isConnected&&!lastFocus.hidden)lastFocus.focus();else byId('work-order-open').focus();}
-  function openDialog(id){lastFocus=document.activeElement;byId(id).showModal();}
+  function openDialog(id){lastFocus=document.activeElement;byId(id).showModal();if(id==='history-dialog')fitHistoryPage();}
+  function estimatedHistoryPageSize(){
+    const mobile=window.innerWidth<=570;
+    const available=Math.min(window.innerHeight*.94,900)-(mobile?300:285);
+    return Math.max(1,Math.min(6,Math.floor(available/(mobile?170:94))));
+  }
+  function fitHistoryPage(){
+    const dialog=byId('history-dialog'),body=byId('history-body');
+    if(!dialog?.open)return;
+    if(historyPageSize>1 && (body.scrollHeight>body.clientHeight+1 || dialog.scrollHeight>dialog.clientHeight+1)){
+      const first=historyPage*historyPageSize;
+      historyPageSize--;
+      historyPage=Math.floor(first/historyPageSize);
+      renderHistory();
+    }
+  }
   function renderHistory(){
     if(!ready)return;
     const row=selectedOrder(),id=String(row?.id||'');
     if(historyOrder!==id){historyOrder=id;historyPage=0;selected.clear();}
-    const logs=row?logsForOrder(row.id):[],pages=Math.max(1,Math.ceil(logs.length/HISTORY_PAGE_SIZE));
+    const logs=row?logsForOrder(row.id):[],pages=Math.max(1,Math.ceil(logs.length/historyPageSize));
     const active=logs.filter(log=>log.status!=='void');
     historyPage=Math.min(historyPage,pages-1);
     const valid=new Set(logs.filter(l=>l.status!=='void').map(l=>String(l.id)));
@@ -145,7 +159,7 @@
     byId('history-title').textContent=row?`${row.product||row.title} · 외포장 ${logs.length}건`:'외포장 출력이력';
     byId('history-meta').textContent=row?`${row.date||''} · LOT ${row.lot||row.sourceStock?.lot||'-'} · 정상 ${active.length}장 · 삭제 ${logs.length-active.length}장 · 과거 라벨 내용으로 재출력`:'';
     byId('history-delete-all').disabled=state.loading||!row||!active.length||!!completionFor(row.id);
-    byId('history-body').innerHTML=logs.slice(historyPage*HISTORY_PAGE_SIZE,(historyPage+1)*HISTORY_PAGE_SIZE).map(log=>{
+    byId('history-body').innerHTML=logs.slice(historyPage*historyPageSize,(historyPage+1)*historyPageSize).map(log=>{
       const id=String(log.id),voided=log.status==='void';
       return `<div class="touch-history-row"><label class="history-choice"><input type="checkbox" data-log="${html(id)}" aria-label="${html(log.code||id)} 선택" ${selected.has(id)?'checked':''} ${voided||state.loading?'disabled':''}><span><strong>${html(log.workOrderSnapshot?.product||log.product||'품목 없음')}${log.workOrderSnapshot?.packunit?' / '+html(log.workOrderSnapshot.packunit):''}</strong><small>${html(log.code||id)}</small><small>${html(formatTime(log.printedAt))} · ${voided?'삭제됨':`재출력 ${toNumber(log.reprintCount)}회`}</small></span><b>${kg(log.labelWeight)}</b></label><div class="history-actions">${button('미리보기',`data-act="preview" data-id="${html(id)}"`)}${button('재출력',`data-act="reprint" data-id="${html(id)}" ${voided||state.loading?'disabled':''}`)}${button('삭제',`data-act="void" data-id="${html(id)}" ${voided||state.loading||completionFor(row.id)?'disabled':''}`)}</div></div>`;
     }).join('')||'<p class="empty">이 작업의 외포장 출력이력이 없습니다.</p>';
@@ -153,6 +167,7 @@
     byId('history-prev').disabled=historyPage===0||state.loading;
     byId('history-next').disabled=historyPage===pages-1||state.loading;
     sync();
+    fitHistoryPage();
   }
   function preview(log,back=false){
     previewReturn=back;
@@ -258,8 +273,15 @@
       else byId('cancel-transfer-error').textContent=byId('status').textContent;
     };
     byId('inner-print-btn').onclick=()=>printSelectedLabels('inner');byId('inner-preview-btn').onclick=()=>previewSelectedLabel('inner');
-    byId('reprint-open').onclick=()=>{selected.clear();historyPage=0;renderHistory();openDialog('history-dialog');};
+    byId('reprint-open').onclick=()=>{selected.clear();historyPage=0;historyPageSize=estimatedHistoryPageSize();byId('history-dialog').querySelector('.dialog-notice').textContent='';renderHistory();openDialog('history-dialog');};
     byId('history-prev').onclick=()=>{historyPage--;renderHistory();};byId('history-next').onclick=()=>{historyPage++;renderHistory();};
+    window.addEventListener('resize',()=>{
+      if(!byId('history-dialog')?.open)return;
+      const first=historyPage*historyPageSize;
+      historyPageSize=estimatedHistoryPageSize();
+      historyPage=Math.floor(first/historyPageSize);
+      renderHistory();
+    });
     byId('history-delete-all').onclick=async()=>{
       const row=selectedOrder();
       if(state.loading||!row||completionFor(row.id))return;
@@ -268,7 +290,7 @@
       const reason=prompt('전체삭제 사유', '잘못 출력');
       if(reason===null)return;
       await voidAllLogsForOrder(row.id,reason);
-      renderHistory();byId('history-dialog').querySelector('.dialog-notice').textContent=byId('status').textContent;
+      renderHistory();byId('history-dialog').querySelector('.dialog-notice').textContent=byId('status').textContent;fitHistoryPage();
     };
     byId('history-body').onchange=e=>{if(e.target.matches('[data-log]')){e.target.checked?selected.add(e.target.dataset.log):selected.delete(e.target.dataset.log);sync();}};
     byId('history-body').onclick=async e=>{
@@ -277,9 +299,9 @@
       if(b.dataset.act==='preview'){preview(log,true);return;}
       if(b.dataset.act==='reprint')await reprintLog(log.id);
       if(b.dataset.act==='void')await voidLog(log.id);
-      renderHistory();byId('history-dialog').querySelector('.dialog-notice').textContent=byId('status').textContent;
+      renderHistory();byId('history-dialog').querySelector('.dialog-notice').textContent=byId('status').textContent;fitHistoryPage();
     };
-    byId('history-print').onclick=async()=>{if(state.loading)return;await reprintLogs([...selected]);renderHistory();byId('history-dialog').querySelector('.dialog-notice').textContent=byId('status').textContent;};
+    byId('history-print').onclick=async()=>{if(state.loading)return;await reprintLogs([...selected]);renderHistory();byId('history-dialog').querySelector('.dialog-notice').textContent=byId('status').textContent;fitHistoryPage();};
     byId('label-preview-close').onclick=()=>{closeDialog('label-preview-dialog');if(previewReturn)openDialog('history-dialog');};
     document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeDialog(b.dataset.close));
     document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{settings()[b.dataset.kind].mode=b.dataset.mode;sync();});

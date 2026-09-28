@@ -48,20 +48,31 @@ const server=http.createServer((request,response)=>{
     await page.locator('#app-password').fill('0000');await page.locator('#connect-btn').click();
     await page.waitForFunction(()=>!state.loading&&state.workOrders.length===2);
     await page.locator('#reprint-open').click();
-    assert.equal(await page.locator('#history-body .touch-history-row').count(),10,'Ten labels per page');
-    assert.equal(await page.locator('#history-page').textContent(),'1 / 2');
+    const desktopCount=await page.locator('#history-body .touch-history-row').count();
+    assert(desktopCount>4&&desktopCount<=6,'Show more than four labels only while they fit');
+    assert.equal(await page.locator('#history-page').textContent(),`1 / ${Math.ceil(14/desktopCount)}`);
     assert.match(await page.locator('#history-meta').textContent(),/정상 13장 · 삭제 1장/);
     assert(await page.locator('#history-delete-all').isEnabled());
+    const seen=new Set();
+    for(;;){
+      const ids=await page.locator('#history-body input[data-log]').evaluateAll(elements=>elements.map(element=>element.dataset.log));
+      ids.forEach(id=>seen.add(id));
+      assert(await page.locator('#history-body').evaluate(element=>element.scrollHeight<=element.clientHeight+1),'No page has an inner scrollbar');
+      if(await page.locator('#history-next').isDisabled())break;
+      await page.locator('#history-next').click();
+    }
+    assert.equal(seen.size,14,'Pagination covers every label');
+    while(await page.locator('#history-prev').isEnabled())await page.locator('#history-prev').click();
     const firstSelected=await page.locator('#history-body input[data-log]:enabled').first().getAttribute('data-log');
     await page.locator('#history-body input[data-log]:enabled').first().check();
     await page.locator('#history-next').click();
-    assert.equal(await page.locator('#history-body .touch-history-row').count(),4);
+    assert.equal(await page.locator('#history-body .touch-history-row').count(),desktopCount);
     await page.locator('#history-body input[data-log]:enabled').first().check();
     assert.match(await page.locator('#history-print').textContent(),/선택 2장/,'Selection survives pagination');
     await page.locator('#history-prev').click();
     assert(await page.locator(`#history-body input[data-log="${firstSelected}"]`).isChecked());
     await page.locator('#history-dialog').screenshot({path:path.join(artifacts,'history-desktop.png')});
-    assert(await page.locator('#history-body').evaluate(element=>element.scrollHeight>element.clientHeight),'Long page scrolls inside dialog');
+    assert(await page.locator('#history-body').evaluate(element=>element.scrollHeight<=element.clientHeight+1),'Visible page needs no list scroll');
     assert(await page.locator('#history-dialog footer').evaluate(element=>element.getBoundingClientRect().bottom<=innerHeight),'Actions remain visible');
 
     await page.locator('#history-delete-all').click();
@@ -74,7 +85,7 @@ const server=http.createServer((request,response)=>{
     assert.equal(attempts,1);
     assert.equal(logs.filter(log=>log.workOrderId==='a'&&log.status==='active').length,13,'Server failure leaves persisted labels active');
     assert.equal(await page.locator('#active-count').textContent(),'13장','Client totals roll back on failure');
-    assert.equal(await page.locator('#history-page').textContent(),'1 / 2');
+    assert.equal(await page.locator('#history-page').textContent(),`1 / ${Math.ceil(14/desktopCount)}`);
     assert(await page.locator('#history-delete-all').isEnabled());
 
     fail=false;
@@ -104,12 +115,14 @@ const server=http.createServer((request,response)=>{
     assert(await page.locator('#history-delete-all').isDisabled(),'Completed production blocks bulk deletion');
     assert(await page.locator('#history-body [data-act=void]').first().isDisabled());
     await page.setViewportSize({width:360,height:700});
+    const mobileCount=await page.locator('#history-body .touch-history-row').count();
+    assert(mobileCount<desktopCount,'Smaller screens show fewer labels');
     assert(await page.locator('#history-dialog footer').evaluate(element=>element.getBoundingClientRect().bottom<=innerHeight));
     assert(await page.locator('#history-dialog').evaluate(element=>element.scrollWidth<=element.clientWidth+1));
-    assert(await page.locator('#history-body').evaluate(element=>element.scrollHeight>element.clientHeight));
+    assert(await page.locator('#history-body').evaluate(element=>element.scrollHeight<=element.clientHeight+1),'Mobile page needs no list scroll');
     await page.locator('#history-dialog').screenshot({path:path.join(artifacts,'history-mobile.png')});
     assert.deepEqual(errors,[]);
-    console.log('PASS: 10/page, internal scrolling, cross-page selection, cancel/failure/rollback, all-record deletion, other-work isolation, completion lock, mobile layout');
+    console.log('PASS: viewport-fitting pages without list scroll, cross-page selection, cancel/failure/rollback, all-record deletion, other-work isolation, completion lock, mobile layout');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
