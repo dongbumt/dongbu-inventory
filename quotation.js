@@ -69,7 +69,7 @@ function quotationBlankRow(){
 function quotationBlankDraft(){
   return {
     id:'', date:typeof localDateString === 'function' ? localDateString() : new Date().toISOString().slice(0,10),
-    customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가',
+    customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가', priceMultiplier:'',
     managerName:'김상영 본부장', managerPhone:'010-2414-5406',
     note:'위 품목은 시세에 따라 단가가 변동됩니다.', rows:[quotationBlankRow()],
     companyProfile:null, createdAt:'', updatedAt:''
@@ -84,7 +84,9 @@ function quotationNormalizeRow(row={}){
 
 function quotationNormalize(record={}){
   const rows = Array.isArray(record.rows) && record.rows.length ? record.rows : [quotationBlankRow()];
-  return {...quotationBlankDraft(), ...record, rows:rows.slice(0,QUOTATION_MAX_ROWS).map(quotationNormalizeRow)};
+  const normalized={...quotationBlankDraft(), ...record, rows:rows.slice(0,QUOTATION_MAX_ROWS).map(quotationNormalizeRow)};
+  quotationApplyMultiplier(normalized);
+  return normalized;
 }
 
 function qNumber(value){
@@ -118,6 +120,26 @@ function quotationCalc(row){
   return {rawPrice,yieldRate,lossAdjusted,productionCost,overheadCost,allInCost,targetPrice,salePrice,suggestedPrice,margin,marginRate};
 }
 
+function quotationMultiplier(record){
+  const value=String(record?.priceMultiplier ?? '').trim();
+  if(!value) return null;
+  const number=Number(value);
+  return Number.isFinite(number) && number>0 ? number : null;
+}
+
+function quotationDisplayedPrice1(row){
+  return qNumber(row.price1) || quotationCalc(row).suggestedPrice;
+}
+
+function quotationApplyMultiplier(record, row){
+  const multiplier=quotationMultiplier(record);
+  if(multiplier===null) return;
+  (row ? [row] : record.rows).forEach(item=>{
+    const price1=quotationDisplayedPrice1(item);
+    item.price2=price1 ? Math.round(price1*multiplier) : '';
+  });
+}
+
 function quotationRowsForOutput(record){
   return (record?.rows || []).filter(row => [row.product,row.spec,row.price1,row.price2].some(v=>String(v ?? '').trim()));
 }
@@ -133,7 +155,7 @@ function quotationCustomerOptions(){
 function quotationSyncMetaInputs(){
   const values = {
     'qt-date':'date','qt-customer':'customer','qt-recipient':'recipient','qt-subject':'subject',
-    'qt-price-header-1':'priceHeader1','qt-price-header-2':'priceHeader2','qt-manager':'managerName',
+    'qt-price-header-1':'priceHeader1','qt-price-header-2':'priceHeader2','qt-price-multiplier':'priceMultiplier','qt-manager':'managerName',
     'qt-manager-phone':'managerPhone','qt-note':'note'
   };
   Object.entries(values).forEach(([id,key])=>{
@@ -169,7 +191,7 @@ function renderQuotationRows(){
       <td>${quotationInput(row,'origin','text','placeholder="원산지"')}</td>
       <td>${quotationInput(row,'unit','text','placeholder="KG"')}</td>
       <td>${quotationInput(row,'price1','number','min="0" step="1"')}</td>
-      <td>${quotationInput(row,'price2','number','min="0" step="1"')}</td>
+      <td>${quotationInput(row,'price2','number',`min="0" step="1" ${quotationMultiplier(quotationDraft)!==null?'readonly title="배율에 따라 자동계산"':''}`)}</td>
       <td>${quotationInput(row,'note','text','placeholder="비고"')}</td>
       <td>${quotationInput(row,'monthlyUsage','number','min="0" step="0.01"')}</td>
       <td>${quotationInput(row,'targetPrice','number','min="0" step="1"')}</td>
@@ -216,6 +238,10 @@ function renderQuotationComputedRow(row){
 function quotationMetaChanged(field, value){
   if(!quotationDraft) quotationDraft = quotationBlankDraft();
   quotationDraft[field] = value;
+  if(field === 'priceMultiplier'){
+    quotationApplyMultiplier(quotationDraft);
+    renderQuotationRows();
+  }
   if(field === 'priceHeader1' || field === 'priceHeader2'){
     const target = document.getElementById(field === 'priceHeader1' ? 'qt-editor-price-head-1' : 'qt-editor-price-head-2');
     if(target) target.textContent = value || (field === 'priceHeader1' ? '단가 1' : '단가 2');
@@ -227,6 +253,11 @@ function quotationRowChanged(id, field, value){
   const row = quotationDraft?.rows.find(item=>item.id===id);
   if(!row) return;
   row[field] = value;
+  if(quotationMultiplier(quotationDraft)!==null && ['price1','rawPrice','yieldRate','overheadCost','targetPrice','salePrice'].includes(field)){
+    quotationApplyMultiplier(quotationDraft,row);
+    const price2=document.querySelector(`tr[data-quote-row="${id}"] td:nth-child(7) input`);
+    if(price2) price2.value=row.price2;
+  }
   if(['monthlyUsage','targetPrice','rawPrice','yieldRate','overheadCost','salePrice'].includes(field)) renderQuotationComputedRow(row);
   scheduleQuotationPreview();
 }
@@ -259,6 +290,7 @@ function applyQuotationSuggested(id){
   const suggested = quotationCalc(row).suggestedPrice;
   if(!suggested){ toast('원물시세, 타겟단가 또는 판매가를 먼저 입력하세요.'); return; }
   row.price1 = suggested;
+  quotationApplyMultiplier(quotationDraft,row);
   renderQuotationRows();
   scheduleQuotationPreview();
 }
@@ -286,6 +318,12 @@ function quotationPersist(action, record){
 
 function saveQuotation(){
   if(!quotationDraft) return;
+  const multiplierText=String(quotationDraft.priceMultiplier ?? '').trim();
+  if(document.getElementById('qt-price-multiplier')?.validity.badInput || (multiplierText && quotationMultiplier(quotationDraft)===null)){
+    toast('단가 2 배율은 0보다 큰 숫자로 입력하세요.');
+    document.getElementById('qt-price-multiplier')?.focus();
+    return;
+  }
   const customer = String(quotationDraft.customer || '').trim();
   const rows = quotationRowsForOutput(quotationDraft);
   if(!customer){ toast('고객사를 입력하세요.'); document.getElementById('qt-customer')?.focus(); return; }
@@ -522,8 +560,7 @@ function qDrawPublicTable(ctx,record,rows,startY,{compact=false}={}){
   headers.forEach((header,index)=>{ qDrawCell(ctx,{x,y:startY,w:widths[index],h:headH,text:header,size:compact?24:34,weight:700,fill:'#ededed'}); x+=widths[index]; });
   let y=startY+headH;
   rows.forEach(row=>{
-    const calc=quotationCalc(row);
-    const price1=qNumber(row.price1)||calc.suggestedPrice;
+    const price1=quotationDisplayedPrice1(row);
     const values=[row.category,row.product,row.grade,row.origin,row.unit,qMoney(price1),qMoney(row.price2),row.note];
     x=x0;
     values.forEach((value,index)=>{

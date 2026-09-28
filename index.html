@@ -2854,6 +2854,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="form-group quote-meta-wide"><label>견적 제목</label><input id="qt-subject" placeholder="예) 호주산 설깃 가공품 견적" oninput="quotationMetaChanged('subject',this.value)"></div>
       <div class="form-group"><label>단가 1 열제목</label><input id="qt-price-header-1" value="KG단가" oninput="quotationMetaChanged('priceHeader1',this.value)"></div>
       <div class="form-group"><label>단가 2 열제목</label><input id="qt-price-header-2" value="BOX단가" oninput="quotationMetaChanged('priceHeader2',this.value)"></div>
+      <div class="form-group"><label for="qt-price-multiplier">단가 2 배율 (단가 1 ×)</label><input type="number" id="qt-price-multiplier" min="0.01" step="any" placeholder="예) 1.2" oninput="quotationMetaChanged('priceMultiplier',this.value)"><small style="display:block;color:#667085;margin-top:4px;">미입력 시 수동 입력 · 단가 1 미입력 시 권장가 기준 · 원 단위 반올림</small></div>
       <div class="form-group"><label>담당자</label><input id="qt-manager" value="김상영 본부장" oninput="quotationMetaChanged('managerName',this.value)"></div>
       <div class="form-group"><label>담당자 연락처</label><input id="qt-manager-phone" value="010-2414-5406" oninput="quotationMetaChanged('managerPhone',this.value)"></div>
       <div class="form-group quote-meta-full"><label>외부용 비고</label><textarea id="qt-note" rows="2" oninput="quotationMetaChanged('note',this.value)">위 품목은 시세에 따라 단가가 변동됩니다.</textarea></div>
@@ -21368,7 +21369,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 
 </script>
 <script src="company-master.js?v=20260827requiredlogin1"></script>
-<script src="quotation.js?v=20260821subject2"></script>
+<script src="quotation.js?v=20260928multiplier1"></script>
 <script src="cold-storage-request.js?v=20260827requiredlogin1"></script>
 <script src="meatwatch-lookup.js?v=20260826bulktrace1"></script>
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
