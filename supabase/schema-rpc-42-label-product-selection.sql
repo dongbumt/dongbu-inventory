@@ -233,7 +233,7 @@ begin
     into v_job from public.production_entries where work_date=v_date and deleted_at is null;
   v_entry := jsonb_build_object('id',v_id,'date',to_char(v_date,'YYYY/MM/DD'),'job_no',v_job::text,
     'key',jsonb_build_array(to_char(v_date,'YYYY/MM/DD'),v_job::text),'job_type','생산',
-    'note',coalesce(v_order->>'title','') || ' / 라벨 생산완료','inputs',v_inputs,'outputs',v_outputs,
+    'note',coalesce(v_order->>'title',''),'inputs',v_inputs,'outputs',v_outputs,
     '_isUser',true,'_labelCompletion',jsonb_build_object('workOrderId',p_work_order_id,'completedAt',now(),'lockedInputCount',1),
     '_serverAudit',jsonb_build_object('authMode','label_pin','savedAt',now()));
   v_entry := public.dbmt_prepare_label_stock_rows(v_entry);
