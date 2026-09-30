@@ -2719,6 +2719,24 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <!-- 기본 정보 요약 -->
     <div id="cc-r-info" style="background:#f8f9fa;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12px;display:flex;flex-wrap:wrap;gap:12px 24px;"></div>
 
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:#555;">원자재비 + 기타비용(판관비) = 생산원가 합계</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px;">
+      <div style="border:1px solid #dfe3e6;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:12px;color:#555;font-weight:700;margin-bottom:6px;">원자재비</div>
+        <div id="cc-r-rawcost" style="font-size:20px;font-weight:800;color:#333;"></div>
+        <div id="cc-r-rawcostkg" style="font-size:12px;color:#666;margin-top:6px;"></div>
+      </div>
+      <div style="border:1px solid #dfe3e6;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:12px;color:#555;font-weight:700;margin-bottom:6px;">+ 기타비용(판관비)</div>
+        <div id="cc-r-othercost" style="font-size:20px;font-weight:800;color:#333;"></div>
+        <div id="cc-r-othercostkg" style="font-size:12px;color:#666;margin-top:6px;"></div>
+      </div>
+      <div style="background:#f1f3f5;border:1px solid #dfe3e6;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:12px;color:#555;font-weight:700;margin-bottom:6px;">= 생산원가 합계</div>
+        <div id="cc-r-totalcost" style="font-size:20px;font-weight:800;color:#333;"></div>
+        <div style="font-size:12px;color:#666;margin-top:6px;">원자재비 + 기타비용</div>
+      </div>
+    </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
       <div style="flex:1;min-width:130px;background:#eaf4fd;border-radius:10px;padding:14px;text-align:center;">
         <div style="font-size:11px;color:#2980b9;font-weight:700;margin-bottom:4px;">총 투입중량</div>
@@ -2727,10 +2745,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div style="flex:1;min-width:130px;background:#f4ecfd;border-radius:10px;padding:14px;text-align:center;">
         <div style="font-size:11px;color:#8e44ad;font-weight:700;margin-bottom:4px;">실 생산중량</div>
         <div id="cc-r-output" style="font-size:18px;font-weight:800;color:#8e44ad;"></div>
-      </div>
-      <div style="flex:1;min-width:130px;background:#fef9e7;border-radius:10px;padding:14px;text-align:center;">
-        <div style="font-size:11px;color:#e67e22;font-weight:700;margin-bottom:4px;">생산원가 합계</div>
-        <div id="cc-r-totalcost" style="font-size:18px;font-weight:800;color:#e67e22;"></div>
       </div>
       <div style="flex:1;min-width:130px;background:#fdf2f8;border-radius:10px;padding:14px;text-align:center;">
         <div style="font-size:11px;color:#c0392b;font-weight:700;margin-bottom:4px;">KG당 생산단가</div>
@@ -17772,7 +17786,7 @@ function calcCost(){
     return;
   }
 
-  // 경비: 월경비 → 일경비 → KG당 → 투입량 기준 총액
+  // 기타비용(판관비): 월경비 → 일경비 → KG당 → 실 생산중량 기준 총액
   const activeExp  = getCostCalcActiveExpenses();
   let totExpCost   = 0;
   const expRows    = activeExp.map(e => {
@@ -17785,12 +17799,18 @@ function calcCost(){
   });
 
   const totalCost  = totRawCost + totExpCost;
+  const rawPerKg   = totOutput > 0 ? totRawCost / totOutput : 0;
+  const otherPerKg = totOutput > 0 ? totExpCost / totOutput : 0;
   const costPerKg  = totOutput > 0 ? totalCost / totOutput : 0;
   const revenue    = sellPrice * totOutput;
   const profit     = revenue - totalCost;
 
   document.getElementById('cc-r-input').textContent     = fmtD(totInput)  + ' KG';
   document.getElementById('cc-r-output').textContent    = fmtD(totOutput) + ' KG';
+  document.getElementById('cc-r-rawcost').textContent   = fmt(totRawCost) + ' 원';
+  document.getElementById('cc-r-rawcostkg').textContent = fmtD(rawPerKg) + ' 원/KG';
+  document.getElementById('cc-r-othercost').textContent = fmt(totExpCost) + ' 원';
+  document.getElementById('cc-r-othercostkg').textContent = fmtD(otherPerKg) + ' 원/KG';
   document.getElementById('cc-r-totalcost').textContent = fmt(totalCost)  + ' 원';
   document.getElementById('cc-r-costkg').textContent    = fmt(costPerKg)  + ' 원';
   document.getElementById('cc-r-revenue').textContent   = sellPrice ? fmt(revenue) + ' 원' : '-';
@@ -17799,23 +17819,32 @@ function calcCost(){
   profEl.style.color = profit >= 0 ? '#1e8449' : '#c0392b';
 
   // 원가 구성 테이블
-  const rawPerKg = totOutput > 0 ? totRawCost / totOutput : 0;
-  let rows = [{ label:'원자재비', total:totRawCost, perKg:rawPerKg, color:'#2980b9' }];
-  expRows.forEach(r => rows.push({ label:r.name, total:r.total, perKg:r.perKg, color:'#d35400' }));
-  rows.sort((a, b) => b.total - a.total); // 비중 큰 순서(내림차순)
+  const rows = [
+    { label:'원자재비', total:totRawCost, perKg:rawPerKg },
+    { label:'기타비용(판관비) 합계', total:totExpCost, perKg:otherPerKg }
+  ];
+  // 두 비용 구분을 먼저 표시하고, 판관비 세부항목은 합계에 포함된 내역으로 표시합니다.
+  expRows.sort((a, b) => b.total - a.total);
 
   const kgWarn = dailyQty===0 && activeExp.length>0
-    ? '<tr><td colspan="4" style="color:#e67e22;font-size:11px;padding:6px 12px;">⚠️ 일일생산량 미입력 — 경비가 KG당 0원으로 계산됨</td></tr>' : '';
+    ? '<tr><td colspan="4" style="color:#e67e22;font-size:11px;padding:6px 12px;">⚠️ 일일생산량 미입력 — 기타비용(판관비)이 KG당 0원으로 계산됨</td></tr>' : '';
 
   document.getElementById('cc-breakdown-tbody').innerHTML =
-    kgWarn + rows.map(r => `<tr>
-      <td style="font-weight:600;color:${r.color};">${htmlEscape(r.label)}</td>
+    kgWarn + rows.map(r => `<tr style="font-weight:700;">
+      <td>${htmlEscape(r.label)}</td>
       <td style="text-align:right;">${fmt(r.total)} 원</td>
       <td style="text-align:right;">${fmtD(r.perKg)} 원</td>
       <td style="text-align:right;">${totalCost>0?(r.total/totalCost*100).toFixed(1):'0.0'} %</td>
     </tr>`).join('') +
+    (expRows.length ? '<tr><td colspan="4" style="background:#f8f9fa;color:#666;font-size:11px;">기타비용 세부내역 (위 판관비 합계에 포함)</td></tr>' +
+      expRows.map(r => `<tr style="color:#666;font-size:12px;">
+        <td style="padding-left:24px;">↳ ${htmlEscape(r.name)}</td>
+        <td style="text-align:right;">${fmt(r.total)} 원</td>
+        <td style="text-align:right;">${fmtD(r.perKg)} 원</td>
+        <td style="text-align:right;">${totalCost>0?(r.total/totalCost*100).toFixed(1):'0.0'} %</td>
+      </tr>`).join('') : '') +
     `<tr style="font-weight:800;border-top:2px solid #333;">
-      <td>합계 (생산원가)</td>
+      <td>생산원가 합계 (원자재비 + 기타비용)</td>
       <td style="text-align:right;">${fmt(totalCost)} 원</td>
       <td style="text-align:right;">${fmt(costPerKg)} 원/KG</td>
       <td style="text-align:right;">100.0 %</td>
@@ -18096,7 +18125,7 @@ function renderCostCompare(){
     {label:'KG당 생산단가', field:'costPerKg', type:'moneyKg', lowerBetter:true},
     {label:'생산원가 합계', field:'totalCost', type:'money', lowerBetter:true},
     {label:'원자재비', field:'totRawCost', type:'money', lowerBetter:true},
-    {label:'경비 합계', field:'totExpCost', type:'money', lowerBetter:true},
+    {label:'기타비용(판관비)', field:'totExpCost', type:'money', lowerBetter:true},
     {label:'총 투입중량', field:'totInput', type:'kg'},
     {label:'실 생산중량', field:'totOutput', type:'kg'},
     {label:'일일생산량', field:'dailyQty', type:'kg'},

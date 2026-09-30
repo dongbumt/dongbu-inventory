@@ -50,12 +50,24 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     const active = index => expenseRows.nth(index).locator('.cc-expense-active');
     const result = ()=>page.evaluate(()=>window._ccLastResult);
     const saved = ()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dbmt_costcalc')));
+    async function checkCostSplit(raw, other){
+      const displayed = await page.evaluate(()=>{
+        const amountOf = id => Number(document.getElementById(id).textContent.replace(/[^0-9.-]/g,''));
+        return {raw:amountOf('cc-r-rawcost'),other:amountOf('cc-r-othercost'),total:amountOf('cc-r-totalcost')};
+      });
+      assert.deepEqual(displayed,{raw,other,total:raw+other},'The result separates material cost and applied overhead without double counting');
+      assert.equal((await result()).totalCost,raw+other);
+      const summary = page.locator('#cc-breakdown-tbody tr').filter({hasText:'기타비용(판관비) 합계'});
+      assert.equal(await summary.count(),1);
+      assert.equal(Number((await summary.locator('td').nth(1).innerText()).replace(/[^0-9.-]/g,'')),other);
+    }
     await page.evaluate(row=>{ccMaterials=[row];renderMaterialRows();},material);
     await page.locator('#cc-daily-qty').fill('1000');
     await page.locator('#cc-sell-price').fill('8000');
     assert.equal(await expenseRows.count(),3,'Inactive defaults remain available for this calculation');
     assert.equal(await active(2).isChecked(),false);
     assert.equal((await result()).totExpCost,27000);
+    await checkCostSplit(500000,27000);
 
     await amount(0).fill('');
     await amount(0).pressSequentially('6600000');
@@ -99,6 +111,7 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     assert.equal((await result()).totExpCost,first.totExpCost);
     await page.locator('#cc-daily-qty').fill('500');
     assert.equal((await result()).totExpCost,54000);
+    await checkCostSplit(500000,54000);
     assert.equal(await amount(0).inputValue(),'6600000','Changing production volume retains the overridden expense');
     await page.evaluate(id=>loadCostCalc(id),second.id);
     assert.equal(await amount(0).inputValue(),'8800000');
@@ -126,6 +139,7 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     // or reactivate expenses when restored.
     for(let i=0;i<3;i++) await active(i).uncheck();
     assert.equal((await result()).totExpCost,0);
+    await checkCostSplit(500000,0);
     await page.evaluate(()=>saveCostCalc());
     const excluded = (await saved())[0];
     await page.evaluate(id=>loadCostCalc(id),excluded.id);
@@ -151,6 +165,6 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     assert.equal(await page.evaluate(()=>costCalcHistory.length),countBefore,'Saving invalid material input cannot reuse a stale result');
     assert.equal(await result(),null);
     assert.deepEqual(errors,[]);
-    console.log('PASS: default expenses, editable names/monthly amounts, exclusions, live totals, independent saved snapshots across reloads, worker labor, legacy fallback and invalid-input guard.');
+    console.log('PASS: raw material/overhead cost split, default expenses, editable names/monthly amounts, exclusions, live totals, independent saved snapshots across reloads, worker labor, legacy fallback and invalid-input guard.');
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
