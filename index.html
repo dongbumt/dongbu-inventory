@@ -2674,7 +2674,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   <div class="card">
     <div class="card-title">
       <div class="ct-bar" style="background:#d35400;"></div>경비 현황
-      <span style="font-size:11px;font-weight:400;color:#999;margin-left:8px;">⚙️ 경비 설정 메뉴에서 월경비 관리</span>
+      <span style="font-size:11px;font-weight:400;color:#777;margin-left:8px;">항목별 적용 여부와 월경비를 이 계산에 맞게 조정하세요.</span>
+      <button type="button" class="btn btn-secondary btn-sm" style="margin-left:auto;" onclick="reloadCostCalcExpenses()">경비 설정 다시 불러오기</button>
     </div>
     <div class="form-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px;">
       <div class="form-group">
@@ -2684,13 +2685,14 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
       <div class="form-group">
         <label>인건비 인원수 (명)</label>
-        <input type="number" id="cc-workers" placeholder="예) 3" min="1" oninput="renderCostExpenseArea(); calcCost();">
-        <span style="font-size:11px;color:#888;margin-top:3px;">인당 3,500,000원/월 기준 자동계산</span>
+        <input type="number" id="cc-workers" placeholder="예) 3" min="1" oninput="updateCostCalcWorkers()">
+        <span style="font-size:11px;color:#888;margin-top:3px;">인원 변경 시 인당 3,500,000원/월로 계산 · 아래에서 금액 수정 가능</span>
       </div>
     </div>
     <div id="cc-expense-area">
       <div style="color:#aaa;font-size:12px;padding:8px 0;">일일생산량을 입력하면 KG당 경비가 계산됩니다.</div>
     </div>
+    <div id="cc-expense-note" style="font-size:11px;color:#777;margin-top:8px;">조정한 경비는 이 계산내역에 함께 저장됩니다. 경비 설정의 기본 금액은 유지됩니다.</div>
   </div>
 
   <!-- 판가 설정 -->
@@ -17449,6 +17451,7 @@ function fmtD(n){ return Number(n).toLocaleString('ko-KR',{maximumFractionDigits
 let pgbList         = JSON.parse(localStorage.getItem('dbmt_pangwanbi') || '[]');
 let costCalcHistory = JSON.parse(localStorage.getItem('dbmt_costcalc')  || '[]');
 let ccMaterials     = [{ id: Date.now(), name:'', origin:'', qty:0, price:0, loss:0 }];
+let ccExpenses      = null; // 현재 계산의 경비 사본. 저장된 기본 경비와 독립적으로 조정한다.
 
 // ── 경비 설정 ──────────────────────────────
 
@@ -17562,55 +17565,143 @@ function getCostCalcLaborExpense(){
 }
 
 function getCostCalcActiveExpenses(){
+  return getCostCalcExpenses().filter(e => e.active);
+}
+
+function copyCostCalcExpenses(rows){
+  return JSON.parse(JSON.stringify(rows)).map(e => ({
+    ...e,
+    name:String(e.name || ''),
+    monthlyCost:Math.max(0, parseAppNumber(e.monthlyCost)),
+    active:e.active === true || e.active === 1 || e.active === 'true' || e.active === 'TRUE'
+  }));
+}
+
+function getDefaultCostCalcExpenses(){
+  const rows = copyCostCalcExpenses(Array.isArray(pgbList) ? pgbList : []);
   const labor = getCostCalcLaborExpense();
-  const active = pgbList.filter(e => e.active);
-  return labor ? [labor, ...active.filter(e => !isLaborExpenseName(e.name))] : active;
+  if(labor){
+    const index = rows.findIndex(e => isLaborExpenseName(e.name));
+    const original = index >= 0 ? rows[index] : null;
+    const autoLabor = {...labor, _ccLaborBase:original};
+    if(index >= 0) rows[index] = autoLabor;
+    else rows.unshift(autoLabor);
+  }
+  return rows;
+}
+
+function getCostCalcExpenses(){
+  if(ccExpenses === null) ccExpenses = getDefaultCostCalcExpenses();
+  return ccExpenses;
+}
+
+function reloadCostCalcExpenses(){
+  if(ccExpenses !== null && !confirm('현재 계산의 경비 조정을 경비 설정의 기본값으로 바꾸시겠습니까?')) return;
+  ccExpenses = getDefaultCostCalcExpenses();
+  setCostCalcExpenseNote();
+  renderCostExpenseArea();
+  calcCost();
+}
+
+function setCostCalcExpenseNote(legacy=false){
+  const note = document.getElementById('cc-expense-note');
+  if(note) note.textContent = legacy
+    ? '이전 계산에는 항목별 경비가 저장되어 있지 않아 현재 경비 설정을 불러왔습니다. 금액을 확인한 뒤 저장해주세요.'
+    : '조정한 경비는 이 계산내역에 함께 저장됩니다. 경비 설정의 기본 금액은 유지됩니다.';
+}
+
+function updateCostCalcWorkers(){
+  const rows = getCostCalcExpenses();
+  const index = rows.findIndex(e => e._ccLabor || isLaborExpenseName(e.name));
+  const labor = getCostCalcLaborExpense();
+  if(labor){
+    if(index >= 0){
+      const current = rows[index];
+      rows[index] = {...labor, active:current.active,
+        _ccLaborBase:current._ccLabor ? current._ccLaborBase : {...current}};
+    } else rows.unshift({...labor, _ccLaborBase:null});
+  } else if(index >= 0 && rows[index]._ccLabor){
+    const current = rows[index];
+    if(current._ccLaborBase) rows[index] = {...current._ccLaborBase, active:current.active};
+    else rows.splice(index, 1);
+  }
+  renderCostExpenseArea();
+  calcCost();
+}
+
+function updateCostCalcExpense(index, field, value){
+  const expense = getCostCalcExpenses()[index];
+  if(!expense) return;
+  if(field === 'active') expense.active = !!value;
+  else if(field === 'monthlyCost') expense.monthlyCost = Math.max(0, parseAppNumber(value));
+  else if(field === 'name') expense.name = String(value);
+  else return;
+  updateCostExpenseTotals();
+  calcCost();
+}
+
+function updateCostExpenseTotals(){
+  const dailyQty = parseFloat(document.getElementById('cc-daily-qty')?.value) || 0;
+  let totalMonthly = 0;
+  getCostCalcExpenses().forEach((expense, index) => {
+    const monthlyCost = Math.max(0, parseAppNumber(expense.monthlyCost));
+    const dailyCost = monthlyCost / WORK_DAYS;
+    const row = document.querySelector(`#cc-expense-area tr[data-expense-index="${index}"]`);
+    if(row){
+      row.style.background = expense.active ? '' : '#f8f9fa';
+      row.querySelector('.cc-expense-state').textContent = expense.active ? '적용' : '제외';
+      row.querySelector('.cc-expense-daily').textContent = expense.active ? fmt(dailyCost) + ' 원/일' : '-';
+      row.querySelector('.cc-expense-kg').textContent = expense.active
+        ? (dailyQty > 0 ? fmtD(dailyCost / dailyQty) + ' 원/KG' : '일일생산량 입력 필요') : '-';
+    }
+    if(expense.active) totalMonthly += monthlyCost;
+  });
+  const set = (id, value) => { const el = document.getElementById(id); if(el) el.textContent = value; };
+  set('cc-expense-total-monthly', fmt(totalMonthly) + ' 원/월');
+  set('cc-expense-total-daily', fmt(totalMonthly / WORK_DAYS) + ' 원/일');
+  set('cc-expense-total-kg', dailyQty > 0 ? fmtD(totalMonthly / WORK_DAYS / dailyQty) + ' 원/KG' : '-');
 }
 
 // 원가계산기 내 경비 영역 렌더 (일일생산량 입력 후 KG당 표시)
 function renderCostExpenseArea(){
   const el = document.getElementById('cc-expense-area'); if(!el) return;
-  const dailyQty = parseFloat(document.getElementById('cc-daily-qty')?.value) || 0;
-  const active   = getCostCalcActiveExpenses();
+  if(ccExpenses === null && !document.getElementById('p-costcalc')?.classList.contains('active')) return;
+  const expenses = getCostCalcExpenses();
 
-  if(!active.length){
-    el.innerHTML = '<span style="color:#aaa;font-size:12px;">적용 중인 경비 항목 없음 — 일일생산량과 인건비 인원수를 입력하거나, ⚙️ 경비 설정 메뉴에서 항목을 추가하세요.</span>';
+  if(!expenses.length){
+    el.innerHTML = '<span style="color:#888;font-size:12px;">등록된 경비가 없습니다. 경비 설정에서 항목을 추가한 뒤 다시 불러오세요.</span>';
     return;
   }
 
-  let totMonthly=0, totDaily=0, totKg=0;
-  const rows = active.map(e => {
-    const monthlyCost = parseFloat(e.monthlyCost) || 0;
-    const dailyCost = monthlyCost / WORK_DAYS;
-    const kgCost    = dailyQty > 0 ? dailyCost / dailyQty : null;
-    totMonthly += monthlyCost;
-    totDaily   += dailyCost;
-    if(kgCost !== null) totKg += kgCost;
-    return `<tr>
-      <td>${e.name}</td>
-      <td style="text-align:right;">${fmt(monthlyCost)} 원/월</td>
-      <td style="text-align:right;">${fmt(Math.round(dailyCost))} 원/일</td>
-      <td style="text-align:right;font-weight:600;color:#d35400;">${kgCost !== null ? fmtD(kgCost) + ' 원/KG' : '<span style="color:#bbb">일일생산량 입력 필요</span>'}</td>
-    </tr>`;
-  }).join('');
+  const rows = expenses.map((expense, index) => `<tr data-expense-index="${index}">
+    <td style="text-align:center;white-space:nowrap;"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+      <input type="checkbox" class="cc-expense-active" aria-label="경비 적용 ${index + 1}" ${expense.active ? 'checked' : ''} onchange="updateCostCalcExpense(${index},'active',this.checked)">
+      <span class="cc-expense-state"></span></label></td>
+    <td><input class="cc-expense-name" aria-label="경비 항목명 ${index + 1}" style="width:100%;min-width:140px;padding:5px 7px;font-size:12px;" value="${htmlEscape(expense.name)}" oninput="updateCostCalcExpense(${index},'name',this.value)"></td>
+    <td><input type="number" class="cc-expense-monthly" aria-label="월경비 ${index + 1}" min="0" step="any" style="width:100%;min-width:140px;padding:5px 7px;font-size:12px;text-align:right;" value="${expense.monthlyCost}" oninput="if(this.valueAsNumber<0)this.value=0;updateCostCalcExpense(${index},'monthlyCost',this.value)"></td>
+    <td class="cc-expense-daily" style="text-align:right;white-space:nowrap;"></td>
+    <td class="cc-expense-kg" style="text-align:right;white-space:nowrap;"></td>
+  </tr>`).join('');
 
-  el.innerHTML = `<div class="tbl-wrap" style="max-height:240px;">
+  el.innerHTML = `<div class="tbl-wrap" style="max-height:320px;">
     <table>
       <thead><tr>
+        <th style="text-align:center;">적용</th>
         <th>항목명</th>
-        <th style="text-align:right;">월경비</th>
+        <th style="text-align:right;">월경비 (원/월)</th>
         <th style="text-align:right;">일경비 (÷22)</th>
         <th style="text-align:right;">KG당 경비</th>
       </tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr style="font-weight:700;background:#fef3e8;">
-        <td>합계 (적용 항목)</td>
-        <td style="text-align:right;">${fmt(totMonthly)} 원/월</td>
-        <td style="text-align:right;">${fmt(Math.round(totDaily))} 원/일</td>
-        <td style="text-align:right;color:#d35400;">${dailyQty > 0 ? fmtD(totKg) + ' 원/KG' : '-'}</td>
+      <tfoot><tr style="font-weight:700;background:#f2f2f2;">
+        <td colspan="2">합계 (적용 항목)</td>
+        <td id="cc-expense-total-monthly" style="text-align:right;white-space:nowrap;"></td>
+        <td id="cc-expense-total-daily" style="text-align:right;white-space:nowrap;"></td>
+        <td id="cc-expense-total-kg" style="text-align:right;white-space:nowrap;"></td>
       </tr></tfoot>
     </table>
   </div>`;
+  updateCostExpenseTotals();
 }
 
 // ── 원자재 행 ──────────────────────────────
@@ -17675,7 +17766,11 @@ function calcCost(){
     totRawCost += m.qty * m.price;
     totOutput  += m.qty * (1 - (m.loss||0) / 100);
   });
-  if(!totInput || !totRawCost){ document.getElementById('cc-result-card').style.display='none'; return; }
+  if(!totInput || !totRawCost){
+    document.getElementById('cc-result-card').style.display='none';
+    window._ccLastResult = null;
+    return;
+  }
 
   // 경비: 월경비 → 일경비 → KG당 → 투입량 기준 총액
   const activeExp  = getCostCalcActiveExpenses();
@@ -17714,7 +17809,7 @@ function calcCost(){
 
   document.getElementById('cc-breakdown-tbody').innerHTML =
     kgWarn + rows.map(r => `<tr>
-      <td style="font-weight:600;color:${r.color};">${r.label}</td>
+      <td style="font-weight:600;color:${r.color};">${htmlEscape(r.label)}</td>
       <td style="text-align:right;">${fmt(r.total)} 원</td>
       <td style="text-align:right;">${fmtD(r.perKg)} 원</td>
       <td style="text-align:right;">${totalCost>0?(r.total/totalCost*100).toFixed(1):'0.0'} %</td>
@@ -17744,11 +17839,13 @@ function calcCost(){
       return parts.join(' ');
     }).join(', ') || '-';
     const avgPrice = totInput > 0 ? totRawCost / totInput : 0;
+    const laborMonthly = activeExp.filter(e => e._ccLabor || isLaborExpenseName(e.name))
+      .reduce((sum, e) => sum + parseAppNumber(e.monthlyCost), 0);
     const infoItems = [
       { label:'품목명',       value: matNames },
       { label:'일일생산량',   value: dailyQty  ? fmt(dailyQty) + ' KG' : '-' },
       { label:'인건비 인원수', value: workers   ? workers + ' 명'        : '-' },
-      { label:'인건비',       value: workers   ? fmt(workers * ((typeof DEFAULT_MONTHLY_SALARY !== 'undefined') ? DEFAULT_MONTHLY_SALARY : 3500000)) + ' 원/월' : '-' },
+      { label:'인건비',       value: fmt(laborMonthly) + ' 원/월' },
       { label:'평균 매입가',  value: avgPrice  ? fmt(avgPrice) + ' 원/KG' : '-' },
       { label:'판매가',       value: sellPrice ? fmt(sellPrice) + ' 원/KG' : '-' },
     ];
@@ -17759,10 +17856,13 @@ function calcCost(){
 
   document.getElementById('cc-result-card').style.display = 'block';
   window._ccLastResult = { totInput, totOutput, totRawCost, totExpCost, totalCost, costPerKg,
-    sellPrice, revenue, profit, dailyQty, workers, materials: JSON.stringify(ccMaterials) };
+    sellPrice, revenue, profit, dailyQty, workers, materials: JSON.stringify(ccMaterials),
+    expenses: JSON.stringify(getCostCalcExpenses()) };
 }
 
 function saveCostCalc(){
+  if(getCostCalcExpenses().some(e => !e.name.trim())){ alert('경비 항목명을 입력하세요.'); return; }
+  calcCost();
   if(!window._ccLastResult){ alert('먼저 계산을 실행하세요.'); return; }
   const r     = window._ccLastResult;
   const names = ccMaterials.filter(m=>m.name).map(m=>m.name+(m.origin?' ('+m.origin+')':'')).join(', ') || '미입력';
@@ -17788,6 +17888,13 @@ function loadCostCalc(id){
   const sp = document.getElementById('cc-sell-price'); if(sp) sp.value = e.sellPrice||'';
   const dq = document.getElementById('cc-daily-qty');  if(dq) dq.value = e.dailyQty||'';
   const wk = document.getElementById('cc-workers');    if(wk) wk.value = e.workers||'';
+  let savedExpenses = null;
+  try{
+    const parsed = typeof e.expenses === 'string' ? JSON.parse(e.expenses) : e.expenses;
+    if(Array.isArray(parsed)) savedExpenses = copyCostCalcExpenses(parsed);
+  }catch{}
+  ccExpenses = savedExpenses === null ? getDefaultCostCalcExpenses() : savedExpenses;
+  setCostCalcExpenseNote(savedExpenses === null);
   renderCostExpenseArea();
   calcCost();
   window.scrollTo(0,0);
@@ -17799,6 +17906,8 @@ function resetCostCalc(){
   const sp=document.getElementById('cc-sell-price'); if(sp) sp.value='';
   const dq=document.getElementById('cc-daily-qty');  if(dq) dq.value='';
   const wk=document.getElementById('cc-workers');    if(wk) wk.value='';
+  ccExpenses = null;
+  setCostCalcExpenseNote();
   document.getElementById('cc-result-card').style.display='none';
   window._ccLastResult = null;
   renderCostExpenseArea();
