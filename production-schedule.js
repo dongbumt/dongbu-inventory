@@ -45,7 +45,6 @@
       state.rows=[];state.editing=null;state.loading=false;state.saving=false;
       clearEditor(todayText());
       el('calendar').innerHTML='';el('summary').textContent='';
-      el('products').innerHTML='';
       message('');
     }
     syncControls();
@@ -156,8 +155,6 @@
     applyPermissions();
     if(!can('view')) return;
     el('anchor-date').value=todayText();
-    const names=typeof labelProducts==='undefined'?[]:[...new Set(labelProducts.filter(p=>p.active!==false).map(p=>p.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
-    el('products').innerHTML=names.map(name=>`<option value="${esc(name)}"></option>`).join('');
     if(typeof updateTraderList==='function') updateTraderList();
     if(!el('date').value) clearEditor(todayText());
     await load();

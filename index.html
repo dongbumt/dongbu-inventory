@@ -490,7 +490,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <form id="ps-editor" class="ps-editor" onsubmit="event.preventDefault();DBMTProductionSchedule.save()" hidden>
       <div class="ps-editor-heading"><strong id="ps-editor-title">생산예정 추가</strong><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.reset()">입력 초기화</button></div>
       <div class="form-group"><label for="ps-date">생산예정일</label><input type="date" id="ps-date" required></div>
-      <div class="form-group ps-product"><label for="ps-product">생산예정 품목</label><input id="ps-product" list="ps-products" maxlength="200" placeholder="품목명 검색 또는 입력" required autocomplete="off"><datalist id="ps-products"></datalist></div>
+      <div class="form-group ps-product"><label for="ps-product">생산예정 품목</label><input id="ps-product" maxlength="200" placeholder="품목명 입력" required autocomplete="off"></div>
       <div class="form-group"><label for="ps-qty">예정수량(KG)</label><input type="number" id="ps-qty" min="0.01" max="999999999" step="0.01" placeholder="미정"></div>
       <div class="form-group"><label for="ps-trader">거래처(선택)</label><input id="ps-trader" list="sales-trader-list" maxlength="200" placeholder="거래처"></div>
       <div class="form-group"><label for="ps-status">상태</label><select id="ps-status"><option value="planned">예정</option><option value="completed">완료</option></select></div>
@@ -21441,7 +21441,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="stock-report.js?v=20260913rowstock1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
-<script src="production-schedule.js?v=20260923plan4"></script>
+<script src="production-schedule.js?v=20260930plan5"></script>
 <script src="m02-auth.js?v=20260923plan1"></script>
 </body>
 </html>
