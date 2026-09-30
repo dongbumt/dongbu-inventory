@@ -20403,17 +20403,16 @@ function renderWorkOrders(){
     wrap.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">조건에 맞는 작업지시가 없습니다.</div>';
     return;
   }
-  wrap.innerHTML = `<table style="min-width:760px;">
+  wrap.innerHTML = `<table style="min-width:680px;">
     <thead><tr>
-      <th>작업일</th><th>생산물</th><th>중량</th><th>이력번호</th><th>투입 원료육</th><th>관리</th>
+      <th>생산물</th><th>이력번호</th><th>투입 원료육</th><th>투입 예정량</th><th>관리</th>
     </tr></thead>
     <tbody>${rows.map(r => `
       <tr>
-        <td>${htmlEscape(r.date || '')}</td>
         <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div></td>
-        <td style="text-align:right;">${parseAppNumber(r.weight) > 0 ? parseAppNumber(r.weight).toFixed(2)+' KG (기존값)' : '출력 시 선택'}</td>
         <td>${htmlEscape(r.lot || '')}</td>
-        <td style="font-size:11px;color:#555;">${htmlEscape(r.sourceStock ? workOrderStockLabel(r.sourceStock) : '-')}</td>
+        <td>${htmlEscape(r.sourceStock?.product || '-')}</td>
+        <td style="text-align:right;white-space:nowrap;">${r.inputWeight == null || r.inputWeight === '' ? '-' : parseAppNumber(r.inputWeight).toFixed(2)+' KG'}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm" onclick="editWorkOrder(${jsArg(r.id)})">수정</button>
           <button class="btn btn-primary btn-sm" onclick="selectLabelWorkOrder(${jsArg(r.id)})">라벨</button>

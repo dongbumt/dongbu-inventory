@@ -143,6 +143,13 @@
     position:sticky;top:0;z-index:10;}
   td{padding:9px 12px;border-bottom:1px solid #f0f0f0;
     color:var(--text);vertical-align:middle;}
+  #wo-list-wrap table{table-layout:fixed;}
+  #wo-list-wrap th,#wo-list-wrap td{padding:8px 6px;overflow-wrap:anywhere;}
+  #wo-list-wrap th:nth-child(1){width:27%;}
+  #wo-list-wrap th:nth-child(2){width:18%;}
+  #wo-list-wrap th:nth-child(3){width:16%;}
+  #wo-list-wrap th:nth-child(4){width:15%;}
+  #wo-list-wrap th:nth-child(5){width:24%;}
   /* 단가표 행높이 축소 (기본의 80%) */
   #p-prices td{padding:7px 10px;}
   #stock-table{min-width:0;width:100%;}
