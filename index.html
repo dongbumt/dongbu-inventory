@@ -3139,20 +3139,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 
 <div class="tab-panel" id="p-pangwanbi">
 
-  <!-- 인건비 자동계산 -->
-  <div class="card">
-    <div class="card-title"><div class="ct-bar" style="background:#c0392b;"></div>👷 인건비 자동계산
-      <span style="font-size:11px;font-weight:400;color:#999;margin-left:8px;">인당 3,500,000원 기준으로 자동 계산됩니다</span>
-    </div>
-    <div id="pgb-salary-summary" style="margin-bottom:12px;">
-      <div style="color:#aaa;font-size:12px;">직원 급여 정보를 불러오는 중...</div>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="applySalaryToExpense()">💼 인건비를 경비 항목에 반영</button>
-      <span style="font-size:11px;color:#888;align-self:center;">→ 아래 경비 목록의 '인건비' 항목에 자동 적용됩니다</span>
-    </div>
-  </div>
-
   <!-- 경비 항목 등록 -->
   <div class="card">
     <div class="card-title"><div class="ct-bar" style="background:#d35400;"></div>경비 항목 등록
@@ -5118,7 +5104,6 @@ function renderPageById(id, reason='menu'){
         break;
       case 'p-pangwanbi':
         renderPangwanbi();
-        renderSalarySummary();
         break;
       case 'p-costcalc':
         renderMaterialRows();
@@ -16437,7 +16422,7 @@ function saveEmployee(){
     summary:`직원정보 ${isEditing ? '수정' : '저장'}: ${prev?.name && prev.name !== name ? prev.name + ' → ' + name : name}`,
     refId:obj.id
   });
-  saveHR(); cancelEmpEdit(); renderEmployees(); renderRetiredEmployees(); renderSalarySummary();
+  saveHR(); cancelEmpEdit(); renderEmployees(); renderRetiredEmployees();
   toast(isEditing ? '직원 정보가 수정됐습니다.' : '직원이 등록됐습니다.');
   _empEditId = null;
 }
@@ -16478,7 +16463,7 @@ function deleteEmployee(id){
   leaveRecs  = leaveRecs.filter(x=>x.empId!==id);
   weekendWorkRecs = weekendWorkRecs.filter(x=>x.empId!==id);
   leaveDeductRecs = leaveDeductRecs.filter(x=>x.empId!==id);
-  saveHR(); renderEmployees(); renderRetiredEmployees(); renderSalarySummary(); toast('삭제됐습니다.');
+  saveHR(); renderEmployees(); renderRetiredEmployees(); toast('삭제됐습니다.');
 }
 function cancelEmpEdit(){
   _empEditId = null;
@@ -16735,7 +16720,6 @@ function saveResignation(){
   saveHR();
   renderEmployees();
   renderRetiredEmployees();
-  renderSalarySummary();
   closeResignModal();
   toast(`${e.name} 퇴사 정산이 저장됐습니다. (총 ${total.toLocaleString('ko-KR')}원)`);
 }
@@ -16760,7 +16744,6 @@ function reinstateEmployee(id){
   saveHR();
   renderEmployees();
   renderRetiredEmployees();
-  renderSalarySummary();
   toast(`${e.name} 직원이 복직 처리됐습니다.`);
 }
 
@@ -17468,64 +17451,6 @@ let costCalcHistory = JSON.parse(localStorage.getItem('dbmt_costcalc')  || '[]')
 let ccMaterials     = [{ id: Date.now(), name:'', origin:'', qty:0, price:0, loss:0 }];
 
 // ── 경비 설정 ──────────────────────────────
-
-// ── 인건비 자동계산 (재직 직원 급여 합산) ──────────────
-function renderSalarySummary(){
-  const el = document.getElementById('pgb-salary-summary'); if(!el) return;
-  const FALLBACK = (typeof DEFAULT_MONTHLY_SALARY!=='undefined') ? DEFAULT_MONTHLY_SALARY : 3500000;
-  const active = employees.filter(e=>!e.resignDate);
-
-  if(!active.length){
-    el.innerHTML = '<span style="color:#aaa;font-size:12px;">등록된 재직 직원이 없습니다. 👥 직원정보 메뉴에서 직원을 등록하세요.</span>';
-    return;
-  }
-
-  const total = active.reduce((s,e)=>s+(parseFloat(e.monthlySalary)||FALLBACK), 0);
-
-  const rows = active.map(e => {
-    const sal = parseFloat(e.monthlySalary)||FALLBACK;
-    return `<tr>
-      <td>${e.name}</td>
-      <td style="font-size:11px;color:#666;">${e.position||'-'}</td>
-      <td style="text-align:right;">${sal.toLocaleString('ko-KR')} 원</td>
-    </tr>`;
-  }).join('');
-
-  el.innerHTML = `
-    <div class="tbl-wrap" style="max-height:200px;">
-      <table>
-        <thead><tr><th>이름</th><th>직책</th><th style="text-align:right;">월 급여</th></tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot><tr style="font-weight:800;background:#fdf2f8;">
-          <td colspan="2">총 인건비 합계 (재직 ${active.length}명)</td>
-          <td style="text-align:right;color:#c0392b;">${total.toLocaleString('ko-KR')} 원/월</td>
-        </tr></tfoot>
-      </table>
-    </div>`;
-}
-
-function applySalaryToExpense(){
-  const FALLBACK = (typeof DEFAULT_MONTHLY_SALARY!=='undefined') ? DEFAULT_MONTHLY_SALARY : 3500000;
-  const active = employees.filter(e=>!e.resignDate);
-  if(!active.length){ alert('등록된 재직 직원이 없습니다. 👥 직원정보 메뉴에서 직원을 등록하세요.'); return; }
-  const total = active.reduce((s,e)=>s+(parseFloat(e.monthlySalary)||FALLBACK), 0);
-
-  // '인건비' 항목이 이미 있으면 업데이트, 없으면 새로 추가
-  const existing = pgbList.find(e => e.name === '인건비');
-  if(existing){
-    existing.monthlyCost = total;
-    existing.active = true;
-  } else {
-    pgbList.push({ id: Date.now(), name:'인건비', monthlyCost: total, active: true });
-  }
-  localStorage.setItem('dbmt_pangwanbi', JSON.stringify(pgbList));
-  gsSaveAppData();
-  renderPangwanbi();
-  renderCostExpenseArea();
-  alert(`인건비 ${total.toLocaleString('ko-KR')}원/월 이 경비 항목에 반영되었습니다.
-(재직 ${active.length}명 합산)`);
-}
-
 
 function updatePgbPreview(){
   const monthly = parseFloat(document.getElementById('pgb-monthly-cost')?.value) || 0;
