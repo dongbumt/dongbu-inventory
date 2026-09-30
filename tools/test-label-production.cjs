@@ -38,7 +38,10 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
         assert(!body.p_log_ids.includes('a'));assert(body.p_log_ids.includes('b'));assert.equal(body.p_log_ids.length,2);
         if(fail){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA 재전송 오류"}'});return;}
         deleted=false;currentProductionId='prod_label_replacement';result={ok:true,productionId:currentProductionId,completions:status()};
-      }else if(fn==='dbmt_label_print_save_logs'){serverLogs=body.p_logs;result={ok:true,logs:serverLogs,completions:status()};}
+      }else if(fn==='dbmt_label_print_save_logs'){
+        for(const changed of body.p_logs){const index=serverLogs.findIndex(log=>log.id===changed.id);if(index<0)serverLogs.push(changed);else serverLogs[index]=changed;}
+        result={ok:true,logs:serverLogs,completions:status()};
+      }
       await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
     });
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());

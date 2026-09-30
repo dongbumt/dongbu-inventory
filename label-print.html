@@ -741,11 +741,13 @@
       if(window.DBMTLabelTouch?.ready) window.DBMTLabelTouch.renderHistory();
     }
 
-    async function saveLogs(){
+    async function saveLogs(changedLogs){
       if(!state.pin) throw new Error('라벨전용 PIN이 없습니다.');
+      if(!Array.isArray(changedLogs) || !changedLogs.length) throw new Error('저장할 출력이력이 없습니다.');
+      // The RPC merges these rows into the saved history; resending all rows can exceed its time limit.
       const result = await sbRpc('dbmt_label_print_save_logs', {
         p_pin: state.pin,
-        p_logs: state.logs
+        p_logs: changedLogs
       });
       if(result?.ok !== true) throw new Error(result?.message || '출력이력 저장을 확인하지 못했습니다.');
       if(Array.isArray(result.logs)) state.logs = result.logs;
@@ -1033,7 +1035,7 @@
       setStatus('출력이력 저장 중...', 'warn');
       let logsSaved = false;
       try {
-        await saveLogs();
+        await saveLogs(records);
         logsSaved = true;
         setStatus('라벨 인쇄 준비 중...', 'warn');
         await writePrintDocument(null, records, size);
@@ -1100,7 +1102,7 @@
       setStatus('재출력 기록 저장 중...', 'warn');
       let logsSaved = false;
       try {
-        await saveLogs();
+        await saveLogs(records);
         logsSaved = true;
         setStatus('라벨 재출력 준비 중...', 'warn');
         for(const size of ['7x10','10x10']){
@@ -1142,7 +1144,7 @@
       setLoading(true);
       setStatus('삭제 처리 저장 중...', 'warn');
       try {
-        await saveLogs();
+        await saveLogs([state.logs[idx]]);
         setStatus('라벨 삭제 처리됨', 'ok');
       } catch(err) {
         state.logs = previousLogs;
@@ -1167,7 +1169,7 @@
       setLoading(true);
       setStatus(`외포장 라벨 ${active.length}장 삭제 처리 저장 중...`, 'warn');
       try{
-        await saveLogs();
+        await saveLogs(state.logs.filter(log=>ids.has(String(log.id))));
         setStatus(`이 작업의 외포장 라벨 ${active.length}장 삭제 처리됨 · 이력은 보존됩니다.`, 'ok');
       }catch(err){
         state.logs=previousLogs;

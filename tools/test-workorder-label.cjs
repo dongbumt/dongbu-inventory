@@ -120,9 +120,11 @@ const server=http.createServer((req,res)=>{
     await setOuter(label,7.35,1);
     await label.evaluate(()=>renderAll());assert.equal(await label.locator('#print-weight-custom').inputValue(),'7.35');
     await label.locator('#print-btn').click();await label.waitForFunction(()=>!state.loading&&__printedLabels.length===2);assert.match((await label.evaluate(()=>__printedLabels[1]))[0],/7\.35/);
+    assert.equal(saved[1].p_logs.length,1,'A new print sends only the new label');
     assert.equal(saved[1].p_logs[0].labelWeight,7.35);assert.equal(await label.locator('#metric-output').textContent(),'17.35 kg');
     const firstId=saved[0].p_logs[0].id;await setOuter(label,20);
     await label.evaluate(id=>reprintLog(id),firstId);assert.match((await label.evaluate(()=>__printedLabels[2]))[0],/5\.00/);
+    assert.equal(saved[2].p_logs.length,1,'A reprint sends only its updated label');
     assert.equal(await label.locator('#metric-output').textContent(),'17.35 kg');
     await label.evaluate(()=>selectOrder('legacy'));assert.equal(await label.locator('#print-weight').inputValue(),'7.25');
     await label.evaluate(()=>selectOrder('qa-workorder'));assert.equal(await label.locator('#print-weight').inputValue(),'20','Each job retains its own weight');

@@ -64,6 +64,7 @@ const server=http.createServer((req,res)=>{
     let requests=await page.evaluate(()=>__requests);
     assert.equal(requests.length,1,await page.locator('#status').textContent());
     assert.equal(saves.length,1,'Rapid duplicate click must not duplicate saved logs');
+    assert.equal(saves[0].p_logs.length,2,'Only new labels are sent');
     assert.equal(requests[0].count,2);assert(requests[0].imagesReady);
     assert.equal(requests[0].hidden,'true');assert.match(requests[0].frameStyle,/opacity:\s*0/);
     assert(!/display:\s*none|visibility:\s*hidden/.test(requests[0].frameStyle));
@@ -78,6 +79,7 @@ const server=http.createServer((req,res)=>{
     requests=await page.evaluate(()=>__requests);
     assert.equal(requests.length,2);assert.match(requests[1].text,/5\.00/);
     assert.equal(await page.evaluate(()=>state.logs.length),2);assert.equal(await page.locator('#metric-output').textContent(),'10 kg');
+    assert.equal(saves[1].p_logs.length,1,'Reprinting sends only the changed label');
     console.log('PASS: hidden normal/reprint, popup-blocker independence, rapid-click guard, delayed artwork, original reprint weight and unchanged production totals');
 
     failSave=true;
@@ -91,6 +93,7 @@ const server=http.createServer((req,res)=>{
     await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading);
     assert.equal(await page.evaluate(()=>__requests.length),2,'Missing certification image must not print');
     assert.equal(await page.evaluate(()=>state.logs.length),3,'A committed print log must survive image preparation failure');
+    assert.equal(saves[2].p_logs.length,1,'A later print does not resend older labels');
     assert.equal(await page.locator('#metric-output').textContent(),'30 kg');
     assert.match(await page.locator('#status').textContent(),/출력이력은 저장됐습니다/);
     failImage=false;
@@ -143,6 +146,16 @@ const server=http.createServer((req,res)=>{
     await page.frameLocator('#label-preview-frame').locator('.print-label').waitFor();
     assert.equal(await page.evaluate(()=>__requests.length),beforePreview);assert.equal(await page.evaluate(()=>__topPrints),0);
     await page.locator('#label-preview-close').click();assert.equal(context.pages().length,1);assert.deepEqual(errors,[]);
+    await page.evaluate(()=>{
+      state.logs.push(...Array.from({length:627},(_,index)=>({id:`older-${index}`,workOrderId:'older-order',status:'active',labelWeight:1})));
+      renderAll();
+    });
+    const beforeLongHistory=saves.length;
+    await setOuter(page,5,1);await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert.equal(saves.length,beforeLongHistory+1);
+    assert.equal(saves.at(-1).p_logs.length,1,'A long saved history must not be resent for one new label');
+    assert.equal(await page.evaluate(()=>state.logs.length),631);
+    assert.match(await page.locator('#status').textContent(),/출력 요청 처리됨/);
     console.log('PASS: explicit preview preserved, no automatic preview printing, no page errors');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

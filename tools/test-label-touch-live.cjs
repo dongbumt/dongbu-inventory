@@ -20,7 +20,9 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       if(name==='dbmt_label_print_get_data')result={appData:{workOrders:[order,{...order,id:'b',product:'LA갈비(작업)',title:'LA갈비 작업',lot:'OTHER-LOT',weight:5},{...order,id:'c'},{...order,id:'d'}],labelProducts:[],labelPrintLogs:logs},completions:completion()};
       else if(name==='dbmt_label_print_save_logs'){
         if(fail){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA save fail"}'});return;}
-        saves++;logs=body.p_logs;result={ok:true,logs,completions:completion()};
+        saves++;
+        for(const changed of body.p_logs){const index=logs.findIndex(log=>log.id===changed.id);if(index<0)logs.push(changed);else logs[index]=changed;}
+        result={ok:true,logs,completions:completion()};
       }else if(name==='dbmt_label_complete_production'){completeIds=body.p_log_ids;done=true;result={ok:true,completions:completion()};}
       else if(name==='dbmt_label_cancel_production'){
         cancelCalls++;assert.equal(body.p_work_order_id,'a');assert.equal(body.p_production_id,'qa-production-'+generation);assert.equal(body.p_pin,'0000');
@@ -92,7 +94,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await erpPage.close();await page.bringToFront();console.log('PASS: ERP opens separately without navigating/reloading the label page or disconnecting the scale.');
     await page.locator('[data-kind=outer][data-mode=scale]').click();assert(await page.locator('#print-btn').isDisabled());
     await page.evaluate(()=>__send('ST,+00002.'));assert(await page.locator('#print-btn').isDisabled());await page.evaluate(()=>__send('48 kg\r\n'));await page.waitForFunction(()=>!document.getElementById('print-btn').disabled);
-    assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),1);await page.locator('#print-btn').click();await wait();assert.equal(await production(),'27.48 kg');assert.equal(logs.at(0).labelWeight,2.48);
+    assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),1);await page.locator('#print-btn').click();await wait();assert.equal(await production(),'27.48 kg');assert.equal(logs.at(-1).labelWeight,2.48);
     for(const line of ['US,+00003.00 kg\r\n','ST,+00000.00 kg\r\n','ST,-00001.00 kg\r\n','bad frame\r\n']){await page.evaluate(line=>__send(line),line);await page.waitForFunction(()=>document.getElementById('print-btn').disabled);}
     await page.evaluate(()=>__send('ST,+00004.20 kg\r\n'));await page.waitForFunction(()=>!document.getElementById('print-btn').disabled);
     await page.waitForFunction(()=>document.getElementById('print-btn').disabled,{},{timeout:5000});assert.equal(await page.locator('#scale-value').textContent(),'—','Stale weight cleared');

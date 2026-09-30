@@ -24,7 +24,9 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       if(name==='dbmt_label_print_get_data')data={appData:{workOrders:[order,{...order,id:'wo-b',lot:'OTHER-LOT'}],labelProducts:products,labelPrintLogs:logs},completions:completions()};
       if(name==='dbmt_label_print_save_logs'){
         if(fail){await route.fulfill({status:400,body:JSON.stringify({message:'품목 기준정보 변경. 새로고침해주세요.'})});return;}
-        saves++;logs=body.p_logs;data={ok:true,logs,completions:completions()};
+        saves++;
+        for(const changed of body.p_logs){const index=logs.findIndex(log=>log.id===changed.id);if(index<0)logs.push(changed);else logs[index]=changed;}
+        data={ok:true,logs,completions:completions()};
       }
       if(name==='dbmt_label_complete_production'){done=true;data={ok:true,completions:completions()};}
       await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
@@ -47,7 +49,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.locator('#preview-btn').click();const label=page.frameLocator('#label-preview-frame').locator('.print-label');await label.waitFor();
     const text=await label.textContent();for(const part of [p1.name,p1.itemno,'2026.10.14','냉장','RAW-LOT','국내산'])assert(text.includes(part),part);await page.locator('#label-preview-close').click();
     const saveBefore=saves;await page.locator('#inner-print-btn').click();await wait();assert.equal(saves,saveBefore);assert.equal(logs.length,1);
-    await edit('copies',2);await page.locator('#print-btn').click();await wait();assert.equal(logs.length,3);assert.equal(JSON.stringify(logs.at(-1)),original);assert.equal(logs[0].workOrderSnapshot.productSelectionVersion,1);assert.equal(logs[0].workOrderSnapshot.itemno,p1.itemno);
+    await edit('copies',2);await page.locator('#print-btn').click();await wait();assert.equal(logs.length,3);assert.equal(JSON.stringify(logs[0]),original);assert.equal(logs[1].workOrderSnapshot.productSelectionVersion,1);assert.equal(logs[1].workOrderSnapshot.itemno,p1.itemno);
     await choose('P002','p2');await edit('weight',7.35);await page.locator('#print-btn').click();await wait();assert.equal(await page.locator('#metric-output').textContent(),'22.35 kg');
     await page.locator('#product-totals-open').click();assert.equal(await page.locator('.product-total-row').count(),3);assert.match(await page.locator('#product-totals-summary').textContent(),/4장.*22.35 kg/);await page.locator('#product-totals-dialog').screenshot({path:path.join(dir,'product-totals.png')});await page.locator('[data-close=product-totals-dialog]').click();
     await page.locator('#reprint-open').click();assert.match(await page.locator('#history-body').textContent(),/돈까스 10mm/);await page.locator('[data-act=reprint]').last().click();await wait();assert.equal(logs.length,4);assert.match(await page.evaluate(()=>__prints.at(-1)[0]),/돈등심\(기본\)/);await page.locator('[data-close=history-dialog]').click();

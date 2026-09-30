@@ -30,7 +30,7 @@ const server=http.createServer((request,response)=>{
       if(name==='dbmt_label_print_save_logs'){
         attempts++;lastSubmitted=body.p_logs;
         if(fail){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA save failed"}'});return;}
-        logs=structuredClone(body.p_logs);
+        for(const changed of body.p_logs){const index=logs.findIndex(log=>log.id===changed.id);if(index<0)logs.push(structuredClone(changed));else logs[index]=structuredClone(changed);}
         await route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,logs,completions:[]})});
         return;
       }
@@ -92,7 +92,8 @@ const server=http.createServer((request,response)=>{
     await page.locator('#history-delete-all').click();
     await page.waitForFunction(()=>!state.loading&&document.getElementById('status').textContent.includes('13장 삭제 처리됨'));
     assert.equal(attempts,2,'All selected-job labels saved in one request');
-    assert.equal(lastSubmitted.length,initial.length,'Other jobs and prior voided records are retained');
+    assert.equal(lastSubmitted.length,13,'Only this work order’s active labels are sent for deletion');
+    assert(lastSubmitted.every(log=>log.workOrderId==='a'&&log.status==='void'));
     assert.equal(logs.filter(log=>log.workOrderId==='a'&&log.status!=='void').length,0);
     assert.equal(logs.filter(log=>log.workOrderId==='b'&&log.status==='active').length,2);
     assert.equal(logs.find(log=>log.id==='a-13').status,'void');
