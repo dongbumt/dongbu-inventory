@@ -69,7 +69,7 @@ function quotationBlankRow(){
 function quotationBlankDraft(){
   return {
     id:'', date:typeof localDateString === 'function' ? localDateString() : new Date().toISOString().slice(0,10),
-    customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가', priceMultiplier:'',
+    customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가', priceOperator:'*', priceMultiplier:'',
     managerName:'김상영 본부장', managerPhone:'010-2414-5406',
     note:'위 품목은 시세에 따라 단가가 변동됩니다.', rows:[quotationBlankRow()],
     companyProfile:null, createdAt:'', updatedAt:''
@@ -85,6 +85,7 @@ function quotationNormalizeRow(row={}){
 function quotationNormalize(record={}){
   const rows = Array.isArray(record.rows) && record.rows.length ? record.rows : [quotationBlankRow()];
   const normalized={...quotationBlankDraft(), ...record, rows:rows.slice(0,QUOTATION_MAX_ROWS).map(quotationNormalizeRow)};
+  normalized.priceOperator=normalized.priceOperator==='/' ? '/' : '*';
   quotationApplyMultiplier(normalized);
   return normalized;
 }
@@ -136,7 +137,7 @@ function quotationApplyMultiplier(record, row){
   if(multiplier===null) return;
   (row ? [row] : record.rows).forEach(item=>{
     const price1=quotationDisplayedPrice1(item);
-    item.price2=price1 ? Math.round(price1*multiplier) : '';
+    item.price2=price1 ? Math.round(record.priceOperator==='/' ? price1/multiplier : price1*multiplier) : '';
   });
 }
 
@@ -155,7 +156,7 @@ function quotationCustomerOptions(){
 function quotationSyncMetaInputs(){
   const values = {
     'qt-date':'date','qt-customer':'customer','qt-recipient':'recipient','qt-subject':'subject',
-    'qt-price-header-1':'priceHeader1','qt-price-header-2':'priceHeader2','qt-price-multiplier':'priceMultiplier','qt-manager':'managerName',
+    'qt-price-header-1':'priceHeader1','qt-price-header-2':'priceHeader2','qt-price-operator':'priceOperator','qt-price-multiplier':'priceMultiplier','qt-manager':'managerName',
     'qt-manager-phone':'managerPhone','qt-note':'note'
   };
   Object.entries(values).forEach(([id,key])=>{
@@ -191,7 +192,7 @@ function renderQuotationRows(){
       <td>${quotationInput(row,'origin','text','placeholder="원산지"')}</td>
       <td>${quotationInput(row,'unit','text','placeholder="KG"')}</td>
       <td>${quotationInput(row,'price1','number','min="0" step="1"')}</td>
-      <td>${quotationInput(row,'price2','number',`min="0" step="1" ${quotationMultiplier(quotationDraft)!==null?'readonly title="배율에 따라 자동계산"':''}`)}</td>
+      <td>${quotationInput(row,'price2','number',`min="0" step="1" ${quotationMultiplier(quotationDraft)!==null?'readonly title="계산식에 따라 자동계산"':''}`)}</td>
       <td>${quotationInput(row,'note','text','placeholder="비고"')}</td>
       <td>${quotationInput(row,'monthlyUsage','number','min="0" step="0.01"')}</td>
       <td>${quotationInput(row,'targetPrice','number','min="0" step="1"')}</td>
@@ -238,7 +239,7 @@ function renderQuotationComputedRow(row){
 function quotationMetaChanged(field, value){
   if(!quotationDraft) quotationDraft = quotationBlankDraft();
   quotationDraft[field] = value;
-  if(field === 'priceMultiplier'){
+  if(field === 'priceMultiplier' || field === 'priceOperator'){
     quotationApplyMultiplier(quotationDraft);
     renderQuotationRows();
   }
@@ -320,7 +321,7 @@ function saveQuotation(){
   if(!quotationDraft) return;
   const multiplierText=String(quotationDraft.priceMultiplier ?? '').trim();
   if(document.getElementById('qt-price-multiplier')?.validity.badInput || (multiplierText && quotationMultiplier(quotationDraft)===null)){
-    toast('단가 2 배율은 0보다 큰 숫자로 입력하세요.');
+    toast('단가 2 계산값은 0보다 큰 숫자로 입력하세요.');
     document.getElementById('qt-price-multiplier')?.focus();
     return;
   }

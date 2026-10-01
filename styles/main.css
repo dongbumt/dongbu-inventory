@@ -581,6 +581,8 @@
   .quote-meta-grid>.form-group{min-width:0;}
   .quote-meta-wide{grid-column:span 2;}
   .quote-meta-full{grid-column:1 / -1;}
+  .quote-price-formula{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px;}
+  .quote-price-formula>select,.quote-price-formula>input{width:100%;min-width:0;}
   .quote-editor-wrap{width:100%;max-width:100%;max-height:none;overflow:auto;border:1px solid var(--border);}
   .quote-editor-table{min-width:2020px;font-size:11px;table-layout:fixed;}
   .quote-editor-table th{white-space:nowrap;padding:7px 6px;background:#f3f4f6;color:#374151;}
@@ -662,7 +664,7 @@
     .doc-request-group-head{display:block;}
     .doc-request-group-recipient{text-align:left;margin-top:3px;}
     .quote-meta-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
-    .quote-meta-wide,.quote-meta-full{grid-column:1 / -1;}
+    .quote-meta-wide,.quote-meta-full,.quote-price-formula-group{grid-column:1 / -1;}
     .quote-toolbar{width:100%;}
     .quote-toolbar .btn{flex:1;justify-content:center;white-space:nowrap;}
     .quote-preview-shell{padding:6px;}
