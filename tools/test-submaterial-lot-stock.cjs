@@ -122,6 +122,7 @@ const setup = `
   function refreshSubMaterialItemOptions(){}
   function updateSubMaterialLotPreview(){}
   function renderSubMaterialUsageHistory(){}
+  function renderSubMaterialMonthlyUsage(){}
 `;
 function harness(){
   const elements = {};

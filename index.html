@@ -1545,6 +1545,34 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:#7f8c8d;"></div>
+        부자재 월별 사용 집계 <span id="sm-monthly-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+        <label style="font-size:12px;">사용월 <input type="month" id="sm-monthly-month" aria-label="부자재 사용월" style="width:145px;" onchange="renderSubMaterialMonthlyUsage()"></label>
+        <input id="sm-monthly-search" aria-label="부자재 월별 집계 검색" placeholder="품목명 / 규격 검색..." style="width:220px;max-width:100%;" oninput="renderSubMaterialMonthlyUsage()">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="exportSubMaterialMonthlyUsageCSV()">CSV</button>
+      </div>
+    </div>
+    <div id="sm-monthly-summary" style="font-size:12px;color:#555;line-height:1.6;margin:0 0 10px;"></div>
+    <div class="tbl-wrap" style="max-height:360px;">
+      <table aria-label="부자재 월별 사용 집계">
+        <thead><tr>
+          <th>품목명</th><th>규격</th><th>단위</th>
+          <th style="text-align:right;">한 달 사용량</th><th style="text-align:right;">금액환산</th>
+        </tr></thead>
+        <tbody id="sm-monthly-body"></tbody>
+        <tfoot><tr style="background:#f5f5f5;font-weight:700;">
+          <td colspan="3">월 합계</td><td id="sm-monthly-qty-total" style="text-align:right;"></td>
+          <td id="sm-monthly-amount-total" style="text-align:right;"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div class="card-title" style="margin:0;">
         <div class="ct-bar" style="background:#27ae60;"></div>
         부자재 재고현황 <span id="sm-stock-count" style="font-size:12px;font-weight:400;color:#888;"></span>
       </div>
@@ -13047,6 +13075,84 @@ function exportSubMaterialUsageCSV(){
   ])], '부자재_사용이력.csv');
 }
 
+function getSubMaterialMonthlyUsage(month, search=''){
+  const groups = new Map();
+  subMaterialUsages.forEach(usage => {
+    if(String(usage.workDate || '').replace(/\//g, '-').slice(0, 7) !== month) return;
+    const usedQty = parseAppNumber(usage.qty);
+    if(usedQty <= 0) return;
+    const item = subMaterialItems.find(row => usage.itemId && String(row.id) === String(usage.itemId)) ||
+      subMaterialItems.find(row => usage.itemCode && String(row.code) === String(usage.itemCode)) ||
+      (() => {
+        const matches = subMaterialItems.filter(row =>
+          String(row.name || '') === String(usage.itemName || '') &&
+          String(row.spec || '') === String(usage.itemSpec || '')
+        );
+        return matches.length === 1 ? matches[0] : null;
+      })();
+    const name = String(usage.itemName || item?.name || '').trim() || '-';
+    const spec = String(usage.itemSpec || item?.spec || '').trim();
+    const unit = String(usage.unit || item?.unit || '').trim() || '-';
+    const key = JSON.stringify([name, spec, unit]);
+    if(!groups.has(key)) groups.set(key, {name, spec, unit, qty:0, amount:0, pricedCount:0, missingPriceCount:0});
+    const group = groups.get(key);
+    group.qty += usedQty;
+    const rawPrice = item?.unitPrice;
+    const price = rawPrice === '' || rawPrice == null ? NaN : Number(String(rawPrice).replace(/,/g, ''));
+    if(!Number.isFinite(price) || price < 0) group.missingPriceCount++;
+    else{
+      group.amount += Math.round(usedQty * price);
+      group.pricedCount++;
+    }
+  });
+  const query = String(search || '').trim().toLocaleLowerCase('ko-KR');
+  const rows = [...groups.values()]
+    .filter(row => !query || `${row.name} ${row.spec}`.toLocaleLowerCase('ko-KR').includes(query))
+    .sort((a,b) => a.name.localeCompare(b.name, 'ko') || a.spec.localeCompare(b.spec, 'ko') || a.unit.localeCompare(b.unit, 'ko'));
+  const unitTotals = new Map();
+  rows.forEach(row => unitTotals.set(row.unit, (unitTotals.get(row.unit) || 0) + row.qty));
+  return {
+    rows,
+    unitTotals: [...unitTotals.entries()],
+    totalAmount: rows.reduce((sum,row) => sum + row.amount, 0),
+    missingPriceCount: rows.reduce((sum,row) => sum + row.missingPriceCount, 0)
+  };
+}
+
+function renderSubMaterialMonthlyUsage(){
+  const monthEl = document.getElementById('sm-monthly-month');
+  if(!monthEl) return;
+  if(!monthEl.value) monthEl.value = localDateString().slice(0, 7);
+  const report = getSubMaterialMonthlyUsage(monthEl.value, document.getElementById('sm-monthly-search')?.value);
+  const formatQty = value => value.toLocaleString('ko-KR', {maximumFractionDigits:6});
+  const formatWon = value => `${value.toLocaleString('ko-KR')}원`;
+  document.getElementById('sm-monthly-count').textContent = `(${report.rows.length}품목·규격)`;
+  document.getElementById('sm-monthly-summary').textContent =
+    `현재 등록 단가 기준 · 사용 기록별 원 단위 반올림 · 단위가 다른 기록은 별도 행으로 표시` +
+    (report.missingPriceCount ? ` · 단가 미등록 ${report.missingPriceCount}건의 금액은 합계에서 제외` : '');
+  document.getElementById('sm-monthly-body').innerHTML = report.rows.length ? report.rows.map(row => `<tr>
+    <td><strong>${htmlEscape(row.name)}</strong></td>
+    <td>${htmlEscape(row.spec || '-')}</td>
+    <td>${htmlEscape(row.unit)}</td>
+    <td style="text-align:right;font-weight:700;">${formatQty(row.qty)}</td>
+    <td style="text-align:right;">${row.pricedCount ? formatWon(row.amount) : '-'}${row.missingPriceCount ? ' <small style="color:#666;">(일부 미산정)</small>' : ''}</td>
+  </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;">선택한 월의 부자재 사용 기록이 없습니다.</td></tr>';
+  document.getElementById('sm-monthly-qty-total').textContent = report.unitTotals.length ?
+    report.unitTotals.map(([unit, qty]) => `${formatQty(qty)} ${unit}`).join(' / ') : '-';
+  document.getElementById('sm-monthly-amount-total').textContent =
+    `${formatWon(report.totalAmount)}${report.missingPriceCount ? ' (미산정 제외)' : ''}`;
+}
+
+function exportSubMaterialMonthlyUsageCSV(){
+  const month = document.getElementById('sm-monthly-month')?.value || localDateString().slice(0, 7);
+  const report = getSubMaterialMonthlyUsage(month, document.getElementById('sm-monthly-search')?.value);
+  const rows = [['사용월','품목명','규격','단위','한 달 사용량','금액환산(원)','단가 미등록 건수'],
+    ...report.rows.map(row => [month,row.name,row.spec,row.unit,row.qty,row.pricedCount ? row.amount : '',row.missingPriceCount]),
+    [month,'월 합계','','',report.unitTotals.map(([unit,qty]) => `${qty} ${unit}`).join(' / '),report.totalAmount,report.missingPriceCount],
+    ['금액 기준','현재 등록 단가 × 사용수량 (사용 기록별 원 단위 반올림)','단가 미등록 건의 금액은 제외']];
+  downloadCSV(rows, `부자재_월별_사용집계_${month}.csv`);
+}
+
 function subMaterialRecordIsAfterCount(record, latest){
   if(!latest) return false;
   const recordDate = String(record.workDate || record.date || '');
@@ -13234,6 +13340,7 @@ function renderSubMaterials(){
   renderSubMaterialItems();
   renderSubMaterialStock();
   renderSubMaterialUsageHistory();
+  renderSubMaterialMonthlyUsage();
 }
 
 function exportSubMaterialsCSV(){
