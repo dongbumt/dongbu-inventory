@@ -1270,6 +1270,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <option value="">전체(소진포함)</option>
         </select>
         <button id="stock-print-btn" class="btn btn-secondary btn-sm" onclick="printStockReport()" disabled>🖨 출력 (A4)</button>
+        <button id="stock-count-print-btn" class="btn btn-secondary btn-sm" onclick="printStockCountSheet()" disabled>🖨 실사조사</button>
         <button id="stock-csv-btn" class="btn btn-secondary btn-sm" onclick="exportStockCSV()" disabled>CSV</button>
       </div>
     </div>
@@ -11679,7 +11680,7 @@ function stockTableColspan(){
 }
 
 function setStockExportEnabled(enabled){
-  ['stock-print-btn','stock-csv-btn'].forEach(id=>{
+  ['stock-print-btn','stock-count-print-btn','stock-csv-btn'].forEach(id=>{
     const button = document.getElementById(id);
     if(button) button.disabled = !enabled;
   });
@@ -14512,6 +14513,17 @@ function printStockReport(){
   if(!printer){ toast('출력 기능을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
   const company = window.DBMTCompanyMaster?.getPrimaryProfile?.();
   if(!printer.open({...snapshot, companyName:company?.legalName || company?.name || '주식회사 동부엠티'})){
+    toast('인쇄 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.');
+  }
+}
+
+function printStockCountSheet(){
+  const snapshot = getStockExportSnapshot();
+  if(!snapshot) return;
+  const printer = window.DBMTStockReport;
+  if(!printer){ toast('실사조사 출력 기능을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+  const company = window.DBMTCompanyMaster?.getPrimaryProfile?.();
+  if(!printer.open({...snapshot, kind:'count', companyName:company?.legalName || company?.name || '주식회사 동부엠티'})){
     toast('인쇄 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.');
   }
 }
@@ -21544,10 +21556,10 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
 <script src="trace-integration.js?v=20260827m05preview1"></script>
 <script src="submaterial-usage-print.js?v=20260907a4usage1"></script>
-<script src="stock-report.js?v=20261002multipage2"></script>
+<script src="stock-report.js?v=20261002count1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="production-schedule.js?v=20260930plan5"></script>
-<script src="m02-auth.js?v=20260923plan1"></script>
+<script src="m02-auth.js?v=20261002stockcount1"></script>
 </body>
 </html>

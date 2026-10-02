@@ -18,7 +18,7 @@ const functions = [
   'stockCanAdjustCurrent','stockTableColspan','setStockExportEnabled','getStockQueryFilters','stockQueryDescription',
   'showStockQueryState','markStockSearchPending','runStockSearch','resetStockAsOfDate','renderStock',
   'stockPersonalCan','applyStockPermissionState','closeStockAdjust','openStockAdjust','saveStockAdjust',
-  'getStockExportSnapshot','printStockReport','exportStockCSV','stockSort'
+  'getStockExportSnapshot','printStockReport','printStockCountSheet','exportStockCSV','stockSort'
 ].map(name => {
   const match = html.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));
   assert.ok(match, `Missing ${name}`);
@@ -28,6 +28,7 @@ const functions = [
 for(const [i, match] of [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].entries()) new vm.Script(match[1], {filename:`inline-${i}`});
 new vm.Script(auth);
 assert.match(auth, /printStockReport:\['stock','view'\]/);
+assert.match(auth, /printStockCountSheet:\['stock','view'\]/);
 assert.match(auth, /exportStockCSV:\['stock','view'\]/);
 
 const base = {product:'테스트 원료육', origin:'국내산', lot:'000123', packunit:'10 KG', price:5000, stockLocation:'가공장', proddate:'2026-08-31', brand:'테스트 브랜드', grade:'1등급'};
@@ -63,7 +64,7 @@ const setup = `
 function harness(){
   const elements = {};
   for(const id of ['stock-as-of-date','stock-search','stock-location-filter','stock-filter-status','stock-search-btn',
-    'stock-print-btn','stock-csv-btn','stock-query-note','stock-stats','stock-body','stock-manage-head','stock-adjust-modal']){
+    'stock-print-btn','stock-count-print-btn','stock-csv-btn','stock-query-note','stock-stats','stock-body','stock-manage-head','stock-adjust-modal']){
     elements[id] = {value:'', innerHTML:'', textContent:'', disabled:false, style:{}, classList:{add(){},remove(){}}};
   }
   elements['stock-filter-status'].value = '재고';
@@ -119,11 +120,13 @@ async function testLogic(){
   assert.match(ctx.stockQuerySnapshot.warning, /2건/);
   assert.match(el['stock-query-note'].textContent, /2026-09-05 마감/);
   assert.equal(el['stock-print-btn'].disabled, false);
+  assert.equal(el['stock-count-print-btn'].disabled, false);
   assert.equal(ctx.stockCanAdjustCurrent(), false);
   ctx.openStockAdjust('x'); assert.match(ctx.lastMessage, /조회 전용/);
   await ctx.saveStockAdjust(); assert.match(ctx.lastMessage, /조회 전용/);
   el['stock-location-filter'].value = '물류창고'; ctx.markStockSearchPending();
   assert.equal(el['stock-print-btn'].disabled, true);
+  assert.equal(el['stock-count-print-btn'].disabled, true);
   assert.equal(ctx.getStockExportSnapshot(), null, 'stale results blocked');
   ctx.renderStock();
   assert.equal(ctx.stockQuerySnapshot.rows.length, 1);
@@ -135,6 +138,10 @@ async function testLogic(){
   assert.equal(ctx.csvResult.rows[1][13], '20.00');
   ctx.window.DBMTStockReport.open = data=>{ctx.printed=data; return true;};
   ctx.printStockReport(); assert.equal(ctx.printed.rows[0].stock, 20);
+  assert.equal(ctx.printed.filters.location, '물류창고');
+  ctx.printStockCountSheet();
+  assert.equal(ctx.printed.kind, 'count');
+  assert.equal(ctx.printed.rows[0].stock, 20);
   assert.equal(ctx.printed.filters.location, '물류창고');
   el['stock-search'].value = '검색결과 없음'; ctx.renderStock();
   assert.equal(ctx.stockQuerySnapshot.rows.length, 0);
@@ -200,6 +207,20 @@ async function testBrowser(){
     assert.equal(await popup.locator('tbody tr').count(), 3);
     assert.ok((await popup.locator('article').innerText()).includes('455,000원'));
     await popup.close();
+    const countPopupEvent = page.waitForEvent('popup');
+    await page.locator('#stock-count-print-btn').click();
+    const countPopup = await countPopupEvent;
+    await countPopup.waitForFunction(()=>document.documentElement.dataset.printReady === 'true');
+    assert.equal(await countPopup.locator('h1').innerText(), '재고 실사조사표');
+    assert.deepEqual(await countPopup.locator('thead th').allTextContents(),
+      ['No.','지점','품목 / 포장 / 비고','브랜드 / 등급','이력번호 / 생산일','원산지','조정','현재고','실재고','차이']);
+    assert.ok(!(await countPopup.locator('.summary').innerText()).includes('재고금액'));
+    assert.equal(await countPopup.locator('tbody tr:first-child td').count(), 10);
+    const firstStock=await page.evaluate(()=>stockQuerySnapshot.rows[0].stock.toFixed(2));
+    assert.equal(await countPopup.locator('tbody tr:first-child td').nth(7).innerText(), firstStock);
+    assert.equal(await countPopup.locator('tbody tr:first-child td').nth(8).innerText(), '');
+    assert.equal(await countPopup.locator('tbody tr:first-child td').nth(9).innerText(), '');
+    await countPopup.close();
     await page.locator('#stock-search').fill('생산품');
     assert.equal(await page.locator('#stock-print-btn').isDisabled(), true);
     await page.locator('#stock-search-btn').click();
@@ -219,6 +240,7 @@ async function testBrowser(){
       ['normal', model],
       ['medium', {...model,rows:Array.from({length:15},(_,i)=>({...rows[i%rows.length],lot:`0000000000${i}`}))}],
       ['long', {...model,rows:Array.from({length:60},(_,i)=>({...rows[i%rows.length],lot:`TEST-LOT-${String(i).padStart(4,'0')}`,product:'긴 품목명과 포장규격 줄바꿈 확인용 테스트 원료육'}))}],
+      ['count', {...model,kind:'count',rows:Array.from({length:30},(_,i)=>({...rows[i%rows.length],lot:`COUNT-LOT-${String(i).padStart(4,'0')}`}))}],
       ['empty', {...model,rows:[]}],
       ['escaped', {...model,companyName:attack,filters:{...model.filters,query:attack},rows:[{...rows[0],product:attack,lot:attack}],warning:attack}]
     ];
@@ -238,6 +260,14 @@ async function testBrowser(){
       })));
       assert.ok(pages.every(sheet=>sheet.height<=188*96/25.4+2 && sheet.rows>0 && sheet.header),
         `${name}: page boundary or repeated heading ${JSON.stringify(pages)}`);
+      if(name==='count'){
+        assert.ok(pages.length>1, 'Count sheet should paginate');
+        assert.deepEqual(await page.locator('thead').first().locator('th').allTextContents(),
+          ['No.','지점','품목 / 포장 / 비고','브랜드 / 등급','이력번호 / 생산일','원산지','조정','현재고','실재고','차이']);
+        assert.equal(await page.locator('tbody tr').first().locator('td').count(),10);
+        assert.equal(await page.locator('tbody tr').first().locator('td').nth(8).innerText(),'');
+        assert.equal(await page.locator('tbody tr').first().locator('td').nth(9).innerText(),'');
+      }
       if(name==='long'){
         assert.ok(pages.length<=5 && pages[0].rows>=14,
           `${name}: report should fit about twice as many rows per page ${JSON.stringify(pages)}`);
@@ -259,7 +289,7 @@ async function testBrowser(){
         text+=(await pdfPage.getTextContent()).items.map(item=>item.str).join('').replace(/\s/g,'');
       }
       assert.ok(text.includes('2026-09-05마감'),`${name}: cutoff missing`);
-      assert.ok(text.includes('기준일이후거래는날짜별조회에서제외됩니다.'),`${name}: footer missing`);
+      assert.ok(text.includes(name==='count' ? '실재고와차이는현장실사후기입하세요.' : '기준일이후거래는날짜별조회에서제외됩니다.'),`${name}: footer missing`);
       for(const row of data.rows) assert.ok(text.includes(row.lot.replace(/\s/g,'')),`${name}: missing LOT ${row.lot}`);
       await doc.destroy();
       console.log(`${name}: ${parsed.getPageCount()} A4 landscape pages, ${data.rows.length} rows, ${geometry.fontSize}px text`);
