@@ -1,4 +1,4 @@
-/* 재고현황의 조회 결과를 그대로 출력하는 A4 가로 1장 보고서. */
+/* 재고현황의 조회 결과를 A4 가로 여러 장에 읽기 쉬운 크기로 출력하는 보고서. */
 (function(root){
   'use strict';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -37,8 +37,8 @@
   body { background:#e5e7eb; color:#111; font-family:"Malgun Gothic","맑은 고딕",Arial,sans-serif; }
   .toolbar { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:12px; padding:14px; font-size:14px; }
   button { min-height:42px; padding:8px 20px; border:1px solid #777; border-radius:5px; background:#fff; color:#111; font:inherit; cursor:pointer; }
-  .sheet { width:277mm; height:189mm; margin:0 auto 20px; background:#fff; }
-  .report { width:100%; padding:1mm; font-size:8.5pt; line-height:1.3; }
+  .sheet { width:277mm; min-height:190mm; margin:0 auto 20px; background:#fff; }
+  .report { width:100%; padding:1mm; font-size:10pt; line-height:1.3; }
   header { display:flex; justify-content:space-between; align-items:flex-end; gap:4mm; border-bottom:2px solid #222; padding:2mm 0 3mm; }
   h1 { font-size:21pt; margin:0; letter-spacing:2px; }
   .company { font-size:11pt; overflow-wrap:anywhere; }
@@ -47,29 +47,29 @@
   table { width:100%; border-collapse:collapse; table-layout:fixed; }
   th,td { border:1px solid #888; padding:1.4mm 1mm; vertical-align:middle; overflow-wrap:anywhere; }
   th { background:#f2f2f2; text-align:center; font-weight:700; }
+  thead { display:table-header-group; }
   .number { text-align:right; font-variant-numeric:tabular-nums; }
   .center { text-align:center; }
   .detail { display:block; margin-top:.6mm; font-size:.9em; color:#444; }
   .warning { margin:2mm 0; font-weight:700; overflow-wrap:anywhere; }
   footer { margin-top:3mm; padding-top:2mm; border-top:1px solid #999; color:#444; overflow-wrap:anywhere; }
-  .compact { line-height:1.15; }
-  .compact th,.compact td { padding:.7mm 1mm; }
-  .compact .detail { margin-top:0; }
+  .continued-heading { display:flex; justify-content:space-between; gap:4mm; margin:0 0 3mm; padding-bottom:2mm; border-bottom:1px solid #999; font-size:11pt; font-weight:700; }
   @media print {
-    html,body { width:277mm; background:#fff; }
+    html,body { background:#fff; }
     .toolbar { display:none; }
-    .sheet { margin:0; }
+    .sheet { width:auto; min-height:0; margin:0; break-after:page; page-break-after:always; }
+    .sheet.last-page { break-after:auto; page-break-after:auto; }
     th { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
-    tr { break-inside:avoid; }
+    tr { break-inside:avoid; page-break-inside:avoid; }
   }
 </style></head><body>
-<div class="toolbar"><span>A4 가로 · 1장 맞춤 (인쇄 설정의 머리글/바닥글은 꺼주세요)</span><button type="button" onclick="printReport()">🖨 출력</button><button type="button" onclick="window.close()">닫기</button></div>
+<div class="toolbar"><span>A4 가로 · 여러 장 자동 분할 (인쇄 설정의 머리글/바닥글은 꺼주세요)</span><button type="button" onclick="printReport()">🖨 출력</button><button type="button" onclick="window.close()">닫기</button></div>
 <main class="sheet"><article class="report">
   <header><h1>재고현황</h1><div class="company">${escapeHtml(companyName)}</div></header>
   <div class="summary"><strong>기준일: ${escapeHtml(basis)}</strong><span>조회 ${rows.length}건 · 재고량 <strong>${qty(totalStock)} KG</strong> · 재고금액 <strong>${money(totalAmount)}원</strong></span></div>
   <div class="conditions">지점: ${escapeHtml(filters.location || '전체 지점')} / 상태: ${escapeHtml(filters.status || '전체(소진포함)')} / 검색: ${escapeHtml(filters.query || '전체')} · 중량: KG / 금액: 원</div>
   <table aria-label="기준일 재고현황">
-    <colgroup><col style="width:3%"><col style="width:6%"><col style="width:17%"><col style="width:8%"><col style="width:14%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%"><col style="width:3%"></colgroup>
+    <colgroup><col style="width:3%"><col style="width:6%"><col style="width:16%"><col style="width:8%"><col style="width:14%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%"><col style="width:4%"></colgroup>
     <thead><tr><th>No.</th><th>지점</th><th>품목 / 포장 / 비고</th><th>브랜드 / 등급</th><th>이력번호 / 생산일</th><th>원산지</th><th>총입고</th><th>총사용</th><th>총출고</th><th>조정</th><th>재고</th><th>단가</th><th>재고금액</th><th>상태</th></tr></thead>
     <tbody>${stockRows || '<tr><td colspan="14" class="center">선택한 기준일과 조회조건에 해당하는 재고가 없습니다.</td></tr>'}</tbody>
   </table>
@@ -77,32 +77,71 @@
   <footer>현재 저장된 거래의 거래일 기준으로 계산한 재고입니다. 기준일 이후 거래는 날짜별 조회에서 제외됩니다.${queriedAt ? `<br>조회 시각: ${escapeHtml(queriedAt)}` : ''}</footer>
 </article></main>
 <script>
-  function fitOnePage(){
-    const sheet = document.querySelector('.sheet');
-    const report = document.querySelector('.report');
-    report.style.zoom = 1;
-    report.classList.remove('compact');
-    const maxHeight = sheet.getBoundingClientRect().height - 2;
-    if(report.getBoundingClientRect().height > maxHeight) report.classList.add('compact');
-    if(report.getBoundingClientRect().height > maxHeight){
-      let low = 0.001, high = 1;
-      for(let i = 0; i < 20; i++){
-        const scale = (low + high) / 2;
-        report.style.zoom = scale;
-        if(report.getBoundingClientRect().height <= maxHeight) low = scale;
-        else high = scale;
-      }
-      report.style.zoom = low;
+  var paginated = false;
+  function paginateReport(){
+    if(paginated) return;
+    paginated = true;
+    const firstSheet = document.querySelector('.sheet');
+    const firstReport = firstSheet.querySelector('.report');
+    const firstTable = firstReport.querySelector('table');
+    const rows = [...firstTable.tBodies[0].rows];
+    const warning = firstReport.querySelector('.warning');
+    const footer = firstReport.querySelector('footer');
+    const basis = firstReport.querySelector('.summary strong')?.textContent || '';
+    warning?.remove();
+    footer?.remove();
+    firstTable.tBodies[0].replaceChildren();
+    const maxHeight = 188 * 96 / 25.4;
+    let sheet = firstSheet, report = firstReport, tbody = firstTable.tBodies[0];
+    function nextPage(){
+      sheet = document.createElement('main');
+      sheet.className = 'sheet';
+      report = document.createElement('article');
+      report.className = 'report';
+      const heading = document.createElement('div');
+      heading.className = 'continued-heading';
+      const title = document.createElement('span');
+      title.textContent = '재고현황 (계속)';
+      const date = document.createElement('span');
+      date.textContent = basis;
+      heading.append(title, date);
+      const table = firstTable.cloneNode(false);
+      table.append(firstTable.querySelector('colgroup').cloneNode(true), firstTable.tHead.cloneNode(true));
+      tbody = document.createElement('tbody');
+      table.append(tbody);
+      report.append(heading, table);
+      sheet.append(report);
+      document.body.append(sheet);
     }
-    document.documentElement.dataset.printReady = 'true';
+    for(const row of rows){
+      tbody.append(row);
+      if(report.getBoundingClientRect().height > maxHeight){
+        row.remove();
+        nextPage();
+        tbody.append(row);
+      }
+    }
+    if(warning) report.append(warning);
+    if(footer) report.append(footer);
+    if(report.getBoundingClientRect().height > maxHeight && tbody.lastElementChild){
+      const lastRow = tbody.lastElementChild;
+      lastRow.remove();
+      warning?.remove();
+      footer?.remove();
+      nextPage();
+      tbody.append(lastRow);
+      if(warning) report.append(warning);
+      if(footer) report.append(footer);
+    }
+    sheet.classList.add('last-page');
   }
   async function printReport(){
     if(document.fonts) await document.fonts.ready;
-    fitOnePage();
+    paginateReport();
+    document.documentElement.dataset.printReady = 'true';
     window.focus();
     window.print();
   }
-  window.addEventListener('beforeprint', fitOnePage);
   window.addEventListener('load', printReport, {once:true});
 </script></body></html>`;
   }

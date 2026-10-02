@@ -177,6 +177,7 @@ async function testBrowser(){
   const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'dbmt-stock-report-'));
   try{
     const page = await browser.newPage({viewport:{width:1440,height:1000}});
+    page.on('pageerror',error=>console.error('Print page error:',error.message));
     await page.addInitScript(()=>{window.print=()=>{window.printCalled=true;};});
     await page.goto('about:blank');
     const pageHtml = html.slice(html.indexOf('<div class="tab-panel" id="p-stock">'), html.indexOf('<!-- ═', html.indexOf('id="stock-adjust-modal"')));
@@ -226,24 +227,38 @@ async function testBrowser(){
       await page.waitForFunction(()=>document.documentElement.dataset.printReady==='true');
       const geometry=await page.evaluate(()=>{
         const sheet=document.querySelector('.sheet').getBoundingClientRect(), report=document.querySelector('.report').getBoundingClientRect();
-        return {height:report.height,maxHeight:sheet.height,width:report.width,maxWidth:sheet.width,scale:document.querySelector('.report').style.zoom};
+        return {width:report.width,maxWidth:sheet.width,fontSize:parseFloat(getComputedStyle(document.querySelector('.report')).fontSize),zoom:document.querySelector('.report').style.zoom};
       });
-      assert.ok(geometry.height<=geometry.maxHeight && geometry.width<=geometry.maxWidth+1, `${name}: overflow ${JSON.stringify(geometry)}`);
+      assert.ok(geometry.width<=geometry.maxWidth+1, `${name}: horizontal overflow ${JSON.stringify(geometry)}`);
+      assert.ok(geometry.fontSize>=13 && !geometry.zoom, `${name}: print text was scaled down ${JSON.stringify(geometry)}`);
+      const pages=await page.evaluate(()=>[...document.querySelectorAll('.sheet')].map(sheet=>({
+        height:sheet.querySelector('.report').getBoundingClientRect().height,
+        rows:sheet.querySelectorAll('tbody tr').length,
+        header:!!sheet.querySelector('thead')
+      })));
+      assert.ok(pages.every(sheet=>sheet.height<=188*96/25.4+2 && sheet.rows>0 && sheet.header),
+        `${name}: page boundary or repeated heading ${JSON.stringify(pages)}`);
       assert.equal(await page.evaluate(()=>window.INJECTED),undefined);
       await page.screenshot({path:path.join(artifacts,`${name}.png`),fullPage:true});
       const pdf = await page.pdf({path:path.join(artifacts,`${name}.pdf`),preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false});
       const parsed = await PDFDocument.load(pdf);
-      assert.equal(parsed.getPageCount(),1,`${name}: one page`);
-      const size = parsed.getPage(0).getSize();
-      assert.ok(Math.abs(size.width-841.89)<2 && Math.abs(size.height-595.28)<2,`${name}: A4 landscape`);
+      assert.equal(parsed.getPageCount(),pages.length,`${name}: one PDF page per report sheet`);
+      if(name==='long') assert.ok(parsed.getPageCount()>1,`${name}: rows must span multiple pages`);
+      for(const pdfPage of parsed.getPages()){
+        const size = pdfPage.getSize();
+        assert.ok(Math.abs(size.width-841.89)<2 && Math.abs(size.height-595.28)<2,`${name}: A4 landscape`);
+      }
       const doc = await getDocument({data:new Uint8Array(pdf),useSystemFonts:true}).promise;
-      const pdfPage=await doc.getPage(1);
-      const text=(await pdfPage.getTextContent()).items.map(item=>item.str).join('').replace(/\s/g,'');
+      let text='';
+      for(let pageNo=1;pageNo<=doc.numPages;pageNo++){
+        const pdfPage=await doc.getPage(pageNo);
+        text+=(await pdfPage.getTextContent()).items.map(item=>item.str).join('').replace(/\s/g,'');
+      }
       assert.ok(text.includes('2026-09-05마감'),`${name}: cutoff missing`);
       assert.ok(text.includes('기준일이후거래는날짜별조회에서제외됩니다.'),`${name}: footer missing`);
       for(const row of data.rows) assert.ok(text.includes(row.lot.replace(/\s/g,'')),`${name}: missing LOT ${row.lot}`);
       await doc.destroy();
-      console.log(`${name}: 1 A4 landscape page, ${data.rows.length} rows, scale ${geometry.scale}`);
+      console.log(`${name}: ${parsed.getPageCount()} A4 landscape pages, ${data.rows.length} rows, ${geometry.fontSize}px text`);
     }
     console.log(`Artifacts: ${artifacts}`);
   }finally{await browser.close();}
