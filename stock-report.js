@@ -38,19 +38,19 @@
   .toolbar { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:12px; padding:14px; font-size:14px; }
   button { min-height:42px; padding:8px 20px; border:1px solid #777; border-radius:5px; background:#fff; color:#111; font:inherit; cursor:pointer; }
   .sheet { width:277mm; min-height:190mm; margin:0 auto 20px; background:#fff; }
-  .report { width:100%; padding:1mm; font-size:10pt; line-height:1.3; }
+  .report { width:100%; padding:1mm; font-size:9.5pt; line-height:1.15; }
   header { display:flex; justify-content:space-between; align-items:flex-end; gap:4mm; border-bottom:2px solid #222; padding:2mm 0 3mm; }
   h1 { font-size:21pt; margin:0; letter-spacing:2px; }
   .company { font-size:11pt; overflow-wrap:anywhere; }
   .summary { display:flex; flex-wrap:wrap; justify-content:space-between; gap:2mm 5mm; margin:3mm 0 2mm; font-size:10pt; }
   .conditions { margin:0 0 3mm; overflow-wrap:anywhere; }
   table { width:100%; border-collapse:collapse; table-layout:fixed; }
-  th,td { border:1px solid #888; padding:1.4mm 1mm; vertical-align:middle; overflow-wrap:anywhere; }
+  th,td { border:1px solid #888; padding:.6mm .7mm; vertical-align:middle; overflow-wrap:anywhere; }
   th { background:#f2f2f2; text-align:center; font-weight:700; }
   thead { display:table-header-group; }
   .number { text-align:right; font-variant-numeric:tabular-nums; }
   .center { text-align:center; }
-  .detail { display:block; margin-top:.6mm; font-size:.9em; color:#444; }
+  .detail { display:inline; margin-left:1mm; font-size:.85em; color:#444; }
   .warning { margin:2mm 0; font-weight:700; overflow-wrap:anywhere; }
   footer { margin-top:3mm; padding-top:2mm; border-top:1px solid #999; color:#444; overflow-wrap:anywhere; }
   .continued-heading { display:flex; justify-content:space-between; gap:4mm; margin:0 0 3mm; padding-bottom:2mm; border-bottom:1px solid #999; font-size:11pt; font-weight:700; }
@@ -69,7 +69,7 @@
   <div class="summary"><strong>기준일: ${escapeHtml(basis)}</strong><span>조회 ${rows.length}건 · 재고량 <strong>${qty(totalStock)} KG</strong> · 재고금액 <strong>${money(totalAmount)}원</strong></span></div>
   <div class="conditions">지점: ${escapeHtml(filters.location || '전체 지점')} / 상태: ${escapeHtml(filters.status || '전체(소진포함)')} / 검색: ${escapeHtml(filters.query || '전체')} · 중량: KG / 금액: 원</div>
   <table aria-label="기준일 재고현황">
-    <colgroup><col style="width:3%"><col style="width:6%"><col style="width:16%"><col style="width:8%"><col style="width:14%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%"><col style="width:4%"></colgroup>
+    <colgroup><col style="width:3%"><col style="width:6%"><col style="width:19%"><col style="width:7%"><col style="width:12%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%"><col style="width:4%"></colgroup>
     <thead><tr><th>No.</th><th>지점</th><th>품목 / 포장 / 비고</th><th>브랜드 / 등급</th><th>이력번호 / 생산일</th><th>원산지</th><th>총입고</th><th>총사용</th><th>총출고</th><th>조정</th><th>재고</th><th>단가</th><th>재고금액</th><th>상태</th></tr></thead>
     <tbody>${stockRows || '<tr><td colspan="14" class="center">선택한 기준일과 조회조건에 해당하는 재고가 없습니다.</td></tr>'}</tbody>
   </table>

@@ -230,7 +230,7 @@ async function testBrowser(){
         return {width:report.width,maxWidth:sheet.width,fontSize:parseFloat(getComputedStyle(document.querySelector('.report')).fontSize),zoom:document.querySelector('.report').style.zoom};
       });
       assert.ok(geometry.width<=geometry.maxWidth+1, `${name}: horizontal overflow ${JSON.stringify(geometry)}`);
-      assert.ok(geometry.fontSize>=13 && !geometry.zoom, `${name}: print text was scaled down ${JSON.stringify(geometry)}`);
+      assert.ok(geometry.fontSize>=12.5 && !geometry.zoom, `${name}: print text was scaled down ${JSON.stringify(geometry)}`);
       const pages=await page.evaluate(()=>[...document.querySelectorAll('.sheet')].map(sheet=>({
         height:sheet.querySelector('.report').getBoundingClientRect().height,
         rows:sheet.querySelectorAll('tbody tr').length,
@@ -238,6 +238,10 @@ async function testBrowser(){
       })));
       assert.ok(pages.every(sheet=>sheet.height<=188*96/25.4+2 && sheet.rows>0 && sheet.header),
         `${name}: page boundary or repeated heading ${JSON.stringify(pages)}`);
+      if(name==='long'){
+        assert.ok(pages.length<=5 && pages[0].rows>=14,
+          `${name}: report should fit about twice as many rows per page ${JSON.stringify(pages)}`);
+      }
       assert.equal(await page.evaluate(()=>window.INJECTED),undefined);
       await page.screenshot({path:path.join(artifacts,`${name}.png`),fullPage:true});
       const pdf = await page.pdf({path:path.join(artifacts,`${name}.pdf`),preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false});
