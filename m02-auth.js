@@ -16,6 +16,7 @@
     'nav-transactions':'transactions',
     'nav-production':'production',
     'nav-production-schedule':'production_schedule',
+    'nav-product-specs':'product_specs',
     'nav-prod-loss':'production_loss',
     'nav-production-board':'production_board',
     'nav-stock':'stock',
