@@ -68,6 +68,16 @@ function testLogic() {
   assert.ok(Number.isNaN(boxLedger.parseOptionalBoxCount('-1')));
   assert.equal(row(boxLedger, 'boxes-A').stockBoxes, 7);
   assert.equal(row(boxLedger, 'boxes-A', '물류창고').stockBoxes, 1);
+
+  const startedLegacy = harness([
+    trackedInbound('old-stock', 100, 5000),
+    consume('old-stock', 20),
+    {...common,date:'2026-09-15',type:'박스기준',stockRowId:'old-stock',weight:0,boxCountAfter:8},
+    {...consume('old-stock', 10),date:'2026-09-16',boxCount:2}
+  ]);
+  assert.equal(row(startedLegacy, 'old-stock').stock, 70, 'A box baseline never changes weight stock');
+  assert.equal(row(startedLegacy, 'old-stock').stockBoxes, 6, 'Future box movements start from the counted balance');
+  assert.equal(row(startedLegacy, 'old-stock', '가공장', '2026-09-14').stockBoxes, null, 'History before the baseline stays unknown');
   assert.equal(row(boxLedger, 'legacy-B').stockBoxes, null, 'Historical missing boxes stay unknown');
   assert.equal(row(boxLedger, 'boxes-A', '가공장', '2026-09-13').stockBoxes, 10);
   boxLedger.userTransactions.push(consume('boxes-A', 5)); boxLedger.invalidateStockMap();
@@ -181,7 +191,7 @@ function testPublicStockPresentation() {
 async function testTransactionFlows(page, artifacts) {
   await page.evaluate(markup => {
     const template = document.createElement('template'); template.innerHTML = markup;
-    for (const id of ['p-transactions', 'stock-adjust-modal']) document.querySelector('main').append(template.content.querySelector('#' + id));
+    for (const id of ['p-transactions', 'stock-adjust-modal', 'stock-box-baseline-modal']) document.querySelector('main').append(template.content.querySelector('#' + id));
     document.getElementById('p-production').classList.remove('active');
     document.getElementById('p-transactions').classList.add('active');
     for (const id of ['t-stock-location', 't-move-from', 't-move-to']) {
@@ -197,11 +207,12 @@ async function testTransactionFlows(page, artifacts) {
     'outboundStockOptionsForEdit', 'availableStockForEdit', 'availableBoxesForEdit', 'ensureOutProductOption', 'bulkOutboundStockLabel',
     'selectTxnStock', 'addTransaction', 'addBulkOutboundRow', 'addBulkOutboundRows', 'clearBulkOutbound',
     'selectBulkOutboundStock', 'refreshBulkOutboundPrice', 'updateBulkOutboundAmount', 'saveBulkOutbound',
-    'openStockAdjust', 'closeStockAdjust', 'calcStockAdjustDiff', 'saveStockAdjust'
+    'openStockAdjust', 'closeStockAdjust', 'calcStockAdjustDiff', 'saveStockAdjust',
+    'openStockBoxBaseline', 'closeStockBoxBaseline', 'saveStockBoxBaseline'
   ];
   await page.addScriptTag({content: `
     var _editTxnId=null, bulkOutboundStockOptionsCacheMap=null, bulkOutboundStockOptionsCacheRows=null;
-    var savedTransactionCalls=[], adjustCalls=[], DBMTAuth={getSessionToken:()=> 'isolated-token'};
+    var savedTransactionCalls=[], adjustCalls=[], DBMTAuth={getSessionToken:()=> 'isolated-token',can:()=>true};
     function getTxnStockSearchOptions(){return outboundStockOptionsForEdit(getEditingTransaction());}
     function autoFillTxnPrice(){}
     function clearTransactionForm(){_editTxnId=null;}
@@ -302,6 +313,14 @@ async function testTransactionFlows(page, artifacts) {
   assert.equal(adjusted.calls[0].body.p_record.weight, -2);
   assert.equal(adjusted.rows.find(item => item.stockRowId === 'action-A').stock, 8);
   assert.equal(adjusted.rows.find(item => item.stockRowId === 'action-B' && item.stockLocation === '가공장').stock, 50);
+  await page.evaluate(() => {
+    const stock=Object.values(getStockMap()).find(item=>item.stockRowId==='action-A');
+    openStockBoxBaseline(JSON.stringify(stock));
+    document.getElementById('stock-box-actual').value='4';
+  });
+  await page.evaluate(() => saveStockBoxBaseline());
+  assert.equal(await page.evaluate(() => Object.values(getStockMap()).find(item=>item.stockRowId==='action-A').stockBoxes),4);
+  assert.equal(await page.evaluate(() => savedTransactionCalls.at(-1).boxCountAfter),4);
   await page.screenshot({path: path.join(artifacts, 'transaction-stock-rows.png'), fullPage: true});
   console.log('PASS: actual single outbound, general use, branch transfer, bulk outbound and adjustment DOM save paths preserve row IDs and stock notes');
 }

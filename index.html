@@ -949,6 +949,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <option value="사용">사용(구 데이터)</option>
             <option value="재고조정">재고조정</option>
             <option value="재고이동">재고이동</option>
+            <option value="박스기준">박스기준</option>
           </select>
           <input placeholder="품목명 검색..." id="t-search-product" style="width:150px;" autocomplete="off" oninput="markTransactionKeywordSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
           <input placeholder="이력번호 검색..." id="t-search-lot" style="width:150px;" autocomplete="off" oninput="markTransactionKeywordSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runTransactionSearch();}">
@@ -1339,6 +1340,28 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="btn-row" style="justify-content:flex-end;">
       <button class="btn btn-secondary" onclick="closeStockAdjust()">취소</button>
       <button class="btn btn-primary" onclick="saveStockAdjust()">정리 저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="stock-box-baseline-modal" class="edit-modal-bg hidden">
+  <div class="edit-modal" style="max-width:520px;">
+    <h3>박스수 기준 설정</h3>
+    <div class="alert alert-info">현재 재고의 실제 박스수를 시작 수량으로 기록합니다. 기존 거래와 중량 재고는 변경되지 않습니다.</div>
+    <input type="hidden" id="stock-box-identity">
+    <div class="form-row">
+      <div class="form-group"><label>기준일</label><input type="date" id="stock-box-date" readonly style="background:#f8f9fa;"></div>
+      <div class="form-group"><label>품목</label><input id="stock-box-product" readonly style="background:#f8f9fa;"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>현재 중량(KG)</label><input id="stock-box-weight" readonly style="background:#f8f9fa;text-align:right;"></div>
+      <div class="form-group"><label>기록된 박스수</label><input id="stock-box-current" readonly style="background:#f8f9fa;text-align:right;"></div>
+      <div class="form-group"><label>실제 박스수</label><input type="number" id="stock-box-actual" min="0" step="1" inputmode="numeric" placeholder="0 이상의 정수" style="text-align:right;"></div>
+    </div>
+    <div class="form-group"><label>메모(선택)</label><input id="stock-box-note" placeholder="예) 최초 박스수 실사"></div>
+    <div class="btn-row" style="justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeStockBoxBaseline()">취소</button>
+      <button class="btn btn-primary" onclick="saveStockBoxBaseline()">기준 저장</button>
     </div>
   </div>
 </div>
@@ -8268,7 +8291,7 @@ function getStockMap(asOfDate=''){
 
   const stockTxns = userTransactions
     .map((t, idx)=>({t, idx, date:cutoff ? stockLedgerDateKey(t.date) : ''}))
-    .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동'].includes(x.t.type))
+    .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동','박스기준'].includes(x.t.type))
     .filter(x=>!cutoff || (x.date && x.date <= cutoff))
     .sort((a,b)=>{
       const ad = cutoff ? a.date : String(a.t.date||'').replace(/\//g,'-');
@@ -8291,7 +8314,14 @@ function getStockMap(asOfDate=''){
     const stockRowId = String(t.stockRowId || '');
     const matchesRow = s => String(s.stockRowId || '') === stockRowId;
 
-    if(t.type==='재고조정'){
+    if(t.type==='박스기준'){
+      const baselineKey = stockMapKey(product, lot, unitPrice, t.origin, packunit, stockProddate, stockLocation, stockRowId);
+      const bucket = map[baselineKey];
+      if(bucket){
+        const baseline = parseOptionalBoxCount(t.boxCountAfter);
+        if(baseline !== null && !Number.isNaN(baseline)) bucket.stockBoxes = baseline;
+      }
+    } else if(t.type==='재고조정'){
       if(!packunit){
         const inferredPackunits = [...new Set(Object.values(map)
           .filter(s => sameStockIdentity(s, product, lot, t.origin, '', unitPrice, stockProddate, stockLocation))
@@ -10215,6 +10245,7 @@ function renderTransactions(){
     const domId = String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
     const isStockAdjust = t.type === '재고조정';
     const isStockMove = t.type === '재고이동';
+    const isBoxBaseline = t.type === '박스기준';
     const date = htmlEscape(t.date);
     const type = htmlEscape(t.type);
     const trader = htmlEscape(t.trader || '-');
@@ -10229,17 +10260,17 @@ function renderTransactions(){
     const weight = Number(t.weight || 0);
     const price = Number(t.price || 0);
     const amount = Number(t.amount || 0);
-    const badgeClass = t.type==='입고'||t.type==='생산입고' ? 'in' : t.type==='사용' ? 'use' : isStockAdjust ? 'adjust' : 'out';
+    const badgeClass = t.type==='입고'||t.type==='생산입고' ? 'in' : t.type==='사용' ? 'use' : (isStockAdjust || isBoxBaseline) ? 'adjust' : 'out';
     return `<tr>
     <td style="min-width:92px;white-space:nowrap;">${date}</td>
     <td style="min-width:76px;white-space:nowrap;"><span class="badge badge-${badgeClass}" style="white-space:nowrap;${t.type==='생산입고'?'opacity:0.8;font-size:9px;':''}">${type}</span></td>
     <td>${trader}</td><td>${product}${t.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(t.packunit)}</span>`:''}</td><td>${origin}${storage?` <span style="font-size:10px;color:#2980b9;border:1px solid #d6eaf8;border-radius:4px;padding:1px 5px;">${storage}</span>`:''}${location?` <span style="font-size:10px;color:#6c3483;border:1px solid #eadcf8;border-radius:4px;padding:1px 5px;">${location}</span>`:''}</td>
     <td style="font-family:monospace;font-size:11px">${lot}</td>
     <td style="text-align:right">${weight.toFixed(2)}</td>
-    <td style="text-align:right">${boxCountDisplay(t.boxCount)}</td>
+    <td style="text-align:right">${isBoxBaseline ? `${boxCountDisplay(t.boxCountAfter)} <small>기준</small>` : boxCountDisplay(t.boxCount)}</td>
     <td style="text-align:right;padding:2px 4px;">
       ${t._isUser
-        ? ((isStockAdjust || isStockMove) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
+        ? ((isStockAdjust || isStockMove || isBoxBaseline) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
              onchange="updateTxnPrice(${jsArg(t.id)}, this.value)"
              style="width:80px;text-align:right;font-size:12px;padding:2px 4px;
                     border:1px solid #ddd;border-radius:4px;background:#fffff8;">`)
@@ -10249,7 +10280,7 @@ function renderTransactions(){
     <td>${note}</td>
     <td style="white-space:nowrap">
       ${t._isUser
-        ? `${isStockAdjust ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
+         ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
     </td>
   </tr>`;
@@ -11908,6 +11939,7 @@ function runStockSearch(){
 function renderStock(){
   applyStockPermissionState();
   const canAdjustStock = stockCanAdjustCurrent();
+  const canSetBoxBaseline = canAdjustStock && typeof DBMTAuth === 'object' && DBMTAuth.can('transactions','create');
   const filters = getStockQueryFilters();
   const q = filters.query.toLowerCase();
   const filterStatus = filters.status;
@@ -11942,7 +11974,7 @@ function renderStock(){
     return _dir * ((a[k]||0) - (b[k]||0));
   });
   const undatedCount = filters.asOfDate ? userTransactions.filter(t=>
-    ['입고','생산입고','출고','사용','재고조정','재고이동'].includes(t.type) && !stockLedgerDateKey(t.date)
+    ['입고','생산입고','출고','사용','재고조정','재고이동','박스기준'].includes(t.type) && !stockLedgerDateKey(t.date)
   ).length : 0;
   const warning = undatedCount ? `주의: 거래일이 없거나 올바르지 않은 거래 ${undatedCount}건은 기준일 계산에서 제외되었습니다.` : '';
   stockQuerySnapshot = {filters, rows, warning, queriedAt:new Date().toLocaleString('ko-KR')};
@@ -11985,6 +12017,7 @@ function renderStock(){
     const label=isMinus?'⚠마이너스':stk>0.01?'정상':'소진';
     const stkStyle=isMinus?'text-align:right;font-weight:700;color:#e74c3c':'text-align:right;font-weight:700';
     const rowBg=isMinus?'background:#fff5f5;':'';
+    const boxIdentity=JSON.stringify({product:s.product,lot:s.lot,origin:s.origin,price:s.price,proddate:s.proddate,packunit:s.packunit,stockLocation:s.stockLocation,stockRowId:s.stockRowId,stockNote:s.stockNote,stock:s.stock,stockBoxes:s.stockBoxes});
     return `<tr style="${rowBg}">
       <td class="stock-col-location"><span class="stock-location-badge">${htmlEscape(s.stockLocation || STOCK_LOCATION_DEFAULT)}</span></td>
       <td>${htmlEscape(s.product||'')}${s.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(s.packunit)}</span>`:''}</td>
@@ -12002,7 +12035,7 @@ function renderStock(){
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
       <td class="stock-col-note">${htmlEscape(s.stockNote||'')}</td>
-      ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})">정리</button></td>` : ''}
+      ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})">정리</button>${canSetBoxBaseline ? ` <button class="btn btn-sm btn-secondary" onclick="openStockBoxBaseline(${jsArg(boxIdentity)})">박스기준</button>` : ''}</td>` : ''}
     </tr>`;
   }).join('');
 }
@@ -12015,7 +12048,7 @@ function applyStockPermissionState(){
   const canAdjust = stockCanAdjustCurrent();
   const head = document.getElementById('stock-manage-head');
   if(head) head.style.display = canAdjust ? '' : 'none';
-  if(!canAdjust) closeStockAdjust();
+  if(!canAdjust){ closeStockAdjust(); closeStockBoxBaseline(); }
 }
 
 function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit='', stockLocation='', stockRowId='', stockNote=''){
@@ -12125,6 +12158,67 @@ async function saveStockAdjust(){
     toast(String(err?.message || err || '재고 정리에 실패했습니다.'));
   }finally{
     if(saveButton) saveButton.disabled = false;
+  }
+}
+
+function openStockBoxBaseline(serialized){
+  if(!stockPersonalCan('update') || !DBMTAuth.can('transactions','create')){ toast('박스수 기준을 저장할 권한이 없습니다.'); return; }
+  if(!stockCanAdjustCurrent()){ toast('현재 재고를 조회한 뒤 박스수 기준을 설정해주세요.'); return; }
+  let identity;
+  try{ identity=JSON.parse(serialized); }catch(_){ toast('재고 항목을 다시 선택해주세요.'); return; }
+  const set=(id,value)=>{ const el=document.getElementById(id); if(el) el.value=value; };
+  set('stock-box-identity',serialized);
+  set('stock-box-date',localDateString());
+  set('stock-box-product',[identity.product,identity.packunit,identity.lot,identity.stockLocation].filter(Boolean).join(' / '));
+  set('stock-box-weight',Number(identity.stock||0).toFixed(2));
+  set('stock-box-current',identity.stockBoxes === null ? '미기록' : boxCountDisplay(identity.stockBoxes));
+  set('stock-box-actual','');
+  set('stock-box-note','');
+  document.getElementById('stock-box-baseline-modal')?.classList.remove('hidden');
+}
+
+function closeStockBoxBaseline(){
+  document.getElementById('stock-box-baseline-modal')?.classList.add('hidden');
+}
+
+async function saveStockBoxBaseline(){
+  if(!stockPersonalCan('update') || !DBMTAuth.can('transactions','create')){ toast('박스수 기준을 저장할 권한이 없습니다.'); return; }
+  if(!stockCanAdjustCurrent()){ toast('현재 재고를 조회한 뒤 박스수 기준을 설정해주세요.'); return; }
+  const actual=parseOptionalBoxCount(document.getElementById('stock-box-actual')?.value);
+  if(actual === null || Number.isNaN(actual)){ alert('실제 박스수는 0 이상의 정수로 입력해주세요.'); return; }
+  let identity;
+  try{ identity=JSON.parse(document.getElementById('stock-box-identity')?.value || ''); }
+  catch(_){ alert('재고 항목을 다시 선택해주세요.'); return; }
+  const key=stockMapKey(identity.product,identity.lot,identity.price,identity.origin,identity.packunit,identity.proddate,identity.stockLocation,identity.stockRowId);
+  const current=getStockMap()[key];
+  if(!current){ alert('선택한 재고가 변경됐습니다. 다시 조회해주세요.'); return; }
+  const memo=(document.getElementById('stock-box-note')?.value || '').trim();
+  const record={
+    id:makeAppId('boxbase'),date:localDateString(),type:'박스기준',
+    product:current.product,lot:current.lot||'',origin:current.origin||'',packunit:current.packunit||'',
+    proddate:current.proddate||'',stockProddate:current.proddate||'',stockLocation:current.stockLocation||STOCK_LOCATION_DEFAULT,
+    stockRowId:current.stockRowId||'',stockNote:current.stockNote||'',stockUnitPrice:parseAppNumber(current.price),
+    trader:'재고실사',weight:0,price:parseAppNumber(current.price),amount:0,
+    boxCountAfter:actual,note:`박스수 기준 ${actual}박스${memo ? ' / '+memo : ''}`,_isUser:true,_isBoxBaseline:true
+  };
+  const button=document.querySelector('#stock-box-baseline-modal .btn-primary');
+  if(button) button.disabled=true;
+  userTransactions.push(record);
+  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+  _stockMapCache=null;
+  try{
+    await saveTransactionRows(record);
+    closeStockBoxBaseline();
+    renderStock();
+    renderTransactions();
+    toast('박스수 기준이 저장되었습니다.');
+  }catch(err){
+    userTransactions=userTransactions.filter(row=>String(row.id)!==String(record.id));
+    transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+    _stockMapCache=null;
+    toast(String(err?.message || err || '박스수 기준 저장에 실패했습니다.'));
+  }finally{
+    if(button) button.disabled=false;
   }
 }
 
@@ -14407,7 +14501,7 @@ function downloadCSV(rows,filename){
 }
 function exportTransactionsCSV(){
   const header=['날짜','구분','거래처','품목명','원산지','보관','이력번호','중량(KG)','박스수','단가','금액','비고'];
-  const rows=transactions.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,boxCountDisplay(t.boxCount,''),t.price||'',t.amount||'',t.note||'']);
+  const rows=transactions.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,t.type==='박스기준'?boxCountDisplay(t.boxCountAfter,''):boxCountDisplay(t.boxCount,''),t.price||'',t.amount||'',t.note||'']);
   downloadCSV([header,...rows],'원료수불부_거래내역.csv');
 }
 
@@ -14485,7 +14579,7 @@ function printFilteredTransactions(){
       <td>${htmlEscape(originInfo || '-')}</td>
       <td class="mono">${htmlEscape(t.lot || '-')}</td>
       <td class="numeric">${parseAppNumber(t.weight).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-      <td class="numeric">${boxCountDisplay(t.boxCount)}</td>
+      <td class="numeric">${t.type==='박스기준' ? `${boxCountDisplay(t.boxCountAfter)} (기준)` : boxCountDisplay(t.boxCount)}</td>
       <td class="numeric">${parseAppNumber(t.price) ? parseAppNumber(t.price).toLocaleString('ko-KR',{maximumFractionDigits:2}) : '-'}</td>
       <td class="numeric">${parseAppNumber(t.amount) ? Math.round(parseAppNumber(t.amount)).toLocaleString('ko-KR') : '-'}</td>
       <td>${htmlEscape(t.note || '-')}</td>

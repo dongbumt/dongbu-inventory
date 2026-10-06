@@ -17,7 +17,7 @@ const functions = [
   'stockLedgerDateKey','parseOptionalBoxCount','boxCountDisplay','getStockMap','invalidateStockMap','htmlEscape','jsArg',
   'stockCanAdjustCurrent','stockTableColspan','setStockExportEnabled','getStockQueryFilters','stockQueryDescription',
   'showStockQueryState','markStockSearchPending','runStockSearch','resetStockAsOfDate','renderStock',
-  'stockPersonalCan','applyStockPermissionState','closeStockAdjust','openStockAdjust','saveStockAdjust',
+  'stockPersonalCan','applyStockPermissionState','closeStockAdjust','closeStockBoxBaseline','openStockAdjust','saveStockAdjust',
   'getStockExportSnapshot','printStockReport','printStockCountSheet','exportStockCSV','stockSort'
 ].map(name => {
   const match = html.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));

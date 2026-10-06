@@ -128,9 +128,9 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-in-product-1','prod-in-qty-1','prod-in-price-1','prod-out-product-1','prod-out-qty-1','prod-out-price-1','prod-output-add-btn']) assert(await erp.locator('#'+id).isEnabled(),id);
     assert.equal(await erp.locator('#prod-input-rows button:disabled,#prod-output-rows button:disabled').count(),0);
     await erp.locator('#prod-date').fill('2026-09-09');await erp.locator('#prod-job-no').fill('7');await erp.locator('#prod-note').fill('수정 테스트');await erp.locator('#prod-job-type').selectOption('묶음');
-    await erp.locator('#prod-in-box-count-1').fill('9');await erp.locator('#prod-out-box-count-1').fill('2');
     await erp.evaluate(()=>selectProdInputStock(1,'수정 원료','NEW-RAW','국내산','',90,'입고',4000));
     await erp.evaluate(()=>selectProdOutProduct(1,1));await erp.locator('#prod-out-lot-1').fill('NEW-OUT');await erp.locator('#prod-out-qty-1').fill('10.72');await erp.locator('#prod-out-price-1').fill('6285');await erp.locator('#prod-out-origin-1').fill('미국산');
+    await erp.locator('#prod-in-box-count-1').fill('9');await erp.locator('#prod-out-box-count-1').fill('2');
     await erp.locator('button[onclick="addProdInputRow()"]').click();assert(await erp.locator('#prod-in-qty-2').isEnabled());
     await erp.evaluate(()=>selectProdInputStock(2,'추가 돈등심','ADD-LOT','국내산','',10,'입고',6000));
     await erp.locator('#prod-output-add-btn').click();await erp.evaluate(()=>selectProdOutProduct(2,0));await erp.locator('#prod-out-qty-2').fill('3');await erp.locator('#prod-out-price-2').fill('2000');
