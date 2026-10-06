@@ -760,8 +760,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <div id="t-meatwatch-status" style="display:none;margin-top:4px;font-size:10px;line-height:1.35;color:#666;"></div>
       </div>
       <div class="form-group t-proddate" style="display:none"><label>생산일</label><input type="date" id="t-proddate" oninput="clearTxnStockSelection()"></div>
-      <div class="form-group"><label>중량(KG)</label><input type="number" id="t-weight" placeholder="0.00" step="0.01" oninput="autoFillTxnPrice()"></div>
       <div class="form-group"><label>박스수(선택)</label><input type="number" id="t-box-count" placeholder="미기록" min="0" step="1" inputmode="numeric"></div>
+      <div class="form-group"><label>중량(KG)</label><input type="number" id="t-weight" placeholder="0.00" step="0.01" oninput="autoFillTxnPrice()"></div>
       <div class="form-group">
         <label>단가 (원/KG)</label>
         <input type="number" id="t-price" placeholder="자동입력" step="1" style="background:#fffbe6;" oninput="this.dataset.autofilled='0'; updateTxnAmtPreview()">
@@ -853,8 +853,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <th style="min-width:540px;">품목 및 등록정보 (품목관리 기준)</th>
             <th style="min-width:120px;">거래처</th>
             <th style="min-width:230px;">이력번호(LOT)</th>
-            <th style="min-width:96px;text-align:right;">중량(KG)</th>
             <th style="min-width:82px;text-align:right;">박스수</th>
+            <th style="min-width:96px;text-align:right;">중량(KG)</th>
             <th style="min-width:92px;text-align:right;">단가(선택)</th>
             <th style="min-width:110px;">비고</th>
             <th style="width:34px;"></th>
@@ -903,8 +903,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <th style="min-width:112px;text-align:center;">이력번호</th>
             <th style="min-width:86px;text-align:right;">현재재고</th>
             <th style="min-width:110px;">거래처</th>
-            <th style="min-width:88px;text-align:right;">출고중량(KG)</th>
             <th style="min-width:82px;text-align:right;">박스수</th>
+            <th style="min-width:88px;text-align:right;">출고중량(KG)</th>
             <th style="min-width:78px;text-align:right;">단가</th>
             <th style="min-width:88px;text-align:right;">금액</th>
             <th style="width:34px;"></th>
@@ -9451,8 +9451,8 @@ function addBulkInboundRow(){
     <td class="bulk-in-product-cell"><div class="bulk-in-row-product-content"><div class="bulk-in-product-search-shell"><div class="bulk-in-row-product-search"><input class="bulk-in-product" placeholder="품목명 검색" autocomplete="off" oninput="onBulkInboundProductInput(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)"><button type="button" class="btn btn-sm btn-secondary" onclick="openBulkInboundProductPicker(this.parentElement.querySelector('.bulk-in-product'))" title="품목 검색 팝업 열기">검색</button></div><input type="hidden" class="bulk-in-product-id"></div><div class="bulk-in-product-meta" aria-live="polite"></div></div></td>
     <td><div class="txn-trader-search-wrap bulk-in-trader-search-wrap"><input class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkInboundTraderSearch(this,true)" onfocus="onBulkInboundTraderSearch(this,false)" onblur="hideBulkInboundTraderResults(this)" onkeydown="handleBulkInboundTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-in-trader-results" role="listbox" style="display:none;"></div></div></td>
     <td class="bulk-in-lot-cell"><input class="bulk-in-lot" placeholder="LOT번호" oninput="clearBulkInboundMeatwatchResult(this.closest('tr'),{removeNote:true})"><input type="hidden" class="bulk-in-meatwatch-process-begin"><input type="hidden" class="bulk-in-meatwatch-process-end"><input type="hidden" class="bulk-in-meatwatch-expiry"><input type="hidden" class="bulk-in-meatwatch-queried-at"><input type="hidden" class="bulk-in-livestock-species"><input type="hidden" class="bulk-in-livestock-trace-type"><input type="hidden" class="bulk-in-livestock-slaughter-date"><input type="hidden" class="bulk-in-livestock-slaughter-end-date"><input type="hidden" class="bulk-in-livestock-slaughter-houses"><input type="hidden" class="bulk-in-livestock-grades"><input type="hidden" class="bulk-in-livestock-inspection-results"><input type="hidden" class="bulk-in-livestock-process-date"><input type="hidden" class="bulk-in-livestock-process-end-date"><input type="hidden" class="bulk-in-livestock-process-companies"><input type="hidden" class="bulk-in-livestock-queried-at"><div class="bulk-in-meatwatch-status"></div></td>
-    <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-box-count" type="number" min="0" step="1" inputmode="numeric" placeholder="미기록" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-price" type="number" step="1" placeholder="자동" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-note" placeholder="비고" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkInboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
@@ -9895,8 +9895,8 @@ function addBulkOutboundRow(){
     <td class="bulk-out-lot-cell" style="font-size:11px;color:#666;text-align:center;font-family:monospace;">-</td>
     <td class="bulk-out-stock-cell" style="font-size:11px;color:#666;text-align:right;">-</td>
     <td><input class="bulk-out-trader" list="sales-trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
-    <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-box-count" type="number" min="0" step="1" inputmode="numeric" placeholder="미기록" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td class="bulk-out-amount-cell" style="font-size:11px;color:#555;text-align:right;">-</td>
     <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkOutboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
@@ -10663,12 +10663,12 @@ function addProdInputRow(){
       <input id="prod-in-lot-${id}" placeholder="LOT" style="font-family:monospace;font-size:11px;">
     </div>
     <div class="form-group">
-      <label style="font-size:11px;font-weight:700;color:#666;">투입량(KG)</label>
-      <input type="number" id="prod-in-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
-    </div>
-    <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">박스수(선택)</label>
       <input type="number" id="prod-in-box-count-${id}" placeholder="미기록" min="0" step="1" inputmode="numeric" style="font-size:12px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">투입량(KG)</label>
+      <input type="number" id="prod-in-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:var(--blue);">단가(원/KG)</label>
@@ -10806,12 +10806,12 @@ function addProdOutputRow(stockRowId=makeAppId('prodrow')){
       <input id="prod-out-lot-${id}" placeholder="LOT" style="font-family:monospace;font-size:11px;">
     </div>
     <div class="form-group">
-      <label style="font-size:11px;font-weight:700;color:#666;">생산량(KG)</label>
-      <input type="number" id="prod-out-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
-    </div>
-    <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">박스수(선택)</label>
       <input type="number" id="prod-out-box-count-${id}" placeholder="미기록" min="0" step="1" inputmode="numeric" style="font-size:12px;">
+    </div>
+    <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">생산량(KG)</label>
+      <input type="number" id="prod-out-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
     </div>
     <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">단가(원/KG)</label>
