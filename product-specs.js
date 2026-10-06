@@ -6,8 +6,8 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
   const money=value=>value===null || value===undefined?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:2});
-  const fields=['trader','material','origin','cutting_spec','packaging_spec','price_kg','price_box','note'];
-  const inputs={trader:'trader',material:'material',origin:'origin',cutting_spec:'cutting',packaging_spec:'packaging',price_kg:'price-kg',price_box:'price-box',note:'note'};
+  const fields=['trader','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','price_kg','price_box','note'];
+  const inputs={trader:'trader',material:'material',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',price_kg:'price-kg',price_box:'price-box',note:'note'};
   function message(value='',error=false){el('message').textContent=value;el('message').classList.toggle('error',error);}
   function syncControls(){
     const action=state.editing?'update':'create';
@@ -34,7 +34,7 @@
     return state.rows.filter(row=>fields.every(key=>{
       const term=filters[key];
       if(!term)return true;
-      const value=key.startsWith('price_') ? row[key]===null?'':String(Number(row[key])) : row[key];
+      const value=key.startsWith('price_') ? row[key]===null?'':String(Number(row[key])) : key==='inner_packaging_spec'?(row[key]??row.packaging_spec):row[key];
       return normalize(value).includes(term);
     }));
   }
@@ -43,10 +43,10 @@
     el('count').textContent=`${rows.length.toLocaleString('ko-KR')}건 / 전체 ${state.rows.length.toLocaleString('ko-KR')}건`;
     el('rows').innerHTML=rows.length?rows.map(row=>`<tr data-id="${esc(row.id)}">
       <td>${esc(row.trader)}</td><td>${esc(row.material)}</td><td>${esc(row.origin)}</td>
-      <td>${esc(row.cutting_spec)}</td><td>${esc(row.packaging_spec)}</td>
+      <td>${esc(row.cutting_spec)}</td><td>${esc(row.inner_packaging_spec??row.packaging_spec)}</td><td>${esc(row.outer_packaging_spec)}</td>
       <td class="spec-money">${money(row.price_kg)}</td><td class="spec-money">${money(row.price_box)}</td><td>${esc(row.note)}</td>
       <td>${can('update')?`<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${esc(row.id)}">수정</button>`:''}${can('delete')?`<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(row.id)}">삭제</button>`:''}</td>
-    </tr>`).join(''):`<tr><td colspan="9" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
+    </tr>`).join(''):`<tr><td colspan="10" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
   }
   async function load(){
     if(state.saving)return;
@@ -72,7 +72,7 @@
     const row=state.rows.find(item=>item.id===id);
     if(!row)return;
     state.editing={...row};
-    fields.forEach(key=>{el(inputs[key]).value=row[key]??'';});
+    fields.forEach(key=>{el(inputs[key]).value=key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');});
     syncControls();el('editor').scrollIntoView({block:'nearest',behavior:'smooth'});el('trader').focus();
   }
   function readPrice(key){

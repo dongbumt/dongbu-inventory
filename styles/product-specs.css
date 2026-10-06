@@ -11,7 +11,7 @@
 .spec-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:12px;}
 .spec-count{font-size:12px;font-weight:400;color:#666;}
 .spec-table-wrap{width:100%;overflow-x:auto;}
-.spec-table{width:100%;min-width:1120px;border-collapse:collapse;font-size:12px;}
+.spec-table{width:100%;min-width:1280px;border-collapse:collapse;font-size:12px;}
 .spec-table th{background:#f4f5f6;color:#555;text-align:left;font-weight:700;white-space:nowrap;}
 .spec-table th,.spec-table td{padding:9px 8px;border-bottom:1px solid #e4e6e8;vertical-align:top;overflow-wrap:anywhere;}
 .spec-table td{max-width:220px;white-space:pre-wrap;}
