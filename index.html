@@ -21,7 +21,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20260922productionnotes1">
+<link rel="stylesheet" href="styles/main.css?v=20261006workordermulti1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20260923plan4">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261006spec1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
@@ -399,7 +399,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="window.open('production-board.html?v=20260831board9','_blank');" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
       <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders">📝 작업지시</div>
       <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label">🏷️ 라벨출력</div>
-      <div class="nav-tab" onclick="window.open('label-print.html?v=20260916touch4','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
+      <div class="nav-tab" onclick="window.open('label-print.html?v=20261006workordermulti1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
     </div>
   </div>
 
@@ -3683,7 +3683,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="card">
       <div class="card-title"><div class="ct-bar" style="background:#6c3483;"></div>📝 작업지시 등록 / 수정</div>
       <input type="hidden" id="wo-edit-id">
-      <input type="hidden" id="wo-stock-key">
 
       <div style="display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px;">
         <div class="form-group">
@@ -3695,19 +3694,13 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <input id="wo-title" placeholder="예) 돈등심 라벨작업" oninput="refreshWorkOrderPreview()">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
-          <label>투입 원료육 현재고 선택</label>
-          <div class="txn-managed-product-field production-picker-field">
-            <input id="wo-stock-search" data-picker-context="workorder-input" placeholder="품목명·이력번호 검색 후 검색 버튼" autocomplete="off" oninput="onWorkOrderStockInput()" onkeydown="handleWorkOrderPickerKeydown(event,'stock')">
-            <button type="button" class="btn btn-secondary" onclick="openWorkOrderStockPicker()">검색</button>
+          <label>투입 원료육</label>
+          <div id="wo-source-rows"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addWorkOrderSourceRow()">+ 원료육 추가</button>
+            <span id="wo-input-total" style="font-size:12px;color:#555;">투입 예정량 합계 0.00 KG</span>
           </div>
-        </div>
-        <div class="form-group" style="grid-column:1/-1;">
-          <label>선택 원료육</label>
-          <input id="wo-stock-summary" readonly style="background:#f8f9fa;" placeholder="현재고에서 원료육을 선택하세요">
-        </div>
-        <div class="form-group">
-          <label>투입 예정량(KG)</label>
-          <input id="wo-input-weight" type="number" step="0.01" placeholder="0.00">
+          <div style="font-size:11px;color:#777;margin-top:5px;">원료육마다 현재고와 투입 예정량을 입력하세요. 여러 LOT를 섞는 경우 생산물 이력번호를 확인해주세요.</div>
         </div>
         <div class="form-group">
           <label>라벨 크기</label>
@@ -3758,7 +3751,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         </div>
         <div class="form-group">
           <label>이력번호</label>
-          <input id="wo-lot" placeholder="원료 선택 시 자동입력" oninput="refreshWorkOrderPreview()">
+          <input id="wo-lot" placeholder="원료 선택 시 자동입력" oninput="this.dataset.autoSourceLot='';refreshWorkOrderPreview()">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label>원료 및 함량</label>
@@ -7822,7 +7815,7 @@ function openTxnStockPicker(initialQuery, targetInput=null){
   const allSearch = document.getElementById('tsp-search-all');
   const pickerContext = targetInput?.dataset?.pickerContext || '';
   const selectedKey = targetInput
-    ? (pickerContext === 'workorder-input' ? (document.getElementById('wo-stock-key')?.value || '') : (pickerContext === 'production-input' ? (targetInput.dataset.stockKey || '') : (targetInput.closest('tr')?.querySelector('.bulk-out-key')?.value || '')))
+    ? (pickerContext === 'workorder-input' ? (targetInput.closest('.wo-source-row')?.querySelector('.wo-stock-key')?.value || '') : (pickerContext === 'production-input' ? (targetInput.dataset.stockKey || '') : (targetInput.closest('tr')?.querySelector('.bulk-out-key')?.value || '')))
     : (document.getElementById('t-stock-key')?.value || '');
   const sourceValue = targetInput?.value || document.getElementById('t-stock-search')?.value || '';
   if(allSearch) allSearch.value = initialQuery !== undefined ? String(initialQuery || '') : (selectedKey ? '' : sourceValue);
@@ -7973,9 +7966,9 @@ function confirmTxnStockPicker(){
   const targetInput = txnStockPickerTargetInput;
   if(targetInput){
     if(targetInput.dataset?.pickerContext === 'workorder-input'){
-      selectWorkOrderStock(stock.key);
+      selectWorkOrderStock(stock.key,targetInput);
       closeTxnStockPicker(false);
-      requestAnimationFrame(()=>document.getElementById('wo-input-weight')?.focus());
+      requestAnimationFrame(()=>targetInput.closest('.wo-source-row')?.querySelector('.wo-input-weight')?.focus());
       return;
     }
     if(targetInput.dataset?.pickerContext === 'production-input'){
@@ -20497,6 +20490,53 @@ function labelCrossFacilityNoticeFromText(product='', ingredients=''){
   return '본 제품은 소고기, 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
 }
 
+function workOrderSourceInputs(order){
+  if(Array.isArray(order?.sourceInputs) && order.sourceInputs.length) return order.sourceInputs;
+  return order?.sourceStock ? [{sourceStockKey:order.sourceStockKey || order.sourceStock.key || '',sourceStock:order.sourceStock,inputWeight:order.inputWeight || 0}] : [];
+}
+
+function workOrderSourceRows(){
+  return [...document.querySelectorAll('#wo-source-rows .wo-source-row')];
+}
+
+function updateWorkOrderInputTotal(){
+  const rows=workOrderSourceRows();
+  const total=rows.reduce((sum,row)=>sum+parseAppNumber(row.querySelector('.wo-input-weight')?.value),0);
+  const count=rows.filter(row=>row.querySelector('.wo-stock-key')?.value).length;
+  const el=document.getElementById('wo-input-total');
+  if(el) el.textContent=`선택 원료육 ${count}건 · 투입 예정량 합계 ${total.toFixed(2)} KG`;
+}
+
+function addWorkOrderSourceRow(source=null){
+  const container=document.getElementById('wo-source-rows');
+  if(!container) return null;
+  if(workOrderSourceRows().length>=30){alert('한 작업지시에 원료육은 최대 30건까지 입력할 수 있습니다.');return null;}
+  const row=document.createElement('div');
+  row.className='wo-source-row';
+  row.innerHTML=`<div class="form-group"><label>원료육 현재고 선택</label><div class="txn-managed-product-field production-picker-field"><input class="wo-stock-search" data-picker-context="workorder-input" placeholder="품목명·이력번호 검색" autocomplete="off" oninput="onWorkOrderStockInput(this)" onkeydown="handleWorkOrderPickerKeydown(event,'stock')"><button type="button" class="btn btn-secondary" onclick="openWorkOrderStockPicker(this)">검색</button></div><input type="hidden" class="wo-stock-key"></div><div class="form-group"><label>예정량(KG)</label><input class="wo-input-weight" type="number" min="0.01" step="0.01" placeholder="0.00" oninput="updateWorkOrderInputTotal()"></div><button type="button" class="btn btn-secondary wo-remove" onclick="removeWorkOrderSourceRow(this)" aria-label="원료육 행 삭제">×</button><div class="wo-source-summary">현재고에서 원료육을 선택하세요.</div>`;
+  container.appendChild(row);
+  if(source?.sourceStock){
+    row._sourceStock=source.sourceStock;
+    row.querySelector('.wo-stock-key').value=source.sourceStockKey || source.sourceStock.key || '';
+    row.querySelector('.wo-stock-search').value=source.sourceStock.product || '';
+    row.querySelector('.wo-source-summary').textContent=workOrderStockLabel(source.sourceStock);
+    row.querySelector('.wo-input-weight').value=parseAppNumber(source.inputWeight)>0?String(source.inputWeight):'';
+  }
+  updateWorkOrderInputTotal();
+  return row;
+}
+
+function removeWorkOrderSourceRow(button){
+  const row=button.closest('.wo-source-row');
+  if(!row)return;
+  if(workOrderSourceRows().length===1){
+    row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-stock-search').value='';
+    row.querySelector('.wo-input-weight').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
+    row._sourceStock=null;
+  }else row.remove();
+  updateWorkOrderInputTotal();refreshWorkOrderPreview();
+}
+
 function initWorkOrderForm(){
   if(typeof migrateLabelProducts === 'function') migrateLabelProducts();
   const todayStr = localDateString();
@@ -20506,12 +20546,13 @@ function initWorkOrderForm(){
   if(mfgEl && !mfgEl.value) mfgEl.value = todayStr;
   const sizeEl = document.getElementById('wo-label-size');
   if(sizeEl && !sizeEl.value) sizeEl.value = localStorage.getItem('dbmt_label_size') || '7x10';
+  if(!workOrderSourceRows().length) addWorkOrderSourceRow();
   autoSetWorkOrderExpiry();
   refreshWorkOrderPreview();
 }
 
 function resetWorkOrderForm(){
-  ['wo-edit-id','wo-stock-key','wo-label-product-id','wo-title','wo-stock-search','wo-stock-summary','wo-input-weight',
+  ['wo-edit-id','wo-label-product-id','wo-title',
    'wo-product','wo-origin','wo-grade','wo-weight','wo-itemno','wo-lot','wo-ingredients'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
@@ -20525,6 +20566,9 @@ function resetWorkOrderForm(){
   if(tempEl) tempEl.value = '냉동';
   const sizeEl = document.getElementById('wo-label-size');
   if(sizeEl) sizeEl.value = localStorage.getItem('dbmt_label_size') || '7x10';
+  document.getElementById('wo-lot').dataset.autoSourceLot='';
+  const sourceRows=document.getElementById('wo-source-rows');
+  if(sourceRows){sourceRows.innerHTML='';addWorkOrderSourceRow();}
   autoSetWorkOrderExpiry();
   refreshWorkOrderPreview();
 }
@@ -20537,9 +20581,9 @@ function onWorkOrderDateChange(){
   refreshWorkOrderPreview();
 }
 
-function openWorkOrderStockPicker(){
-  const input = document.getElementById('wo-stock-search');
-  if(input) openTxnStockPicker(document.getElementById('wo-stock-key')?.value ? '' : input.value, input);
+function openWorkOrderStockPicker(target){
+  const input=(target?.matches?.('.wo-stock-search')?target:target?.closest?.('.wo-source-row')?.querySelector('.wo-stock-search')) || workOrderSourceRows()[0]?.querySelector('.wo-stock-search');
+  if(input) openTxnStockPicker(input.closest('.wo-source-row').querySelector('.wo-stock-key').value ? '' : input.value, input);
 }
 
 function openWorkOrderProductPicker(){
@@ -20550,16 +20594,18 @@ function openWorkOrderProductPicker(){
 function handleWorkOrderPickerKeydown(event,kind){
   if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
     event.preventDefault();
-    if(kind === 'stock') openWorkOrderStockPicker(); else openWorkOrderProductPicker();
+    if(kind === 'stock') openWorkOrderStockPicker(event.target); else openWorkOrderProductPicker();
   }
 }
 
-function onWorkOrderStockInput(){
-  const previous = findWorkOrderStock(document.getElementById('wo-stock-key')?.value || '');
-  if(previous && document.getElementById('wo-lot').value === previous.lot) document.getElementById('wo-lot').value = '';
-  document.getElementById('wo-stock-key').value = '';
-  document.getElementById('wo-stock-summary').value = '';
-  refreshWorkOrderPreview();
+function onWorkOrderStockInput(input){
+  const row=input?.closest('.wo-source-row');
+  if(!row)return;
+  const previous=row._sourceStock;
+  const lotEl=document.getElementById('wo-lot');
+  if(previous && lotEl.dataset.autoSourceLot===lotEl.value && lotEl.value===previous.lot){lotEl.value='';lotEl.dataset.autoSourceLot='';}
+  row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
+  row._sourceStock=null;updateWorkOrderInputTotal();refreshWorkOrderPreview();
 }
 
 function onWorkOrderProductInput(){
@@ -20595,8 +20641,8 @@ function applyWorkOrderLabelProduct(product){
   set('wo-grade', p.grade);
   set('wo-itemno', p.itemno);
   set('wo-ingredients', `${p.meattype || inferLabelMeatType(p.name, '')} 100%`);
-  const stock = findWorkOrderStock(document.getElementById('wo-stock-key')?.value || '');
-  if(stock?.lot) set('wo-lot', stock.lot);
+  const sourceRows=workOrderSourceRows().filter(row=>row.querySelector('.wo-stock-key').value);
+  if(sourceRows.length===1 && !document.getElementById('wo-lot')?.value && sourceRows[0]._sourceStock?.lot) set('wo-lot',sourceRows[0]._sourceStock.lot);
   const workDate = document.getElementById('wo-date')?.value || localDateString();
   set('wo-mfgdate', workDate);
   const tempEl = document.getElementById('wo-temptype');
@@ -20644,53 +20690,76 @@ function workOrderStockLabel(s){
   return parts.join(' / ');
 }
 
-function selectWorkOrderStock(key){
+function selectWorkOrderStock(key,targetInput){
   const s = findWorkOrderStock(key);
   if(!s) return;
-  const set = (id, value) => {
-    const el = document.getElementById(id);
-    if(el) el.value = value || '';
-  };
-  set('wo-stock-key', s.key);
-  set('wo-stock-search', s.product || '');
-  set('wo-stock-summary', workOrderStockLabel(s));
-  if(!document.getElementById('wo-input-weight')?.value) set('wo-input-weight', parseAppNumber(s.stock).toFixed(2));
-  set('wo-lot', s.lot || '');
-  if(!document.getElementById('wo-origin')?.value) set('wo-origin', s.origin || '');
-  if(!document.getElementById('wo-ingredients')?.value){
-    set('wo-ingredients', `${inferLabelMeatType(s.product, '')} 100%`);
+  const row=targetInput?.closest('.wo-source-row') || workOrderSourceRows()[0];
+  if(!row)return;
+  row._sourceStock=s;
+  row.querySelector('.wo-stock-key').value=s.key;
+  row.querySelector('.wo-stock-search').value=s.product || '';
+  row.querySelector('.wo-source-summary').textContent=workOrderStockLabel(s);
+  if(!row.querySelector('.wo-input-weight').value)row.querySelector('.wo-input-weight').value=parseAppNumber(s.stock).toFixed(2);
+  const lotEl=document.getElementById('wo-lot');
+  const selected=workOrderSourceRows().filter(item=>item.querySelector('.wo-stock-key').value);
+  if(selected.length===1 && (!lotEl.value || lotEl.dataset.autoSourceLot===lotEl.value)){lotEl.value=s.lot || '';lotEl.dataset.autoSourceLot=lotEl.value;}
+  else if(selected.length>1 && (lotEl.dataset.autoSourceLot===lotEl.value || lotEl.value===selected[0]._sourceStock?.lot)
+    && selected.some(item=>item._sourceStock?.lot!==lotEl.value)){
+    lotEl.value='';lotEl.dataset.autoSourceLot='';lotEl.placeholder='여러 LOT의 생산물 이력번호 입력';
   }
-  refreshWorkOrderPreview();
+  if(!document.getElementById('wo-origin')?.value) document.getElementById('wo-origin').value=s.origin || '';
+  if(!document.getElementById('wo-ingredients')?.value){
+    document.getElementById('wo-ingredients').value=`${inferLabelMeatType(s.product, '')} 100%`;
+  }
+  updateWorkOrderInputTotal();refreshWorkOrderPreview();
+}
+
+function workOrderStockSnapshot(stock){
+  return {
+    key:stock.key,stockRowId:stock.stockRowId || '',stockNote:stock.stockNote || '',
+    product:stock.product || '',packunit:stock.packunit || '',lot:stock.lot || '',origin:stock.origin || '',
+    proddate:stock.proddate || '',stockLocation:stock.stockLocation || '',
+    price:parseAppNumber(stock.price),stock:parseAppNumber(stock.stock)
+  };
 }
 
 function collectWorkOrderForm(){
   const val = id => document.getElementById(id)?.value || '';
-  const existing = workOrders.find(row => String(row.id) === val('wo-edit-id'));
-  const stock = findWorkOrderStock(val('wo-stock-key')) || (existing?.sourceStockKey === val('wo-stock-key') ? existing.sourceStock : null);
   const product = val('wo-product').trim();
   const date = val('wo-date');
   const weight = parseAppNumber(val('wo-weight'));
   if(!date){ alert('작업일을 입력해주세요.'); return null; }
   if(!product){ alert('생산물 제품명을 입력해주세요.'); return null; }
+  const sourceInputs=[];
+  const usedKeys=new Set();
+  for(const row of workOrderSourceRows()){
+    const key=row.querySelector('.wo-stock-key').value;
+    const search=row.querySelector('.wo-stock-search').value.trim();
+    const qtyText=row.querySelector('.wo-input-weight').value;
+    if(!key && !search && !qtyText)continue;
+    const stock=key && (row._sourceStock?.key===key?row._sourceStock:findWorkOrderStock(key));
+    if(!stock){alert('각 투입 원료육을 현재고 검색에서 선택해주세요.');return null;}
+    const qty=Number(qtyText);
+    if(!qtyText || !Number.isFinite(qty) || qty<=0 || qty>999999999 || Math.abs(qty*100-Math.round(qty*100))>0.000001){
+      alert('원료육마다 투입 예정량을 0보다 크게, 소수 둘째 자리까지 입력해주세요.');return null;
+    }
+    const identity=stock.stockRowId || key;
+    if(usedKeys.has(identity)){alert('같은 재고는 한 번만 선택하고 예정량을 합쳐 입력해주세요.');return null;}
+    usedKeys.add(identity);
+    sourceInputs.push({sourceStockKey:key,sourceStock:workOrderStockSnapshot(stock),inputWeight:qty});
+  }
+  if(!sourceInputs.length){alert('투입 원료육을 하나 이상 선택해주세요.');return null;}
+  if(sourceInputs.length>1 && !val('wo-lot').trim()){alert('여러 원료육을 투입할 때는 생산물 이력번호를 입력해주세요.');return null;}
+  const inputWeight=Math.round(sourceInputs.reduce((sum,item)=>sum+item.inputWeight,0)*100)/100;
   const selectedProduct = selectedWorkOrderLabelProduct();
   return {
     id: val('wo-edit-id') || workOrderId(),
     date,
     title: val('wo-title').trim(),
-    sourceStockKey: val('wo-stock-key'),
-    sourceStock: stock ? {
-      key: stock.key,
-      stockRowId:stock.stockRowId || '', stockNote:stock.stockNote || '',
-      product: stock.product || '',
-      packunit: stock.packunit || '',
-      lot: stock.lot || '',
-      origin: stock.origin || '',
-      proddate: stock.proddate || '',
-      stockLocation: stock.stockLocation || '',
-      price: parseAppNumber(stock.price),
-      stock: parseAppNumber(stock.stock)
-    } : null,
-    inputWeight: parseAppNumber(val('wo-input-weight')),
+    sourceStockKey:sourceInputs[0].sourceStockKey,
+    sourceStock:sourceInputs[0].sourceStock,
+    sourceInputs,
+    inputWeight,
     labelProductId: val('wo-label-product-id') || selectedProduct?.id || '',
     productCode: selectedProduct?.productCode || '',
     brand: selectedProduct?.brand || '',
@@ -20736,10 +20805,8 @@ function editWorkOrder(id){
   set('wo-edit-id', row.id);
   set('wo-date', row.date);
   set('wo-title', row.title);
-  set('wo-stock-key', row.sourceStockKey);
-  set('wo-stock-summary', row.sourceStock ? workOrderStockLabel(row.sourceStock) : '');
-  set('wo-stock-search', row.sourceStock?.product || '');
-  set('wo-input-weight', row.inputWeight ? String(row.inputWeight) : '');
+  const sourceRows=document.getElementById('wo-source-rows');
+  if(sourceRows){sourceRows.innerHTML='';workOrderSourceInputs(row).forEach(source=>addWorkOrderSourceRow(source));if(!workOrderSourceRows().length)addWorkOrderSourceRow();}
   const labelProductId = row.labelProductId || ((labelProducts || []).find(p => samePriceText(p.name || '', row.product || ''))?.id || '');
   set('wo-label-product-id', labelProductId);
   set('wo-label-size', row.labelSize || '7x10');
@@ -20751,6 +20818,7 @@ function editWorkOrder(id){
   set('wo-weight', row.weight ? String(row.weight) : '');
   set('wo-itemno', row.itemno);
   set('wo-lot', row.lot);
+  document.getElementById('wo-lot').dataset.autoSourceLot='';
   set('wo-ingredients', row.ingredients);
   set('wo-temptype', row.temptype || '냉동');
   refreshWorkOrderPreview();
@@ -20774,7 +20842,7 @@ function setWorkOrderListToday(){
 
 function workOrderSearchText(row){
   return [row.date, row.title, row.product, row.origin, row.lot, row.ingredients,
-    row.sourceStock?.product, row.sourceStock?.lot, row.sourceStock?.origin, row.sourceStock?.stockLocation
+    ...workOrderSourceInputs(row).flatMap(source=>[source.sourceStock?.product,source.sourceStock?.lot,source.sourceStock?.origin,source.sourceStock?.stockLocation])
   ].join(' ');
 }
 
@@ -20806,7 +20874,7 @@ function renderWorkOrders(){
       <tr>
         <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div></td>
         <td>${htmlEscape(r.lot || '')}</td>
-        <td>${htmlEscape(r.sourceStock?.product || '-')}</td>
+        <td>${workOrderSourceInputs(r).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
         <td style="text-align:right;white-space:nowrap;">${r.inputWeight == null || r.inputWeight === '' ? '-' : parseAppNumber(r.inputWeight).toFixed(2)+' KG'}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm" onclick="editWorkOrder(${jsArg(r.id)})">수정</button>
@@ -20836,7 +20904,7 @@ function workOrderLabelData(row){
     phone: LBL_DEFAULTS.phone,
     address: LBL_DEFAULTS.address,
     temptype: row.temptype || '냉동',
-    lotText: row.lot || row.sourceStock?.lot || '',
+    lotText: row.lot || (workOrderSourceInputs(row).length===1?row.sourceStock?.lot:'') || '',
     crossFacilityNotice: labelCrossFacilityNoticeFromText(row.product, row.ingredients)
   };
 }
@@ -20864,7 +20932,7 @@ function collectWorkOrderFormForPreview(){
     lot: val('wo-lot').trim(),
     ingredients: val('wo-ingredients').trim(),
     temptype: val('wo-temptype') || '냉동',
-    sourceStock: findWorkOrderStock(val('wo-stock-key'))
+    sourceStock: workOrderSourceRows()[0]?._sourceStock || null
   };
 }
 
@@ -20946,7 +21014,7 @@ function updateSelectedWorkOrderLabelPreview(){
       `작업일: ${htmlEscape(row.date || '')}<br>` +
       `중량: ${weight ? weight.toFixed(2)+' KG' : '선택해주세요'}<br>` +
       `이력번호: ${htmlEscape(row.lot || row.sourceStock?.lot || '')}<br>` +
-      `투입 원료육: ${htmlEscape(row.sourceStock ? workOrderStockLabel(row.sourceStock) : '-')}`;
+      `투입 원료육: ${workOrderSourceInputs(row).map(source=>htmlEscape(`${source.sourceStock?.product || '-'} / ${parseAppNumber(source.inputWeight).toFixed(2)} KG / LOT ${source.sourceStock?.lot || '-'}`)).join('<br>') || '-'}`;
   }
 }
 

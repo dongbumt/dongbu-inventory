@@ -798,7 +798,9 @@
       const weight = logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
       const groups=window.DBMTLabelProducts?.group(logs)||[];
       const detail=groups.map(g=>`${g.name}${g.packunit?' / '+g.packunit:''}: ${g.count}장 · ${kg(g.weight)}`).join('\n');
-      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장)\n${detail}\n\n원료 투입은 한 번만, 생산품목별로 생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
+      const sourceDetail=(Array.isArray(row.sourceInputs)&&row.sourceInputs.length?row.sourceInputs:[{sourceStock:row.sourceStock,inputWeight:row.inputWeight}])
+        .map(input=>`${input.sourceStock?.product || '-'} · ${kg(input.inputWeight)} · LOT ${input.sourceStock?.lot || '-'}`).join('\n');
+      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장)\n${sourceDetail}\n${detail}\n\n원료 투입은 한 번만, 생산품목별로 생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
       setLoading(true);
       setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
       try {
@@ -849,7 +851,7 @@
         .filter(row => state.allDates || !date || String(row.date || '') === date)
         .filter(row => {
           if(!search) return true;
-          const hay = [row.title, row.product, row.lot, row.origin, row.sourceStock?.lot].join(' ').toLowerCase();
+          const hay = [row.title, row.product, row.lot, row.origin,...(Array.isArray(row.sourceInputs)?row.sourceInputs:[]).flatMap(input=>[input.sourceStock?.product,input.sourceStock?.lot]),row.sourceStock?.lot].join(' ').toLowerCase();
           return hay.includes(search);
         })
         .sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')) || String(a.product || '').localeCompare(String(b.product || ''), 'ko'));
@@ -1228,6 +1230,7 @@
         temptype: row.temptype || '냉동',
         inputWeight: toNumber(row.inputWeight),
         sourceStock: row.sourceStock || null,
+        ...(Array.isArray(row.sourceInputs)&&row.sourceInputs.length?{sourceInputs:row.sourceInputs}:{}),
         labelSize: row.labelSize || '7x10'
       };
     }

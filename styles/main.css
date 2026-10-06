@@ -150,6 +150,13 @@
   #wo-list-wrap th:nth-child(3){width:16%;}
   #wo-list-wrap th:nth-child(4){width:15%;}
   #wo-list-wrap th:nth-child(5){width:24%;}
+  .wo-source-row{display:grid;grid-template-columns:minmax(0,1fr) 105px 32px;gap:6px;align-items:end;padding:8px;margin-top:6px;border:1px solid #dde1e7;border-radius:7px;background:#f8f9fa;}
+  .wo-source-row .form-group{min-width:0;margin:0;}
+  .wo-source-row label{display:block;font-size:11px;font-weight:700;color:#666;margin-bottom:3px;}
+  .wo-source-row .txn-managed-product-field{width:100%;min-width:0;}
+  .wo-source-row .txn-managed-product-field input{min-width:0;}
+  .wo-source-row .wo-source-summary{grid-column:1/-1;font-size:11px;color:#555;overflow-wrap:anywhere;min-height:15px;}
+  .wo-source-row .wo-remove{width:32px;height:35px;padding:0;}
   /* 단가표 행높이 축소 (기본의 80%) */
   #p-prices td{padding:7px 10px;}
   #stock-table{min-width:0;width:100%;}

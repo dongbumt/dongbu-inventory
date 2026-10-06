@@ -54,29 +54,29 @@ const server=http.createServer((req,res)=>{
       const updateLabelPreview=()=>updateSelectedWorkOrderLabelPreview(),printLabelData=(...args)=>calls.push(['erp-print',...args]);
       ${block("let txnProductPickerKind =",'function handleManagedProductInputKeydown(')}
       ${block('let txnStockPickerRows =','function selectTxnStock(')}
-      ${block('function initWorkOrderForm(){','// 📦 품목관리 (labelProducts)')}
+${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelProducts)')}
       initWorkOrderForm();
     `});
-    const openStock=()=>page.locator('#p-workorders button[onclick="openWorkOrderStockPicker()"]').click();
+    const openStock=()=>page.locator('#p-workorders .wo-source-row').first().locator('button[onclick="openWorkOrderStockPicker(this)"]').click();
     await openStock();assert.equal(await page.locator('#tsp-result-head th').count(),10);assert.equal(await page.locator('#tsp-result-body tr').count(),2);
     await page.locator('#tsp-search-lot').fill('111');await page.locator('#tsp-result-body tr').dblclick();
-    assert.equal(await page.locator('#wo-stock-key').inputValue(),'raw-1');assert.equal(await page.locator('#wo-lot').inputValue(),'LOT-111');
+    assert.equal(await page.locator('.wo-source-row:first-child .wo-stock-key').inputValue(),'raw-1');assert.equal(await page.locator('#wo-lot').inputValue(),'LOT-111');
     await openStock();await page.locator('#tsp-search-lot').fill('222');await page.locator('#tsp-search-lot').press('Enter');
     assert.equal(await page.locator('#wo-lot').inputValue(),'LOT-222');
     await openStock();await page.locator('#txn-stock-picker-modal').screenshot({path:path.join(artifacts,'stock-picker.png')});await page.locator('#tsp-search-all').press('Escape');
-    assert.equal(await page.locator('#wo-stock-key').inputValue(),'raw-2');
+    assert.equal(await page.locator('.wo-source-row:first-child .wo-stock-key').inputValue(),'raw-2');
     await page.locator('#wo-product').press('F4');assert.equal(await page.locator('#tpp-kind-product').getAttribute('aria-pressed'),'true');
     await page.locator('#tpp-search-brand').selectOption('B');await page.locator('#txn-product-picker-modal').screenshot({path:path.join(artifacts,'product-picker.png')});
     await page.locator('#tpp-result-body tr').dblclick();assert.equal(await page.locator('#wo-label-product-id').inputValue(),'prod-b');
     assert.equal(await page.locator('#wo-itemno').inputValue(),'202502930936');assert.equal(await page.locator('#wo-temptype').inputValue(),'냉장');
     assert.equal(await page.locator('#wo-lot').inputValue(),'LOT-222');
-    await page.locator('#wo-input-weight').fill('100');await page.evaluate(()=>saveWorkOrder());
+    await page.locator('.wo-source-row:first-child .wo-input-weight').fill('100');await page.evaluate(()=>saveWorkOrder());
     const order=await page.evaluate(()=>workOrders[0]);assert.equal(order.weight,0);assert.equal(order.labelProductId,'prod-b');assert.equal(order.sourceStock.key,'raw-2');assert.equal(order.sourceStock.stockRowId,'qa-source-row');assert.equal(order.sourceStock.stockNote,'가상 거래처 / 5mm');
     assert.deepEqual(await page.evaluate(()=>alerts),[],'Work order should save without label weight');
     await page.evaluate(()=>{editWorkOrder('qa-workorder');stocks=[];});
     assert.equal((await page.evaluate(()=>collectWorkOrderForm())).sourceStock.key,'raw-2','Keep historical source snapshot when stock is depleted');
     await page.evaluate(()=>{stocks=[workOrders[0].sourceStock];});
-    await page.locator('#wo-stock-search').fill('다른 원료');assert.equal(await page.locator('#wo-stock-key').inputValue(),'');
+    await page.locator('.wo-source-row:first-child .wo-stock-search').fill('다른 원료');assert.equal(await page.locator('.wo-source-row:first-child .wo-stock-key').inputValue(),'');
     await page.locator('#wo-product').fill('다른 제품');assert.equal(await page.locator('#wo-label-product-id').inputValue(),'');
     await page.evaluate(()=>{
       const input=document.createElement('input');input.dataset.pickerContext='production-input';input.dataset.productionRowId='1';document.body.append(input);
@@ -91,6 +91,30 @@ const server=http.createServer((req,res)=>{
     await page.locator('#lbl-weight').selectOption('10');await page.evaluate(()=>printSelectedWorkOrderLabel());
     assert.equal((await page.evaluate(()=>calls.find(c=>c[0]==='erp-print')))[1].weight,'10.00');
     console.log('PASS: workorder popup selection, lot changes, optional weight, source snapshot, shared picker regression, ERP label weight');
+
+    await page.evaluate(()=>{
+      document.getElementById('p-label').classList.remove('active');document.getElementById('p-workorders').classList.add('active');
+      stocks=[workOrders[0].sourceStock,{key:'raw-1',product:'돈등심 원료',lot:'LOT-111',origin:'국내산',stock:100,price:5000,stockLocation:'가공장'}];
+      editWorkOrder('qa-workorder');addWorkOrderSourceRow();
+      selectWorkOrderStock('raw-1',workOrderSourceRows()[1].querySelector('.wo-stock-search'));
+    });
+    assert.equal(await page.locator('.wo-source-row').count(),2);
+    assert.equal(await page.locator('#wo-lot').inputValue(),'','Different source LOTs must not silently reuse the first LOT');
+    await page.locator('.wo-source-row:nth-child(2) .wo-input-weight').fill('20');
+    await page.locator('#wo-lot').fill('MIX-LOT');
+    await page.evaluate(()=>saveWorkOrder());
+    const multi=await page.evaluate(()=>workOrders[0]);
+    assert.equal(multi.sourceInputs.length,2);
+    assert.deepEqual(multi.sourceInputs.map(input=>[input.sourceStock.key,input.inputWeight]),[['raw-2',100],['raw-1',20]]);
+    assert.equal(multi.inputWeight,120);
+    assert.equal(multi.sourceStock.key,'raw-2','Legacy primary source remains available');
+    assert.match(await page.locator('#wo-list-wrap').textContent(),/120\.00 KG/);
+    await page.evaluate(()=>editWorkOrder('qa-workorder'));
+    assert.equal(await page.locator('.wo-source-row').count(),2,'Editing restores every raw input');
+    await page.locator('#p-workorders').screenshot({path:path.join(artifacts,'workorder-multi.png')});
+    await page.locator('.wo-source-row:nth-child(2) .wo-remove').click();
+    assert.equal(await page.locator('.wo-source-row').count(),1);
+    console.log('PASS: multiple raw inputs, per-source weights, explicit mixed LOT, total weight, legacy primary source, edit and remove');
 
     const context=await browser.newContext({viewport:{width:1366,height:900}});const saved=[];let failSave=false;
     await context.addInitScript(()=>{window.__printedLabels=[];window.print=()=>{
@@ -132,8 +156,13 @@ const server=http.createServer((req,res)=>{
     failSave=true;await setOuter(label,3.75);const count=await label.evaluate(()=>state.logs.length);
     await label.locator('#print-btn').click();await label.waitForFunction(()=>!state.loading);assert.equal(await label.evaluate(()=>state.logs.length),count);
     assert.equal(await label.evaluate(()=>__printedLabels.length),3,'Failed save must not print');assert.equal(await label.locator('iframe[data-dbmt-label-print]').count(),0);
+    failSave=false;
+    await label.evaluate(value=>{state.workOrders.push({...value,id:'qa-multi-workorder'});selectOrder('qa-multi-workorder');},multi);
+    await setOuter(label,5);await label.locator('#print-btn').click();await label.waitForFunction(()=>!state.loading&&__printedLabels.length===4);
+    assert.equal(saved.at(-1).p_logs[0].workOrderSnapshot.sourceInputs.length,2,'Print snapshot keeps both raw materials');
+    assert.equal(saved.at(-1).p_logs[0].inputWeight,120,'Print log keeps total raw input');
     await label.screenshot({path:path.join(artifacts,'label-weight.png'),fullPage:true});
-    console.log('PASS: selected/custom/legacy weights, preview, logs, mixed-weight totals, immutable reprints, invalid values, failed-save rollback');
+    console.log('PASS: selected/custom/legacy weights, preview, logs, mixed-weight totals, immutable reprints, invalid values, failed-save rollback, multi-input print snapshot');
     console.log(`Artifacts: ${artifacts}`);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
