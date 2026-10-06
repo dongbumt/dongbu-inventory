@@ -22,7 +22,7 @@ try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261006workordermulti1">
-<link rel="stylesheet" href="styles/production-schedule.css?v=20260923plan4">
+<link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261006spec2">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
@@ -488,7 +488,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
     </div>
     <div class="ps-summary"><strong id="ps-title"></strong><span id="ps-summary"></span></div>
-    <p class="ps-guide">날짜를 눌러 생산예정 품목을 추가하고, 등록한 품목을 눌러 수정하세요. 생산 실적은 생산일보에서 기록합니다.</p>
+    <p class="ps-guide">날짜를 눌러 품목을 추가하고, 등록한 일정을 눌러 수정하거나 다른 날짜로 드래그해 옮기세요. 생산 실적은 생산일보에서 기록합니다.</p>
     <form id="ps-editor" class="ps-editor" onsubmit="event.preventDefault();DBMTProductionSchedule.save()" hidden>
       <div class="ps-editor-heading"><strong id="ps-editor-title">생산예정 추가</strong><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.reset()">입력 초기화</button></div>
       <div class="form-group"><label for="ps-date">생산예정일</label><input type="date" id="ps-date" required></div>
@@ -21905,7 +21905,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="stock-report.js?v=20261002count1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
-<script src="production-schedule.js?v=20260930plan5"></script>
+<script src="production-schedule.js?v=20261007drag1"></script>
 <script src="product-specs.js?v=20261006spec2"></script>
 <script src="m02-auth.js?v=20261002stockcount1"></script>
 </body>

@@ -1,6 +1,7 @@
 (function(){
   'use strict';
   const state = {rows:[], editing:null, saving:false, loading:false, request:0, token:''};
+  let draggingId=null, dropDate=null;
   const el = id => document.getElementById('ps-' + id);
   const can = action => Boolean(window.DBMTAuth?.isPersonal() && DBMTAuth.can('production_schedule',action));
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -23,6 +24,11 @@
     el('message').textContent=text;
     el('message').classList.toggle('error',error);
   }
+  function clearDrag(){
+    el('calendar').querySelector('.ps-item.dragging')?.classList.remove('dragging');
+    el('calendar').querySelector('.ps-day.drop-target')?.classList.remove('drop-target');
+    draggingId=null;dropDate=null;
+  }
   function syncControls(){
     const action=state.editing?'update':'create';
     el('editor').hidden=!can(action);
@@ -40,6 +46,7 @@
   function applyPermissions(){
     const token=window.DBMTAuth?.getSessionToken() || '';
     if(token!==state.token || !can('view')){
+      clearDrag();
       state.token=token;
       state.request++;
       state.rows=[];state.editing=null;state.loading=false;state.saving=false;
@@ -66,8 +73,8 @@
     el('calendar').innerHTML=head+dates.map((date,i)=>{
       const rows=(byDate.get(date)||[]).slice().sort((a,b)=>(a.status==='completed')-(b.status==='completed')||a.product.localeCompare(b.product,'ko')||a.id.localeCompare(b.id));
       const holiday=typeof getKoreanHoliday==='function'?getKoreanHoliday(date):'';
-      const items=rows.map(row=>`<div class="ps-item ${row.status==='completed'?'completed':''} ${can('delete')?'has-delete':''}" data-plan-id="${esc(row.id)}">
-        <button type="button" class="ps-item-main" data-action="edit" data-id="${esc(row.id)}" ${!can('update')||state.saving?'disabled':''} title="생산일정 수정">
+      const items=rows.map(row=>`<div class="ps-item ${row.status==='completed'?'completed':''} ${can('delete')?'has-delete':''}" data-plan-id="${esc(row.id)}" draggable="${can('update')&&!state.saving&&!state.loading}" ${can('update')?'title="다른 날짜로 드래그하여 이동"':''}>
+        <button type="button" class="ps-item-main" data-action="edit" data-id="${esc(row.id)}" ${!can('update')||state.saving?'disabled':''} title="클릭하여 수정 · 드래그하여 날짜 이동">
           <strong>${esc(row.product)} ${row.qty===null?'수량 미정':quantity(row.qty)+' KG'}</strong>
           ${row.trader||row.note?`<span>${[row.trader,row.note].filter(Boolean).map(esc).join(' · ')}</span>`:''}<span class="ps-item-state">${row.status==='completed'?'✓ 완료':'생산 예정'}</span>
         </button>${can('delete')?`<button type="button" class="ps-item-delete" data-action="delete" data-id="${esc(row.id)}" aria-label="${esc(row.product)} 일정 삭제" title="삭제" ${state.saving?'disabled':''}>×</button>`:''}</div>`).join('');
@@ -82,6 +89,7 @@
     if(state.saving) return;
     applyPermissions();
     if(!can('view')){message('생산일정 조회 권한이 없습니다.',true);return;}
+    clearDrag();
     const dates=calendarDates(anchorValue()), request=++state.request, token=state.token;
     state.loading=true;state.rows=[];render();message('생산일정을 불러오는 중입니다…');
     try{
@@ -130,6 +138,23 @@
       if(token===DBMTAuth.getSessionToken()) message(error.message||String(error),true);
     }finally{if(token===state.token){state.saving=false;syncControls();render();}}
   }
+  async function move(id,date){
+    if(state.saving || state.loading || !can('update') || !calendarDates(anchorValue()).includes(date)) return;
+    const row=state.rows.find(item=>item.id===id);
+    if(!row || row.date===date) return;
+    const token=state.token;
+    const record={date,product:row.product,qty:row.qty,trader:row.trader,note:row.note,status:row.status};
+    state.saving=true;state.request++;render();message(`${row.product} 일정을 ${date}로 옮기는 중입니다…`);
+    try{
+      const result=await sbRpc('dbmt_erp_save_production_schedule',{p_token:token,p_id:id,p_record:record,p_revision:row.revision});
+      if(token!==DBMTAuth.getSessionToken()) return;
+      if(!result?.ok) throw new Error(result?.message||'생산일정 이동에 실패했습니다.');
+      state.rows=state.rows.filter(item=>item.id!==id).concat(result.event);
+      if(state.editing?.id===id){state.editing={...result.event};el('date').value=date;}
+      message(`${row.product} 일정을 ${date}로 옮겼습니다.`);
+    }catch(error){if(token===DBMTAuth.getSessionToken()) message(error.message||String(error),true);}
+    finally{if(token===state.token){state.saving=false;render();}}
+  }
   async function remove(id){
     if(state.saving || !can('delete')) return;
     const row=state.rows.find(item=>item.id===id);
@@ -166,6 +191,42 @@
     if(button.dataset.action==='edit') edit(button.dataset.id);
     if(button.dataset.action==='delete') remove(button.dataset.id);
   });
+  el('calendar').addEventListener('dragstart',event=>{
+    const card=event.target.closest?.('.ps-item');
+    if(!card || event.target.closest('.ps-item-delete') || card.draggable!==true || state.saving || state.loading || !can('update')){
+      event.preventDefault();return;
+    }
+    draggingId=card.dataset.planId;
+    event.dataTransfer.effectAllowed='move';
+    event.dataTransfer.setData('text/plain',draggingId);
+    card.classList.add('dragging');
+  });
+  el('calendar').addEventListener('dragover',event=>{
+    if(!draggingId || state.saving || state.loading || !can('update')) return;
+    const day=event.target.closest?.('.ps-day');
+    const source=state.rows.find(row=>row.id===draggingId);
+    if(!day || !source || day.dataset.date===source.date) return;
+    event.preventDefault();event.dataTransfer.dropEffect='move';
+    if(dropDate!==day.dataset.date){
+      el('calendar').querySelector('.ps-day.drop-target')?.classList.remove('drop-target');
+      day.classList.add('drop-target');dropDate=day.dataset.date;
+    }
+  });
+  el('calendar').addEventListener('dragleave',event=>{
+    const day=event.target.closest?.('.ps-day');
+    if(day?.dataset.date===dropDate && !day.contains(event.relatedTarget)){
+      day.classList.remove('drop-target');dropDate=null;
+    }
+  });
+  el('calendar').addEventListener('drop',event=>{
+    const day=event.target.closest?.('.ps-day');
+    if(!draggingId || !day) return;
+    event.preventDefault();
+    const id=draggingId,date=day.dataset.date;
+    clearDrag();
+    void move(id,date);
+  });
+  el('calendar').addEventListener('dragend',clearDrag);
   window.DBMTProductionSchedule={init,load,save,reset,moveWeek,applyPermissions,
     today(){if(state.saving)return;el('anchor-date').value=todayText();reset(todayText());return load();}};
 })();
