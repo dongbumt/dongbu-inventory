@@ -12,6 +12,12 @@
   const money = value => Math.round(number(value)).toLocaleString('ko-KR');
   const cell = value => escapeHtml(String(value ?? '').trim() || '-');
   const status = stock => stock < -0.01 ? '마이너스' : stock > 0.01 ? '정상' : '소진';
+  const stockBoxDetail = row => {
+    const value = row.stockBoxes;
+    return value === null || value === undefined || !Number.isSafeInteger(Number(value)) || Number(value) < 0
+      ? '<span class="detail">박스 미기록</span>'
+      : `<span class="detail">${Number(value).toLocaleString('ko-KR')} 박스</span>`;
+  };
 
   function buildDocument({companyName='주식회사 동부엠티', filters={}, rows=[], warning='', queriedAt='', kind='stock'}={}){
     const countSheet = kind === 'count';
@@ -29,7 +35,7 @@
       <td class="write-cell" aria-label="실재고 기입란"></td><td class="write-cell" aria-label="차이 기입란"></td>` : `
       <td class="number">${qty(row.total_in)}</td><td class="number">${qty(row.total_use)}</td>
       <td class="number">${qty(row.total_out)}</td><td class="number">${qty(row.total_adjust)}</td>
-      <td class="number"><strong>${qty(row.stock)}</strong></td><td class="number">${money(row.price)}</td>
+      <td class="number"><strong>${qty(row.stock)}</strong>${stockBoxDetail(row)}</td><td class="number">${money(row.price)}</td>
       <td class="number"><strong>${money(number(row.stock) * number(row.price))}</strong></td>
       <td class="center">${status(number(row.stock))}</td>`}
     </tr>`).join('');
@@ -77,7 +83,7 @@
   <table aria-label="${countSheet ? '재고 실사조사표' : '기준일 재고현황'}">
     ${countSheet ? `<colgroup><col style="width:3%"><col style="width:7%"><col style="width:24%"><col style="width:9%"><col style="width:17%"><col style="width:6%"><col style="width:7%"><col style="width:9%"><col style="width:9%"><col style="width:9%"></colgroup>
     <thead><tr><th>No.</th><th>지점</th><th>품목 / 포장 / 비고</th><th>브랜드 / 등급</th><th>이력번호 / 생산일</th><th>원산지</th><th>조정</th><th>현재고</th><th>실재고</th><th>차이</th></tr></thead>` : `<colgroup><col style="width:3%"><col style="width:6%"><col style="width:19%"><col style="width:7%"><col style="width:12%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:8%"><col style="width:4%"></colgroup>
-    <thead><tr><th>No.</th><th>지점</th><th>품목 / 포장 / 비고</th><th>브랜드 / 등급</th><th>이력번호 / 생산일</th><th>원산지</th><th>총입고</th><th>총사용</th><th>총출고</th><th>조정</th><th>재고</th><th>단가</th><th>재고금액</th><th>상태</th></tr></thead>`}
+    <thead><tr><th>No.</th><th>지점</th><th>품목 / 포장 / 비고</th><th>브랜드 / 등급</th><th>이력번호 / 생산일</th><th>원산지</th><th>총입고</th><th>총사용</th><th>총출고</th><th>조정</th><th>재고<br>KG / 박스</th><th>단가</th><th>재고금액</th><th>상태</th></tr></thead>`}
     <tbody>${stockRows || `<tr><td colspan="${countSheet ? 10 : 14}" class="center">선택한 기준일과 조회조건에 해당하는 재고가 없습니다.</td></tr>`}</tbody>
   </table>
   ${warning ? `<div class="warning">${escapeHtml(warning)}</div>` : ''}

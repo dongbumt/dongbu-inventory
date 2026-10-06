@@ -353,8 +353,8 @@
   .txn-managed-product-field{display:flex;flex:0 1 310px;min-width:240px;align-items:center;gap:6px;}
   .txn-managed-product-field.production-picker-field{flex:none;width:100%;min-width:0;}
   .production-entry-row{display:grid;gap:8px;margin-bottom:8px;align-items:end;}
-  .production-input-row{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1.4fr) auto;}
-  .production-output-row{grid-template-columns:minmax(0,2fr) minmax(0,.6fr) minmax(0,.7fr) minmax(0,1.1fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1.4fr) auto;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed #edf0f2;}
+  .production-input-row{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,.7fr) minmax(0,.6fr) minmax(0,.7fr) minmax(0,1.4fr) auto;}
+  .production-output-row{grid-template-columns:minmax(0,2fr) minmax(0,.6fr) minmax(0,.7fr) minmax(0,1.1fr) minmax(0,.7fr) minmax(0,.6fr) minmax(0,.7fr) minmax(0,1.4fr) auto;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed #edf0f2;}
   .production-entry-row>.form-group,.production-entry-row input{min-width:0;}
   @media(max-width:900px){
     .production-entry-row{grid-template-columns:repeat(2,minmax(0,1fr));}

@@ -761,6 +761,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
       <div class="form-group t-proddate" style="display:none"><label>생산일</label><input type="date" id="t-proddate" oninput="clearTxnStockSelection()"></div>
       <div class="form-group"><label>중량(KG)</label><input type="number" id="t-weight" placeholder="0.00" step="0.01" oninput="autoFillTxnPrice()"></div>
+      <div class="form-group"><label>박스수(선택)</label><input type="number" id="t-box-count" placeholder="미기록" min="0" step="1" inputmode="numeric"></div>
       <div class="form-group">
         <label>단가 (원/KG)</label>
         <input type="number" id="t-price" placeholder="자동입력" step="1" style="background:#fffbe6;" oninput="this.dataset.autofilled='0'; updateTxnAmtPreview()">
@@ -853,6 +854,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <th style="min-width:120px;">거래처</th>
             <th style="min-width:230px;">이력번호(LOT)</th>
             <th style="min-width:96px;text-align:right;">중량(KG)</th>
+            <th style="min-width:82px;text-align:right;">박스수</th>
             <th style="min-width:92px;text-align:right;">단가(선택)</th>
             <th style="min-width:110px;">비고</th>
             <th style="width:34px;"></th>
@@ -902,6 +904,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <th style="min-width:86px;text-align:right;">현재재고</th>
             <th style="min-width:110px;">거래처</th>
             <th style="min-width:88px;text-align:right;">출고중량(KG)</th>
+            <th style="min-width:82px;text-align:right;">박스수</th>
             <th style="min-width:78px;text-align:right;">단가</th>
             <th style="min-width:88px;text-align:right;">금액</th>
             <th style="width:34px;"></th>
@@ -959,7 +962,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <table id="t-table">
         <thead><tr>
           <th style="min-width:92px;white-space:nowrap;">날짜</th><th style="min-width:76px;white-space:nowrap;">구분</th><th>거래처</th><th>품목명</th><th>원산지</th>
-          <th>이력번호</th><th style="text-align:right">중량(KG)</th>
+          <th>이력번호</th><th style="text-align:right">중량(KG)</th><th style="text-align:right">박스수</th>
           <th style="text-align:right">단가</th><th style="text-align:right">금액</th>
           <th>비고</th><th>관리</th>
         </tr></thead>
@@ -1290,7 +1293,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <th onclick="stockSort('total_use')" style="text-align:right;cursor:pointer;user-select:none;">총사용(KG) <span id="ss-total_use"></span></th>
           <th onclick="stockSort('total_out')" style="text-align:right;cursor:pointer;user-select:none;">총출고(KG) <span id="ss-total_out"></span></th>
           <th onclick="stockSort('total_adjust')" style="text-align:right;cursor:pointer;user-select:none;">조정(KG) <span id="ss-total_adjust"></span></th>
-          <th onclick="stockSort('stock')" style="text-align:right;cursor:pointer;user-select:none;">재고(KG) <span id="ss-stock"></span></th>
+          <th onclick="stockSort('stock')" style="text-align:right;cursor:pointer;user-select:none;">재고<br>(KG / 박스) <span id="ss-stock"></span></th>
           <th onclick="stockSort('price')" style="text-align:right;cursor:pointer;user-select:none;">단가 <span id="ss-price"></span></th>
           <th onclick="stockSort('stock_amount')" style="text-align:right;cursor:pointer;user-select:none;">재고금액 <span id="ss-stock_amount"></span></th>
           <th>상태</th>
@@ -7987,6 +7990,10 @@ function selectTxnStock(key){
   if(pdEl) pdEl.value = s.proddate || '';
   const keyEl = document.getElementById('t-stock-key');
   const priceEl = document.getElementById('t-stock-price');
+  if(keyEl?.value && keyEl.value !== s.key){
+    const boxEl = document.getElementById('t-box-count');
+    if(boxEl) boxEl.value = '';
+  }
   if(keyEl) keyEl.value = s.key || '';
   if(priceEl) priceEl.value = Number(s.price || 0);
 
@@ -8084,6 +8091,8 @@ function clearTxnStockSelection(clearSearch=false, clearProduct=false){
   const priceEl = document.getElementById('t-stock-price');
   if(keyEl) keyEl.value = '';
   if(priceEl) priceEl.value = '';
+  const boxEl = document.getElementById('t-box-count');
+  if(boxEl) boxEl.value = '';
   if(clearProduct){
     const sel = document.getElementById('t-product-select');
     const prodInput = document.getElementById('t-product-input');
@@ -8186,6 +8195,16 @@ function getStockMap(asOfDate=''){
   if(!cutoff && _stockMapCache) return _stockMapCache;
   if(cutoff && EXCEL_STOCK.length) throw new Error('기초재고의 기준일 정보가 없어 날짜별 재고를 계산할 수 없습니다.');
   const map={};
+  // 박스수는 중량과 독립적인 장부다. 과거 미기록분을 0박스로 추정하지 않는다.
+  const applyStockBoxes = (bucket, value, sign=1) => {
+    const boxes = parseOptionalBoxCount(value);
+    if(bucket.stockBoxes === null || boxes === null || Number.isNaN(boxes)){
+      bucket.stockBoxes = null;
+      return;
+    }
+    const next = bucket.stockBoxes + sign * boxes;
+    bucket.stockBoxes = next >= 0 ? next : null;
+  };
 
   // EXCEL_STOCK 기준값 (빈 배열이면 건너뜀)
   EXCEL_STOCK.forEach(s=>{
@@ -8198,7 +8217,7 @@ function getStockMap(asOfDate=''){
       stockRowId:s.stockRowId || '', stockNote:s.stockNote || '',
       total_in:Number(s.total_in)||0, total_use:Number(s.total_use)||0, total_out:Number(s.total_out)||0,
       total_adjust:Number(s.total_adjust)||0,
-      stock:Number(s.stock)||0,
+      stock:Number(s.stock)||0, stockBoxes:parseOptionalBoxCount(s.boxCount),
       total_in_amount:0, price,
       inbound_weight:0, inbound_amount:0, produced_weight:0, produced_amount:0, source:''
     };
@@ -8211,7 +8230,7 @@ function getStockMap(asOfDate=''){
     if(!map[key]) map[key]={
       product, packunit:String(packunit||'').trim(), lot:String(lot||''), origin:normalizeOriginName(origin||''), stockLocation:loc,
       stockRowId:String(stockRowId || ''), stockNote:'',
-      total_in:0, total_use:0, total_out:0, stock:0, proddate:stockProddate,
+      total_in:0, total_use:0, total_out:0, stock:0, stockBoxes:0, proddate:stockProddate,
       total_adjust:0,
       total_in_amount:0, price:parseAppNumber(price),
       inbound_weight:0, inbound_amount:0, produced_weight:0, produced_amount:0, source:''
@@ -8284,12 +8303,14 @@ function getStockMap(asOfDate=''){
       applyBucketProductMeta(bucket, t);
       bucket.total_adjust += weight;
       bucket.stock += weight;
+      applyStockBoxes(bucket, t.boxCount, weight >= 0 ? 1 : -1);
       if(!bucket.source) bucket.source = '재고조정';
     } else if(t.type==='입고' || t.type==='생산입고'){
       const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation, stockRowId);
       applyBucketProductMeta(bucket, t);
       bucket.total_in += weight;
       bucket.stock += weight;
+      applyStockBoxes(bucket, t.boxCount);
       if(unitPrice > 0 && weight > 0){
         bucket.total_in_amount += unitPrice * weight;
         bucket.price = Math.round(bucket.total_in_amount / bucket.total_in);
@@ -8313,6 +8334,7 @@ function getStockMap(asOfDate=''){
       const toLocation = normalizeStockLocation(t.toLocation || '');
       const movePrice = selectedStockPrice || unitPrice;
       let remaining = weight;
+      const movedBuckets = [];
       let candidates = Object.values(map)
         .filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(fromLocation) : sameStockIdentity(s, product, lot, origin, packunit, movePrice, stockProddate, fromLocation)))
         .filter(s=>s.stock>0.01)
@@ -8322,6 +8344,7 @@ function getStockMap(asOfDate=''){
         const moved = Math.min(remaining, Math.max(0, s.stock));
         s.total_adjust -= moved;
         s.stock -= moved;
+        movedBuckets.push(s);
         remaining -= moved;
       });
       if(remaining > 0.01){
@@ -8329,14 +8352,20 @@ function getStockMap(asOfDate=''){
         applyBucketProductMeta(fallback, t);
         fallback.total_adjust -= remaining;
         fallback.stock -= remaining;
+        movedBuckets.push(fallback);
       }
+      const moveBoxesKnown = movedBuckets.length === 1 && remaining <= 0.01 && movedBuckets[0].stockBoxes !== null && parseOptionalBoxCount(t.boxCount) !== null;
+      movedBuckets.forEach(s=>{ if(moveBoxesKnown) applyStockBoxes(s, t.boxCount, -1); else s.stockBoxes = null; });
       const dest = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, toLocation, stockRowId);
       applyBucketProductMeta(dest, t);
       dest.total_adjust += weight;
       dest.stock += weight;
+      if(moveBoxesKnown && movedBuckets[0].stockBoxes !== null) applyStockBoxes(dest, t.boxCount);
+      else dest.stockBoxes = null;
       if(!dest.source) dest.source = '재고이동';
     } else {
       let remaining = weight;
+      const usedBuckets = [];
       const origin = normalizeOriginName(t.origin||'');
       let candidates = Object.values(map).filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(stockLocation) : sameStockIdentity(s, product, lot, origin, packunit, '', '', stockLocation)));
       candidates = candidates.filter(s=>s.stock>0.01);
@@ -8363,6 +8392,7 @@ function getStockMap(asOfDate=''){
         if(t.type==='출고') s.total_out += used;
         else s.total_use += used;
         s.stock -= used;
+        usedBuckets.push(s);
         remaining -= used;
       });
       if(remaining > 0.01){
@@ -8371,7 +8401,10 @@ function getStockMap(asOfDate=''){
         if(t.type==='출고') fallback.total_out += remaining;
         else fallback.total_use += remaining;
         fallback.stock -= remaining;
+        usedBuckets.push(fallback);
       }
+      if(usedBuckets.length === 1 && remaining <= 0.01) applyStockBoxes(usedBuckets[0], t.boxCount, -1);
+      else usedBuckets.forEach(s=>{ s.stockBoxes = null; });
     }
   });
   const productionNotes = new Map();
@@ -8864,6 +8897,21 @@ function updateTxnAmtPreview(){
 
 
 
+function parseOptionalBoxCount(value){
+  if(value === null || value === undefined || String(value).trim() === '') return null;
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : NaN;
+}
+function boxCountDisplay(value, missing='-'){
+  const count = parseOptionalBoxCount(value);
+  return count === null || Number.isNaN(count) ? missing : count.toLocaleString('ko-KR');
+}
+function totalRecordedBoxes(rows){
+  if(!rows.length) return null;
+  const counts = rows.map(row=>parseOptionalBoxCount(row.boxCount));
+  return counts.some(count=>count === null || Number.isNaN(count)) ? null : counts.reduce((sum,count)=>sum+count,0);
+}
+
 async function addTransaction(){
   const linkedProductionTxn = _editTxnId ? userTransactions.find(txn=>String(txn.id)===String(_editTxnId)) : null;
   if(linkedProductionTxn?.stockRowId && linkedProductionTxn?._prodId){ alert('생산일보에서 생성된 재고입니다. 해당 생산일보에서 수정해주세요.'); return; }
@@ -8881,8 +8929,10 @@ async function addTransaction(){
   const lot=document.getElementById('t-lot').value.trim();
   const proddate=document.getElementById('t-proddate').value;
   const weight=parseFloat(document.getElementById('t-weight').value)||0;
+  const boxCount=parseOptionalBoxCount(document.getElementById('t-box-count').value);
   const note=document.getElementById('t-note').value.trim();
   if(!date||!product||!weight){alert('날짜, 품목명, 중량은 필수입니다.');return;}
+  if(Number.isNaN(boxCount)){alert('박스수는 0 이상의 정수로 입력해주세요.');return;}
   const managedRows = type === '입고'
     ? labelProducts.filter(p =>
         (!selectedLabelProductId || String(p.id || '') === String(selectedLabelProductId)) &&
@@ -8906,6 +8956,16 @@ async function addTransaction(){
     return;
   }
   const editTxn = getEditingTransaction();
+  const previousBoxes = parseOptionalBoxCount(editTxn?.boxCount);
+  if(type === '입고' && editTxn?.type === '입고' && editTxn.stockRowId && boxCount !== null && previousBoxes !== null && !Number.isNaN(previousBoxes)){
+    const currentRows = Object.values(getStockMap()).filter(s=>String(s.stockRowId || '') === String(editTxn.stockRowId) &&
+      stockLocationKey(s.stockLocation || '') === stockLocationKey(getTxnStockLocation(editTxn)));
+    if(currentRows.length && currentRows.every(s=>s.stockBoxes !== null)){
+      const remainingBoxes = currentRows.reduce((sum,s)=>sum+s.stockBoxes,0);
+      const usedBoxes = previousBoxes - remainingBoxes;
+      if(boxCount < usedBoxes){ alert(`이미 ${usedBoxes}박스가 사용·출고되어 입고 박스수를 그보다 작게 수정할 수 없습니다.`); return; }
+    }
+  }
   let selectedStock = null;
   if(type === '출고' || type === '재고이동' || type === '사용'){
     if(type === '재고이동' && fromLocation === toLocation){
@@ -8943,6 +9003,11 @@ async function addTransaction(){
       alert(`현재 선택 재고 ${Number(availableStock||0).toFixed(2)}KG보다 입력중량 ${weight.toFixed(2)}KG가 큽니다.`);
       return;
     }
+    const availableBoxes = availableBoxesForEdit(selectedStock, editTxn);
+    if(boxCount !== null && availableBoxes !== null && boxCount > availableBoxes){
+      alert(`현재 선택 재고 ${availableBoxes}박스보다 입력 박스수 ${boxCount}박스가 큽니다.`);
+      return;
+    }
   }
   if((type === '재고이동' || type === '사용') && selectedStock){
     price = parseAppNumber(selectedStock.price);
@@ -8969,7 +9034,7 @@ async function addTransaction(){
         t.grade=transactionProductMeta.grade || '';
       }
       t.trader=trader; t.lot=lot; t.proddate=proddateForSave;
-      t.weight=weight; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
+      t.weight=weight; t.boxCount=boxCount; t.price=price; t.amount=Math.round(price*weight); t.note=note; t.storage=storage;
       t.meatwatchProcessBeginDate=document.getElementById('t-meatwatch-process-begin')?.value || '';
       t.meatwatchProcessEndDate=document.getElementById('t-meatwatch-process-end')?.value || '';
       t.meatwatchExpiryDate=document.getElementById('t-meatwatch-expiry')?.value || '';
@@ -9009,7 +9074,7 @@ async function addTransaction(){
       nationalPartName:transactionProductMeta?.nationalPartName || nationalPartNameForCode(transactionProductMeta?.nationalPartCode),
       taxType:normalizeLabelProductTaxType(transactionProductMeta?.taxType),
       grade:transactionProductMeta?.grade || '',
-      trader,lot,proddate:proddateForSave,weight,note,storage,price,amount:Math.round(price*weight),
+      trader,lot,proddate:proddateForSave,weight,boxCount,note,storage,price,amount:Math.round(price*weight),
       meatwatchProcessBeginDate:document.getElementById('t-meatwatch-process-begin')?.value || '',
       meatwatchProcessEndDate:document.getElementById('t-meatwatch-process-end')?.value || '',
       meatwatchExpiryDate:document.getElementById('t-meatwatch-expiry')?.value || '',
@@ -9077,7 +9142,7 @@ function showTransactionSaveStatus(message, isError=false){
 function clearTransactionForm(options={}){
   const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
   showTransactionSaveStatus('');
-  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at','t-livestock-species','t-livestock-trace-type','t-livestock-slaughter-date','t-livestock-slaughter-end-date','t-livestock-slaughter-houses','t-livestock-grades','t-livestock-inspection-results','t-livestock-process-date','t-livestock-process-end-date','t-livestock-process-companies','t-livestock-queried-at'].forEach(id=>{
+  ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-box-count','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at','t-livestock-species','t-livestock-trace-type','t-livestock-slaughter-date','t-livestock-slaughter-end-date','t-livestock-slaughter-houses','t-livestock-grades','t-livestock-inspection-results','t-livestock-process-date','t-livestock-process-end-date','t-livestock-process-companies','t-livestock-queried-at'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   updateTxnManagedProductMeta(null);
@@ -9357,6 +9422,7 @@ function addBulkInboundRow(){
     <td><div class="txn-trader-search-wrap bulk-in-trader-search-wrap"><input class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkInboundTraderSearch(this,true)" onfocus="onBulkInboundTraderSearch(this,false)" onblur="hideBulkInboundTraderResults(this)" onkeydown="handleBulkInboundTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-in-trader-results" role="listbox" style="display:none;"></div></div></td>
     <td class="bulk-in-lot-cell"><input class="bulk-in-lot" placeholder="LOT번호" oninput="clearBulkInboundMeatwatchResult(this.closest('tr'),{removeNote:true})"><input type="hidden" class="bulk-in-meatwatch-process-begin"><input type="hidden" class="bulk-in-meatwatch-process-end"><input type="hidden" class="bulk-in-meatwatch-expiry"><input type="hidden" class="bulk-in-meatwatch-queried-at"><input type="hidden" class="bulk-in-livestock-species"><input type="hidden" class="bulk-in-livestock-trace-type"><input type="hidden" class="bulk-in-livestock-slaughter-date"><input type="hidden" class="bulk-in-livestock-slaughter-end-date"><input type="hidden" class="bulk-in-livestock-slaughter-houses"><input type="hidden" class="bulk-in-livestock-grades"><input type="hidden" class="bulk-in-livestock-inspection-results"><input type="hidden" class="bulk-in-livestock-process-date"><input type="hidden" class="bulk-in-livestock-process-end-date"><input type="hidden" class="bulk-in-livestock-process-companies"><input type="hidden" class="bulk-in-livestock-queried-at"><div class="bulk-in-meatwatch-status"></div></td>
     <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-in-box-count" type="number" min="0" step="1" inputmode="numeric" placeholder="미기록" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-price" type="number" step="1" placeholder="자동" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-note" placeholder="비고" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkInboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
@@ -9430,10 +9496,12 @@ async function saveBulkInbound(){
     const productInput = tr.querySelector('.bulk-in-product');
     const typed = productInput ? productInput.value.trim() : '';
     const weight = parseFloat(tr.querySelector('.bulk-in-weight')?.value) || 0;
+    const boxCount = parseOptionalBoxCount(tr.querySelector('.bulk-in-box-count')?.value);
     // 품목·입력·중량 모두 비어있으면 빈 행으로 간주하고 건너뜀
-    if(!pid && !typed && !weight) return;
+    if(!pid && !typed && !weight && boxCount === null) return;
     if(!pid){ errorMsg = `${idx+1}번째 행: 품목을 검색 목록에서 선택하세요.`; return; }
     if(weight <= 0){ errorMsg = `${idx+1}번째 행: 중량을 입력하세요.`; return; }
+    if(Number.isNaN(boxCount)){ errorMsg = `${idx+1}번째 행: 박스수는 0 이상의 정수로 입력하세요.`; return; }
     const lp = (labelProducts||[]).find(p => String(p.id) === String(pid));
     if(!lp){ errorMsg = `${idx+1}번째 행: 품목 정보를 찾을 수 없습니다.`; return; }
     const trader = (tr.querySelector('.bulk-in-trader')?.value || '').trim();
@@ -9451,7 +9519,7 @@ async function saveBulkInbound(){
       nationalPartCode: lp.nationalPartCode || '', nationalPartName: nationalPartNameForCode(lp.nationalPartCode),
       taxType: normalizeLabelProductTaxType(lp.taxType),
       trader, lot, proddate:'',
-      weight, price, amount: Math.round(price*weight),
+      weight, boxCount, price, amount: Math.round(price*weight),
       note,
       meatwatchProcessBeginDate:tr.querySelector('.bulk-in-meatwatch-process-begin')?.value || '',
       meatwatchProcessEndDate:tr.querySelector('.bulk-in-meatwatch-process-end')?.value || '',
@@ -9548,7 +9616,7 @@ function bulkOutboundStockOptions(){
         packunit: String(s.packunit||'').trim(),
         lot,
         origin: normalizeOriginName(s.origin||''),
-        stock: 0,
+        stock: 0, stockBoxes:0,
         proddate,
         stockLocation,
         source: s.source || '',
@@ -9557,6 +9625,8 @@ function bulkOutboundStockOptions(){
       };
     }
     grouped[key].stock += stock;
+    grouped[key].stockBoxes = grouped[key].stockBoxes === null || s.stockBoxes === null
+      ? null : grouped[key].stockBoxes + s.stockBoxes;
     if(!grouped[key].labelProductId && (s.labelProductId || s.productId)) grouped[key].labelProductId = s.labelProductId || s.productId;
     if(!grouped[key].brand && s.brand) grouped[key].brand = String(s.brand).trim();
     if(!grouped[key].grade && s.grade) grouped[key].grade = String(s.grade).trim();
@@ -9634,7 +9704,7 @@ function stockOptionFromTransaction(t){
     packunit,
     lot,
     origin,
-    stock: 0,
+    stock: 0, stockBoxes:null,
     proddate,
     stockLocation,
     source: '기존 거래',
@@ -9670,6 +9740,16 @@ function availableStockForEdit(selectedStock, editTxn){
   const editOption = stockOptionFromTransaction(editTxn);
   if(editOption && sameBulkOutboundStockOption(selectedStock, editOption)){
     return current + parseAppNumber(editTxn.weight);
+  }
+  return current;
+}
+function availableBoxesForEdit(selectedStock, editTxn){
+  const current = parseOptionalBoxCount(selectedStock?.stockBoxes);
+  if(current === null || Number.isNaN(current)) return null;
+  const editOption = stockOptionFromTransaction(editTxn);
+  if(editOption && sameBulkOutboundStockOption(selectedStock, editOption)){
+    const previous = parseOptionalBoxCount(editTxn.boxCount);
+    return previous === null || Number.isNaN(previous) ? null : current + previous;
   }
   return current;
 }
@@ -9739,6 +9819,10 @@ function selectBulkOutboundStock(inp, key){
   if(!s) return;
   const tr = inp.closest('tr');
   if(!tr) return;
+  if(tr.querySelector('.bulk-out-key')?.value && tr.querySelector('.bulk-out-key').value !== s.key){
+    const boxEl = tr.querySelector('.bulk-out-box-count');
+    if(boxEl) boxEl.value = '';
+  }
   inp.value = bulkOutboundStockLabel(s);
   const setVal = (cls, val)=>{
     const el = tr.querySelector(cls);
@@ -9782,6 +9866,7 @@ function addBulkOutboundRow(){
     <td class="bulk-out-stock-cell" style="font-size:11px;color:#666;text-align:right;">-</td>
     <td><input class="bulk-out-trader" list="sales-trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
     <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-out-box-count" type="number" min="0" step="1" inputmode="numeric" placeholder="미기록" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td class="bulk-out-amount-cell" style="font-size:11px;color:#555;text-align:right;">-</td>
     <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkOutboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
@@ -9868,6 +9953,7 @@ async function saveBulkOutbound(){
   bulkOutboundStockOptions().forEach(s=>{ stockByKey[s.key] = s; });
   const rows = document.querySelectorAll('#bulk-outbound-tbody tr');
   const requested = {};
+  const requestedBoxes = {};
   const staged = [];
   let errorMsg = '';
   rows.forEach((tr, idx)=>{
@@ -9876,21 +9962,25 @@ async function saveBulkOutbound(){
     const typed = (tr.querySelector('.bulk-out-stock-input')?.value || '').trim();
     const trader = (tr.querySelector('.bulk-out-trader')?.value || '').trim();
     const weight = parseAppNumber(tr.querySelector('.bulk-out-weight')?.value);
-    if(!key && !typed && !trader && !weight) return;
+    const boxCount = parseOptionalBoxCount(tr.querySelector('.bulk-out-box-count')?.value);
+    if(!key && !typed && !trader && !weight && boxCount === null) return;
     if(!key){ errorMsg = `${idx+1}번째 행: 재고 품목을 검색 목록에서 선택하세요.`; return; }
     const stockInfo = stockByKey[key];
     if(!stockInfo){ errorMsg = `${idx+1}번째 행: 현재 재고에서 선택한 항목을 찾을 수 없습니다. 다시 선택하세요.`; return; }
     if(weight <= 0){ errorMsg = `${idx+1}번째 행: 출고중량을 입력하세요.`; return; }
+    if(Number.isNaN(boxCount)){ errorMsg = `${idx+1}번째 행: 박스수는 0 이상의 정수로 입력하세요.`; return; }
     let price = parseAppNumber(tr.querySelector('.bulk-out-price-input')?.value);
     if(!price) price = getPrice(stockInfo.product, stockInfo.origin, trader) || 0;
     if(!price){ errorMsg = `${idx+1}번째 행: 단가를 찾지 못했습니다. 단가를 직접 입력하세요.`; return; }
     requested[key] = (requested[key] || 0) + weight;
+    if(boxCount !== null) requestedBoxes[key] = (requestedBoxes[key] || 0) + boxCount;
     staged.push({
       idx,
       key,
       stockInfo,
       trader,
       weight,
+      boxCount,
       price
     });
   });
@@ -9903,6 +9993,10 @@ async function saveBulkOutbound(){
       const prodLabel = stockInfo.proddate ? ` / 생산일 ${stockInfo.proddate}` : '';
       const priceLabel = stockInfo.price ? ` / 원가 ${Number(stockInfo.price).toLocaleString('ko-KR')}` : '';
       errorMsg = `${stockInfo.product} / ${lotLabel}${locLabel}${prodLabel}${priceLabel}: 현재 재고 ${Number(stockInfo.stock||0).toFixed(2)}KG보다 출고 합계 ${requested[key].toFixed(2)}KG가 큽니다.`;
+      return true;
+    }
+    if(stockInfo?.stockBoxes !== null && requestedBoxes[key] > stockInfo.stockBoxes){
+      errorMsg = `${stockInfo.product}: 현재 재고 ${stockInfo.stockBoxes}박스보다 출고 합계 ${requestedBoxes[key]}박스가 큽니다.`;
       return true;
     }
     return false;
@@ -9932,6 +10026,7 @@ async function saveBulkOutbound(){
       lot: s.lot,
       proddate: s.proddate || '',
       weight: row.weight,
+      boxCount: row.boxCount,
       price: row.price,
       amount: Math.round(row.price * row.weight),
       note: '',
@@ -10112,7 +10207,7 @@ function renderTransactions(){
   document.getElementById('t-count').textContent=`(${rows.length}건)`;
   const b=document.getElementById('t-body');
   if(!rows.length){
-    b.innerHTML='<tr><td colspan="11" style="text-align:center;color:#888;padding:24px;">조회 결과가 없습니다.</td></tr>';
+    b.innerHTML='<tr><td colspan="12" style="text-align:center;color:#888;padding:24px;">조회 결과가 없습니다.</td></tr>';
     return;
   }
   b.innerHTML=rows.map(t=>{
@@ -10141,6 +10236,7 @@ function renderTransactions(){
     <td>${trader}</td><td>${product}${t.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(t.packunit)}</span>`:''}</td><td>${origin}${storage?` <span style="font-size:10px;color:#2980b9;border:1px solid #d6eaf8;border-radius:4px;padding:1px 5px;">${storage}</span>`:''}${location?` <span style="font-size:10px;color:#6c3483;border:1px solid #eadcf8;border-radius:4px;padding:1px 5px;">${location}</span>`:''}</td>
     <td style="font-family:monospace;font-size:11px">${lot}</td>
     <td style="text-align:right">${weight.toFixed(2)}</td>
+    <td style="text-align:right">${boxCountDisplay(t.boxCount)}</td>
     <td style="text-align:right;padding:2px 4px;">
       ${t._isUser
         ? ((isStockAdjust || isStockMove) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
@@ -10232,6 +10328,7 @@ function loadTxnToForm(id){
   document.getElementById('t-lot').value     =t.lot||'';
   document.getElementById('t-proddate').value=t.proddate||'';
   document.getElementById('t-weight').value  =t.weight||'';
+  document.getElementById('t-box-count').value =parseOptionalBoxCount(t.boxCount) ?? '';
   document.getElementById('t-price').value   =t.price||'';
   document.getElementById('t-note').value    =t.note||'';
   if(typeof restoreMeatwatchLookupFromTransaction === 'function') restoreMeatwatchLookupFromTransaction(t);
@@ -10399,6 +10496,7 @@ function validateProductionStockInputs(inputs, previous, outputs=[]){
   const stockRows = Object.values(getStockMap());
   const outputIds = new Set(outputs.map(output=>String(output.stockRowId || '')).filter(Boolean));
   const requested = new Map();
+  const requestedBoxes = new Map();
   for(const input of tracked){
     const rowId = String(input.stockRowId);
     if(outputIds.has(rowId)) return `${input.product}: 같은 생산일보의 생산품을 다시 투입할 수 없습니다.`;
@@ -10414,6 +10512,17 @@ function validateProductionStockInputs(inputs, previous, outputs=[]){
     const qty = (requested.get(key) || 0) + parseAppNumber(input.qty);
     requested.set(key,qty);
     if(qty > available + 0.01) return `${input.product}: 선택 재고 ${available.toFixed(2)}KG보다 투입 합계 ${qty.toFixed(2)}KG가 큽니다.`;
+    const boxes = parseOptionalBoxCount(input.boxCount);
+    if(boxes !== null){
+      const boxTotal = (requestedBoxes.get(key) || 0) + boxes;
+      requestedBoxes.set(key, boxTotal);
+      const oldBoxes = (previous?.inputs || []).filter(old=>String(old.stockRowId || '') === rowId &&
+        stockLocationKey(old.stockLocation || '') === location).map(old=>parseOptionalBoxCount(old.boxCount));
+      if(matching.length && matching.every(stock=>stock.stockBoxes !== null) && oldBoxes.every(old=>old !== null)){
+        const availableBoxes = matching.reduce((sum,stock)=>sum+stock.stockBoxes,0) + oldBoxes.reduce((sum,old)=>sum+old,0);
+        if(boxTotal > availableBoxes) return `${input.product}: 선택 재고 ${availableBoxes}박스보다 투입 합계 ${boxTotal}박스가 큽니다.`;
+      }
+    }
   }
   return '';
 }
@@ -10449,7 +10558,7 @@ function hideProdInputStockSuggestionsSoon(id){
 function clearProdInputStockSelection(id){
   const picker = document.getElementById(`prod-in-sel-${id}`);
   if(picker) picker.dataset.stockKey = '';
-  [`prod-in-product-${id}`,`prod-in-lot-${id}`,`prod-in-origin-${id}`,`prod-in-packunit-${id}`,`prod-in-proddate-${id}`,`prod-in-stock-price-${id}`,`prod-in-location-${id}`,`prod-in-stock-row-id-${id}`,`prod-in-stock-note-${id}`,`prod-in-qty-${id}`,`prod-in-price-${id}`].forEach(fieldId=>{
+  [`prod-in-product-${id}`,`prod-in-lot-${id}`,`prod-in-origin-${id}`,`prod-in-packunit-${id}`,`prod-in-proddate-${id}`,`prod-in-stock-price-${id}`,`prod-in-location-${id}`,`prod-in-stock-row-id-${id}`,`prod-in-stock-note-${id}`,`prod-in-qty-${id}`,`prod-in-box-count-${id}`,`prod-in-price-${id}`].forEach(fieldId=>{
     const field = document.getElementById(fieldId);
     if(field) field.value = '';
   });
@@ -10527,6 +10636,10 @@ function addProdInputRow(){
       <input type="number" id="prod-in-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
     </div>
     <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">박스수(선택)</label>
+      <input type="number" id="prod-in-box-count-${id}" placeholder="미기록" min="0" step="1" inputmode="numeric" style="font-size:12px;">
+    </div>
+    <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:var(--blue);">단가(원/KG)</label>
       <input type="number" id="prod-in-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
@@ -10541,6 +10654,10 @@ function addProdInputRow(){
 
 function selectProdInputStock(id, product, lot, origin, packunit, stock, source, inputPrice, proddate='', stockPrice=0, stockLocation='', stockKey='', stockRowId='', stockNote=''){
   const input = document.getElementById(`prod-in-sel-${id}`);
+  if(input?.dataset.stockKey && input.dataset.stockKey !== stockKey){
+    const boxEl = document.getElementById(`prod-in-box-count-${id}`);
+    if(boxEl) boxEl.value = '';
+  }
   const loc = normalizeStockLocation(stockLocation);
   if(input){
     input.value = getProdInputStockLabel({ product, lot, origin, packunit, stock, source, price: inputPrice || stockPrice, proddate, stockLocation:loc, stockNote });
@@ -10662,6 +10779,10 @@ function addProdOutputRow(stockRowId=makeAppId('prodrow')){
       <input type="number" id="prod-out-qty-${id}" placeholder="0.00" step="0.01" style="font-size:12px;">
     </div>
     <div class="form-group">
+      <label style="font-size:11px;font-weight:700;color:#666;">박스수(선택)</label>
+      <input type="number" id="prod-out-box-count-${id}" placeholder="미기록" min="0" step="1" inputmode="numeric" style="font-size:12px;">
+    </div>
+    <div class="form-group">
       <label style="font-size:11px;font-weight:700;color:#666;">단가(원/KG)</label>
       <input type="number" id="prod-out-price-${id}" placeholder="0" style="font-size:12px;">
     </div>
@@ -10777,6 +10898,7 @@ async function saveProdEntry(){
 
   // 투입 수집
   const inputs = [];
+  let invalidBoxRow = '';
   document.querySelectorAll('[id^="prod-in-qty-"]').forEach(el=>{
     const id = el.id.replace('prod-in-qty-','');
     const product = document.getElementById(`prod-in-product-${id}`)?.value.trim();
@@ -10790,12 +10912,14 @@ async function saveProdEntry(){
     const stockNote = document.getElementById(`prod-in-stock-note-${id}`)?.value.trim() || '';
     const sourceStockKey = document.getElementById(`prod-in-sel-${id}`)?.dataset.stockKey || '';
     const qty = parseFloat(el.value)||0;
+    const boxCount = parseOptionalBoxCount(document.getElementById(`prod-in-box-count-${id}`)?.value);
+    if(Number.isNaN(boxCount) || (boxCount !== null && (!product || qty <= 0))) invalidBoxRow = `투입 품목 #${id}`;
     // 단가: 사용자 입력 우선, 없으면 단가표
     const manualPrice = parseFloat(document.getElementById(`prod-in-price-${id}`)?.value)||0;
     const p = manualPrice || getPrice(product, origin);
     if(product && qty>0){
       const samsung = productionRowSamsungSnapshot(document.getElementById(`prod-in-${id}`));
-      inputs.push({product,lot,qty,price:p,amount:p*qty,origin,packunit,proddate,stockUnitPrice:stockUnitPrice || p,stockLocation,stockRowId,stockNote,sourceStockKey,...(samsung ? {samsung} : {})});
+      inputs.push({product,lot,qty,boxCount,price:p,amount:p*qty,origin,packunit,proddate,stockUnitPrice:stockUnitPrice || p,stockLocation,stockRowId,stockNote,sourceStockKey,...(samsung ? {samsung} : {})});
     }
   });
 
@@ -10815,6 +10939,8 @@ async function saveProdEntry(){
     const stockRowId = document.getElementById(`prod-out-stock-row-id-${id}`)?.value || '';
     const note = document.getElementById(`prod-out-note-${id}`)?.value.trim() || '';
     const qty = parseFloat(el.value)||0;
+    const boxCount = parseOptionalBoxCount(document.getElementById(`prod-out-box-count-${id}`)?.value);
+    if(Number.isNaN(boxCount) || (boxCount !== null && (!product || qty <= 0))) invalidBoxRow = `생산 품목 #${id}`;
     const manualPrice = parseFloat(document.getElementById(`prod-out-price-${id}`)?.value)||0;
     if(product && qty>0){
       const registered = findLabelProductForProduction(product, packunit, productId);
@@ -10836,11 +10962,12 @@ async function saveProdEntry(){
         nationalPartName: nationalPartNameForCode(registered.nationalPartCode),
         taxType: normalizeLabelProductTaxType(registered.taxType),
         grade: registered.grade || '',
-        packunit: labelProductPackUnitText(registered), lot, qty, manualPrice, origin: outOrigin, stockRowId, note,
+        packunit: labelProductPackUnitText(registered), lot, qty, boxCount, manualPrice, origin: outOrigin, stockRowId, note,
         ...(samsung ? {samsung} : {})
       });
     }
   });
+  if(invalidBoxRow){alert(`${invalidBoxRow}: 박스수는 중량·품목과 함께 0 이상의 정수로 입력해주세요.`);return;}
   if(invalidOutputProduct){
     alert(`생산품목은 품목관리에 등록된 품목만 선택할 수 있습니다.\n\n등록되지 않은 품목: ${invalidOutputProduct}`);
     return;
@@ -10865,7 +10992,7 @@ async function saveProdEntry(){
       grade:o.grade || '',
       // Amounts are shown and saved as whole won: round a weight × unit-price
       // result instead of always rounding it upward.
-      packunit:o.packunit, lot:o.lot, qty:o.qty, price, amount:Math.round(price*o.qty), origin:o.origin,
+      packunit:o.packunit, lot:o.lot, qty:o.qty, boxCount:o.boxCount, price, amount:Math.round(price*o.qty), origin:o.origin,
       stockRowId:o.stockRowId, note:o.note, ...(o.samsung ? {samsung:o.samsung} : {})
     };
   });
@@ -10912,7 +11039,7 @@ async function saveProdEntry(){
         id:makeProductionTxnId(entry.id, 'use', index), date, type:'사용',
         product:inp.product, lot:inp.lot||'', origin:inp.origin||'',
         packunit:inp.packunit||'',
-        trader:'', weight:inp.qty, price:inp.price, amount:inp.amount,
+        trader:'', weight:inp.qty, boxCount:inp.boxCount, price:inp.price, amount:inp.amount,
         note:`${jobType}작업 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         proddate: inp.proddate || '',
         stockProddate: inp.proddate || '',
@@ -10939,7 +11066,7 @@ async function saveProdEntry(){
         nationalPartCode:out.nationalPartCode||'', nationalPartName:out.nationalPartName||'',
         taxType:normalizeLabelProductTaxType(out.taxType),
         grade:out.grade||'',
-        trader:'생산작업', weight:out.qty, price:out.price, amount:out.amount,
+        trader:'생산작업', weight:out.qty, boxCount:out.boxCount, price:out.price, amount:out.amount,
         note:`${jobType}완료 ${dateFormatted} #${jobNo}${jobNote ? ' / ' + jobNote : ''}`,
         stockLocation: STOCK_LOCATION_DEFAULT,
         stockRowId:out.stockRowId || '', stockNote:out.note || '',
@@ -11067,6 +11194,7 @@ function openEditProdEntry(id){
     const p=document.getElementById(`prod-in-product-${n}`);
     const l=document.getElementById(`prod-in-lot-${n}`);
     const q=document.getElementById(`prod-in-qty-${n}`);
+    const boxes=document.getElementById(`prod-in-box-count-${n}`);
     const pr=document.getElementById(`prod-in-price-${n}`);
     const pk=document.getElementById(`prod-in-packunit-${n}`);
     const o=document.getElementById(`prod-in-origin-${n}`);
@@ -11091,6 +11219,7 @@ function openEditProdEntry(id){
     }
     if(pk)pk.value=inp.packunit||'';
     if(q)q.value=inp.qty||0;      if(pr)pr.value=inp.price||0;
+    if(boxes)boxes.value=parseOptionalBoxCount(inp.boxCount) ?? '';
     document.getElementById(`prod-in-${n}`).dataset.legacySamsung=JSON.stringify(productionLegacySamsung(inp));
   });
   (entry.outputs||[]).forEach(out=>{
@@ -11099,6 +11228,7 @@ function openEditProdEntry(id){
     const o=document.getElementById(`prod-out-origin-${n}`);
     const l=document.getElementById(`prod-out-lot-${n}`);
     const q=document.getElementById(`prod-out-qty-${n}`);
+    const boxes=document.getElementById(`prod-out-box-count-${n}`);
     const pr=document.getElementById(`prod-out-price-${n}`);
     const pk=document.getElementById(`prod-out-packunit-${n}`);
     const pid=document.getElementById(`prod-out-product-id-${n}`);
@@ -11109,6 +11239,7 @@ function openEditProdEntry(id){
     if(pd)pd.value=out.proddate||out.stockProddate||'';
     if(o){o.value=out.origin||'';o.removeAttribute('readonly');}
     if(l)l.value=out.lot||''; if(q)q.value=out.qty||0; if(pr)pr.value=out.price||0;
+    if(boxes)boxes.value=parseOptionalBoxCount(out.boxCount) ?? '';
     const outputNote=document.getElementById(`prod-out-note-${n}`);
     if(outputNote)outputNote.value=productionStockNote(out);
     document.getElementById(`prod-out-${n}`).dataset.legacySamsung=JSON.stringify(productionLegacySamsung(out));
@@ -11340,6 +11471,8 @@ function renderProduction(){
     const totalInAmt=inputs.reduce((s,i)=>s+i.amount,0);
     const totalInQty=inputs.reduce((s,i)=>s+i.qty,0);
     const totalOutQty=outputs.reduce((s,o)=>s+o.qty,0);
+    const totalInBoxes=totalRecordedBoxes(inputs);
+    const totalOutBoxes=totalRecordedBoxes(outputs);
     const totalOutAmt=outputs.reduce((s,o)=>s+Math.round(parseAppNumber(o.qty)*parseAppNumber(o.price)),0);
     const lossKg=totalInQty-totalOutQty;
     const lossRate=totalInQty>0?(lossKg/totalInQty*100):0;
@@ -11358,7 +11491,7 @@ function renderProduction(){
       // 투입
       html+=inp
         ?`<td>${htmlEscape(inp.product || '')}${inp.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(inp.packunit)}</span>` : ''}${productionStockNoteHtml(inp)}</td><td>${inp.origin||''}</td>
-           <td style="text-align:right">${inp.qty.toFixed(2)}</td>
+           <td style="text-align:right">${inp.qty.toFixed(2)}${boxCountDisplay(inp.boxCount, '') ? `<br><small style="color:#666">${boxCountDisplay(inp.boxCount)} 박스</small>` : ''}</td>
            <td style="text-align:right">${inp.price?inp.price.toLocaleString():'-'}</td>
            <td style="text-align:right;font-weight:500">${inp.amount?Math.round(inp.amount).toLocaleString():'-'}</td>
            <td style="font-family:var(--font-mono);font-size:11px">${inp.lot||'-'}</td>`
@@ -11368,7 +11501,7 @@ function renderProduction(){
       // 생산
       html+=out
         ?`<td>${htmlEscape(out.product || '')}${out.packunit ? ` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(out.packunit)}</span>` : ''}${productionStockNoteHtml(out)}</td><td>${out.origin||''}</td>
-           <td style="text-align:right">${out.qty.toFixed(2)}</td>
+           <td style="text-align:right">${out.qty.toFixed(2)}${boxCountDisplay(out.boxCount, '') ? `<br><small style="color:#666">${boxCountDisplay(out.boxCount)} 박스</small>` : ''}</td>
            <td style="text-align:right">${out.price?Math.ceil(out.price).toLocaleString():'-'}</td>
            <td style="text-align:right;font-weight:500">${out.amount?Math.round(parseAppNumber(out.qty)*parseAppNumber(out.price)).toLocaleString():'-'}</td>
            <td style="font-family:var(--font-mono);font-size:11px">${out.lot||'-'}</td>`
@@ -11380,11 +11513,11 @@ function renderProduction(){
     html+=`<tr class="subtotal-row">
       <td></td>
       <td colspan="3" style="text-align:right">투입합계</td>
-      <td></td><td style="text-align:right">${totalInQty.toFixed(2)}KG</td>
+       <td></td><td style="text-align:right">${totalInQty.toFixed(2)}KG${totalInBoxes === null ? '' : `<br><small>${boxCountDisplay(totalInBoxes)} 박스</small>`}</td>
       <td style="text-align:right">${Math.round(totalInAmt).toLocaleString()}원</td>
       <td style="border-left:2px solid var(--color-border-tertiary)"></td>
       <td colspan="2">로스 <span style="color:${lossColor}">${lossKg.toFixed(2)}KG (${lossRate.toFixed(1)}%)</span></td>
-      <td style="text-align:right">${totalOutQty.toFixed(2)}KG</td>
+       <td style="text-align:right">${totalOutQty.toFixed(2)}KG${totalOutBoxes === null ? '' : `<br><small>${boxCountDisplay(totalOutBoxes)} 박스</small>`}</td>
       <td></td>
       <td style="text-align:right">${Math.round(totalOutAmt).toLocaleString()}원</td>
       <td></td>
@@ -11864,7 +11997,7 @@ function renderStock(){
       <td style="text-align:right">${(s.total_use||0).toFixed(2)}</td>
       <td style="text-align:right">${(s.total_out||0).toFixed(2)}</td>
       <td style="text-align:right;color:${(s.total_adjust||0)<0?'#e74c3c':(s.total_adjust||0)>0?'#3440a0':'#888'}">${(s.total_adjust||0).toFixed(2)}</td>
-      <td style="${stkStyle}">${stk.toFixed(2)}</td>
+      <td style="${stkStyle}">${stk.toFixed(2)}<br><small style="font-weight:400;color:#666">${s.stockBoxes === null ? '박스 미기록' : `${boxCountDisplay(s.stockBoxes)} 박스`}</small></td>
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
@@ -14273,8 +14406,8 @@ function downloadCSV(rows,filename){
   a.download=filename; a.click();
 }
 function exportTransactionsCSV(){
-  const header=['날짜','구분','거래처','품목명','원산지','보관','이력번호','중량(KG)','단가','금액','비고'];
-  const rows=transactions.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,t.price||'',t.amount||'',t.note||'']);
+  const header=['날짜','구분','거래처','품목명','원산지','보관','이력번호','중량(KG)','박스수','단가','금액','비고'];
+  const rows=transactions.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,boxCountDisplay(t.boxCount,''),t.price||'',t.amount||'',t.note||'']);
   downloadCSV([header,...rows],'원료수불부_거래내역.csv');
 }
 
@@ -14352,6 +14485,7 @@ function printFilteredTransactions(){
       <td>${htmlEscape(originInfo || '-')}</td>
       <td class="mono">${htmlEscape(t.lot || '-')}</td>
       <td class="numeric">${parseAppNumber(t.weight).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="numeric">${boxCountDisplay(t.boxCount)}</td>
       <td class="numeric">${parseAppNumber(t.price) ? parseAppNumber(t.price).toLocaleString('ko-KR',{maximumFractionDigits:2}) : '-'}</td>
       <td class="numeric">${parseAppNumber(t.amount) ? Math.round(parseAppNumber(t.amount)).toLocaleString('ko-KR') : '-'}</td>
       <td>${htmlEscape(t.note || '-')}</td>
@@ -14360,11 +14494,11 @@ function printFilteredTransactions(){
   const table=`<table>
     <colgroup>
       <col style="width:8%"><col style="width:6%"><col style="width:11%"><col style="width:14%"><col style="width:12%">
-      <col style="width:13%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:11%">
+       <col style="width:13%"><col style="width:7%"><col style="width:5%"><col style="width:8%"><col style="width:9%"><col style="width:7%">
     </colgroup>
     <thead><tr>
       <th>날짜</th><th>구분</th><th>거래처</th><th>품목명</th><th>원산지 / 보관 / 지점</th>
-      <th>이력번호</th><th>중량(KG)</th><th>단가</th><th>금액</th><th>비고</th>
+       <th>이력번호</th><th>중량(KG)</th><th>박스수</th><th>단가</th><th>금액</th><th>비고</th>
     </tr></thead><tbody>${body}</tbody>
   </table>`;
   openA4ListPrint('거래내역 목록', filters.length ? filters.join(' · ') : '전체 거래내역', rows.length, table);
@@ -14405,13 +14539,13 @@ function printFilteredProduction(){
         <td rowspan="${maxRows}"><strong>${htmlEscape(getProdJobType(e))}</strong>${entryNote ? `<br>${htmlEscape(entryNote)}` : ''}</td>` : ''}
         <td>${inp ? htmlEscape([inp.product,inp.packunit ? `(${inp.packunit})` : ''].filter(Boolean).join(' ')) + productionStockNoteHtml(inp) : ''}</td>
         <td>${inp ? htmlEscape(inp.origin || '') : ''}</td>
-        <td class="numeric">${inp ? parseAppNumber(inp.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}</td>
+        <td class="numeric">${inp ? parseAppNumber(inp.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (boxCountDisplay(inp.boxCount, '') ? `<br>${boxCountDisplay(inp.boxCount)} 박스` : '') : ''}</td>
         <td class="numeric">${inp && parseAppNumber(inp.price) ? parseAppNumber(inp.price).toLocaleString('ko-KR',{maximumFractionDigits:2}) : ''}</td>
         <td class="numeric">${inp && parseAppNumber(inp.amount) ? Math.round(parseAppNumber(inp.amount)).toLocaleString('ko-KR') : ''}</td>
         <td class="mono">${inp ? htmlEscape(inp.lot || '-') : ''}</td>
         <td>${out ? htmlEscape([out.product,out.packunit ? `(${out.packunit})` : ''].filter(Boolean).join(' ')) + productionStockNoteHtml(out) : ''}</td>
         <td>${out ? htmlEscape(out.origin || '') : ''}</td>
-        <td class="numeric">${out ? parseAppNumber(out.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}</td>
+        <td class="numeric">${out ? parseAppNumber(out.qty).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (boxCountDisplay(out.boxCount, '') ? `<br>${boxCountDisplay(out.boxCount)} 박스` : '') : ''}</td>
         <td class="numeric">${out && parseAppNumber(out.price) ? Math.ceil(parseAppNumber(out.price)).toLocaleString('ko-KR') : ''}</td>
         <td class="numeric">${out && parseAppNumber(out.amount) ? Math.round(parseAppNumber(out.qty)*parseAppNumber(out.price)).toLocaleString('ko-KR') : ''}</td>
         <td class="mono">${out ? htmlEscape(out.lot || '-') : ''}</td>
@@ -14439,7 +14573,7 @@ function printFilteredProduction(){
     </colgroup>
     <thead>
       <tr><th rowspan="2">작업일 / 번호</th><th rowspan="2">유형 / 비고</th><th colspan="6">투입 품목</th><th colspan="6">생산 품목</th></tr>
-      <tr><th>품목명</th><th>원산지</th><th>중량</th><th>단가</th><th>금액</th><th>이력번호</th><th>품목명</th><th>원산지</th><th>중량</th><th>단가</th><th>금액</th><th>이력번호</th></tr>
+      <tr><th>품목명</th><th>원산지</th><th>중량 / 박스</th><th>단가</th><th>금액</th><th>이력번호</th><th>품목명</th><th>원산지</th><th>중량 / 박스</th><th>단가</th><th>금액</th><th>이력번호</th></tr>
     </thead>${groups}
   </table>`;
   openA4ListPrint('생산일보 목록', filters.length ? filters.join(' · ') : '전체 생산일보', entries.length, table);
@@ -14452,7 +14586,7 @@ function exportProductionCSV(){
   }
   const { entries: filtered, exactDate, filterFrom, filterTo, productQ, lotQ } = getFilteredProductionEntries('asc');
 
-  const header=['작업일','작업번호','작업유형','작업비고','투입품목','투입포장단위','원산지','투입량(KG)','투입단가','투입금액','투입이력번호','투입재고비고','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산단가','생산금액','생산이력번호','생산품비고'];
+  const header=['작업일','작업번호','작업유형','작업비고','투입품목','투입포장단위','원산지','투입량(KG)','투입박스수','투입단가','투입금액','투입이력번호','투입재고비고','생산품목','생산포장단위','원산지(생산)','생산량(KG)','생산박스수','생산단가','생산금액','생산이력번호','생산품비고'];
   const rows=[header];
   filtered.forEach(e=>{
     const inputs =e.inputs ||[];
@@ -14471,6 +14605,7 @@ function exportProductionCSV(){
         inp?inp.packunit||'':'',
         inp?inp.origin||'':'',
         inp?inp.qty.toFixed(2):'',
+        inp?boxCountDisplay(inp.boxCount,''):'',
         inp?inp.price||'':'',
         inp?Math.round(inp.amount||0):'',
         inp?inp.lot||'':'',
@@ -14479,6 +14614,7 @@ function exportProductionCSV(){
         out?out.packunit||'':'',
         out?out.origin||'':'',
         out?out.qty.toFixed(2):'',
+        out?boxCountDisplay(out.boxCount,''):'',
         out?Math.ceil(out.price||0):'',
         out?Math.round(parseAppNumber(out.qty)*parseAppNumber(out.price)):'',
         out?out.lot||'':'',
@@ -14531,7 +14667,7 @@ function printStockCountSheet(){
 function exportStockCSV(){
   const snapshot = getStockExportSnapshot();
   if(!snapshot) return;
-  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','단가','재고금액','비고'];
+  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','재고(박스)','단가','재고금액','비고'];
   const rows=snapshot.rows.map(r=>[
     snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',r.proddate||'',r.origin||'',
     Number(r.total_in||0).toFixed(2),
@@ -14539,6 +14675,7 @@ function exportStockCSV(){
     Number(r.total_out||0).toFixed(2),
     Number(r.total_adjust||0).toFixed(2),
     Number(r.stock||0).toFixed(2),
+    boxCountDisplay(r.stockBoxes,''),
     r.price||'',
     Math.round((Number(r.stock)||0) * (Number(r.price)||0)) || '',
     r.stockNote||r.note||''

@@ -21,7 +21,7 @@ const stockFunctions = [
   'localDateString', 'normProdDate', 'priceKey', 'priceProductKey', 'samePriceText', 'samePriceProductText',
   'normalizeOriginName', 'originKey', 'sameOriginText', 'normalizeStockLocation', 'stockLocationKey', 'getTxnStockLocation',
   'parseAppNumber', 'stockPriceKey', 'stockDateKey', 'stockMapKey', 'sameStockIdentity', 'getTxnUnitPrice',
-  'getStockTxnProddate', 'stockLedgerDateKey', 'getStockMap', 'invalidateStockMap', 'htmlEscape', 'jsArg'
+  'getStockTxnProddate', 'stockLedgerDateKey', 'parseOptionalBoxCount', 'boxCountDisplay', 'getStockMap', 'invalidateStockMap', 'htmlEscape', 'jsArg'
 ];
 const stockSource = stockFunctions.map(source).join('\n');
 const common = {
@@ -56,6 +56,24 @@ function row(ctx, id, location = '가공장', asOf = '') {
   return found[0];
 }
 function testLogic() {
+  const boxLedger = harness([
+    {...trackedInbound('boxes-A', 100, 5000), boxCount:10},
+    {...trackedInbound('legacy-B', 30, 5000)},
+    {...consume('boxes-A', 20), boxCount:2},
+    {...consume('boxes-A', 10, '재고이동', {fromLocation:'가공장',toLocation:'물류창고'}), boxCount:1}
+  ]);
+  assert.equal(boxLedger.parseOptionalBoxCount(''), null, 'Blank means unrecorded, not zero');
+  assert.equal(boxLedger.parseOptionalBoxCount('0'), 0, 'Explicit zero remains a recorded value');
+  assert.ok(Number.isNaN(boxLedger.parseOptionalBoxCount('1.5')));
+  assert.ok(Number.isNaN(boxLedger.parseOptionalBoxCount('-1')));
+  assert.equal(row(boxLedger, 'boxes-A').stockBoxes, 7);
+  assert.equal(row(boxLedger, 'boxes-A', '물류창고').stockBoxes, 1);
+  assert.equal(row(boxLedger, 'legacy-B').stockBoxes, null, 'Historical missing boxes stay unknown');
+  assert.equal(row(boxLedger, 'boxes-A', '가공장', '2026-09-13').stockBoxes, 10);
+  boxLedger.userTransactions.push(consume('boxes-A', 5)); boxLedger.invalidateStockMap();
+  assert.equal(row(boxLedger, 'boxes-A').stockBoxes, null, 'A later unrecorded movement makes only that location unknown');
+  assert.equal(row(boxLedger, 'boxes-A', '물류창고').stockBoxes, 1);
+
   for (const notes of [['삼성웰스토리 / 3mm', '일반 / 5mm'], ['같은 비고', '같은 비고'], ['', '']]) {
     const ctx = harness([incoming('row-A', 30, notes[0]), incoming('row-B', 70, notes[1])]);
     assert.equal(buckets(ctx).length, 2, 'Each production line remains independent regardless of note');
@@ -176,7 +194,7 @@ async function testTransactionFlows(page, artifacts) {
     'getTProduct', 'getTOrigin', 'getTStorage', 'getTPackunit', 'getTLabelProductId', 'getTStockLocation',
     'getTMoveFromLocation', 'getTMoveToLocation', 'getEditingTransaction', 'stockOptionFromTransaction',
     'bulkOutboundIdentityKey', 'bulkOutboundKeyFromValues', 'bulkOutboundStockOptions', 'sameBulkOutboundStockOption',
-    'outboundStockOptionsForEdit', 'availableStockForEdit', 'ensureOutProductOption', 'bulkOutboundStockLabel',
+    'outboundStockOptionsForEdit', 'availableStockForEdit', 'availableBoxesForEdit', 'ensureOutProductOption', 'bulkOutboundStockLabel',
     'selectTxnStock', 'addTransaction', 'addBulkOutboundRow', 'addBulkOutboundRows', 'clearBulkOutbound',
     'selectBulkOutboundStock', 'refreshBulkOutboundPrice', 'updateBulkOutboundAmount', 'saveBulkOutbound',
     'openStockAdjust', 'closeStockAdjust', 'calcStockAdjustDiff', 'saveStockAdjust'
@@ -200,13 +218,14 @@ async function testTransactionFlows(page, artifacts) {
     async function sbRpc(name, body){adjustCalls.push({name,body});return {ok:true,transaction:body.p_record};}
     ${names.map(source).join('\n')}
   `});
-  await page.evaluate(rows => {userTransactions = rows; userProdEntries = []; invalidateStockMap();}, [incoming('action-A', 30, '삼성 / 3mm'), incoming('action-B', 70, '일반 / 5mm')]);
+  await page.evaluate(rows => {userTransactions = rows; userProdEntries = []; invalidateStockMap();}, [{...incoming('action-A', 30, '삼성 / 3mm'),boxCount:3}, {...incoming('action-B', 70, '일반 / 5mm'),boxCount:7}]);
   await page.evaluate(() => {
     document.getElementById('t-date').value = '2026-09-14';
     document.getElementById('t-type').value = '출고';
     selectTxnStock(bulkOutboundStockOptions().find(item => item.stockRowId === 'action-A').key);
     document.getElementById('t-trader').value = '가상 납품처';
     document.getElementById('t-weight').value = '20';
+    document.getElementById('t-box-count').value = '2';
     document.getElementById('t-price').value = '9000';
   });
   await page.evaluate(() => addTransaction());
@@ -215,12 +234,15 @@ async function testTransactionFlows(page, artifacts) {
   assert.equal(saved[0].type, '출고');
   assert.equal(saved[0].stockRowId, 'action-A');
   assert.equal(saved[0].stockNote, '삼성 / 3mm');
+  assert.equal(saved[0].boxCount, 2);
+  assert.equal(await page.evaluate(() => Object.values(getStockMap()).find(item => item.stockRowId === 'action-A').stockBoxes), 1);
   assert.equal(await page.evaluate(() => Object.values(getStockMap()).find(item => item.stockRowId === 'action-A').stock), 10);
   await page.evaluate(() => {
     document.getElementById('t-type').value = '재고이동';
     selectTxnStock(bulkOutboundStockOptions().find(item => item.stockRowId === 'action-B').key);
     document.getElementById('t-move-to').value = '물류창고';
     document.getElementById('t-weight').value = '13';
+    document.getElementById('t-box-count').value = '1';
   });
   await page.evaluate(() => addTransaction());
   saved = await page.evaluate(() => savedTransactionCalls);
@@ -230,6 +252,7 @@ async function testTransactionFlows(page, artifacts) {
   assert.equal(saved[1].stockNote, '일반 / 5mm');
   assert.equal(saved[1].fromLocation, '가공장'); assert.equal(saved[1].toLocation, '물류창고');
   assert.equal(await page.evaluate(() => Object.values(getStockMap()).find(item => item.stockRowId === 'action-B' && item.stockLocation === '물류창고').stock), 13);
+  assert.equal(await page.evaluate(() => Object.values(getStockMap()).find(item => item.stockRowId === 'action-B' && item.stockLocation === '물류창고').stockBoxes), 1);
   await page.evaluate(() => {
     document.getElementById('bulk-out-date').value = '2026-09-14';
     document.getElementById('bulk-outbound-tbody').innerHTML = ''; addBulkOutboundRow();
@@ -238,6 +261,7 @@ async function testTransactionFlows(page, artifacts) {
     selectBulkOutboundStock(row.querySelector('.bulk-out-stock-input'), stock.key);
     row.querySelector('.bulk-out-trader').value = '가상 일괄 납품처';
     row.querySelector('.bulk-out-weight').value = '5';
+    row.querySelector('.bulk-out-box-count').value = '1';
     row.querySelector('.bulk-out-price-input').value = '9000';
   });
   await page.evaluate(() => saveBulkOutbound());
@@ -246,10 +270,12 @@ async function testTransactionFlows(page, artifacts) {
   assert.equal(saved[2][0].stockRowId, 'action-B');
   assert.equal(saved[2][0].stockNote, '일반 / 5mm');
   assert.equal(saved[2][0].weight, 5);
+  assert.equal(saved[2][0].boxCount, 1);
   await page.evaluate(() => {
     document.getElementById('t-type').value = '사용';
     selectTxnStock(bulkOutboundStockOptions().find(item => item.stockRowId === 'action-B' && item.stockLocation === '가공장').key);
     document.getElementById('t-weight').value = '2';
+    document.getElementById('t-box-count').value = '1';
   });
   await page.evaluate(() => addTransaction());
   saved = await page.evaluate(() => savedTransactionCalls);

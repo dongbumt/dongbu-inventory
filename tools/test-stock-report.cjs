@@ -14,7 +14,7 @@ const functions = [
   'localDateString','normProdDate','priceKey','priceProductKey','samePriceText','samePriceProductText',
   'normalizeOriginName','originKey','sameOriginText','normalizeStockLocation','stockLocationKey','getTxnStockLocation',
   'parseAppNumber','stockPriceKey','stockDateKey','stockMapKey','sameStockIdentity','getTxnUnitPrice','getStockTxnProddate',
-  'stockLedgerDateKey','getStockMap','invalidateStockMap','htmlEscape','jsArg',
+  'stockLedgerDateKey','parseOptionalBoxCount','boxCountDisplay','getStockMap','invalidateStockMap','htmlEscape','jsArg',
   'stockCanAdjustCurrent','stockTableColspan','setStockExportEnabled','getStockQueryFilters','stockQueryDescription',
   'showStockQueryState','markStockSearchPending','runStockSearch','resetStockAsOfDate','renderStock',
   'stockPersonalCan','applyStockPermissionState','closeStockAdjust','openStockAdjust','saveStockAdjust',
@@ -136,6 +136,7 @@ async function testLogic(){
   assert.equal(ctx.csvResult.rows.length, 2);
   assert.equal(ctx.csvResult.rows[1][0], '2026-09-05');
   assert.equal(ctx.csvResult.rows[1][13], '20.00');
+  assert.equal(ctx.csvResult.rows[1][14], '', 'Legacy records export blank boxes, not zero');
   ctx.window.DBMTStockReport.open = data=>{ctx.printed=data; return true;};
   ctx.printStockReport(); assert.equal(ctx.printed.rows[0].stock, 20);
   assert.equal(ctx.printed.filters.location, '물류창고');
