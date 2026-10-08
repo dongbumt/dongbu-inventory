@@ -21,7 +21,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261006workordermulti1">
+<link rel="stylesheet" href="styles/main.css?v=20261008stockboxes1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261006spec2">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
@@ -165,7 +165,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="txn-product-picker-table-wrap txn-stock-picker-table-wrap">
       <table class="txn-product-picker-table txn-stock-picker-table">
         <thead><tr id="tsp-result-head">
-          <th>품목명</th><th>브랜드</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th>
+          <th>품목명</th><th>브랜드</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th><th>박스수</th>
         </tr></thead>
         <tbody id="tsp-result-body"></tbody>
       </table>
@@ -7707,7 +7707,8 @@ function getTxnStockSearchOptions(){
   const editTxn = getEditingTransaction();
   return outboundStockOptionsForEdit(editTxn).map(s=>({
     ...s,
-    stock: availableStockForEdit(s, editTxn)
+    stock: availableStockForEdit(s, editTxn),
+    stockBoxes: availableBoxesForEdit(s, editTxn)
   })).filter(s=>
     parseAppNumber(s.stock) > 0.01 &&
     (!locFilter || stockLocationKey(s.stockLocation || '') === stockLocationKey(locFilter))
@@ -7780,8 +7781,13 @@ function refreshTxnStockPickerColumns(){
   const productionInput = isProductionInputStockPicker();
   table.classList.toggle('production-input', productionInput);
   head.innerHTML = productionInput
-    ? '<th>품목명</th><th>브랜드</th><th>등급</th><th>공장넘버</th><th>포장단위</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>현재고</th>'
-    : '<th>품목명</th><th>브랜드</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th>';
+    ? '<th>품목명</th><th>브랜드</th><th>등급</th><th>공장넘버</th><th>포장단위</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>현재고</th><th>박스수</th>'
+    : '<th>품목명</th><th>브랜드</th><th>이력번호</th><th>원산지</th><th>생산일</th><th>원가</th><th>지점</th><th>현재고</th><th>박스수</th>';
+}
+
+function stockPickerBoxLabel(stock){
+  const boxes = parseOptionalBoxCount(stock?.stockBoxes);
+  return boxes === null || Number.isNaN(boxes) ? '미기록' : `${boxCountDisplay(boxes)} 박스`;
 }
 
 function refreshTxnStockPickerFilterOptions(){
@@ -7899,7 +7905,7 @@ function renderTxnStockPicker(resetSelection=false){
   if(txnStockPickerIndex < 0 && filtered.length) txnStockPickerIndex = 0;
   if(count) count.textContent = `${filtered.length}건`;
   if(!filtered.length){
-    body.innerHTML = `<tr><td colspan="${productionInput ? 10 : 8}" class="txn-product-picker-empty">선택 가능한 재고가 없습니다.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${productionInput ? 11 : 9}" class="txn-product-picker-empty">선택 가능한 재고가 없습니다.</td></tr>`;
     syncTxnStockPickerSelection(false);
     return;
   }
@@ -7915,7 +7921,8 @@ function renderTxnStockPicker(resetSelection=false){
     <td>${htmlEscape(normalizeOriginName(stock.origin) || '-')}</td>
     <td>${htmlEscape(stock.proddate || '-')}</td>
     <td class="txn-stock-picker-number">${stock.price ? `${Number(stock.price).toLocaleString('ko-KR')}원` : '-'}</td>
-    <td class="txn-stock-picker-number"><strong>${Number(stock.stock || 0).toFixed(2)} KG</strong></td>`
+    <td class="txn-stock-picker-number"><strong>${Number(stock.stock || 0).toFixed(2)} KG</strong></td>
+    <td class="txn-stock-picker-number">${stockPickerBoxLabel(stock)}</td>`
       : `<td><strong>${htmlEscape(stock.product || '-')}</strong>${stock.stockNote ? `<div style="font-size:11px;color:#555;white-space:normal;">${htmlEscape(stock.stockNote)}</div>` : ''}</td>
     <td>${htmlEscape(meta.brand || '-')}</td>
     <td class="txn-stock-picker-lot">${htmlEscape(stock.lot || 'LOT 없음')}</td>
@@ -7923,7 +7930,8 @@ function renderTxnStockPicker(resetSelection=false){
     <td>${htmlEscape(stock.proddate || '-')}</td>
     <td class="txn-stock-picker-number">${stock.price ? `${Number(stock.price).toLocaleString('ko-KR')}원` : '-'}</td>
     <td>${htmlEscape(normalizeStockLocation(stock.stockLocation))}</td>
-    <td class="txn-stock-picker-number"><strong>${Number(stock.stock || 0).toFixed(2)} KG</strong></td>`;
+    <td class="txn-stock-picker-number"><strong>${Number(stock.stock || 0).toFixed(2)} KG</strong></td>
+    <td class="txn-stock-picker-number">${stockPickerBoxLabel(stock)}</td>`;
     return `<tr data-tsp-index="${index}" aria-selected="${index===txnStockPickerIndex?'true':'false'}" class="${index===txnStockPickerIndex?'selected':''}" onclick="setTxnStockPickerIndex(${index})" ondblclick="confirmTxnStockPicker()">
     ${cells}
   </tr>`;
@@ -7941,7 +7949,7 @@ function syncTxnStockPickerSelection(scrollIntoView=true){
   const summary = document.getElementById('tsp-selected-summary');
   const confirmButton = document.getElementById('tsp-confirm');
   if(summary) summary.textContent = stock
-    ? `${stock.product || '-'} · ${stock.lot ? 'LOT ' + stock.lot : 'LOT 없음'} · ${normalizeStockLocation(stock.stockLocation)} · ${Number(stock.stock || 0).toFixed(2)} KG${stock.stockNote ? ' · '+stock.stockNote : ''}`
+    ? `${stock.product || '-'} · ${stock.lot ? 'LOT ' + stock.lot : 'LOT 없음'} · ${normalizeStockLocation(stock.stockLocation)} · ${Number(stock.stock || 0).toFixed(2)} KG · ${stockPickerBoxLabel(stock)}${stock.stockNote ? ' · '+stock.stockNote : ''}`
     : '선택된 재고 없음';
   if(confirmButton) confirmButton.disabled = !stock;
   if(scrollIntoView && txnStockPickerIndex >= 0){
@@ -8055,7 +8063,7 @@ function selectTxnStock(key){
   const priceEl = document.getElementById('t-stock-price');
   if(keyEl?.value && keyEl.value !== s.key){
     const boxEl = document.getElementById('t-box-count');
-    if(boxEl) boxEl.value = '';
+    if(boxEl){ boxEl.value = ''; boxEl.title = ''; }
   }
   if(keyEl) keyEl.value = s.key || '';
   if(priceEl) priceEl.value = Number(s.price || 0);
@@ -8075,6 +8083,12 @@ function selectTxnStock(key){
     weightEl.value = Number(s.stock || 0).toFixed(2);
     weightEl.style.background = '#fffbe6';
     weightEl.title = '재고중량 자동입력 (수정 가능)';
+  }
+  const boxEl = document.getElementById('t-box-count');
+  const availableBoxes = parseOptionalBoxCount(s.stockBoxes);
+  if(boxEl && !boxEl.value && availableBoxes !== null && !Number.isNaN(availableBoxes)){
+    boxEl.value = String(availableBoxes);
+    boxEl.title = '재고박스수 자동입력 (수정 가능)';
   }
   const noteEl = document.getElementById('t-note');
   if(noteEl && s.proddate && !noteEl.value) noteEl.value = '생산일: ' + s.proddate;
@@ -9891,7 +9905,7 @@ function selectBulkOutboundStock(inp, key){
   if(!tr) return;
   if(tr.querySelector('.bulk-out-key')?.value && tr.querySelector('.bulk-out-key').value !== s.key){
     const boxEl = tr.querySelector('.bulk-out-box-count');
-    if(boxEl) boxEl.value = '';
+    if(boxEl){ boxEl.value = ''; boxEl.title = ''; }
   }
   inp.value = bulkOutboundStockLabel(s);
   const setVal = (cls, val)=>{
@@ -9915,6 +9929,12 @@ function selectBulkOutboundStock(inp, key){
   if(stockEl) stockEl.textContent = `${Number(s.stock||0).toFixed(2)} KG`;
   const weightEl = tr.querySelector('.bulk-out-weight');
   if(weightEl && !weightEl.value) weightEl.value = Number(s.stock||0).toFixed(2);
+  const boxEl = tr.querySelector('.bulk-out-box-count');
+  const availableBoxes = parseOptionalBoxCount(s.stockBoxes);
+  if(boxEl && !boxEl.value && availableBoxes !== null && !Number.isNaN(availableBoxes)){
+    boxEl.value = String(availableBoxes);
+    boxEl.title = '재고박스수 자동입력 (수정 가능)';
+  }
   refreshBulkOutboundPrice(tr);
   updateBulkOutboundAmount(tr);
 }

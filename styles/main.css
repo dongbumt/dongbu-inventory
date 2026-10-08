@@ -459,27 +459,29 @@
   .txn-stock-picker{width:min(1240px,96vw);max-width:1240px;}
   .txn-stock-picker-filters{grid-template-columns:minmax(240px,1.7fr) minmax(160px,1.1fr) minmax(160px,1.1fr) minmax(120px,.8fr) minmax(120px,.8fr);}
   .txn-stock-picker-table{min-width:1040px;}
-  .txn-stock-picker-table th:nth-child(1){width:20%;}
-  .txn-stock-picker-table th:nth-child(2){width:10%;}
-  .txn-stock-picker-table th:nth-child(3){width:17%;}
-  .txn-stock-picker-table th:nth-child(4){width:11%;}
-  .txn-stock-picker-table th:nth-child(5){width:12%;}
-  .txn-stock-picker-table th:nth-child(6){width:10%;text-align:right;}
-  .txn-stock-picker-table th:nth-child(7){width:10%;}
-  .txn-stock-picker-table th:nth-child(8){width:10%;text-align:right;}
+  .txn-stock-picker-table th:nth-child(1){width:18%;}
+  .txn-stock-picker-table th:nth-child(2){width:9%;}
+  .txn-stock-picker-table th:nth-child(3){width:15%;}
+  .txn-stock-picker-table th:nth-child(4){width:10%;}
+  .txn-stock-picker-table th:nth-child(5){width:11%;}
+  .txn-stock-picker-table th:nth-child(6){width:9%;text-align:right;}
+  .txn-stock-picker-table th:nth-child(7){width:9%;}
+  .txn-stock-picker-table th:nth-child(8){width:11%;text-align:right;}
+  .txn-stock-picker-table th:nth-child(9){width:8%;text-align:right;}
   .txn-stock-picker-table.production-input{width:100%;min-width:100%;font-size:11px;}
   .txn-stock-picker-table.production-input th,
   .txn-stock-picker-table.production-input td{padding:8px 5px;}
-  .txn-stock-picker-table.production-input th:nth-child(1){width:16%;}
-  .txn-stock-picker-table.production-input th:nth-child(2){width:9%;}
+  .txn-stock-picker-table.production-input th:nth-child(1){width:15%;}
+  .txn-stock-picker-table.production-input th:nth-child(2){width:8%;}
   .txn-stock-picker-table.production-input th:nth-child(3){width:7%;}
-  .txn-stock-picker-table.production-input th:nth-child(4){width:9%;}
+  .txn-stock-picker-table.production-input th:nth-child(4){width:8%;}
   .txn-stock-picker-table.production-input th:nth-child(5){width:8%;}
-  .txn-stock-picker-table.production-input th:nth-child(6){width:16%;text-align:left;}
+  .txn-stock-picker-table.production-input th:nth-child(6){width:14%;text-align:left;}
   .txn-stock-picker-table.production-input th:nth-child(7){width:8%;}
-  .txn-stock-picker-table.production-input th:nth-child(8){width:10%;}
-  .txn-stock-picker-table.production-input th:nth-child(9){width:8%;text-align:right;}
+  .txn-stock-picker-table.production-input th:nth-child(8){width:9%;}
+  .txn-stock-picker-table.production-input th:nth-child(9){width:7%;text-align:right;}
   .txn-stock-picker-table.production-input th:nth-child(10){width:9%;text-align:right;}
+  .txn-stock-picker-table.production-input th:nth-child(11){width:7%;text-align:right;}
   .txn-stock-picker-lot{font-family:var(--font-mono);}
   .txn-stock-picker-number{text-align:right!important;white-space:nowrap;}
 
