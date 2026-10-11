@@ -14360,7 +14360,7 @@ function buildIncheckHTML(date, rows, printMode=false){
   const signHeight = printMode ? 54 : 46;
   const b = 'border:1px solid #999;padding:3px 4px;font-size:10px;vertical-align:middle;line-height:1.15;';
   const blank = `border:1px solid #999;padding:3px 4px;font-size:10px;height:${rowHeight}px;line-height:1.15;`;
-  const verdict = blank + 'text-align:center;white-space:nowrap;font-size:8px;';
+  const verdict = blank + 'padding:3px 1px;text-align:center;white-space:nowrap;font-size:8px;';
   const dataRows = rows.map((r, i) => `<tr>
     <td style="${b}text-align:center;">${i + 1}</td>
     <td style="${b}">${htmlEscape(r.trader)}</td>
@@ -14373,13 +14373,14 @@ function buildIncheckHTML(date, rows, printMode=false){
     <td style="${verdict}">적합/부적합</td>
     <td style="${verdict}">적합/부적합</td>
     <td style="${verdict}">적합/부적합</td>
+    <td style="${verdict}">적합/부적합</td>
   </tr>`).join('');
-  const emptyRowCells = Array.from({length: 10}).map(() => `<td style="${blank}"></td>`).join('');
+  const emptyRowCells = Array.from({length: 11}).map(() => `<td style="${blank}"></td>`).join('');
   const emptyRows = Array.from({length: emptyCount}).map((_, idx) => `<tr>
     <td style="${b}text-align:center;color:#bbb;">${rows.length + idx + 1}</td>
     ${emptyRowCells}
   </tr>`).join('');
-  const noData = !rows.length ? `<tr><td colspan="11" style="border:1px solid #999;padding:26px;text-align:center;color:#888;">선택한 날짜의 입고 내역이 없습니다.</td></tr>` : '';
+  const noData = !rows.length ? `<tr><td colspan="12" style="border:1px solid #999;padding:26px;text-align:center;color:#888;">선택한 날짜의 입고 내역이 없습니다.</td></tr>` : '';
 
   return `<div class="incheck-doc" style="background:#fff;border:1px solid ${printMode ? '#fff' : 'var(--border)'};border-radius:${printMode ? '0' : '8px'};padding:${printMode ? '0' : '18px'};">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:10px;">
@@ -14413,12 +14414,12 @@ function buildIncheckHTML(date, rows, printMode=false){
     <div>
     <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
       <colgroup>
-        <col style="width:4%;"><col style="width:12%;"><col style="width:14%;"><col style="width:12%;">
-        <col style="width:8%;"><col style="width:7.5%;"><col style="width:9.5%;"><col style="width:8%;">
-        <col style="width:9%;"><col style="width:8%;"><col style="width:8%;">
+        <col style="width:4%;"><col style="width:11%;"><col style="width:12%;"><col style="width:11%;">
+        <col style="width:8%;"><col style="width:7%;"><col style="width:9%;"><col style="width:7%;">
+        <col style="width:9%;"><col style="width:8%;"><col style="width:7%;"><col style="width:7%;">
       </colgroup>
       <thead>
-        <tr style="background:#eef4f4;">
+        <tr style="background:#f2f2f2;">
           <th style="${b}text-align:center;">No</th>
           <th style="${b}text-align:center;">거래처</th>
           <th style="${b}text-align:center;">제품명</th>
@@ -14427,6 +14428,7 @@ function buildIncheckHTML(date, rows, printMode=false){
           <th style="${b}text-align:center;">보관방법</th>
           <th style="${b}text-align:center;">원료육<br>심부온도</th>
           <th style="${b}text-align:center;">온도<br>이탈</th>
+          <th style="${b}text-align:center;">입고차량<br>청결관리</th>
           <th style="${b}text-align:center;">표시사항<br>포장상태</th>
           <th style="${b}text-align:center;">성상<br>(색택, 이취)</th>
           <th style="${b}text-align:center;">이물혼입<br>유무</th>
@@ -14446,7 +14448,7 @@ function buildIncheckHTML(date, rows, printMode=false){
           <col style="width:7%;"><col style="width:27%;"><col style="width:14%;"><col style="width:18%;"><col style="width:12%;"><col style="width:11%;"><col style="width:11%;">
         </colgroup>
         <thead>
-          <tr style="background:#eef4f4;">
+          <tr style="background:#f2f2f2;">
             <th style="${b}text-align:center;">No</th>
             <th style="${b}text-align:center;">제품명</th>
             <th style="${b}text-align:center;">입고량</th>
@@ -14538,8 +14540,8 @@ function printIncheckRange(){
 function exportIncheckCSV(){
   const date = document.getElementById('incheck-date')?.value || localDateString();
   const rows = getIncheckRows(date);
-  const header = ['입고일자','거래처','제품명','이력번호','입고중량(KG)','보관방법','원료육 심부온도','온도이탈','표시사항 및 포장상태','성상(색택, 이취)','이물혼입 유무'];
-  const body = rows.map(r => [date, r.trader, r.product, r.lot, (Number(r.weight)||0).toFixed(2), r.storage, '', '적합/부적합', '적합/부적합', '적합/부적합', '적합/부적합']);
+  const header = ['입고일자','거래처','제품명','이력번호','입고중량(KG)','보관방법','원료육 심부온도','온도이탈','입고차량 청결관리','표시사항 및 포장상태','성상(색택, 이취)','이물혼입 유무'];
+  const body = rows.map(r => [date, r.trader, r.product, r.lot, (Number(r.weight)||0).toFixed(2), r.storage, '', '적합/부적합', '적합/부적합', '적합/부적합', '적합/부적합', '적합/부적합']);
   downloadCSV([header, ...body], `원부재료_입고검사일지_${date}.csv`);
 }
 
