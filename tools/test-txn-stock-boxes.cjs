@@ -57,7 +57,8 @@ vm.createContext(context);
 for(const name of [
   'parseOptionalBoxCount','boxCountDisplay','availableStockForEdit','availableBoxesForEdit',
   'getTxnStockSearchOptions','stockPickerBoxLabel','refreshTxnStockPickerColumns',
-  'renderTxnStockPicker','syncTxnStockPickerSelection','selectTxnStock','selectBulkOutboundStock'
+  'renderTxnStockPicker','syncTxnStockPickerSelection','selectTxnStock','selectBulkOutboundStock',
+  'selectProdInputStock','confirmTxnStockPicker','renderProdInputStockSuggestions'
 ]) vm.runInContext(source(name),context);
 
 context.refreshTxnStockPickerColumns();
@@ -105,4 +106,46 @@ assert.match(elements.get('tsp-result-head').innerHTML, /<th>현재고<\/th><th>
 context.renderTxnStockPicker(true);
 assert.match(elements.get('tsp-result-body').innerHTML, /12 박스/);
 
-console.log('PASS: stock picker box display, edit availability, single and bulk outbound autofill, unknown and manual counts');
+for(const id of [
+  'prod-in-results-1','prod-in-product-1','prod-in-lot-1','prod-in-origin-1',
+  'prod-in-packunit-1','prod-in-proddate-1','prod-in-stock-price-1',
+  'prod-in-location-1','prod-in-stock-row-id-1','prod-in-stock-note-1',
+  'prod-in-qty-1','prod-in-box-count-1','prod-in-price-1'
+]) field(id);
+field('prod-in-1').dataset = {};
+const productionPicker = field('prod-in-sel-1');
+productionPicker.dataset = {pickerContext:'production-input',productionRowId:'1',stockKey:''};
+elements.get('prod-in-qty-1').focus = () => {};
+Object.assign(context,{
+  STOCK_LOCATION_DEFAULT:'가공장',
+  isStockProductSelectable:()=>true,
+  getPriceFromLot:(_product,_lot,_origin,_source,price)=>price,
+  getFilteredProdInputStockOptions:()=>[stockA,stockB],
+  jsArg:value=>JSON.stringify(value),
+  getProdInputStockLabel:s=>s.product+' / '+s.lot,
+  setProdInputStockIdentityReadOnly:()=>{},
+  updateProdOutputOriginsFromInputs:()=>{},
+  closeTxnStockPicker:()=>{},
+  requestAnimationFrame:callback=>callback()
+});
+const confirmProductionStock = stock => {
+  context.txnStockPickerTargetInput = productionPicker;
+  context.txnStockPickerRows = [stock];
+  context.txnStockPickerIndex = 0;
+  context.confirmTxnStockPicker();
+};
+confirmProductionStock(stockA);
+assert.equal(elements.get('prod-in-qty-1').value,'100.00');
+assert.equal(elements.get('prod-in-box-count-1').value,'12');
+elements.get('prod-in-box-count-1').value = '5';
+confirmProductionStock(stockA);
+assert.equal(elements.get('prod-in-box-count-1').value,'5','Reselecting the same stock preserves a manual count');
+confirmProductionStock(stockB);
+assert.equal(elements.get('prod-in-box-count-1').value,'','Unknown box stock stays unrecorded');
+confirmProductionStock(stockC);
+assert.equal(elements.get('prod-in-box-count-1').value,'0','Recorded zero is filled');
+context.renderProdInputStockSuggestions(1);
+assert.match(elements.get('prod-in-results-1').innerHTML, /"A","","",12\)/);
+assert.match(elements.get('prod-in-results-1').innerHTML, /"B","","",null\)/);
+
+console.log('PASS: stock picker box display and autofill in transactions and production input');
