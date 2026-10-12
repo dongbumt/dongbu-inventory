@@ -121,6 +121,7 @@ const setup = `
   function ensureSubMaterialCodes(){}
   function refreshSubMaterialItemOptions(){}
   function updateSubMaterialLotPreview(){}
+  function renderSubMaterialInboundHistory(){}
   function renderSubMaterialUsageHistory(){}
   function renderSubMaterialMonthlyUsage(){}
 `;

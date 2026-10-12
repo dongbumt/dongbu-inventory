@@ -21,7 +21,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261008stockboxes1">
+<link rel="stylesheet" href="styles/main.css?v=20261012smhistory1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261006spec2">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
@@ -1587,20 +1587,48 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     </div>
   </div>
 
-  <div class="card">
-    <div class="section-header">
+  <details class="card sm-history-card" id="sm-inbound-history">
+    <summary class="section-header">
+      <div class="card-title" style="margin:0;">
+        <div class="ct-bar" style="background:#7f8c8d;"></div>
+        부자재 입고이력 <span id="sm-inbound-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+      </div>
+      <span class="sm-history-toggle" aria-hidden="true"></span>
+    </summary>
+    <div class="sm-history-filters">
+      <input type="date" id="sm-inbound-from" aria-label="부자재 입고 시작일" onchange="renderSubMaterialInboundHistory()">
+      <span>~</span>
+      <input type="date" id="sm-inbound-to" aria-label="부자재 입고 종료일" onchange="renderSubMaterialInboundHistory()">
+      <input id="sm-inbound-search" aria-label="부자재 입고이력 검색" placeholder="부자재 / 규격 / LOT / 거래처 검색..." oninput="renderSubMaterialInboundHistory()">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="clearSubMaterialInboundFilters()">전체</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="exportSubMaterialInboundCSV()">CSV</button>
+    </div>
+    <div class="tbl-wrap" style="max-height:360px;">
+      <table aria-label="부자재 입고이력">
+        <thead><tr>
+          <th>입고일자</th><th>부자재 / 고유번호</th><th>규격</th><th>입고 LOT</th><th>거래처</th>
+          <th style="text-align:right;">입고수량</th><th>단위</th><th>비고</th>
+        </tr></thead>
+        <tbody id="sm-inbound-body"></tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="card sm-history-card" id="sm-usage-history">
+    <summary class="section-header">
       <div class="card-title" style="margin:0;">
         <div class="ct-bar" style="background:#7f8c8d;"></div>
         부자재 사용이력 <span id="sm-usage-count" style="font-size:12px;font-weight:400;color:#888;"></span>
       </div>
-      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+      <span class="sm-history-toggle" aria-hidden="true"></span>
+    </summary>
+    <div class="sm-history-filters">
         <input type="date" id="sm-usage-from" aria-label="부자재 사용 시작일" style="width:140px;font-size:12px;" onchange="renderSubMaterialUsageHistory()">
         <span style="font-size:12px;color:#888;">~</span>
         <input type="date" id="sm-usage-to" aria-label="부자재 사용 종료일" style="width:140px;font-size:12px;" onchange="renderSubMaterialUsageHistory()">
         <input id="sm-usage-search" placeholder="생산품 / 부자재 / LOT 검색..." style="width:230px;" oninput="renderSubMaterialUsageHistory()">
         <button class="btn btn-secondary btn-sm" onclick="clearSubMaterialUsageFilters()">전체</button>
         <button class="btn btn-secondary btn-sm" onclick="exportSubMaterialUsageCSV()">CSV</button>
-      </div>
     </div>
     <div class="tbl-wrap" style="max-height:360px;">
       <table>
@@ -1611,7 +1639,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <tbody id="sm-usage-body"></tbody>
       </table>
     </div>
-  </div>
+  </details>
 
   <div class="card">
     <div class="section-header">
@@ -12707,6 +12735,63 @@ function resetSubMaterialInbound(){
   updateSubMaterialLotPreview();
 }
 
+function getFilteredSubMaterialInbounds(){
+  const from = document.getElementById('sm-inbound-from')?.value || '';
+  const to = document.getElementById('sm-inbound-to')?.value || '';
+  const query = (document.getElementById('sm-inbound-search')?.value || '').trim().toLowerCase();
+  return subMaterialLots.map(lot=>{
+    const item = subMaterialItems.find(item=>lot.itemId && String(item.id) === String(lot.itemId)) ||
+      subMaterialItems.find(item=>lot.itemCode && String(item.code) === String(lot.itemCode));
+    return {...lot,
+      itemCode:lot.itemCode || item?.code || '', itemName:lot.itemName || item?.name || '',
+      itemSpec:lot.itemSpec || item?.spec || '', unit:lot.unit || item?.unit || ''};
+  }).filter(lot=>{
+    if(from && String(lot.date || '') < from) return false;
+    if(to && String(lot.date || '') > to) return false;
+    return !query || [lot.itemCode,lot.itemName,lot.itemSpec,lot.lot,lot.trader,lot.note]
+      .some(value=>String(value || '').toLowerCase().includes(query));
+  }).sort((a,b)=>
+    String(b.date || '').localeCompare(String(a.date || '')) ||
+    String(b.createdAt || '').localeCompare(String(a.createdAt || '')) ||
+    String(b.id || '').localeCompare(String(a.id || ''))
+  );
+}
+
+function renderSubMaterialInboundHistory(){
+  const rows = getFilteredSubMaterialInbounds();
+  const countEl = document.getElementById('sm-inbound-count');
+  if(countEl) countEl.textContent = `(${rows.length}건)`;
+  const body = document.getElementById('sm-inbound-body');
+  if(!body) return;
+  body.innerHTML = rows.length ? rows.map(row=>`<tr>
+    <td style="white-space:nowrap;">${htmlEscape(row.date || '-')}</td>
+    <td><strong>${htmlEscape(row.itemName || '-')}</strong><div style="color:#777;font-size:10px;">${htmlEscape(row.itemCode || '')}</div></td>
+    <td>${htmlEscape(row.itemSpec || '-')}</td>
+    <td style="font-family:Consolas,'Courier New',monospace;font-size:11px;">${htmlEscape(row.lot || '-')}</td>
+    <td>${htmlEscape(row.trader || '-')}</td>
+    <td style="text-align:right;font-weight:700;">${parseAppNumber(row.qty).toLocaleString('ko-KR',{maximumFractionDigits:2})}</td>
+    <td>${htmlEscape(row.unit || '-')}</td>
+    <td>${htmlEscape(row.note || '-')}</td>
+  </tr>`).join('')
+    : '<tr><td colspan="8" style="text-align:center;color:#888;padding:20px;">조건에 맞는 부자재 입고이력이 없습니다.</td></tr>';
+}
+
+function clearSubMaterialInboundFilters(){
+  ['sm-inbound-from','sm-inbound-to','sm-inbound-search'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  renderSubMaterialInboundHistory();
+}
+
+function exportSubMaterialInboundCSV(){
+  const rows = getFilteredSubMaterialInbounds();
+  const header = ['입고일자','부자재 고유번호','부자재','규격','입고 LOT','거래처','입고수량','단위','비고'];
+  downloadCSV([header,...rows.map(row=>[
+    row.date,row.itemCode,row.itemName,row.itemSpec,row.lot,row.trader,row.qty,row.unit,row.note
+  ])], '부자재_입고이력.csv');
+}
+
 function deleteSubMaterialLot(id){
   const lot = subMaterialLots.find(l => l.id === id);
   if(!lot) return;
@@ -13626,6 +13711,7 @@ function renderSubMaterials(){
   refreshSubMaterialItemOptions();
   updateSubMaterialLotPreview();
   renderSubMaterialItems();
+  renderSubMaterialInboundHistory();
   renderSubMaterialStock();
   renderSubMaterialUsageHistory();
   renderSubMaterialMonthlyUsage();
