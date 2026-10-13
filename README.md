@@ -144,6 +144,12 @@ ERP의 `배송기사근태` 메뉴에서 기사 계정을 설정합니다. 근�
 
 검증: `node tools/test-submaterial-certificates.cjs`, `node tools/test-submaterial-save-queue.cjs`, `node tools/test-submaterial-lot-stock.cjs` (Playwright / Chrome 필요, `--unit-only`는 계산·저장 검증). 날짜·월말 경계, LOT별 조정과 취소, 서버 실패·충돌, 생산 사용 가능 수량, 기존 실사 보존, 통합 검색·CSV·인쇄를 가상 자료로 확인합니다. `supabase/tests/check-submaterial-stock-count-db.ps1`은 연결된 DB에서 설치·권한·동시 변경 검증 후 전체 롤백합니다.
 
+## PDA 제품 입출고
+
+PM351 Android 11의 Chrome에서 `https://dongbumt.github.io/dongbu-inventory/pda.html`에 접속합니다. 기존 ERP 사용자로 로그인하며 거래내역 조회·등록과 재고현황 조회 권한이 필요합니다. 새 테이블과 RPC는 `supabase/schema-rpc-53-pda-product-movements.sql`로 설치합니다. 기존 재고·생산일보·출력이력은 변환하지 않습니다.
+
+생산완료된 제품 고유바코드만 사용합니다. 최초 입고 확인은 기존 생산입고에 연결만 하므로 중량을 더하지 않으며, 출고는 박스별 차감, 같은 라벨의 반입은 재고를 복원합니다. 스캔 후 목록을 확인하고 확정해야 저장됩니다. 중복·동시 처리와 응답 누락 재시도는 서버에서 검증합니다. 스캐너 설정, 지원 범위와 시험 방법은 [PDA 안내](pda.md)를 참고하세요.
+
 ## 작업지시 · 라벨 중량 선택
 
 생산관리 → 작업지시의 원료육·생산물 제품명 옆 **검색** 버튼으로 생산일보와 같은 선택 팝업을 엽니다. 원료육은 LOT·브랜드·등급·공장번호·지점·현재고를 확인할 수 있고, 생산물은 품목관리의 등록 제품을 선택합니다. 검색칸에서 Enter 또는 F4로도 열 수 있습니다.

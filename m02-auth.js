@@ -14,6 +14,7 @@
     'nav-labelproducts':'label_products',
     'nav-traders':'traders',
     'nav-transactions':'transactions',
+    'nav-pda':'transactions',
     'nav-production':'production',
     'nav-production-schedule':'production_schedule',
     'nav-product-specs':'product_specs',

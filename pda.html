@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#287eb3">
+  <title>동부엠티 ERP · PDA 입출고</title>
+  <link rel="stylesheet" href="styles/pda.css?v=20261013pda1">
+  <script src="pda.js?v=20261013pda1" defer></script>
+</head>
+<body>
+  <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1>PDA 입출고</h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
+  <main>
+    <div id="status" role="status" aria-live="polite"></div>
+    <form id="login-form" class="login-form">
+      <h2>ERP 사용자 로그인</h2>
+      <label for="login-id">아이디</label><input id="login-id" name="username" autocomplete="username" maxlength="30" required>
+      <label for="login-password">비밀번호</label><input id="login-password" name="password" type="password" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4}" maxlength="4" required>
+      <button class="primary" id="login-submit" type="submit">로그인</button>
+    </form>
+    <section id="workspace" hidden>
+      <fieldset class="mode-tabs"><legend class="sr-only">작업구분</legend><label><input type="radio" name="mode" value="inbound" checked><span>입고·반입</span></label><label><input type="radio" name="mode" value="outbound"><span>출고</span></label></fieldset>
+      <details id="settings-panel" open><summary id="settings-summary">작업 설정</summary><div class="settings">
+        <label>작업일<input type="date" id="work-date" required></label>
+        <label>재고 지점<select id="location" required></select></label>
+        <div class="partner-fields" id="partner-fields" hidden><label>출고 거래처<input type="search" id="partner-search" placeholder="거래처명 검색" autocomplete="off"></label><select id="partner" aria-label="출고 거래처"><option value="">거래처 선택</option></select></div>
+      </div></details>
+      <form id="scan-form" class="scan-form"><label for="barcode">제품 고유바코드</label><div class="scan-input"><input id="barcode" name="barcode" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100"><button id="scan-submit" class="primary" type="submit">조회</button></div><label class="manual-toggle"><input id="manual-entry" type="checkbox">수기입력</label></form>
+      <div id="queue-heading" class="queue-heading"><h2>스캔 목록 <span id="item-count">0</span></h2><div><button id="refresh-items" type="button">다시 조회</button><button id="clear-items" type="button">비우기</button></div></div>
+      <ol id="items" class="scan-list"></ol>
+      <label class="note-field">비고<input id="note" maxlength="500" autocomplete="off"></label>
+    </section>
+  </main>
+  <footer id="save-bar" hidden><div><strong id="total">0개 · 0.00 KG</strong><span id="save-detail"></span></div><button id="save" class="primary" type="button" disabled>입고 확인</button></footer>
+  <dialog id="confirm-dialog"><h2 id="confirm-title">입출고 확인</h2><div id="confirm-summary"></div><ul id="confirm-items"></ul><div class="dialog-actions"><button id="confirm-cancel" type="button">돌아가기</button><button id="confirm-save" class="primary" type="button">확정 저장</button></div></dialog>
+  <dialog id="history-dialog"><div class="dialog-heading"><h2>최근 처리이력</h2><button id="history-close" type="button">닫기</button></div><div id="history-list"></div></dialog>
+</body>
+</html>
