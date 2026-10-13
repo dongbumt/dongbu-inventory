@@ -6,8 +6,8 @@
 <title>동부엠티 ERP 시스템</title>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-<script src="label-layout.js?v=20261013barcode1"></script>
-<script src="label-print-document.js?v=20261013barcode1"></script>
+<script src="label-layout.js?v=20261013inset1"></script>
+<script src="label-print-document.js?v=20261013inset1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
 // variables are created so no prior business data exists behind the login wall.
@@ -398,7 +398,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">🏭 생산일보</div>
       <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders">📝 작업지시</div>
       <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label">🏷️ 라벨출력</div>
-      <div class="nav-tab" onclick="window.open('label-print.html?v=20261013barcode1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
+      <div class="nav-tab" onclick="window.open('label-print.html?v=20261013inset1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
       <div class="nav-tab" onclick="showPage('p-product-specs',this)" id="nav-product-specs">📐 제품스펙</div>
       <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산로스율</div>
       <div class="nav-tab" onclick="window.open('production-board.html?v=20260831board9','_blank');" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
@@ -3828,7 +3828,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 
       <div class="card">
         <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>라벨 미리보기</div>
-        <div id="wo-preview" style="width:67mm;height:100mm;margin:auto;overflow:hidden;"></div>
+        <div id="wo-preview" style="width:66mm;height:100mm;margin:auto;overflow:hidden;"></div>
       </div>
     </div>
   </div>
@@ -21059,7 +21059,7 @@ function refreshWorkOrderPreview(){
   if(!el) return;
   const row = collectWorkOrderFormForPreview();
   const cfg = labelSizeConfigByKey(document.getElementById('wo-label-size')?.value || '7x10');
-  el.style.width = (cfg.widthCm * 10 - 3) + 'mm';
+  el.style.width = (cfg.widthCm * 10 - 4) + 'mm';
   el.style.height = '100mm';
   el.innerHTML = row ? buildLabelBody(workOrderLabelData(row)) :
     '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px;">라벨 미리보기</div>';
@@ -21128,7 +21128,7 @@ function applyLabelPreviewSizeForConfig(cfg){
   const preview = document.getElementById('lbl-preview');
   const text = document.getElementById('lbl-preview-size-text');
   if(preview){
-    preview.style.width = (cfg.widthCm * 10 - 3) + 'mm';
+    preview.style.width = (cfg.widthCm * 10 - 4) + 'mm';
     preview.style.height = '100mm';
   }
   if(wrap){

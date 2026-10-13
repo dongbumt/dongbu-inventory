@@ -38,7 +38,7 @@ const js=`
 // The CSS template contains interpolation braces; use the rule's terminating newline instead.
 const line=printDoc.split('\n').find(line=>line.trim().startsWith('.print-label,.lbl-label { width:'));
 assert(line,'Missing actual label page style');
-const css=line.slice(line.indexOf('{')+1,line.lastIndexOf('}')).replaceAll('${contentWidth}','67').replaceAll('${height}','100');
+const css=line.slice(line.indexOf('{')+1,line.lastIndexOf('}')).replaceAll('${contentWidth}','66').replaceAll('${height}','100').replaceAll('${leftInset}','1');
 assert(!css.includes('${'),'Unresolved label dimensions');
 function replaceMarker(text,type,contents){
   const start=`/* PROPOSAL-LABEL-${type}:START */`,end=`/* PROPOSAL-LABEL-${type}:END */`;

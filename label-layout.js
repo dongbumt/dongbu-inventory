@@ -107,7 +107,7 @@
     const notice=d.crossNotice||d.crossFacilityNotice||'';
     const asset=file=>escape(new URL(file,global.document.baseURI).href);
     return `<div class="dbmt-label-body">
-      <div class="dl-row dl-top-code"><span class="dl-code-caption">제품<br>고유번호</span><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code)||'미발급'}</div></div></div>
+      <div class="dl-row dl-top-code"><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code)||'미발급'}</div></div></div>
       <div class="dl-split-body"><div class="dl-main-fields">
         <div class="dl-row dl-product-row"><span class="dl-key">제품명:</span><strong class="dl-product-name" style="font-size:${productFont}pt;">${escape(product)}</strong></div>
         <div class="dl-row dl-grade-row"><div class="dl-grade-cell"><span class="dl-key">성별및등급:</span><span class="dl-grade-value">${escape(d.grade)}</span></div><div class="dl-grade-cell"><span class="dl-key">원산지:</span><strong class="dl-origin-value">${escape(d.origin)}</strong></div></div>

@@ -72,7 +72,8 @@ const server=http.createServer((req,res)=>{
     assert.notEqual(requests[0].barcodes[0][0],requests[0].barcodes[1][0],'Each issued label must keep its own identity');
     assert.equal(requests[0].hidden,'true');assert.match(requests[0].frameStyle,/opacity:\s*0/);
     assert(!/display:\s*none|visibility:\s*hidden/.test(requests[0].frameStyle));
-    assert.match(requests[0].css,/size:70mm 100mm/);assert.match(requests[0].css,/width:67mm/);
+    assert.match(requests[0].css,/size:70mm 100mm/);assert.match(requests[0].css,/width:66mm/);
+    assert.match(requests[0].css,/margin:0 0 0 1mm !important/);
     assert.equal(await page.locator('iframe[data-dbmt-label-print]').count(),0);
     assert.equal(await page.evaluate(()=>__openCalls),0);assert.equal(context.pages().length,1);
     assert.equal(await page.locator('#metric-output').textContent(),'10 kg');

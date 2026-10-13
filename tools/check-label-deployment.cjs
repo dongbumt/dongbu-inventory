@@ -17,13 +17,13 @@ async function read(file){
 (async()=>{
   for(const file of ['label-print.html','label-layout.js','label-print-document.js','vendor/jsbarcode/JsBarcode.code128.min.js']){
     const expected=execFileSync('git',['show',`${ref}:${file}`],{cwd:repo,encoding:'utf8'});
-    assert.equal(normalize(await read(file)),normalize(expected),`${file}: deployed content differs from ${ref}`);
+    assert(normalize(await read(file))===normalize(expected),`${file}: deployed content differs from ${ref}`);
     console.log(`PASS: deployed ${file} matches ${ref}`);
   }
   const main=await read('index.html');
-  assert.match(main,/<script src="label-layout\.js\?v=20261013barcode1"><\/script>/);
+  assert.match(main,/<script src="label-layout\.js\?v=20261013inset1"><\/script>/);
   assert.match(main,/return DBMTLabelLayout\.buildBody\(/);
-  assert.match(main,/label-print\.html\?v=20261013barcode1/);
+  assert.match(main,/label-print\.html\?v=20261013inset1/);
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}});
@@ -46,7 +46,7 @@ async function read(file){
       };
     });
     const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
-    await page.goto(new URL('label-print.html?v=20261013barcode1',base).href);
+    await page.goto(new URL('label-print.html?v=20261013inset1',base).href);
     await page.evaluate(()=>{
       state.pin='qa-no-real-login';
       state.workOrders=[{id:'qa-release-order',date:'2026-10-13',product:'돈사태(작업)',inputWeight:100,weight:12,origin:'국내산',lot:'L12608194894027',mfgdate:'2026-08-21',expdate:'2027-08-20',temptype:'냉동',itemno:'2025029309311'}];
@@ -66,6 +66,10 @@ async function read(file){
       await print.waitForFunction(()=>[...document.images].every(img=>img.complete&&img.naturalWidth>0));
       await print.emulateMedia({media:'print'});
       assert.equal(await print.locator('.dbmt-label-body').count(),1);
+      const bounds=await print.locator('.print-label').boundingBox();
+      assert(Math.abs(bounds.x-96/25.4)<0.1,'Left border must be inset 1 mm');
+      assert(Math.abs(bounds.width-66*96/25.4)<0.1,'Right 3 mm clearance must remain');
+      assert.equal(await print.locator('.dl-top-code .dl-code-caption').count(),0);
       const codes=await print.locator('[data-barcode-kind="product"]').evaluateAll(images=>images.map(img=>img.dataset.barcodeValue));
       assert.equal(codes.length,2);assert.equal(codes[0],codes[1]);assert.match(codes[0],/^98\d{20}$/);
       if(i===0)firstCode=codes[0];else assert.equal(codes[0],firstCode,'Reprint must retain the issued identity');

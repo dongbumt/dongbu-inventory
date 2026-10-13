@@ -158,7 +158,7 @@
   #dbmt-packaging-proposals .dp-actual-page, #dbmt-packaging-proposals .dp-actual-page * { box-sizing:border-box; margin:0; padding:0; }
   #dbmt-packaging-proposals .dp-actual-page b, #dbmt-packaging-proposals .dp-actual-page strong { font-weight:bolder; }
   /* PROPOSAL-LABEL-CSS:START */
-  #dbmt-packaging-proposals .dp-actual-label { width:67mm; height:100mm; margin:0; border:2px solid #000; padding:0.55mm 0.7mm 0.8mm; display:flex; flex-direction:column; line-height:1.13; font-weight:bold; overflow:hidden; background:#fff; page-break-inside:avoid; break-inside:avoid-page; page-break-after:always; break-after:page; }
+  #dbmt-packaging-proposals .dp-actual-label { width:66mm; height:100mm; margin:0 0 0 1mm; border:2px solid #000; padding:0.55mm 0.7mm 0.8mm; display:flex; flex-direction:column; line-height:1.13; font-weight:bold; overflow:hidden; background:#fff; page-break-inside:avoid; break-inside:avoid-page; page-break-after:always; break-after:page; }
   /* PROPOSAL-LABEL-CSS:END */
   #dbmt-packaging-proposals .dp-actual-page img[alt="HACCP"] { filter:grayscale(1) brightness(0.6) contrast(20); }
   #dbmt-packaging-proposals .dp-label-dialog { width:min(100%,540px); }
@@ -214,7 +214,7 @@
 (() => {
   /* PROPOSAL-LABEL-JS:START */
 
-  // Actual label renderer and unchanged logo bytes. Source SHA-256: 7a3f87485294de984e3be28ef6f7656196de97de3dfcb5e2373ffd910466feef
+  // Actual label renderer and unchanged logo bytes. Source SHA-256: 50c54c92186b567c1d94a3ce11c934d7f3376d96c13577ba8eb71a7688e5bf6e
   const actualLabelPreview=(()=>{
     const DEFAULTS = {
       licenseno: '제2025-0293093호',
@@ -338,7 +338,7 @@
     const notice=d.crossNotice||d.crossFacilityNotice||'';
     const asset=file=>escape(artwork[file]);
     return `<div class="dbmt-label-body">
-      <div class="dl-row dl-top-code"><span class="dl-code-caption">제품<br>고유번호</span><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code)||'미발급'}</div></div></div>
+      <div class="dl-row dl-top-code"><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code)||'미발급'}</div></div></div>
       <div class="dl-split-body"><div class="dl-main-fields">
         <div class="dl-row dl-product-row"><span class="dl-key">제품명:</span><strong class="dl-product-name" style="font-size:${productFont}pt;">${escape(product)}</strong></div>
         <div class="dl-row dl-grade-row"><div class="dl-grade-cell"><span class="dl-key">성별및등급:</span><span class="dl-grade-value">${escape(d.grade)}</span></div><div class="dl-grade-cell"><span class="dl-key">원산지:</span><strong class="dl-origin-value">${escape(d.origin)}</strong></div></div>

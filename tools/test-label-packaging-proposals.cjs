@@ -58,7 +58,7 @@ for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script
       assert.equal(await label.locator('[data-barcode-kind="trace"]').count(),1);
       assert(await label.locator('img').evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0)),'Actual logo bytes decoded');
       const dimensions=await label.evaluate(el=>({width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height,scroll:el.scrollHeight,client:el.clientHeight}));
-      assert(Math.abs(dimensions.width-67*96/25.4*1.4)<1);assert(Math.abs(dimensions.height-100*96/25.4*1.4)<1);assert(dimensions.scroll<=dimensions.client+1,'Full label fits');
+      assert(Math.abs(dimensions.width-66*96/25.4*1.4)<1);assert(Math.abs(dimensions.height-100*96/25.4*1.4)<1);assert(dimensions.scroll<=dimensions.client+1,'Full label fits');
       await screen.getByRole('button',{name:'목록으로',exact:true}).click();h=screen.getByRole('dialog');assert.equal(await h.locator('input:checked').count(),1);assert.match(await h.locator('[data-action="history-print"]').textContent(),/선택 2장/);
       await h.getByRole('button',{name:'이전',exact:true}).click();assert.equal(await h.locator('input:checked').count(),1);await screen.screenshot({path:path.join(dir,'outer-history-1280.png')});
       await h.locator('[data-action="history-print"]').click();assert.equal(await production(),'160 kg');assert.equal(await screen.locator('[data-metric="outer"]').textContent(),'8장');assert.equal(await screen.locator('[data-metric="inner"]').textContent(),'20장');

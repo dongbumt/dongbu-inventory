@@ -4,9 +4,9 @@
   function createDocument({labelsHtml='',sizeKey='7x10',preview=false,autoPrint=true}={}){
     const width=sizeKey==='10x10'?100:70;
     const height=100;
-    // Keep the working left/top origin. Reserve 3 mm on the right for the
-    // label driver's non-printable edge; the physical page stays 70/100 x 100 mm.
-    const contentWidth=width-3;
+    // Inset both outer borders without scaling the physical label or adding top space.
+    const leftInset=1, rightInset=3;
+    const contentWidth=width-leftInset-rightInset;
     const baseHref=global.document.baseURI.replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
     return `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -20,7 +20,7 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { margin:0; padding:0; background:#fff; }
   body { width:${width}mm; font-family:"Malgun Gothic","맑은 고딕",Arial,sans-serif; font-size:7pt; color:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  .print-label,.lbl-label { width:${contentWidth}mm; height:${height}mm; margin:0; border:2px solid #000; padding:0.55mm 0.7mm 0.8mm; display:flex; flex-direction:column; line-height:1.13; font-weight:bold; overflow:hidden; background:#fff; page-break-inside:avoid; break-inside:avoid-page; page-break-after:always; break-after:page; }
+  .print-label,.lbl-label { width:${contentWidth}mm; height:${height}mm; margin:0 0 0 ${leftInset}mm; border:2px solid #000; padding:0.55mm 0.7mm 0.8mm; display:flex; flex-direction:column; line-height:1.13; font-weight:bold; overflow:hidden; background:#fff; page-break-inside:avoid; break-inside:avoid-page; page-break-after:always; break-after:page; }
   ${global.DBMTLabelLayout?.styles||''}
   .print-label:last-child,.lbl-label:last-child { page-break-after:auto; break-after:auto; }
   /* Preserve the original certification artwork, including its white lettering.
@@ -37,19 +37,19 @@
     .print-tools button { min-height:48px; padding:8px 18px; margin-top:8px; border:1px solid #33383e; border-radius:6px; background:#33383e; color:#fff; font:inherit; cursor:pointer; }
     .print-tools button:disabled { background:#747b83; cursor:wait; }
     #label-print-status { margin-top:8px; }
-    .print-label,.lbl-label { margin:0 0 12px; }
+    .print-label,.lbl-label { margin:0 0 12px ${leftInset}mm; }
   }
   @media print {
     html,body { width:${width}mm !important; height:auto !important; min-height:0 !important; margin:0 !important; padding:0 !important; background:#fff !important; }
     .print-tools { display:none !important; }
     #label-print-pages { margin:0 !important; padding:0 !important; }
-    .print-label,.lbl-label { margin:0 !important; }
+    .print-label,.lbl-label { margin:0 0 0 ${leftInset}mm !important; }
   }
 </style></head><body>
 <aside class="print-tools" aria-label="라벨 인쇄 설정 안내">
   <strong>${preview?'라벨 미리보기':'라벨 인쇄'} · ${width} × ${height} mm</strong>
   <p>인쇄창 설정: <b>용지 ${width} × ${height} mm · 배율 100% · 여백 없음 · 머리글/바닥글 해제</b></p>
-  <p>오른쪽 테두리 잘림 방지를 위해 라벨 내용에 우측 3mm 안전 여백을 적용했습니다. HACCP 마크는 흑백 인쇄용으로 표시됩니다.</p>
+  <p>테두리 잘림 방지를 위해 라벨 내용에 좌측 1mm·우측 3mm 안전 여백을 적용했습니다. HACCP 마크는 흑백 인쇄용으로 표시됩니다.</p>
   <p>위에 날짜·제목이 찍히거나 아래가 잘리면 ‘설정 더보기’와 프린터 기본 설정을 확인하세요. 프로그램에서 저장된 프린터 설정을 강제로 변경할 수는 없습니다.</p>
   <p>한 장씩 시험 출력한 뒤 여러 장을 출력하세요. 이 창에서 다시 인쇄해도 생산량이나 출력이력은 추가되지 않습니다.</p>
   <button id="label-print-again" type="button">${preview?'미리보기 인쇄':'인쇄창 다시 열기'}</button>
