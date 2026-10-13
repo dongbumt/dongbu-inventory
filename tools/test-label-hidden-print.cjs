@@ -38,6 +38,7 @@ const server=http.createServer((req,res)=>{
         parent.__requests.push({
           text:document.getElementById('label-print-pages').textContent,
           count:document.querySelectorAll('.print-label').length,
+          barcodes:[...document.querySelectorAll('.print-label')].map(label=>[...label.querySelectorAll('[data-barcode-kind="product"]')].map(img=>img.dataset.barcodeValue)),
           imagesReady:[...document.images].every(img=>img.complete&&img.naturalWidth>0),
           frameStyle:window.frameElement.getAttribute('style'),
           hidden:window.frameElement.getAttribute('aria-hidden'),
@@ -66,6 +67,9 @@ const server=http.createServer((req,res)=>{
     assert.equal(saves.length,1,'Rapid duplicate click must not duplicate saved logs');
     assert.equal(saves[0].p_logs.length,2,'Only new labels are sent');
     assert.equal(requests[0].count,2);assert(requests[0].imagesReady);
+    const printCodes=await page.evaluate(codes=>codes.map(code=>DBMTLabelLayout.encodePrintCode(code)),saves[0].p_logs.map(log=>log.code));
+    assert.deepEqual(requests[0].barcodes,printCodes.map(code=>[code,code]));
+    assert.notEqual(requests[0].barcodes[0][0],requests[0].barcodes[1][0],'Each issued label must keep its own identity');
     assert.equal(requests[0].hidden,'true');assert.match(requests[0].frameStyle,/opacity:\s*0/);
     assert(!/display:\s*none|visibility:\s*hidden/.test(requests[0].frameStyle));
     assert.match(requests[0].css,/size:70mm 100mm/);assert.match(requests[0].css,/width:67mm/);
@@ -78,6 +82,9 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(id=>reprintLog(id),originalId);
     requests=await page.evaluate(()=>__requests);
     assert.equal(requests.length,2);assert.match(requests[1].text,/5\.00/);
+    const reprintCode=await page.evaluate(code=>DBMTLabelLayout.encodePrintCode(code),saves[1].p_logs[0].code);
+    assert.deepEqual(requests[1].barcodes,[[reprintCode,reprintCode]],'Reprint must encode the original saved code');
+    assert(requests[0].barcodes.some(codes=>codes[0]===requests[1].barcodes[0][0]));
     assert.equal(await page.evaluate(()=>state.logs.length),2);assert.equal(await page.locator('#metric-output').textContent(),'10 kg');
     assert.equal(saves[1].p_logs.length,1,'Reprinting sends only the changed label');
     console.log('PASS: hidden normal/reprint, popup-blocker independence, rapid-click guard, delayed artwork, original reprint weight and unchanged production totals');

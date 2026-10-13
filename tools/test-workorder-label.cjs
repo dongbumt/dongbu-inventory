@@ -43,9 +43,10 @@ const server=http.createServer((req,res)=>{
       const labelProductSearchText=p=>Object.values(p).join(' '),bulkOutboundSearchText=labelProductSearchText,bulkOutboundStockLabel=labelProductSearchText;
       const bulkOutboundStockOptions=()=>stocks,getTxnStockSearchOptions=()=>stocks;
       const parseAppNumber=v=>Number(v)||0,localDateString=()=> '2026-09-10',nationalPartNameForCode=()=>'',normalizeLabelProductTaxType=()=> '면세';
+      const parseOptionalBoxCount=v=>v==null?null:Number(v),boxCountDisplay=v=>String(v);
       const inferLabelMeatType=()=> '돼지고기',labelCrossFacilityNoticeFromText=()=> '본 제품은 소고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
       const fmtLblDate=v=>v,buildLabelBody=d=>'<div>'+htmlEscape(d.product)+' / '+htmlEscape(d.weight)+'</div>';
-      const labelSizeConfigByKey=()=>({previewW:264,previewH:378,scale:1,label:'7x10'});
+      const labelSizeConfigByKey=()=>({widthCm:7,previewW:264,previewH:378,scale:1,label:'7x10'});
       const workOrderId=()=> 'qa-workorder',saveWorkOrdersStore=()=>{},toast=()=>{},showPage=()=>{};
       const getPriceFromLot=()=>5000;
       const selectProdInputStock=(...args)=>calls.push(['production-stock',...args]),selectProdOutProduct=(...args)=>calls.push(['production-product',...args]);
@@ -58,7 +59,7 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
       initWorkOrderForm();
     `});
     const openStock=()=>page.locator('#p-workorders .wo-source-row').first().locator('button[onclick="openWorkOrderStockPicker(this)"]').click();
-    await openStock();assert.equal(await page.locator('#tsp-result-head th').count(),10);assert.equal(await page.locator('#tsp-result-body tr').count(),2);
+    await openStock();assert.equal(await page.locator('#tsp-result-head th').count(),11);assert.equal(await page.locator('#tsp-result-body tr').count(),2);
     await page.locator('#tsp-search-lot').fill('111');await page.locator('#tsp-result-body tr').dblclick();
     assert.equal(await page.locator('.wo-source-row:first-child .wo-stock-key').inputValue(),'raw-1');assert.equal(await page.locator('#wo-lot').inputValue(),'LOT-111');
     await openStock();await page.locator('#tsp-search-lot').fill('222');await page.locator('#tsp-search-lot').press('Enter');

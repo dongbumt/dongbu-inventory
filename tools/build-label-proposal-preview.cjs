@@ -4,6 +4,8 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const repo=path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(repo,'label-print.html'),'utf8').replace(/\r\n/g,'\n');
 const printDoc=fs.readFileSync(path.join(repo,'label-print-document.js'),'utf8').replace(/\r\n/g,'\n');
+const layout=fs.readFileSync(path.join(repo,'label-layout.js'),'utf8').replace(/\r\n/g,'\n');
+const barcode=fs.readFileSync(path.join(repo,'vendor/jsbarcode/JsBarcode.code128.min.js'),'utf8');
 const file=path.join(repo,'prototypes/label-touch-packaging-proposals.html');
 const original=fs.readFileSync(file,'utf8').replace(/\r\n/g,'\n');
 function takeFunction(name){
@@ -13,18 +15,22 @@ function takeFunction(name){
   assert(end>start,`Missing boundary after ${name}`);
   return source.slice(start,end).trim();
 }
-const functions=['buildLabelBody','otherMarkHtml','inferMeatType','formatIngredients','crossFacilityNotice'].map(takeFunction).join('\n\n');
+const functions=['buildLabelBody','inferMeatType','crossFacilityNotice'].map(takeFunction).join('\n\n');
 const defaults=source.match(/const DEFAULTS = \{[\s\S]*?\n    \};/)[0];
 const haccp=fs.readFileSync(path.join(repo,'HACCP2.png'));
 const recycle=fs.readFileSync(path.join(repo,'assets/other-recycle.svg'));
-const hash=crypto.createHash('sha256').update(functions).update(haccp).update(recycle).digest('hex');
+const hash=crypto.createHash('sha256').update(functions).update(layout).update(barcode).update(haccp).update(recycle).digest('hex');
+const assetLine='const asset=file=>escape(new URL(file,global.document.baseURI).href);';
+assert(layout.includes(assetLine),'Shared label asset resolver changed');
+const inlineLayout=layout.replace(assetLine,'const asset=file=>escape(artwork[file]);');
 const js=`
   // Actual label renderer and unchanged logo bytes. Source SHA-256: ${hash}
   const actualLabelPreview=(()=>{
     ${defaults}
     function html(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-    function haccpMarkSrc(){return ${JSON.stringify('data:image/png;base64,'+haccp.toString('base64'))};}
-    function otherMarkSrc(){return ${JSON.stringify('data:image/svg+xml;base64,'+recycle.toString('base64'))};}
+    const artwork=${JSON.stringify({'HACCP2.png':'data:image/png;base64,'+haccp.toString('base64'),'assets/other-recycle.svg':'data:image/svg+xml;base64,'+recycle.toString('base64')})};
+    ${barcode}
+    ${inlineLayout}
     ${functions}
     return data=>buildLabelBody(data);
   })();

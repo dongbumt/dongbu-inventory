@@ -1,0 +1,118 @@
+// Local fixtures only. No logins, business-data writes or physical printer calls.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),os=require('node:os'),vm=require('node:vm');
+const {execFileSync}=require('node:child_process');
+const {chromium}=require('playwright');
+const repo=path.resolve(__dirname,'..');
+const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-label-barcodes-'));
+for(const file of ['label-layout.js','label-print-document.js']) new vm.Script(fs.readFileSync(path.join(repo,file),'utf8'),{filename:file});
+const server=http.createServer((req,res)=>{
+  const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');
+  if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
+  const mime={'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'};
+  res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));
+});
+(async()=>{
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const base=`http://127.0.0.1:${server.address().port}`;
+  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
+  try{
+    const context=await browser.newContext({viewport:{width:1000,height:1000},deviceScaleFactor:1});
+    await context.route('https://**/*',route=>route.abort());
+    await context.addInitScript(()=>{window.print=()=>{throw Error('Physical printing is forbidden in this test');};});
+    const page=await context.newPage(),errors=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    await page.goto(base+'/label-print.html');
+    const fixture={id:'qa-barcode-order',product:'돈사태(작업)',origin:'국내산',grade:'1',mfgdate:'2026-08-21',expdate:'2027-08-20',weight:12,itemno:'2025029309311',lot:'L12608194894027',ingredients:'돼지고기 100%',temptype:'냉동'};
+    for(const [name,size,patch] of [
+      ['frozen','7x10',{}],['chilled','7x10',{product:'냉장돈등심(치즈용)',temptype:'냉장',weight:5}],
+      ['wide','10x10',{}],['long-lot','10x10',{lot:'TEST-20260729-12345678901234567890'}],
+      ['long-product','7x10',{product:'냉장돈등심(치즈돈까스용 10mm 슬라이스 특수규격)',weight:1000.12}],
+      ['weight-omitted','7x10',{weightOmitted:true,weight:0}],['legacy-lot','7x10',{lot:'수기 LOT-123'}]
+    ]){
+      const doc=await page.evaluate(({fixture,size,patch})=>{
+        const log=makePrintLog({...fixture,...patch,labelSize:size},'QA',1);
+        const data=labelDataFromLog(log);
+        return {code:log.code,barcode:data.productBarcode,restoredCode:DBMTLabelLayout.decodePrintCode(data.productBarcode),lot:data.lot,html:DBMTLabelPrint.createDocument({labelsHtml:`<section class="print-label">${buildLabelBody(data)}</section>`,sizeKey:size,autoPrint:false})};
+      },{fixture,size,patch});
+      assert(!doc.html.includes('98110000002477'),'Mockup-only identity must never reach operational labels');
+      assert.equal(doc.restoredCode,doc.code,'Numeric barcode must preserve the original saved identity');
+      assert.match(doc.barcode,/^98\d{20}$/);
+      const print=await context.newPage();
+      await print.goto(base+'/label-print.html');await print.setContent(doc.html);
+      assert(await print.evaluate(()=>DBMTLabelPrintReady),'Fonts, marks and generated SVGs must load');
+      await print.emulateMedia({media:'print'});
+      const result=await print.locator('.print-label').evaluate(label=>{
+        const bounds=label.getBoundingClientRect(),overflow=[];
+        const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,top:r.top,bottom:r.bottom,left:r.left,right:r.right};};
+        const textBounds=el=>{const range=document.createRange();range.selectNodeContents(el);return [...range.getClientRects()];};
+        for(const el of label.querySelectorAll('.dbmt-label-body div,.dbmt-label-body span,.dbmt-label-body strong,.dbmt-label-body img')){
+          const r=el.getBoundingClientRect();
+          if(r.left<bounds.left-0.1||r.right>bounds.right+0.1||r.bottom>bounds.bottom+0.1||r.top<bounds.top-0.1)overflow.push(el.className);
+        }
+        for(const row of label.querySelectorAll('.dl-row')){
+          const rowRect=row.getBoundingClientRect();
+          for(const el of row.querySelectorAll('span,strong,.dl-code-number,.dl-storage-copy>div'))for(const r of textBounds(el)){
+            if(r.left<rowRect.left-0.5||r.right>rowRect.right+0.5||r.top<rowRect.top-0.5||r.bottom>rowRect.bottom+0.5)overflow.push({text:el.textContent,row:rect(row),textRect:{left:r.left,right:r.right,top:r.top,bottom:r.bottom}});
+          }
+        }
+        const address=label.querySelector('.dl-company-address'),addressLines=textBounds(address);
+        const companyLines=['.dl-company-role','.dl-company-name','.dl-company-phone','.dl-company-address'].map(selector=>rect(label.querySelector(selector)));
+        const marks=rect(label.querySelector('.dl-marks'));
+        return {overflow,addressLineCount:addressLines.length,addressRight:addressLines[0].right,right:bounds.right,
+          companyLines,marks,noticesBottom:rect(label.querySelector('.dl-notices')).bottom,manufacturerTop:rect(label.querySelector('.dl-manufacturer')).top,
+          badge:rect(label.querySelector('.dl-temperature')),heading:rect(label.querySelector('.dl-notice-heading')),
+          sideText:label.querySelector('.dl-side-code').textContent,weightOmitted:label.querySelector('.dl-weight-value').textContent,
+          barcodes:[...label.querySelectorAll('[data-barcode-kind]')].map(image=>({kind:image.dataset.barcodeKind,value:image.dataset.barcodeValue,src:image.src,...rect(image)}))};
+      });
+      assert.deepEqual(result.overflow,[],`${name}: clipped content`);
+      assert.equal(result.addressLineCount,1);assert(result.addressRight<result.right);
+      assert(result.marks.bottom<=result.companyLines[3].top,'Marks must stay above the one-line address');
+      for(let i=1;i<result.companyLines.length;i++)assert(result.companyLines[i-1].bottom<=result.companyLines[i].top,'Manufacturer, company, phone, address order');
+      assert(result.noticesBottom<=result.manufacturerTop,'Notice/manufacturer gap');
+      assert(Math.abs(result.badge.top-result.heading.top)<0.1,'Temperature badge must follow the original footer position');
+      assert.equal(result.sideText,'','Vertical barcode must not contain human-readable text');
+      const products=result.barcodes.filter(b=>b.kind==='product');
+      assert.equal(products.length,2);assert(products.every(b=>b.value===doc.barcode));assert.equal(products[0].src,products[1].src);
+      assert.equal(result.barcodes.filter(b=>b.kind==='trace').length,name==='legacy-lot'?0:1);
+      if(patch.weightOmitted)assert.equal(result.weightOmitted,'');
+      const pdf=path.join(artifacts,name+'.pdf');
+      await print.pdf({path:pdf,preferCSSPageSize:true,printBackground:true});
+      const prefix=path.join(artifacts,name+'-203dpi');
+      execFileSync('pdftoppm',['-f','1','-singlefile','-r','203','-png',pdf,prefix]);
+      // Optional scanner QA: pip install zxing-cpp==2.3.0 into the test environment.
+      if(process.env.DBMT_TEST_BARCODE_DECODE==='1'){
+        const decoded=JSON.parse(execFileSync(process.env.PYTHON_PATH||'python',['-c',
+          `import sys, json, math
+from PIL import Image
+import zxingcpp
+im = Image.open(sys.argv[1])
+scale = 203 / 96
+results = []
+for r in json.loads(sys.argv[2]):
+    crop = im.crop((max(0, math.floor(r["x"] * scale) - 2), max(0, math.floor(r["y"] * scale) - 2), math.ceil((r["x"] + r["width"]) * scale) + 2, math.ceil((r["y"] + r["height"]) * scale) + 2))
+    results.append([b.text for b in zxingcpp.read_barcodes(crop)])
+print(json.dumps(results))`,
+          prefix+'.png',JSON.stringify(result.barcodes.map(({x,y,width,height})=>({x,y,width,height})))],{encoding:'utf8'}));
+        for(let i=0;i<result.barcodes.length;i++) assert(decoded[i].includes(result.barcodes[i].value),`${name}: 203dpi barcode ${i} failed to decode`);
+      }
+      await print.locator('.print-label').screenshot({path:path.join(artifacts,name+'.png')});
+      await print.close();console.log(`PASS: ${name} ${size}, barcode values/layout/address${process.env.DBMT_TEST_BARCODE_DECODE==='1'?' and 203dpi decoding':''}`);
+    }
+    const safety=await page.evaluate(()=>{
+      const data=labelDataFromLog({labelWeight:12,workOrderSnapshot:{product:'<img src=x onerror=alert(1)>',lot:'LOT-1'}});
+      const missing=buildLabelBody(data);
+      let invalid=false;try{DBMTLabelLayout.buildBody({...data,productBarcode:'한글번호'});}catch(error){invalid=true;}
+      const originals=[0,1,35,36,36**6-1].map(n=>'DB2610131000-'+n.toString(36).toUpperCase());
+      const roundtrips=originals.map(code=>DBMTLabelLayout.decodePrintCode(DBMTLabelLayout.encodePrintCode(code)));
+      const inner=buildLabelBody(labelDataFromLog({code:'DB2610131000-ABC123',untrackedLabel:true,labelWeight:12,workOrderSnapshot:{product:'내포장',lot:'LOT-1'}}));
+      return {missing,noProductBarcodes:!missing.includes('data-barcode-kind="product"'),innerUnissued:!inner.includes('data-barcode-kind="product"'),invalid,originals,roundtrips};
+    });
+    assert(safety.noProductBarcodes,'Never invent an issued code for an old/manual label');
+    assert(safety.innerUnissued,'Never print an inventory identity for unsaved inner labels');
+    assert(safety.missing.includes('&lt;img'));assert(safety.invalid);
+    assert.deepEqual(safety.roundtrips,safety.originals);
+    assert.deepEqual(errors,[]);
+    console.log('PASS: no invented identity, invalid-code guard, escaped text, no page errors');
+    console.log('Artifacts: '+artifacts);
+  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+})().catch(error=>{console.error(error);process.exitCode=1;server.close();});

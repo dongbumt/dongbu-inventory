@@ -96,7 +96,7 @@ const server = http.createServer((req,res)=>{
       assert(Math.abs(dimensions[0].height-100*96/25.4)<1);
       for(const d of dimensions){
         assert(d.footerBottom<=d.bottom,'Manufacturer address must be inside label');
-        assert(d.noticeBottom<=d.manufacturerTop,'Narrower label must not overlap notice and manufacturer');
+        assert(d.noticeBottom<=d.manufacturerTop,'Narrower label must not overlap notice and manufacturer: '+JSON.stringify(d));
       }
       await popup.pdf({path:path.join(artifacts,name+'.pdf'),preferCSSPageSize:true,printBackground:true,displayHeaderFooter:true});
       const info=execFileSync('pdfinfo',[path.join(artifacts,name+'.pdf')],{encoding:'utf8'});

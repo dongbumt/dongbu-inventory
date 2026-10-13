@@ -54,7 +54,8 @@ for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script
       await screen.screenshot({path:path.join(dir,'actual-label-preview-1280.png')});
       const label=screen.locator('.dp-actual-label');
       for(const text of ['품목보고번호','소고기를 사용한 제품','주식회사 동부엠티','032-766-1812','1399'])assert((await label.textContent()).includes(text),text);
-      assert.equal(await label.locator('img').count(),2);
+      assert.equal(await label.locator('img.dl-mark').count(),2);
+      assert.equal(await label.locator('[data-barcode-kind="trace"]').count(),1);
       assert(await label.locator('img').evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0)),'Actual logo bytes decoded');
       const dimensions=await label.evaluate(el=>({width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height,scroll:el.scrollHeight,client:el.clientHeight}));
       assert(Math.abs(dimensions.width-67*96/25.4*1.4)<1);assert(Math.abs(dimensions.height-100*96/25.4*1.4)<1);assert(dimensions.scroll<=dimensions.client+1,'Full label fits');

@@ -515,7 +515,9 @@
   </main>
 
   <script src="label-weight.js?v=20260910workorder1"></script>
-  <script src="label-print-document.js?v=20260916print4"></script>
+  <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
+  <script src="label-layout.js?v=20261013barcode1"></script>
+  <script src="label-print-document.js?v=20261013barcode1"></script>
   <script src="company-master.js?v=20260813m01"></script>
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -1024,7 +1026,7 @@
       if(kind==='inner'){
         setLoading(true);
         try {
-          await writePrintDocument(null, records, size);
+          await writePrintDocument(null, records.map(log=>({...log,untrackedLabel:true})), size);
           setStatus(`내포장 ${count}장 출력 요청${weightOmitted?' · 중량 미표기':''} · 생산이력·재고에는 반영하지 않습니다. 실제 출력을 확인해주세요.`, 'ok');
         } catch(err){ setStatus(`내포장 인쇄 확인 필요: ${err.message || err} 실제 출력 여부를 먼저 확인해주세요.`, 'err'); }
         finally { setLoading(false); }
@@ -1070,6 +1072,7 @@
       const size = $('print-size').value || row.labelSize || '7x10';
       const sample = makePrintLog({...row, weight, weightOmitted, labelSize:size}, 'PREVIEW', 1);
       sample.code = 'PREVIEW-0001';
+      sample.untrackedLabel = kind==='inner';
       if(window.DBMTLabelTouch?.ready){ window.DBMTLabelTouch.preview(sample); return; }
       const win = window.open('', '_blank', 'width=420,height=720');
       if(!win){
@@ -1273,6 +1276,7 @@
     function labelDataFromLog(log){
       const row = log.workOrderSnapshot || {};
       return {
+        productBarcode: log.untrackedLabel ? '' : DBMTLabelLayout.encodePrintCode(log.code),
         product: row.product || log.product || '',
         origin: row.origin || '',
         grade: row.grade || '',
@@ -1296,90 +1300,12 @@
     }
 
     function buildLabelBody(d){
-      const bb = 'border-bottom:1pt solid #000;';
-      const br = 'border-right:1pt solid #000;';
-      const pad = 'padding:1.8pt 2.2pt;';
-      const sh = 'flex-shrink:0;';
-      const manufacturerName = html(d.manufacturer || DEFAULTS.manufacturer)
-        .replace(/주식회사\s*동부엠티/g, '주식회사 동부엠티');
-      const storageText = d.temptype === '냉장' ? '-2℃ ~ 5℃이하 냉장보관' : '-18℃이하 냉동보관';
-      const frozenNote = d.temptype === '냉장'
-        ? ''
-        : '<div style="font-size:6pt;text-align:center;">이미 냉동된바 있으니 해동후 재냉동 시키지 마십시오</div>';
-      let rows = '';
-
-      rows += '<div style="'+bb+pad+sh+'min-height:22pt;display:flex;align-items:center;">'
-        + '<span style="font-size:6pt;font-weight:900;margin-right:5pt;">제품명: </span>'
-        + '<strong style="font-size:'+((d.product||'').length>8?'11':'13')+'pt;">'+html(d.product||'　')+'</strong>'
-        + '</div>';
-
-      rows += '<div style="display:flex;'+bb+sh+'min-height:17pt;">'
-        + '<div style="flex:11;'+pad+br+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">성별및등급:</span><span style="flex:1;text-align:center;font-size:9.1pt;">'+html(d.grade||'')+'</span></div>'
-        + '<div style="flex:9;'+pad+'font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;">원산지:</span> <strong style="font-size:10.4pt;margin-left:6pt;">'+html(d.origin||'')+'</strong></div>'
-        + '</div>';
-
-      rows += '<div style="'+bb+pad+sh+'min-height:20pt;display:flex;align-items:center;">'
-        + '<span style="font-size:6pt;font-weight:900;">제조 및 소비기한: </span>'
-        + '<strong style="font-size:10pt;margin-left:8pt;">'+html(d.mfgdate||'')+'～ '+html(d.expdate||'')+'</strong>'
-        + '</div>';
-
-      rows += '<div style="display:flex;align-items:stretch;'+bb+sh+'min-height:30pt;">'
-        + '<div style="flex:11;'+pad+br+'display:flex;align-items:baseline;">'
-        +   '<span style="font-size:6pt;font-weight:900;margin-right:3pt;">중량:</span>'
-        +   '<div style="flex:1;display:flex;align-items:baseline;justify-content:center;padding-left:5pt;">'
-        +     (d.weightOmitted ? ''
-          : '<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">'+html(d.weight||'0.00')+'</span>'
-            + '<span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>')
-        +   '</div>'
-        + '</div>'
-        + '<div style="flex:9;'+pad+'font-size:6pt;">'
-        +   '<div style="font-weight:900;">품목보고번호</div>'
-        +   '<div style="font-size:9.1pt;font-weight:700;margin-top:5pt;text-align:center;">'+html(d.itemno||'')+'</div>'
-        + '</div>'
-        + '</div>';
-
-      rows += '<div style="'+bb+pad+sh+'min-height:15pt;display:flex;align-items:center;gap:4pt;">'
-        + '<span style="font-size:6pt;font-weight:900;flex-shrink:0;">이력번호</span>'
-        + '<strong style="font-size:9.1pt;line-height:1.1;word-break:break-all;">'+html(d.lot||'')+'</strong>'
-        + '</div>';
-
-      rows += '<div style="'+bb+pad+sh+'font-size:6pt;min-height:15pt;display:flex;align-items:center;"><span style="font-weight:900;">원료 및 함량</span> <strong style="margin-left:8pt;font-size:8pt;">'+formatIngredients(d.ingredients, d.product)+'</strong></div>';
-
-      rows += '<div style="'+bb+pad+sh+'min-height:22pt;">'
-        + '<div style="font-size:6pt;"><span style="font-weight:900;">보관방법:</span> &nbsp; '+storageText+'</div>'
-        + frozenNote
-        + '</div>';
-
-      rows += '<div style="padding:2pt 2pt 0;font-size:6.5pt;flex:1 1 0;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;">'
-        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
-        +   '<div style="flex:1;line-height:1.42;display:flex;flex-direction:column;gap:0.5pt;padding-right:2pt;">'
-        +     '<div>· 허가번호: '+html(d.licenseno||'')+'</div>'
-        +     '<div>· 식품의유형: '+html(d.prodtype||'')+'</div>'
-        +     '<div>· 포장재질: '+html(d.packaging||'')+'</div>'
-        +     '<div>· 반품및교환: 제조원및판매원 하단 표시</div>'
-        +     '<div>· 부정,불량 축산물 신고는 국번없이 1399</div>'
-        +     '<div>· 이 제품은 공정거래위원회 고시 소비자 분쟁해결기준에 의거 교환 또는 보상받을 수 있습니다</div>'
-        +     '<div>· 동봉되는 흡습제는 먹어서는 아니됩니다</div>'
-        +     '<div>· '+html(d.crossNotice||crossFacilityNotice(d.product,d.ingredients))+'</div>'
-        +   '</div>'
-        +   '<div style="display:flex;flex-direction:column;align-items:center;margin-left:2pt;flex-shrink:0;">'
-        +     '<div style="font-size:13pt;font-weight:900;border:1.5pt solid #000;padding:1pt 3pt;">'+html(d.temptype||'냉동')+'</div>'
-        +     '<div style="margin-top:20pt;text-align:center;">'
-        +       otherMarkHtml()
-        +       '<img src="'+html(haccpMarkSrc())+'" alt="HACCP" style="height:33pt;width:33pt;object-fit:contain;display:block;">'
-        +     '</div>'
-        +   '</div>'
-        + '</div>'
-        + '<div style="display:flex;align-items:flex-start;margin-top:-18pt;padding-bottom:3pt;line-height:1.12;">'
-        +   '<div style="max-width:100%;">'
-        +     '<div style="display:flex;align-items:baseline;gap:8pt;margin-bottom:1pt;"><span style="font-size:6.5pt;">제조판매원</span><strong style="font-size:11pt;">'+manufacturerName+'</strong></div>'
-        +     '<div style="margin-top:1pt;font-size:6.2pt;">'+html(d.phone||'')+'</div>'
-        +     '<div style="font-size:6.2pt;">'+html(d.address||'')+'</div>'
-        +   '</div>'
-        + '</div>'
-        + '</div>';
-
-      return rows;
+      return DBMTLabelLayout.buildBody({
+        ...d,
+        manufacturer: d.manufacturer || DEFAULTS.manufacturer,
+        ingredients: d.ingredients || `${inferMeatType(d.product, '')} 100%`,
+        crossNotice: d.crossNotice || crossFacilityNotice(d.product, d.ingredients)
+      });
     }
 
     function otherMarkHtml(){

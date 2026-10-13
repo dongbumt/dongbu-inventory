@@ -1,4 +1,4 @@
-/* Shared print-only document. Does not change label contents, print logs or ERP data. */
+/* Shared print-only document. Does not change print logs or ERP data. */
 (function(global){
   'use strict';
   function createDocument({labelsHtml='',sizeKey='7x10',preview=false,autoPrint=true}={}){
@@ -20,7 +20,8 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { margin:0; padding:0; background:#fff; }
   body { width:${width}mm; font-family:"Malgun Gothic","맑은 고딕",Arial,sans-serif; font-size:7pt; color:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  .print-label,.lbl-label { width:${contentWidth}mm; height:${height}mm; margin:0; border:2px solid #000; padding:1.5pt 2pt 4pt; display:flex; flex-direction:column; line-height:1.2; font-weight:bold; overflow:hidden; background:#fff; page-break-inside:avoid; break-inside:avoid-page; page-break-after:always; break-after:page; }
+  .print-label,.lbl-label { width:${contentWidth}mm; height:${height}mm; margin:0; border:2px solid #000; padding:0.55mm 0.7mm 0.8mm; display:flex; flex-direction:column; line-height:1.13; font-weight:bold; overflow:hidden; background:#fff; page-break-inside:avoid; break-inside:avoid-page; page-break-after:always; break-after:page; }
+  ${global.DBMTLabelLayout?.styles||''}
   .print-label:last-child,.lbl-label:last-child { page-break-after:auto; break-after:auto; }
   /* Preserve the original certification artwork, including its white lettering.
      Both turquoise and orange must print black rather than faint halftone dots. */
