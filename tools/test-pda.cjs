@@ -17,7 +17,7 @@ const server=http.createServer((req,res)=>{
     const context=await browser.newContext({viewport:{width:320,height:533},isMobile:true,hasTouch:true});
     const user={id:'qa-user',displayName:'테스트',loginId:'qa'};
     const fixture={labelId:'qa-label',code:'DB2610131200-ABC120',product:'돈등심(치즈돈까스용 10mm 슬라이스)',weight:5,lot:'L12610134894005',origin:'국내산',storage:'냉동',packunit:'5KG',mfgdate:'2026-10-13',expdate:'2027-10-12',registered:false,state:'in_stock',revision:0,location:'가공장'};
-    let current={...fixture},commits=[],lookups=[],failAfterSave=false,canSave=true,lookupDelay=0,denyCommit=false,expireCommit=false;
+    let current={...fixture},commits=[],lookups=[],failAfterSave=false,canSave=true,canView=true,lookupDelay=0,denyCommit=false,expireCommit=false;
     const saved=new Map(),errors=[];
     const result=body=>({ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:5*body.p_items.length,received:body.p_mode==='inbound'&&current.state!=='shipped'?body.p_items.length:0,returned:body.p_mode==='inbound'&&current.state==='shipped'?body.p_items.length:0,shipped:body.p_mode==='outbound'?body.p_items.length:0,items:body.p_items.map(item=>({...fixture,code:item.barcode,action:body.p_mode==='outbound'?'ship':current.state==='shipped'?'return':'receive'})),savedAt:new Date().toISOString()});
     await context.route('https://**/*',async route=>{
@@ -30,7 +30,10 @@ const server=http.createServer((req,res)=>{
       let data;
       if(name==='dbmt_erp_login'||name==='dbmt_erp_session')data={ok:true,token:'qa-token',user};
       else if(name==='dbmt_erp_logout')data=true;
-      else if(name==='dbmt_pda_bootstrap')data={ok:true,locations:['가공장','물류창고'],partners:[{id:'qa-partner',name:'테스트 매출처'}],canSave};
+      else if(name==='dbmt_pda_bootstrap'){
+        if(!canView){await route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({code:'42501',message:'PDA 입출고 조회·등록 권한을 확인해주세요.'})});return;}
+        data={ok:true,locations:['가공장','물류창고'],partners:[{id:'qa-partner',name:'테스트 매출처'}],canSave};
+      }
       else if(name==='dbmt_pda_lookup'){
         lookups.push(body.p_code);if(lookupDelay)await new Promise(resolve=>setTimeout(resolve,lookupDelay));
         if(body.p_code==='LOT-ONLY'){await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({code:'P0001',message:'제품 고유바코드를 읽어주세요.'})});return;}
@@ -87,7 +90,11 @@ const server=http.createServer((req,res)=>{
       assert(item.y+item.height<=footer.y,'First scanned item must be visible above the save bar');
       assert(await page.locator('.brand img').evaluate(img=>img.complete&&img.naturalWidth>0));
     }
-    await page.locator('#logout').click();canSave=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});await scan();assert(await page.locator('#save').isDisabled());
+    await page.locator('#logout').click();canSave=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});
+    assert.match(await page.locator('#status').textContent(),/PDA 입출고 등록 권한/);
+    await scan();assert(await page.locator('#save').isDisabled());
+    await page.locator('#logout').click();canView=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('조회·등록 권한'));
+    assert(await page.locator('#workspace').isHidden(),'Direct URL/login must not show the PDA workspace without view permission');
     assert.deepEqual(errors,[]);
     console.log('PASS: keyboard scans, rapid scanning queue, LOT rejection, duplicate/removal, no save before confirmation, receive/ship/return, retry after reload, stale-state error, permission/offline guards, history, responsive 320/480/390/1280px');
     console.log('Artifacts: '+artifacts);

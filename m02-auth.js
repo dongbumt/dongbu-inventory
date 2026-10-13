@@ -14,7 +14,7 @@
     'nav-labelproducts':'label_products',
     'nav-traders':'traders',
     'nav-transactions':'transactions',
-    'nav-pda':'transactions',
+    'nav-pda':'pda',
     'nav-production':'production',
     'nav-production-schedule':'production_schedule',
     'nav-product-specs':'product_specs',
@@ -46,7 +46,7 @@
     'nav-change-log':'change_log'
   };
   const PAGE_MENU = Object.fromEntries(Object.entries(NAV_MENU)
-    .filter(([nav])=>nav !== 'nav-label-print-standalone')
+    .filter(([nav])=>!['nav-label-print-standalone','nav-pda'].includes(nav))
     .map(([nav,menu])=>['p-' + nav.slice(4), menu]));
 
   // One permission registry drives both button visibility and direct calls.
@@ -381,10 +381,11 @@
       }
     });
     const active = document.querySelector('.tab-panel.active');
-    if(active && !canOpenPage(active.id)){
+    if(state.user && (!active || !canOpenPage(active.id))){
       const first = Object.keys(NAV_MENU).map(id=>document.getElementById(id))
-        .find(el=>el && el.style.display !== 'none' && el.id !== 'nav-label-print-standalone');
+        .find(el=>el && el.style.display !== 'none' && !['nav-label-print-standalone','nav-pda'].includes(el.id));
       if(first) first.click();
+      else if(active) active.classList.remove('active');
     }
   }
 
@@ -598,13 +599,14 @@
       `<td><input type="checkbox" data-all-action="${action}" ${(locked || (viewOnly && action!=='view'))?'disabled':''}></td>`).join('')}</tr>`;
     body.innerHTML=allRow+rows.map(row=>`<tr data-menu-code="${esc(row.menuCode)}"><td>${esc(row.menuName)}</td>${ACTION_KEYS.map(action=>{
       const field=ACTION_FIELDS[action];
-      const disabled=locked || (viewOnly && action!=='view');
-      const checked=viewOnly && action!=='view' ? false : Boolean(row[field]);
-      return `<td><input type="checkbox" data-action="${action}" ${checked?'checked':''} ${disabled?'disabled':''}></td>`;
+      const unsupported=row.menuCode==='pda' && !['view','create'].includes(action);
+      const disabled=locked || unsupported || (viewOnly && action!=='view');
+      const checked=unsupported || (viewOnly && action!=='view') ? false : Boolean(row[field]);
+      return `<td><input type="checkbox" data-action="${action}" ${checked?'checked':''} ${disabled?'disabled':''} ${unsupported?'title="PDA 입출고는 조회·등록 권한만 사용합니다."':''}></td>`;
     }).join('')}</tr>`).join('');
     body.querySelectorAll('[data-all-action]').forEach(box=>{
       const action=box.dataset.allAction;
-      const targets=[...body.querySelectorAll(`[data-action="${action}"]`)];
+      const targets=[...body.querySelectorAll(`[data-action="${action}"]:not(:disabled)`)];
       box.checked=targets.length>0 && targets.every(x=>x.checked);
       box.addEventListener('change',()=>targets.forEach(x=>{x.checked=box.checked;}));
       targets.forEach(x=>x.addEventListener('change',()=>{box.checked=targets.every(y=>y.checked);}));

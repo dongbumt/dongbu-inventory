@@ -63,7 +63,7 @@
         $('location').value=saved.body.p_location;$('work-date').value=saved.body.p_date;$('partner').value=saved.body.p_trader_id||'';$('note').value=saved.body.p_note||'';
         $('settings-panel').open=false;
         status('이전 저장의 응답을 확인하지 못했습니다. 같은 요청 재시도로 처리 결과를 확인해주세요.','error');
-      }else status(state.canSave?'':'거래내역 등록 권한이 없어 조회만 가능합니다.',state.canSave?'':'error');
+      }else status(state.canSave?'':'PDA 입출고 등록 권한이 없어 조회만 가능합니다.',state.canSave?'':'error');
     }catch(_){status('이전 임시 저장 정보를 확인할 수 없습니다. 사무실에서 최근 처리이력을 확인해주세요.','error');state.canSave=false;}
     render();focusScan();
   }
