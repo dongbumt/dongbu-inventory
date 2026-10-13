@@ -3691,7 +3691,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="card">
         <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>📋 등록 품목 목록</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input id="lp-search" placeholder="🔍 제품코드·제품명·브랜드·공장넘버·국가부위코드·원산지 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
+          <input id="lp-search" placeholder="🔍 제품코드·제품명·브랜드·공장넘버·원산지 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
           <select id="lp-status-filter" aria-label="품목 사용 여부 필터" onchange="renderLabelProducts()" style="width:auto;flex:0 0 150px;"><option value="">사용 여부 전체</option><option value="true">사용</option><option value="false">사용안함</option></select>
           <span id="lp-search-count" style="font-size:11px;color:#888;white-space:nowrap;"></span>
         </div>
@@ -21321,7 +21321,7 @@ function renderLabelProducts(){
     if(countEl) countEl.textContent = '';
     return;
   }
-  // 검색 필터 (제품코드·제품명·브랜드·공장넘버·국가부위코드·원산지·유형·육종·면세/과세·보관·포장단위·품목번호·등급)
+  // 검색 필터 (제품코드·제품명·브랜드·공장넘버·원산지·유형·육종·면세/과세·보관·포장단위·품목번호·등급)
   const searchEl = document.getElementById('lp-search');
   const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
   const status = document.getElementById('lp-status-filter')?.value || '';
@@ -21330,7 +21330,7 @@ function renderLabelProducts(){
     .filter(({p})=>!status || String(p.isActive !== false) === status)
     .filter(({p})=>{
       if(!q) return true;
-      const text = [p.productCode,p.name,p.brand,p.factoryNo,p.nationalPartCode,nationalPartNameForCode(p.nationalPartCode),p.origin,p.kind,p.meattype,normalizeLabelProductTaxType(p.taxType),p.storage,p.packunit,p.itemno,p.grade]
+      const text = [p.productCode,p.name,p.brand,p.factoryNo,p.origin,p.kind,p.meattype,normalizeLabelProductTaxType(p.taxType),p.storage,p.packunit,p.itemno,p.grade]
         .map(v=>String(v||'')).join(' ').toLowerCase();
       return text.includes(q);
     })

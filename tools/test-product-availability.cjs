@@ -31,7 +31,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
       window.requests=[];window.alerts=[];window.failSave=false;
       const toast=()=>{},alert=s=>alerts.push(s),STOCK_LOCATION_DEFAULT='가공장';
       const priceKey=v=>String(v??'').trim().toLowerCase(),samePriceText=(a,b)=>priceKey(a)===priceKey(b),sameOriginText=samePriceText;
-      const normalizeOriginName=v=>v||'',normalizeLabelProductTaxType=v=>v||'면세',nationalPartNameForCode=()=>'';
+      const normalizeOriginName=v=>v||'',normalizeLabelProductTaxType=v=>v||'면세',nationalPartNameForCode=code=>code==='P01'?'설도':'';
       const usesNationalPartCode=()=>false,isNationalPartCodeForProduct=()=>true,getDefaultShelfDays=()=>365;
       const autoFillLabelProductShelfDays=()=>{},autoFillLabelProductShelfDaysIfBlank=()=>{},refreshLabelProductNationalPartSelect=()=>{},refreshLabelProductSelect=()=>{};
       const invalidateStockMap=()=>{},safeLocalStorageSet=()=>{},saveDataChangeLogsLocal=()=>{},resetDataChangeAppDataBaseline=()=>{},makeAppId=()=> 'new';
@@ -96,7 +96,22 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
       labelProducts.push({id:'variant-off',name:'동명',origin:'국내산',brand:'A',isActive:false},{id:'variant-on',name:'동명',origin:'국내산',brand:'B'});
       return [isStockProductSelectable({product:'동명'}),isStockProductSelectable({product:'동명',brand:'A'}),isStockProductSelectable({product:'동명',brand:'B'}),isStockProductSelectable({product:'미등록 과거품목'}),isStockProductSelectable({product:'기존 원료',labelProductId:'inactive'}),isStockProductSelectable({product:'중단 원료'})];
     }),[true,false,true,true,false,false]);
+    await page.evaluate(()=>{
+      labelProducts.push(
+        {id:'cut-name',name:'설도',origin:'국내산'},
+        {id:'cut-code',name:'설깃',nationalPartCode:'설도',origin:'국내산'},
+        {id:'cut-code-name',name:'설깃살',nationalPartCode:'P01',origin:'국내산'}
+      );
+      renderLabelProducts();
+    });
+    await page.locator('#lp-search').fill('설도');
+    assert.equal(await page.locator('#lp-list-wrap tbody tr').count(),1,'National part code and its name are excluded from keyword search');
+    assert.match(await page.locator('#lp-list-wrap tbody tr').textContent(),/설도/);
+    await page.locator('#lp-search').fill('설깃');
+    assert.equal(await page.locator('#lp-list-wrap tbody tr').count(),2,'Product name remains searchable');
+    await page.locator('#lp-search').fill('P01');
+    assert.equal(await page.locator('#lp-list-wrap tbody tr').count(),0,'National part code itself is excluded');
     assert.deepEqual(errors,[]);
-    console.log('PASS: product status UI/save/failure/reactivation, legacy active defaults, master/raw-stock choices, historical selection preservation, ambiguous legacy identities, unchanged history/stock fixtures');
+    console.log('PASS: product status UI/save/failure/reactivation, master/raw-stock choices, historical selection, keyword search excluding national part codes');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
