@@ -38,7 +38,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await context.route('**/index.html',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>ERP link fixture</title><p>ERP</p>'}));
     await context.addInitScript(()=>{
       window.__prints=[];window.__portOptions=null;window.__portRequests=0;window.__portClosed=0;
-      window.print=()=>{if(parent!==window){parent.__prints.push({count:document.querySelectorAll('.print-label').length,text:document.querySelector('#label-print-pages').textContent});setTimeout(()=>dispatchEvent(new Event('afterprint')),0);}};
+      window.print=()=>{if(parent!==window){parent.__prints.push({count:document.querySelectorAll('.print-label').length,text:document.querySelector('#label-print-pages').textContent,innerCount:document.querySelectorAll('.dbmt-inner-label').length,barcodeCount:document.querySelectorAll('[data-barcode-kind]').length,outerRegions:document.querySelectorAll('.dl-top-code,.dl-side-strip').length});setTimeout(()=>dispatchEvent(new Event('afterprint')),0);}};
       const port={readable:null,async open(options){window.__portOptions=options;this.readable=new ReadableStream({start(controller){window.__serialController=controller;}});},async close(){window.__portClosed++;}};
       Object.defineProperty(navigator,'serial',{configurable:true,value:{async requestPort(){window.__portRequests++;return port;}}});
       window.__send=text=>window.__serialController.enqueue(new TextEncoder().encode(text));
@@ -71,10 +71,13 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     // Inner packaging can deliberately use 0kg: it prints with the weight
     // omitted, and must never create production history or inventory output.
     await edit('inner','weight',0);assert(await page.evaluate(()=>DBMTLabelTouch.isWeightOmitted('inner')));assert(await page.locator('#inner-print-btn').isEnabled());
-    await edit('inner','copies',3);await page.locator('#inner-preview-btn').click();const innerPreview=page.frameLocator('#label-preview-frame');await innerPreview.locator('.print-label').waitFor();assert.doesNotMatch(await innerPreview.locator('.print-label').textContent(),/0\.00|Kg/);await page.locator('#label-preview-close').click();
+    await edit('inner','copies',3);await page.locator('#inner-preview-btn').click();const innerPreview=page.frameLocator('#label-preview-frame');await innerPreview.locator('.print-label').waitFor();assert.doesNotMatch(await innerPreview.locator('.print-label').textContent(),/0\.00|Kg|미발급/);
+    assert.equal(await innerPreview.locator('.dbmt-inner-label').count(),1);assert.equal(await innerPreview.locator('[data-barcode-kind],.dl-top-code,.dl-side-strip').count(),0);assert.match(await innerPreview.locator('.il-trace').textContent(),/903112100182/);
+    await page.locator('#label-preview-dialog').screenshot({path:path.join(dir,'inner-preview.png')});await page.locator('#label-preview-close').click();
     await page.locator('#inner-print-btn').click();await wait();
     assert.equal(saves,0);assert.equal(logs.length,0);assert.equal(await page.evaluate(()=>__prints[0].count),3);assert.doesNotMatch(await page.evaluate(()=>__prints[0].text),/0\.00|Kg/);
-    assert.match(await page.evaluate(()=>__prints[0].text),/미발급/,'Unsaved inner labels must not advertise an inventory identity');
+    const innerPrint=await page.evaluate(()=>__prints[0]);
+    assert.equal(innerPrint.innerCount,3);assert.equal(innerPrint.barcodeCount,0);assert.equal(innerPrint.outerRegions,0);assert.doesNotMatch(innerPrint.text,/미발급/,'Inner labels must use the original barcode-free format');
     await edit('outer','weight',0);assert.match(await page.locator('#number-error').textContent(),/0 초과/);await page.locator('[data-close=number-dialog]').click();
     await edit('outer','weight',5);await edit('outer','copies',5);await page.locator('#print-btn').click();await wait();assert.equal(saves,1);assert.equal(logs.length,5);assert.equal(await production(),'25 kg');
     await page.locator('#reprint-open').click();await page.locator('#history-body input').first().check();assert(await page.locator('#history-next').isDisabled());await page.locator('#history-body input').nth(1).check();

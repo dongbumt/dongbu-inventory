@@ -21,9 +21,9 @@ async function read(file){
     console.log(`PASS: deployed ${file} matches ${ref}`);
   }
   const main=await read('index.html');
-  assert.match(main,/<script src="label-layout\.js\?v=20261013inset1"><\/script>/);
+  assert.match(main,/<script src="label-layout\.js\?v=20261013inner1"><\/script>/);
   assert.match(main,/return DBMTLabelLayout\.buildBody\(/);
-  assert.match(main,/label-print\.html\?v=20261013inset2/);
+  assert.match(main,/label-print\.html\?v=20261013inner1/);
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}});
@@ -46,7 +46,7 @@ async function read(file){
       };
     });
     const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
-    await page.goto(new URL('label-print.html?v=20261013inset2',base).href);
+    await page.goto(new URL('label-print.html?v=20261013inner1',base).href);
     await page.evaluate(()=>{
       state.pin='qa-no-real-login';
       state.workOrders=[{id:'qa-release-order',date:'2026-10-13',product:'돈사태(작업)',inputWeight:100,weight:12,origin:'국내산',lot:'L12608194894027',mfgdate:'2026-08-21',expdate:'2027-08-20',temptype:'냉동',itemno:'2025029309311'}];
@@ -82,8 +82,33 @@ async function read(file){
       await print.pdf({path:path.join(artifacts,i?'reprint.pdf':'outer.pdf'),preferCSSPageSize:true,printBackground:true});
       await print.close();
     }
+    const previousLogs=await page.evaluate(()=>JSON.stringify(state.logs));
+    await page.locator('#inner-preview-btn').click();
+    const innerPreview=page.frameLocator('#label-preview-frame');
+    await innerPreview.locator('.dbmt-inner-label').waitFor();
+    assert.equal(await innerPreview.locator('[data-barcode-kind],.dl-top-code,.dl-side-strip').count(),0);
+    assert.doesNotMatch(await innerPreview.locator('.print-label').textContent(),/미발급/);
+    assert.match(await innerPreview.locator('.il-trace').textContent(),/L12608194894027/);
+    await page.locator('#label-preview-close').click();
+    await page.locator('#inner-print-btn').click();
+    await page.waitForFunction(()=>!state.loading&&__releasePrints.length===3);
+    assert.equal(saves.length,2,'Inner printing must not save a log or modify production');
+    assert.equal(await page.evaluate(()=>JSON.stringify(state.logs)),previousLogs);
+    const inner=await context.newPage();await inner.setContent(await page.evaluate(()=>__releasePrints[2]));
+    await inner.waitForFunction(()=>[...document.images].every(img=>img.complete&&img.naturalWidth>0));
+    await inner.emulateMedia({media:'print'});
+    assert.equal(await inner.locator('.dbmt-inner-label').count(),1);
+    assert.equal(await inner.locator('[data-barcode-kind],.dl-top-code,.dl-side-strip').count(),0);
+    assert.doesNotMatch(await inner.locator('.print-label').textContent(),/미발급/);
+    assert.match(await inner.locator('.il-trace').textContent(),/L12608194894027/);
+    const firstRow=await inner.locator('.dbmt-inner-label > :first-child').textContent();
+    assert.match(firstRow,/제품명:.*돈사태/s);
+    await inner.locator('.print-label').screenshot({path:path.join(artifacts,'inner.png')});
+    await inner.pdf({path:path.join(artifacts,'inner.pdf'),preferCSSPageSize:true,printBackground:true});
+    await inner.close();
     assert.deepEqual(errors,[]);
     console.log('PASS: deployed outer-print button and reprint emit the new layout; two product barcodes, one trace barcode, unchanged reprint identity');
+    console.log('PASS: deployed inner print and preview use the original barcode-free form, textual LOT and no log/accounting writes');
     console.log('PASS: no real login, backend writes or physical printing');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();}

@@ -103,6 +103,41 @@ print(json.dumps(results))`,
       await print.locator('.print-label').screenshot({path:path.join(artifacts,name+'.png')});
       await print.close();console.log(`PASS: ${name} ${size}, barcode values/layout/address${process.env.DBMT_TEST_BARCODE_DECODE==='1'?' and 203dpi decoding':''}`);
     }
+    for(const [name,size,patch] of [
+      ['inner-frozen','7x10',{}],['inner-wide','10x10',{}],
+      ['inner-chilled','7x10',{temptype:'냉장'}],['inner-weight-omitted','7x10',{weightOmitted:true,weight:0}]
+    ]){
+      const doc=await page.evaluate(({fixture,size,patch})=>{
+        const log={...makePrintLog({...fixture,...patch,labelSize:size},'QA',1),untrackedLabel:true};
+        const data=labelDataFromLog(log),body=buildLabelBody(data);
+        return DBMTLabelPrint.createDocument({labelsHtml:`<section class="print-label">${body}</section>`,sizeKey:size,autoPrint:false});
+      },{fixture,size,patch});
+      const print=await context.newPage();await print.setContent(doc);
+      assert(await print.evaluate(()=>DBMTLabelPrintReady));await print.emulateMedia({media:'print'});
+      assert.equal(await print.locator('.dbmt-inner-label').count(),1);
+      assert.equal(await print.locator('[data-barcode-kind],.dl-top-code,.dl-side-strip,.dbmt-label-body').count(),0,'Inner must have no barcode artwork or reserved outer regions');
+      assert.doesNotMatch(await print.locator('.print-label').textContent(),/미발급/);
+      assert.match(await print.locator('.il-trace').textContent(),/L12608194894027/,'Keep the LOT as text');
+      assert.match(await print.locator('.il-product').textContent(),/제품명:.*돈사태/s);
+      assert.match(await print.locator('.il-manufacturer').textContent(),/제조판매원.*주식회사 동부엠티.*032-766-1812.*소담2로/s);
+      assert.equal(await print.locator('img').count(),2,'Only the original recycling and HACCP artwork');
+      if(patch.weightOmitted)assert.equal((await print.locator('.il-weight').textContent()).trim(),'');
+      else assert.match(await print.locator('.il-weight').textContent(),/12\.00.*Kg/);
+      const geometry=await print.locator('.print-label').evaluate(label=>{
+        const rect=el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
+        const inner=label.querySelector('.dbmt-inner-label'),product=label.querySelector('.il-product');
+        const overflow=[...inner.querySelectorAll('div,span,strong,img')].filter(el=>{const r=rect(el),b=rect(label);return r.left<b.left-.5||r.right>b.right+.5||r.top<b.top-.5||r.bottom>b.bottom+.5;}).map(el=>el.textContent||el.alt);
+        return {inner:rect(inner),product:rect(product),overflow};
+      });
+      assert.deepEqual(geometry.overflow,[],`${name}: clipped inner label`);
+      assert.equal(geometry.product.top,geometry.inner.top,'Product starts at the top without a barcode band');
+      assert.equal(geometry.product.right,geometry.inner.right,'Product information uses the full width');
+      await print.locator('.print-label').screenshot({path:path.join(artifacts,name+'.png')});
+      const pdf=path.join(artifacts,name+'.pdf');await print.pdf({path:pdf,preferCSSPageSize:true,printBackground:true});
+      assert.match(execFileSync('pdfinfo',[pdf],{encoding:'utf8'}),/Pages:\s+1\b/,'One physical label per page');
+      execFileSync('pdftoppm',['-f','1','-singlefile','-r','203','-png',pdf,path.join(artifacts,name+'-203dpi')]);
+      await print.close();console.log(`PASS: ${name} ${size}, original full-width barcode-free form, complete text and marks`);
+    }
     const safety=await page.evaluate(()=>{
       const data=labelDataFromLog({labelWeight:12,workOrderSnapshot:{product:'<img src=x onerror=alert(1)>',lot:'LOT-1'}});
       const missing=buildLabelBody(data);
@@ -110,10 +145,10 @@ print(json.dumps(results))`,
       const originals=[0,1,35,36,36**6-1].map(n=>'DB2610131000-'+n.toString(36).toUpperCase());
       const roundtrips=originals.map(code=>DBMTLabelLayout.decodePrintCode(DBMTLabelLayout.encodePrintCode(code)));
       const inner=buildLabelBody(labelDataFromLog({code:'DB2610131000-ABC123',untrackedLabel:true,labelWeight:12,workOrderSnapshot:{product:'내포장',lot:'LOT-1'}}));
-      return {missing,noProductBarcodes:!missing.includes('data-barcode-kind="product"'),innerUnissued:!inner.includes('data-barcode-kind="product"'),invalid,originals,roundtrips};
+      return {missing,noProductBarcodes:!missing.includes('data-barcode-kind="product"'),innerBarcodeFree:!inner.includes('data-barcode-kind')&&!inner.includes('미발급')&&inner.includes('dbmt-inner-label'),invalid,originals,roundtrips};
     });
     assert(safety.noProductBarcodes,'Never invent an issued code for an old/manual label');
-    assert(safety.innerUnissued,'Never print an inventory identity for unsaved inner labels');
+    assert(safety.innerBarcodeFree,'Restore the original inner label, without any barcode or unissued band');
     assert(safety.missing.includes('&lt;img'));assert(safety.invalid);
     assert.deepEqual(safety.roundtrips,safety.originals);
     assert.deepEqual(errors,[]);
