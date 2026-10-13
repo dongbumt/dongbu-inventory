@@ -146,7 +146,7 @@ ERP의 `배송기사근태` 메뉴에서 기사 계정을 설정합니다. 근�
 
 ## PDA 제품 입출고
 
-PM351 Android 11의 Chrome에서 `https://dongbumt.github.io/dongbu-inventory/pda.html`에 접속합니다. 기존 ERP 사용자로 로그인하며 거래내역 조회·등록과 재고현황 조회 권한이 필요합니다. 새 테이블과 RPC는 `supabase/schema-rpc-53-pda-product-movements.sql`로 설치합니다. 기존 재고·생산일보·출력이력은 변환하지 않습니다.
+PM351 Android 11의 Chrome에서 `https://dongbumt.github.io/dongbu-inventory/pda.html`에 접속합니다. 기존 ERP 사용자로 로그인하며 거래내역 조회·등록과 재고현황 조회 권한이 필요합니다. 새 테이블과 RPC는 `supabase/schema-rpc-53-pda-product-movements.sql`, 재고 충돌 보호는 `supabase/schema-rpc-54-pda-registered-stock-guards.sql` 순으로 설치합니다. 기존 재고·생산일보·출력이력은 변환하지 않습니다.
 
 생산완료된 제품 고유바코드만 사용합니다. 최초 입고 확인은 기존 생산입고에 연결만 하므로 중량을 더하지 않으며, 출고는 박스별 차감, 같은 라벨의 반입은 재고를 복원합니다. 스캔 후 목록을 확인하고 확정해야 저장됩니다. 중복·동시 처리와 응답 누락 재시도는 서버에서 검증합니다. 스캐너 설정, 지원 범위와 시험 방법은 [PDA 안내](pda.md)를 참고하세요.
 

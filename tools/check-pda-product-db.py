@@ -75,6 +75,10 @@ def check(conn):
     before = balance()
     result = commit('inbound', [scan()])
     assert result['received'] == 1 and balance() == before == 15
+    reject(lambda: conn.execute("insert into public.transactions(id,date,type,weight,stock_location,raw) values(%s,'2026-10-13','출고',12,'가공장',%s)", (uid('reserved_out'), Jsonb(dict(stockRowId=stock)))), 'PDA 추적 재고')
+    with conn.transaction(force_rollback=True):
+        conn.execute("insert into public.transactions(id,date,type,weight,stock_location,raw) values(%s,'2026-10-13','출고',5,'가공장',%s)", (uid('free_out'), Jsonb(dict(stockRowId=stock))))
+        assert balance() == 10, 'Unregistered quantity must remain available to ordinary ERP workflows'
     reject(lambda: commit('inbound', [scan()]), '이미 입고')
     stale = scan()
     request = uuid.uuid4()
@@ -125,6 +129,10 @@ def check(conn):
 schema = SCHEMA.read_text(encoding='utf8')
 migrations = list((ROOT / 'supabase/migrations').glob('*_pda_product_movements.sql'))
 assert len(migrations) == 1 and migrations[0].read_text(encoding='utf8').replace('\r\n','\n') == schema.replace('\r\n','\n'), 'PDA schema and migration must match'
+guard = (ROOT / 'supabase/schema-rpc-54-pda-registered-stock-guards.sql').read_text(encoding='utf8')
+guard_migrations = list((ROOT / 'supabase/migrations').glob('*_pda_registered_stock_guards.sql'))
+assert len(guard_migrations) == 1 and guard_migrations[0].read_text(encoding='utf8').replace('\r\n','\n') == guard.replace('\r\n','\n'), 'PDA guard schema and migration must match'
+schema += '\n' + guard
 if 'hdwjwtmbsxfjrlvicgnn' not in os.environ.get('PGUSER','') + os.environ.get('PGHOST',''):
     raise RuntimeError('Wrong linked project')
 with psycopg.connect(sslmode='require',connect_timeout=20,application_name='dbmt_pda_qa') as conn:
