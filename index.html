@@ -3363,7 +3363,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <input type="hidden" id="ma-account-id">
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group"><label>관리자 이름</label><input id="ma-display-name" maxlength="30" placeholder="예: 대표자"></div>
-      <div class="form-group"><label>접속 아이디</label><input id="ma-login-id" maxlength="30" autocomplete="username" placeholder="영문·숫자 4~30자"></div>
+      <div class="form-group"><label>접속 아이디</label><input id="ma-login-id" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="영문만으로 가능 · 3~30자"></div>
       <div class="form-group"><label>숫자 비밀번호</label><input id="ma-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" autocomplete="new-password" placeholder="신규 4자리 / 수정 시 비워두면 유지"></div>
       <div class="form-group" style="max-width:120px;"><label>사용 상태</label><select id="ma-active"><option value="1">사용</option><option value="0">중지</option></select></div>
       <div class="form-group" style="flex:0;"><label>&nbsp;</label><div style="display:flex;gap:5px;"><button class="btn btn-primary" onclick="saveMobileAdminAccount()">저장</button><button class="btn btn-secondary" onclick="resetMobileAdminAccountForm()">초기화</button></div></div>
@@ -6778,7 +6778,7 @@ async function saveMobileAdminAccount(){
   const pin=document.getElementById('ma-pin')?.value||'';
   const active=document.getElementById('ma-active')?.value==='1';
   if(!displayName){ toast('관리자 이름을 입력해주세요.'); return; }
-  if(!/^[A-Za-z0-9._-]{4,30}$/.test(loginId)){ toast('접속 아이디는 영문·숫자 4~30자로 입력해주세요.'); return; }
+  if(!/^[A-Za-z0-9._-]{3,30}$/.test(loginId)){ toast('접속 아이디는 영문만으로 3~30자 입력할 수 있습니다. 숫자·점·밑줄·하이픈도 선택적으로 사용할 수 있습니다.'); return; }
   if((!id || pin) && !/^\d{4}$/.test(pin)){ toast('숫자 비밀번호는 4자리로 입력해주세요.'); return; }
   try{
     await sbRpc('dbmt_erp_mobile_admin_save_account',{

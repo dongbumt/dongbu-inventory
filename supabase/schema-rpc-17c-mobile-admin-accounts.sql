@@ -34,8 +34,8 @@ declare
 begin
   if not public.dbmt_check_password(p_password) then raise exception 'invalid app password'; end if;
   if btrim(coalesce(p_display_name,'')) = '' then raise exception 'display name is required'; end if;
-  if btrim(coalesce(p_login_id,'')) !~ '^[A-Za-z0-9._-]{4,30}$' then
-    raise exception 'login id must be 4-30 letters, numbers, dot, dash or underscore';
+  if btrim(coalesce(p_login_id,'')) !~ '^[A-Za-z0-9._-]{3,30}$' then
+    raise exception 'login id must be 3-30 letters, numbers, dot, dash or underscore';
   end if;
 
   if v_id is null then
