@@ -1,12 +1,13 @@
 (function(){
   'use strict';
-  const state={rows:[],editing:null,loading:false,saving:false,token:'',request:0};
+  const state={rows:[],editing:null,loading:false,saving:false,token:'',request:0,sortKey:'trader',sortDirection:1};
   const el=id=>document.getElementById('spec-'+id);
   const can=action=>Boolean(window.DBMTAuth?.isPersonal() && DBMTAuth.can('product_specs',action));
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
   const money=value=>value===null || value===undefined?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:2});
   const fields=['trader','distribution','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','price_kg','price_box','note'];
+  const collator=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
   const inputs={trader:'trader',distribution:'distribution',material:'material',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',price_kg:'price-kg',price_box:'price-box',note:'note'};
   const distributions=new Set(['삼성웰스토리','동원홈푸드','CJ프레시웨이','동부축산유통','직납']);
   function setDistribution(value=''){
@@ -48,10 +49,30 @@
     return state.rows.filter(row=>{
       const values=[row.trader,row.distribution,row.material,row.origin].map(normalize);
       return terms.every(term=>values.some(value=>value.includes(term)));
-    });
+    }).sort((a,b)=>compareRows(a,b)||collator.compare(a.trader??'',b.trader??'')||collator.compare(a.material??'',b.material??'')||collator.compare(a.id,b.id));
+  }
+  function compareRows(a,b){
+    const key=state.sortKey,numeric=key==='price_kg'||key==='price_box';
+    const value=row=>key==='inner_packaging_spec'?(row[key]??row.packaging_spec):row[key];
+    const left=value(a),right=value(b);
+    const empty=item=>item===null||item===undefined||normalize(item)===''||(numeric&&!Number.isFinite(Number(item)));
+    const leftEmpty=empty(left),rightEmpty=empty(right);
+    if(leftEmpty||rightEmpty)return Number(leftEmpty)-Number(rightEmpty);
+    return (numeric?Number(left)-Number(right):collator.compare(normalize(left),normalize(right)))*state.sortDirection;
+  }
+  function sortBy(key){
+    if(!fields.includes(key))return;
+    state.sortDirection=state.sortKey===key?-state.sortDirection:1;
+    state.sortKey=key;render();
   }
   function render(){
     const rows=filteredRows();
+    document.querySelectorAll('.spec-sort').forEach(button=>{
+      const active=button.dataset.sort===state.sortKey;
+      button.closest('th').setAttribute('aria-sort',active?(state.sortDirection===1?'ascending':'descending'):'none');
+      button.querySelector('.spec-sort-indicator').textContent=active?(state.sortDirection===1?'▲':'▼'):'↕';
+      button.title=`${button.dataset.label} ${active&&state.sortDirection===1?'내림차순':'오름차순'} 정렬`;
+    });
     el('count').textContent=`${rows.length.toLocaleString('ko-KR')}건 / 전체 ${state.rows.length.toLocaleString('ko-KR')}건`;
     el('rows').innerHTML=rows.length?rows.map(row=>`<tr data-id="${esc(row.id)}">
       <td>${esc(row.trader)}</td><td>${esc(row.distribution)}</td><td>${esc(row.material)}</td><td>${esc(row.origin)}</td>
@@ -110,7 +131,6 @@
       if(token!==DBMTAuth.getSessionToken())return;
       if(!result?.ok)throw new Error(result?.message||'제품스펙 저장에 실패했습니다.');
       state.rows=state.rows.filter(row=>row.id!==result.spec.id).concat(result.spec);
-      state.rows.sort((a,b)=>a.trader.localeCompare(b.trader,'ko')||a.material.localeCompare(b.material,'ko')||a.id.localeCompare(b.id));
       state.saving=false;reset();render();message('제품스펙을 저장했습니다.');
     }catch(error){if(token===DBMTAuth.getSessionToken())message(error.message||String(error),true);}
     finally{if(token===state.token){state.saving=false;syncControls();}}
@@ -142,6 +162,10 @@
     else if(button.dataset.action==='delete')remove(button.dataset.id);
   });
   el('search').addEventListener('input',render);
+  document.querySelector('.spec-table thead').addEventListener('click',event=>{
+    const button=event.target.closest('button[data-sort]');
+    if(button)sortBy(button.dataset.sort);
+  });
   el('distribution-choice').addEventListener('change',changeDistribution);
   window.DBMTProductSpecs={init,load,save,reset,applyPermissions,clearFilters(){el('search').value='';render();}};
 })();

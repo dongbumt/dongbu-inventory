@@ -15,6 +15,10 @@
 .spec-table-wrap{width:100%;overflow-x:auto;}
 .spec-table{width:100%;min-width:1040px;table-layout:fixed;border-collapse:collapse;font-size:12px;}
 .spec-table th{background:#f4f5f6;color:#555;text-align:left;font-weight:700;white-space:nowrap;}
+.spec-sort{display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;white-space:nowrap;}
+.spec-sort:hover{text-decoration:underline;}
+.spec-sort:focus-visible{outline:2px solid #777;outline-offset:3px;}
+.spec-sort-indicator{display:inline-block;min-width:10px;font-size:10px;color:#777;text-align:center;}
 .spec-table th:nth-child(4){width:68px;}
 .spec-table th:nth-child(8),.spec-table th:nth-child(9){width:104px;}
 .spec-table th:last-child{width:120px;text-align:right;}

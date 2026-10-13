@@ -83,12 +83,43 @@ const root=path.resolve(__dirname,'..');
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),2);
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.material==='우둔살').price_kg),null);
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.material==='우둔살').distribution),'지역 급식유통');
+    const sortFields=['trader','distribution','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','price_kg','price_box','note'];
+    const rowIds=()=>page.locator('#spec-rows tr[data-id]').evaluateAll(rows=>rows.map(row=>row.dataset.id));
+    await page.evaluate(keys=>{
+      window.qaOriginalRows=structuredClone(qaRows);
+      qaRows=[10,2,1,null].map(number=>({id:'sort-'+number,revision:1,...Object.fromEntries(keys.map(key=>[key,number===null?null:key.startsWith('price_')?String(number===1?0:number===10?10000:number):'테스트 '+number]))}));
+      qaRows[1].packaging_spec=qaRows[1].inner_packaging_spec;
+      delete qaRows[1].inner_packaging_spec;
+      return DBMTProductSpecs.load();
+    },sortFields);
+    const callsBeforeSort=await page.evaluate(()=>qaCalls.length);
+    for(const key of sortFields){
+      const button=page.locator(`.spec-sort[data-sort="${key}"]`),header=page.locator(`th:has(.spec-sort[data-sort="${key}"])`);
+      await button.click();
+      if(await header.getAttribute('aria-sort')!=='ascending')await button.click();
+      assert.equal(await header.getAttribute('aria-sort'),'ascending',key+' ascending indicator');
+      assert.deepEqual(await rowIds(),['sort-1','sort-2','sort-10','sort-null'],key+' natural/numeric ascending with blanks last');
+      await button.press('Enter');
+      assert.equal(await header.getAttribute('aria-sort'),'descending',key+' descending indicator');
+      assert.deepEqual(await rowIds(),['sort-10','sort-2','sort-1','sort-null'],key+' descending with blanks last');
+      assert.equal(await page.locator('th[aria-sort="descending"]').count(),1,'Only the selected column shows a direction');
+    }
+    assert.equal(await page.evaluate(()=>qaCalls.length),callsBeforeSort,'Sorting does not write or fetch records');
+    await page.locator('#spec-search').fill('테스트 2');
+    assert.deepEqual(await rowIds(),['sort-2'],'Search filters the sorted list');
+    await page.getByRole('button',{name:'검색 초기화'}).click();
+    assert.deepEqual(await rowIds(),['sort-10','sort-2','sort-1','sort-null'],'Clearing search preserves sorting');
+    await page.evaluate(()=>DBMTProductSpecs.load());
+    assert.deepEqual(await rowIds(),['sort-10','sort-2','sort-1','sort-null'],'Reload preserves sorting');
+    await page.evaluate(()=>{qaRows=qaOriginalRows;return DBMTProductSpecs.load();});
+    await page.locator('.spec-sort[data-sort="price_kg"]').click();
+    await page.locator('.spec-sort[data-sort="price_kg"]').click();
     const screenshot=path.join(os.tmpdir(),'dbmt-product-specs-qa.png');
     for(const width of [1440,1366,1280]){
       await page.setViewportSize({width,height:900});
       const layout=await page.evaluate(()=>{
         const wrap=document.querySelector('.spec-table-wrap'),bounds=wrap.getBoundingClientRect();
-        return {fits:wrap.scrollWidth<=wrap.clientWidth,buttonsFit:[...document.querySelectorAll('#spec-rows button')].every(button=>{
+        return {fits:wrap.scrollWidth<=wrap.clientWidth,buttonsFit:[...document.querySelectorAll('.spec-table button')].every(button=>{
           const rect=button.getBoundingClientRect();return rect.left>=bounds.left&&rect.right<=bounds.right;
         })};
       });
@@ -121,6 +152,8 @@ const root=path.resolve(__dirname,'..');
     assert.match(await page.locator('#spec-rows tr[data-id="qa-1"]').textContent(),/12,500.5/);
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-1').outer_packaging_spec),'6KG 박스');
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-1').distribution),'CJ프레시웨이');
+    assert.equal(await page.locator('th:has([data-sort="price_kg"])').getAttribute('aria-sort'),'descending','Saving preserves the selected sort');
+    assert.deepEqual(await rowIds(),['qa-1','qa-2'],'Saved numeric values remain sorted with blanks last');
     await page.evaluate(()=>DBMTProductSpecs.load());
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),2,'Server reload');
     await page.locator('#spec-search').fill('cj프레시웨이');
@@ -153,13 +186,15 @@ const root=path.resolve(__dirname,'..');
     await page.evaluate(()=>{qaRights={view:true,create:false,update:false,delete:false};DBMTProductSpecs.applyPermissions();});
     assert.equal(await page.locator('#spec-editor').isVisible(),false);
     assert.equal(await page.locator('#spec-rows button').count(),0);
+    await page.locator('.spec-sort[data-sort="trader"]').click();
+    assert.equal(await page.locator('th:has([data-sort="trader"])').getAttribute('aria-sort'),'ascending','Read-only users can sort');
     await page.evaluate(()=>{qaToken='';DBMTProductSpecs.applyPermissions();});
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),0,'Logout clears private specs');
     assert.deepEqual(errors,[]);
     assert.match(fs.readFileSync(path.join(root,'m02-auth.js'),'utf8'),/'nav-product-specs':'product_specs'/);
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Mobile table scroll stays inside its card');
-    console.log('PASS: product specs unified four-field search, desktop management visibility, distribution, create/edit/delete, permissions and failure handling');
+    console.log('PASS: product specs all-column ascending/descending sorting, numeric/blank/legacy values, search/save/reload sorting persistence, keyboard controls, desktop layout, distribution, create/edit/delete, permissions and failure handling');
     console.log('Screenshot: '+screenshot);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

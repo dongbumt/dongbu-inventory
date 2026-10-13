@@ -23,7 +23,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261012smhistory1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261013spec3">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -535,7 +535,19 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="spec-search">
       <div class="form-group"><label for="spec-search">검색</label><input id="spec-search" type="search" autocomplete="off" placeholder="거래처 · 유통 · 원재료 · 원산지 검색"></div>
     </div>
-    <div class="spec-table-wrap"><table class="spec-table"><thead><tr><th>거래처</th><th>유통</th><th>원재료</th><th>원산지</th><th>세절스펙</th><th>내포장 스펙</th><th>외포장 스펙</th><th class="spec-money">단가(KG)</th><th class="spec-money">단가(BOX)</th><th>비고</th><th>관리</th></tr></thead><tbody id="spec-rows"></tbody></table></div>
+    <div class="spec-table-wrap"><table class="spec-table"><thead><tr>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="trader" data-label="거래처">거래처<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="distribution" data-label="유통">유통<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="material" data-label="원재료">원재료<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="origin" data-label="원산지">원산지<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="cutting_spec" data-label="세절스펙">세절스펙<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="inner_packaging_spec" data-label="내포장 스펙">내포장 스펙<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="outer_packaging_spec" data-label="외포장 스펙">외포장 스펙<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col" class="spec-money"><button type="button" class="spec-sort" data-sort="price_kg" data-label="단가(KG)">단가(KG)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col" class="spec-money"><button type="button" class="spec-sort" data-sort="price_box" data-label="단가(BOX)">단가(BOX)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col"><button type="button" class="spec-sort" data-sort="note" data-label="비고">비고<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col">관리</th>
+    </tr></thead><tbody id="spec-rows"></tbody></table></div>
   </div>
 </div>
 
@@ -22026,7 +22038,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="production-schedule.js?v=20261007drag1"></script>
-<script src="product-specs.js?v=20261013spec3"></script>
+<script src="product-specs.js?v=20261013spec4"></script>
 <script src="m02-auth.js?v=20261002stockcount1"></script>
 </body>
 </html>
