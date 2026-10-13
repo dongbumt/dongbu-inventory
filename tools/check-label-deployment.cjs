@@ -23,7 +23,7 @@ async function read(file){
   const main=await read('index.html');
   assert.match(main,/<script src="label-layout\.js\?v=20261013inset1"><\/script>/);
   assert.match(main,/return DBMTLabelLayout\.buildBody\(/);
-  assert.match(main,/label-print\.html\?v=20261013inset1/);
+  assert.match(main,/label-print\.html\?v=20261013inset2/);
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}});
@@ -46,7 +46,7 @@ async function read(file){
       };
     });
     const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
-    await page.goto(new URL('label-print.html?v=20261013inset1',base).href);
+    await page.goto(new URL('label-print.html?v=20261013inset2',base).href);
     await page.evaluate(()=>{
       state.pin='qa-no-real-login';
       state.workOrders=[{id:'qa-release-order',date:'2026-10-13',product:'돈사태(작업)',inputWeight:100,weight:12,origin:'국내산',lot:'L12608194894027',mfgdate:'2026-08-21',expdate:'2027-08-20',temptype:'냉동',itemno:'2025029309311'}];
@@ -67,8 +67,8 @@ async function read(file){
       await print.emulateMedia({media:'print'});
       assert.equal(await print.locator('.dbmt-label-body').count(),1);
       const bounds=await print.locator('.print-label').boundingBox();
-      assert(Math.abs(bounds.x-96/25.4)<0.1,'Left border must be inset 1 mm');
-      assert(Math.abs(bounds.width-66*96/25.4)<0.1,'Right 3 mm clearance must remain');
+      assert(Math.abs(bounds.x-2*96/25.4)<0.1,'Left border must be inset 2 mm');
+      assert(Math.abs(bounds.width-66*96/25.4)<0.1,'Content width must remain with right 2 mm clearance');
       assert.equal(await print.locator('.dl-top-code .dl-code-caption').count(),0);
       const codes=await print.locator('[data-barcode-kind="product"]').evaluateAll(images=>images.map(img=>img.dataset.barcodeValue));
       assert.equal(codes.length,2);assert.equal(codes[0],codes[1]);assert.match(codes[0],/^98\d{20}$/);

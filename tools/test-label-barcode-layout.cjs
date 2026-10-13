@@ -42,8 +42,8 @@ const server=http.createServer((req,res)=>{
       assert(await print.evaluate(()=>DBMTLabelPrintReady),'Fonts, marks and generated SVGs must load');
       await print.emulateMedia({media:'print'});
       const bounds=await print.locator('.print-label').boundingBox();
-      assert(Math.abs(bounds.x-96/25.4)<0.1,'Left inset must be 1 mm');
-      assert(Math.abs(bounds.width-(size==='7x10'?66:96)*96/25.4)<0.1,'Retain right 3 mm clearance');
+      assert(Math.abs(bounds.x-2*96/25.4)<0.1,'Left inset must be 2 mm');
+      assert(Math.abs(bounds.width-(size==='7x10'?66:96)*96/25.4)<0.1,'Retain content width and right 2 mm clearance');
       assert.equal(await print.locator('.dl-top-code .dl-code-caption').count(),0,'Remove the top caption, not the barcode/number');
       assert.equal(await print.locator('.dl-top-code .dl-code-number').textContent(),doc.barcode);
       const result=await print.locator('.print-label').evaluate(label=>{

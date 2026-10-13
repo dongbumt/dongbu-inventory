@@ -34,17 +34,17 @@ function inspectPrintedPage(pdfPath,markRect,paperWidth){
   assert(Math.min(...point(0.5,0.15))>240,'White interior of certification artwork must stay white');
   // Check both physical clearances and both continuous outer borders at printer resolution.
   for(let y=1;y<png.height-1;y++){
-    for(let x=0;x<Math.floor(0.75*mm);x++){
-      assert(Math.min(...pixel(x,y))>240,'Left-hand 1 mm printer clearance must be blank');
+    for(let x=0;x<Math.floor(1.75*mm);x++){
+      assert(Math.min(...pixel(x,y))>240,'Left-hand 2 mm printer clearance must be blank');
     }
   }
   for(let y=1;y<png.height-1;y++){
-    for(let x=Math.ceil((paperWidth-3+0.25)*mm);x<Math.min(png.width,Math.floor((paperWidth-0.1)*mm));x++){
+    for(let x=Math.ceil((paperWidth-2+0.25)*mm);x<Math.min(png.width,Math.floor((paperWidth-0.1)*mm));x++){
       assert(Math.min(...pixel(x,y))>240,'Right-hand printer clearance must be blank');
     }
   }
-  const borderX=Math.floor((paperWidth-3-0.2)*mm);
-  const leftBorderX=Math.floor(1.2*mm);
+  const borderX=Math.floor((paperWidth-2-0.2)*mm);
+  const leftBorderX=Math.floor(2.2*mm);
   let borderRows=0,leftBorderRows=0;
   for(let y=2;y<png.height-2;y++){
     if(Math.min(...pixel(borderX,y))<96) borderRows++;
@@ -105,7 +105,7 @@ const server = http.createServer((req,res)=>{
       assert(Math.abs(dimensions[0].width-(key==='7x10'?66:96)*96/25.4)<1);
       assert(Math.abs(dimensions[0].height-100*96/25.4)<1);
       for(const d of dimensions){
-        assert(Math.abs(d.x-96/25.4)<0.1,'Every label must have a 1 mm left inset');
+        assert(Math.abs(d.x-2*96/25.4)<0.1,'Every label must have a 2 mm left inset');
         assert(d.footerBottom<=d.bottom,'Manufacturer address must be inside label');
         assert(d.noticeBottom<=d.manufacturerTop,'Narrower label must not overlap notice and manufacturer: '+JSON.stringify(d));
       }
@@ -121,7 +121,7 @@ const server = http.createServer((req,res)=>{
       assert(text.includes('동부엠티')&&text.includes('검단구'),'Manufacturer and address must survive PDF pagination');
       assert(text.includes(beef?'돼지고기를 사용한':'소고기를 사용한'),'Cross-facility notice must survive narrower layout');
       const ink=inspectPrintedPage(path.join(artifacts,name+'.pdf'),dimensions[0].mark,key==='7x10'?70:100);
-      console.log(`${name}: HACCP black ${(ink.blackRatio*100).toFixed(1)}%, white ${(ink.whiteRatio*100).toFixed(1)}%; both borders and left 1mm / right 3mm clearance OK`);
+      console.log(`${name}: HACCP black ${(ink.blackRatio*100).toFixed(1)}%, white ${(ink.whiteRatio*100).toFixed(1)}%; both borders and left/right 2mm clearance OK`);
       await popup.locator('.print-label').first().screenshot({path:path.join(artifacts,name+'.png')});
       await popup.close();
     }
@@ -177,7 +177,7 @@ const server = http.createServer((req,res)=>{
     await real.waitForFunction(()=>window.__printCalls===1,null,{timeout:15000});
     assert.match(await real.locator('#label-print-status').textContent(),/준비 완료/);await real.close();
     assert.deepEqual(errors,[]);
-    console.log('PASS: 70×100/100×100mm PDFs, 1/2/3 pages, left 1mm / right 3mm clearance, continuous borders, 203dpi monochrome HACCP, no headers or setup UI, address/notice visible, actual ERP output, retry, preview and failed-image guard');
+    console.log('PASS: 70×100/100×100mm PDFs, 1/2/3 pages, left/right 2mm clearance, continuous borders, 203dpi monochrome HACCP, no headers or setup UI, address/notice visible, actual ERP output, retry, preview and failed-image guard');
     console.log('Artifacts: '+artifacts);
   } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(err=>{console.error(err);process.exitCode=1;server.close();});
