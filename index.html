@@ -23,7 +23,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261012smhistory1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261006spec2">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261013dist1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -510,10 +510,11 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#666;"></div>제품스펙</div>
       <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.load()">새로고침</button>
     </div>
-    <p class="spec-guide">거래처별 원재료, 세절·내포장·외포장 규격과 단가를 등록합니다. 단가는 원/KG, 원/BOX 기준입니다.</p>
+    <p class="spec-guide">거래처별 유통, 원재료, 세절·내포장·외포장 규격과 단가를 등록합니다. 단가는 원/KG, 원/BOX 기준입니다.</p>
     <form id="spec-editor" class="spec-editor" onsubmit="event.preventDefault();DBMTProductSpecs.save()" hidden>
       <div class="spec-editor-heading"><strong id="spec-editor-title">제품스펙 등록</strong><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.reset()">입력 초기화</button></div>
       <div class="form-group"><label for="spec-trader">거래처</label><input id="spec-trader" list="sales-trader-list" maxlength="200" required autocomplete="off" placeholder="거래처명"></div>
+      <div class="form-group"><label for="spec-distribution-choice">유통</label><select id="spec-distribution-choice"><option value="">선택</option><option>삼성웰스토리</option><option>동원홈푸드</option><option>CJ프레시웨이</option><option>동부축산유통</option><option>직납</option><option value="__custom__">직접입력</option></select><input id="spec-distribution" aria-label="유통 직접입력" maxlength="200" autocomplete="off" placeholder="유통처를 입력하세요" hidden></div>
       <div class="form-group"><label for="spec-material">원재료</label><input id="spec-material" maxlength="200" required autocomplete="off" placeholder="원재료명"></div>
       <div class="form-group"><label for="spec-origin">원산지</label><input id="spec-origin" maxlength="100" placeholder="예: 국내산"></div>
       <div class="form-group"><label for="spec-cutting">세절스펙</label><input id="spec-cutting" maxlength="300" placeholder="예: 3mm 슬라이스"></div>
@@ -533,6 +534,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     </div>
     <div class="spec-filters" aria-label="제품스펙 항목별 검색">
       <div class="form-group"><label for="spec-filter-trader">거래처 조회</label><input id="spec-filter-trader" data-spec-filter="trader" placeholder="거래처"></div>
+      <div class="form-group"><label for="spec-filter-distribution">유통 조회</label><input id="spec-filter-distribution" data-spec-filter="distribution" placeholder="유통처"></div>
       <div class="form-group"><label for="spec-filter-material">원재료 조회</label><input id="spec-filter-material" data-spec-filter="material" placeholder="원재료"></div>
       <div class="form-group"><label for="spec-filter-origin">원산지 조회</label><input id="spec-filter-origin" data-spec-filter="origin" placeholder="원산지"></div>
       <div class="form-group"><label for="spec-filter-cutting">세절스펙 조회</label><input id="spec-filter-cutting" data-spec-filter="cutting_spec" placeholder="세절스펙"></div>
@@ -542,7 +544,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="form-group"><label for="spec-filter-price-box">단가(BOX) 조회</label><input id="spec-filter-price-box" data-spec-filter="price_box" inputmode="decimal" placeholder="금액"></div>
       <div class="form-group"><label for="spec-filter-note">비고 조회</label><input id="spec-filter-note" data-spec-filter="note" placeholder="비고"></div>
     </div>
-    <div class="spec-table-wrap"><table class="spec-table"><thead><tr><th>거래처</th><th>원재료</th><th>원산지</th><th>세절스펙</th><th>내포장 스펙</th><th>외포장 스펙</th><th class="spec-money">단가(KG)</th><th class="spec-money">단가(BOX)</th><th>비고</th><th>관리</th></tr></thead><tbody id="spec-rows"></tbody></table></div>
+    <div class="spec-table-wrap"><table class="spec-table"><thead><tr><th>거래처</th><th>유통</th><th>원재료</th><th>원산지</th><th>세절스펙</th><th>내포장 스펙</th><th>외포장 스펙</th><th class="spec-money">단가(KG)</th><th class="spec-money">단가(BOX)</th><th>비고</th><th>관리</th></tr></thead><tbody id="spec-rows"></tbody></table></div>
   </div>
 </div>
 
@@ -22033,7 +22035,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="production-schedule.js?v=20261007drag1"></script>
-<script src="product-specs.js?v=20261006spec2"></script>
+<script src="product-specs.js?v=20261013dist1"></script>
 <script src="m02-auth.js?v=20261002stockcount1"></script>
 </body>
 </html>

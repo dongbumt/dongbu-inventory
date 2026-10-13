@@ -20,7 +20,7 @@ begin
   values(encode(extensions.digest(v_token,'sha256'),'hex'),v_user,now()+interval '10 minutes');
 
   v_result:=public.dbmt_erp_save_product_spec(v_token,null,jsonb_build_object(
-    'trader','QA 거래처','material','QA 원재료','origin','국내산',
+    'trader','QA 거래처','distribution','삼성웰스토리','material','QA 원재료','origin','국내산',
     'cutting_spec','3mm','inner_packaging_spec','1KG 진공',
     'outer_packaging_spec','10KG 박스','note','검증용',
     'price_kg',12000,'price_box',120000),null);
@@ -28,7 +28,8 @@ begin
   v_id:=(v_result->'spec'->>'id')::uuid;
   v_revision:=(v_result->'spec'->>'revision')::integer;
   if (v_result->'spec'->>'inner_packaging_spec') is distinct from '1KG 진공'
-     or (v_result->'spec'->>'outer_packaging_spec') is distinct from '10KG 박스' then
+     or (v_result->'spec'->>'outer_packaging_spec') is distinct from '10KG 박스'
+     or (v_result->'spec'->>'distribution') is distinct from '삼성웰스토리' then
     raise exception 'Packaging fields were not saved independently: %',v_result;
   end if;
 
@@ -36,7 +37,7 @@ begin
   if v_result->>'ok' is distinct from 'true'
      or not exists(select 1 from jsonb_array_elements(v_result->'specs') as s
        where s->>'id'=v_id::text and s->>'inner_packaging_spec'='1KG 진공'
-         and s->>'outer_packaging_spec'='10KG 박스') then
+         and s->>'outer_packaging_spec'='10KG 박스' and s->>'distribution'='삼성웰스토리') then
     raise exception 'Get did not return both packaging fields: %',v_result;
   end if;
 
@@ -46,19 +47,34 @@ begin
   if v_result->>'ok' is distinct from 'true'
      or (v_result->'spec'->>'inner_packaging_spec') is distinct from '1KG 실링'
      or (v_result->'spec'->>'outer_packaging_spec') is distinct from '10KG 박스'
+     or (v_result->'spec'->>'distribution') is distinct from '삼성웰스토리'
      or (v_result->'spec'->>'packaging_spec') is distinct from '1KG 실링' then
     raise exception 'Legacy edit lost a packaging field: %',v_result;
   end if;
 
   v_revision:=(v_result->'spec'->>'revision')::integer;
   v_result:=public.dbmt_erp_save_product_spec(v_token,v_id,jsonb_build_object(
-    'trader','QA 거래처','material','QA 원재료','inner_packaging_spec','2KG 진공',
+    'trader','QA 거래처','distribution','지역 급식유통','material','QA 원재료','inner_packaging_spec','2KG 진공',
     'outer_packaging_spec',''),v_revision);
   if v_result->>'ok' is distinct from 'true'
      or (v_result->'spec'->>'inner_packaging_spec') is distinct from '2KG 진공'
-     or (v_result->'spec'->>'outer_packaging_spec') is distinct from '' then
+     or (v_result->'spec'->>'outer_packaging_spec') is distinct from ''
+     or (v_result->'spec'->>'distribution') is distinct from '지역 급식유통' then
     raise exception 'Explicit outer packaging clear failed: %',v_result;
   end if;
+  v_revision:=(v_result->'spec'->>'revision')::integer;
+  v_result:=public.dbmt_erp_save_product_spec(v_token,v_id,jsonb_build_object(
+    'trader','QA 거래처','material','QA 원재료','distribution',''),v_revision);
+  if (v_result->'spec'->>'distribution') is distinct from '' then
+    raise exception 'Distribution clear failed: %',v_result;
+  end if;
+  begin
+    perform public.dbmt_erp_save_product_spec(v_token,null,jsonb_build_object(
+      'trader','QA 거래처','material','QA 원재료','distribution',repeat('가',201)),null);
+    raise exception 'Distribution length validation was skipped';
+  exception when others then
+    if sqlerrm not like '유통은 200자%' then raise; end if;
+  end;
 end;
 $qa$;
 rollback;

@@ -6,19 +6,33 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
   const money=value=>value===null || value===undefined?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:2});
-  const fields=['trader','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','price_kg','price_box','note'];
-  const inputs={trader:'trader',material:'material',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',price_kg:'price-kg',price_box:'price-box',note:'note'};
+  const fields=['trader','distribution','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','price_kg','price_box','note'];
+  const inputs={trader:'trader',distribution:'distribution',material:'material',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',price_kg:'price-kg',price_box:'price-box',note:'note'};
+  const distributions=new Set(['삼성웰스토리','동원홈푸드','CJ프레시웨이','동부축산유통','직납']);
+  function setDistribution(value=''){
+    const text=String(value??'');
+    const custom=Boolean(text&&!distributions.has(text));
+    el('distribution-choice').value=custom?'__custom__':text;
+    el('distribution').value=text;
+    el('distribution').hidden=!custom;
+  }
+  function changeDistribution(){
+    const choice=el('distribution-choice').value,custom=choice==='__custom__';
+    el('distribution').value=custom?'':choice;
+    el('distribution').hidden=!custom;
+    if(custom)el('distribution').focus();
+  }
   function message(value='',error=false){el('message').textContent=value;el('message').classList.toggle('error',error);}
   function syncControls(){
     const action=state.editing?'update':'create';
     el('editor').hidden=!can(action);
     el('editor-title').textContent=state.editing?'제품스펙 수정':'제품스펙 등록';
     el('save').textContent=state.saving?'저장 중…':state.editing?'수정 저장':'+ 스펙 등록';
-    el('editor').querySelectorAll('input,button').forEach(node=>{node.disabled=state.saving||state.loading||!can(action);});
+    el('editor').querySelectorAll('input,select,button').forEach(node=>{node.disabled=state.saving||state.loading||!can(action);});
   }
   function reset(){
     if(state.saving)return;
-    state.editing=null;el('editor').reset();syncControls();
+    state.editing=null;el('editor').reset();setDistribution();syncControls();
   }
   function applyPermissions(){
     const token=window.DBMTAuth?.getSessionToken()||'';
@@ -42,11 +56,11 @@
     const rows=filteredRows();
     el('count').textContent=`${rows.length.toLocaleString('ko-KR')}건 / 전체 ${state.rows.length.toLocaleString('ko-KR')}건`;
     el('rows').innerHTML=rows.length?rows.map(row=>`<tr data-id="${esc(row.id)}">
-      <td>${esc(row.trader)}</td><td>${esc(row.material)}</td><td>${esc(row.origin)}</td>
+      <td>${esc(row.trader)}</td><td>${esc(row.distribution)}</td><td>${esc(row.material)}</td><td>${esc(row.origin)}</td>
       <td>${esc(row.cutting_spec)}</td><td>${esc(row.inner_packaging_spec??row.packaging_spec)}</td><td>${esc(row.outer_packaging_spec)}</td>
       <td class="spec-money">${money(row.price_kg)}</td><td class="spec-money">${money(row.price_box)}</td><td>${esc(row.note)}</td>
       <td>${can('update')?`<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${esc(row.id)}">수정</button>`:''}${can('delete')?`<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(row.id)}">삭제</button>`:''}</td>
-    </tr>`).join(''):`<tr><td colspan="10" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
+    </tr>`).join(''):`<tr><td colspan="11" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
   }
   async function load(){
     if(state.saving)return;
@@ -73,6 +87,7 @@
     if(!row)return;
     state.editing={...row};
     fields.forEach(key=>{el(inputs[key]).value=key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');});
+    setDistribution(row.distribution);
     syncControls();el('editor').scrollIntoView({block:'nearest',behavior:'smooth'});el('trader').focus();
   }
   function readPrice(key){
@@ -129,5 +144,6 @@
     else if(button.dataset.action==='delete')remove(button.dataset.id);
   });
   document.querySelectorAll('#p-product-specs [data-spec-filter]').forEach(input=>input.addEventListener('input',render));
+  el('distribution-choice').addEventListener('change',changeDistribution);
   window.DBMTProductSpecs={init,load,save,reset,applyPermissions,clearFilters(){document.querySelectorAll('#p-product-specs [data-spec-filter]').forEach(input=>input.value='');render();}};
 })();
