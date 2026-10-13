@@ -101,15 +101,16 @@
         if(state.mode==='inbound'&&item.registered&&item.state==='in_stock')throw Error('이미 입고 확인된 라벨입니다. 중복 입고하지 않습니다.');
         if(item.state==='in_stock'&&item.location!==$('location').value)throw Error(`현재 재고 지점은 ${item.location}입니다.`);
         state.items.push(item);$('settings-panel').open=false;status(`${item.product} · ${kg(item.weight)} KG · ${action(item)}`,'ok');
-      }catch(error){status(error.message,'error');try{navigator.vibrate?.([80,40,80]);}catch(_){} }
+        window.DBMTPdaSound?.play('success');
+      }catch(error){status(error.message,'error');window.DBMTPdaSound?.play('error');try{navigator.vibrate?.([80,40,80]);}catch(_){} }
       render();
     }
     state.scanning=false;render();
   }
   function enqueue(code){
     if(state.pending||state.saving)return;
-    code=String(code||'').trim();if(!code)return;
-    if(!navigator.onLine){status('인터넷 연결이 없어 바코드를 확인하지 못했습니다. 연결 후 다시 읽어주세요.','error');return;}
+    code=String(code||'').trim();if(!code){status('제품 고유바코드를 읽어주세요.','error');window.DBMTPdaSound?.play('error');return;}
+    if(!navigator.onLine){status('인터넷 연결이 없어 바코드를 확인하지 못했습니다. 연결 후 다시 읽어주세요.','error');window.DBMTPdaSound?.play('error');return;}
     $('barcode').value='';state.scans.push(code);focusScan();scanLoop();
   }
   $('scan-form').addEventListener('submit',event=>{event.preventDefault();enqueue($('barcode').value);});

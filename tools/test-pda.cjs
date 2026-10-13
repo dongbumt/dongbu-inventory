@@ -12,7 +12,7 @@ const server=http.createServer((req,res)=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const testUrl=process.env.DBMT_PDA_TEST_URL||`http://127.0.0.1:${server.address().port}/pda.html`;
   const testBase=new URL('.',testUrl);
-  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
+  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',args:['--mute-audio']});
   try{
     const context=await browser.newContext({viewport:{width:320,height:533},isMobile:true,hasTouch:true});
     const user={id:'qa-user',displayName:'테스트',loginId:'qa'};
@@ -36,6 +36,7 @@ const server=http.createServer((req,res)=>{
       }
       else if(name==='dbmt_pda_lookup'){
         lookups.push(body.p_code);if(lookupDelay)await new Promise(resolve=>setTimeout(resolve,lookupDelay));
+        if(body.p_code==='LOOKUP-NETWORK-ERROR'){await route.abort();return;}
         if(body.p_code==='LOT-ONLY'){await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({code:'P0001',message:'제품 고유바코드를 읽어주세요.'})});return;}
         data={ok:true,item:{...current,...(body.p_code.endsWith('1')?{labelId:'qa-label-2',code:'DB2610131200-ABC121'}:{})}};
       }else if(name==='dbmt_pda_commit'){
@@ -51,14 +52,26 @@ const server=http.createServer((req,res)=>{
     });
     const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
     await page.goto(testUrl);
+    const instrumentSound=()=>page.evaluate(()=>{window.__scanSounds=[];DBMTPdaSound.play=kind=>__scanSounds.push(kind);});
+    const sounds=()=>page.evaluate(()=>__scanSounds);
+    await instrumentSound();
     assert(await page.locator('#workspace').isHidden());
     await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});
     const scan=async(code='9826101312000623598584')=>{await page.locator('#barcode').fill(code);await page.locator('#barcode').press('Enter');await page.waitForFunction(()=>!document.getElementById('save-detail').textContent.includes('조회 중'));};
     await scan();assert.equal(await page.locator('#items li').count(),1);assert.equal(commits.length,0,'Scanning must not save');assert.match(await page.locator('#items').textContent(),/생산입고 확인/);
+    assert.deepEqual(await sounds(),['success'],'Ding-dong only after the item is accepted');
     await scan();assert.equal(await page.locator('#items li').count(),1);assert.match(await page.locator('#status').textContent(),/이미 목록/);
     await scan('LOT-ONLY');assert.match(await page.locator('#status').textContent(),/제품 고유바코드/);assert.equal(commits.length,0);
+    assert.deepEqual(await sounds(),['success','error','error'],'Duplicate and wrong barcode must sound the error pattern');
+    await scan('');assert.equal((await sounds()).at(-1),'error');assert.match(await page.locator('#status').textContent(),/제품 고유바코드를 읽어/);
+    await scan('LOOKUP-NETWORK-ERROR');assert.equal((await sounds()).at(-1),'error');assert.equal(await page.locator('#items li').count(),1);
     await page.locator('.scan-remove').click();assert.equal(await page.locator('#items li').count(),0);
+    for(const [patch,message] of [[{registered:true},'이미 입고 확인'],[{location:'물류창고'},'현재 재고 지점']]){
+      current={...fixture,...patch};await scan();assert.equal((await sounds()).at(-1),'error');assert.match(await page.locator('#status').textContent(),new RegExp(message));assert.equal(await page.locator('#items li').count(),0);
+    }
+    current={...fixture};
     lookupDelay=100;await page.locator('#barcode').fill('A0');await page.locator('#barcode').press('Enter');await page.locator('#barcode').fill('A1');await page.locator('#barcode').press('Enter');await page.waitForFunction(()=>document.getElementById('item-count').textContent==='2');lookupDelay=0;
+    assert.deepEqual((await sounds()).slice(-2),['success','success'],'Each queued lookup reports its own accepted result');
     assert.equal(commits.length,0);await page.locator('#clear-items').click();await scan();
     await page.locator('#save').click();assert(await page.locator('#confirm-dialog').isVisible());assert.equal(commits.length,0);await page.locator('#confirm-cancel').click();assert.equal(commits.length,0);
     await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));
@@ -67,7 +80,7 @@ const server=http.createServer((req,res)=>{
     await page.screenshot({path:path.join(artifacts,'pm351-outbound.png'),fullPage:true});
     failAfterSave=true;await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
     assert(await page.locator('#barcode').isDisabled());assert(await page.locator('#clear-items').isDisabled());const requestId=commits.at(-1).p_request_id;
-    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.equal(await page.locator('#save').textContent(),'같은 요청 재시도');
+    await page.reload();await instrumentSound();await page.locator('#workspace').waitFor({state:'visible'});assert.equal(await page.locator('#save').textContent(),'같은 요청 재시도');
     expireCommit=true;await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('로그인이 만료'));
     assert.equal(await page.locator('#save').textContent(),'같은 요청 재시도');assert(await page.locator('#barcode').isDisabled());expireCommit=false;
     await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));
@@ -80,7 +93,7 @@ const server=http.createServer((req,res)=>{
     assert(await page.locator('#barcode').isEnabled());assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('#save').textContent(),'입고 확인');denyCommit=false;
     await page.locator('#clear-items').click();await page.locator('#manual-entry').check();assert.equal(await page.locator('#barcode').getAttribute('inputmode'),'text');
     await page.locator('#history-open').click();await page.locator('#history-list details').nth(2).waitFor();assert.equal(await page.locator('#history-list details').count(),3);await page.locator('#history-close').click();
-    await context.setOffline(true);assert(await page.locator('#save').isDisabled());await context.setOffline(false);
+    await context.setOffline(true);assert(await page.locator('#save').isDisabled());const lookupCount=lookups.length;await scan();assert.equal((await sounds()).at(-1),'error');assert.equal(lookups.length,lookupCount,'Offline scan must fail without a server request');await context.setOffline(false);
     await scan();
     for(const viewport of [{width:320,height:533},{width:480,height:800},{width:390,height:844},{width:1280,height:900}]){
       await page.setViewportSize(viewport);await page.screenshot({path:path.join(artifacts,`${viewport.width}x${viewport.height}.png`),fullPage:true});
@@ -96,7 +109,7 @@ const server=http.createServer((req,res)=>{
     await page.locator('#logout').click();canView=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('조회·등록 권한'));
     assert(await page.locator('#workspace').isHidden(),'Direct URL/login must not show the PDA workspace without view permission');
     assert.deepEqual(errors,[]);
-    console.log('PASS: keyboard scans, rapid scanning queue, LOT rejection, duplicate/removal, no save before confirmation, receive/ship/return, retry after reload, stale-state error, permission/offline guards, history, responsive 320/480/390/1280px');
+    console.log('PASS: success/error scan sounds, keyboard scans, rapid scanning queue, LOT rejection, duplicate/removal, no save before confirmation, receive/ship/return, retry after reload, stale-state error, permission/offline guards, history, responsive 320/480/390/1280px');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
