@@ -2,7 +2,7 @@
 (function(global){
   'use strict';
   const patterns={
-    success:[[1046.5,0,0.15,'sine',0.24],[784,0.15,0.24,'sine',0.24]],
+    success:[[1046.5,0,0.3,'sine',0.36],[784,0.36,0.44,'sine',0.36]],
     error:[[740,0,0.1,'square',0.09],[740,0.16,0.1,'square',0.09]]
   };
   let context=null;
@@ -39,7 +39,10 @@
         oscillator.type=type;oscillator.frequency.setValueAtTime(frequency,at);
         gain.gain.setValueAtTime(0,at);
         gain.gain.linearRampToValueAtTime(volume,at+0.005);
-        if(kind==='success')gain.gain.exponentialRampToValueAtTime(0.0001,at+duration);
+        if(kind==='success'){
+          gain.gain.setValueAtTime(volume,at+duration*0.65);
+          gain.gain.exponentialRampToValueAtTime(0.0001,at+duration);
+        }
         else{
           gain.gain.setValueAtTime(volume,at+duration-0.01);
           gain.gain.linearRampToValueAtTime(0,at+duration);

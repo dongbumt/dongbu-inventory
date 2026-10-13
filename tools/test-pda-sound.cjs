@@ -3,8 +3,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=require('playwright');
 const source=fs.readFileSync(path.join(__dirname,'../pda-sound.js'),'utf8');
 function fixture(mode='normal'){
-  const listeners={},contexts=[],notes=[];
-  const parameter=()=>({setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){},cancelScheduledValues(){},setTargetAtTime(){}});
+  const listeners={},contexts=[],notes=[],gains=[];
+  const parameter=()=>({values:[],ramps:[],setValueAtTime(value,at){this.values.push([value,at]);},linearRampToValueAtTime(value,at){this.ramps.push([value,at]);},exponentialRampToValueAtTime(){},cancelScheduledValues(){},setTargetAtTime(){}});
   class Audio{
     constructor(){if(mode==='constructor-failure')throw Error('Audio unavailable');this.state='suspended';this.currentTime=1;this.destination={};contexts.push(this);}
     resume(){if(mode==='resume-failure')return Promise.reject(Error('Audio blocked'));this.state='running';return Promise.resolve();}
@@ -13,12 +13,12 @@ function fixture(mode='normal'){
       const note={starts:[],stops:[],connect(){},disconnect(){},start(at){this.starts.push(at);},stop(at){this.stops.push(at);}};
       note.frequency={setValueAtTime(value,at){note.frequencyValues=[value,at];}};notes.push(note);return note;
     }
-    createGain(){return {gain:parameter(),connect(){},disconnect(){}};}
+    createGain(){const gain=parameter();gains.push(gain);return {gain,connect(){},disconnect(){}};}
   }
   const document={hidden:false,addEventListener(type,handler){listeners[type]=handler;}};
   const window={document,AudioContext:mode==='unsupported'?undefined:Audio};
   vm.runInNewContext(source,{window});
-  return {window,document,contexts,notes,event:(type,trusted=true)=>listeners[type]({isTrusted:trusted})};
+  return {window,document,contexts,notes,gains,event:(type,trusted=true)=>listeners[type]({isTrusted:trusted})};
 }
 (async()=>{
   const f=fixture();f.window.DBMTPdaSound.play('success');assert.equal(f.contexts.length,0,'No autoplay or audio creation before interaction');
@@ -26,6 +26,9 @@ function fixture(mode='normal'){
   f.event('pointerup');assert.equal(f.contexts.length,1);assert.equal(f.contexts[0].state,'running');
   f.window.DBMTPdaSound.play('success');assert.deepEqual(f.notes.map(n=>n.frequencyValues[0]),[1046.5,784]);assert(f.notes.every(n=>n.type==='sine'));
   f.window.DBMTPdaSound.play('error');assert.deepEqual(f.notes.slice(-2).map(n=>n.frequencyValues[0]),[740,740]);assert(f.notes.slice(-2).every(n=>n.type==='square'));
+  for(const gain of f.gains.slice(-2)){assert.deepEqual(gain.values.map(([value])=>value),[0,.09]);assert.deepEqual(gain.ramps.map(([value])=>value),[.09,0]);}
+  assert(Math.abs(f.notes.at(-1).starts[0]-f.notes.at(-2).starts[0]-.16)<1e-9);
+  assert(f.notes.slice(-2).every(note=>Math.abs(note.stops[0]-note.starts[0]-.11)<1e-9),'Preserve error tone length, gap and loudness');
   assert(f.notes.slice(0,2).every(n=>n.stops.at(-1)===1.01),'New result cancels old/queued tones');
   for(let i=0;i<50;i++)f.window.DBMTPdaSound.play(i%2?'error':'success');
   assert(f.notes.slice(-2).every(n=>n.type==='square'));assert(f.notes.at(-1).starts[0]<1.2,'Rapid results cannot build a long audio backlog');
@@ -59,12 +62,16 @@ function fixture(mode='normal'){
         DBMTPdaSound.play(kind);const buffer=await __offline.startRendering(),samples=buffer.getChannelData(0),rate=buffer.sampleRate;
         const rms=(start,end)=>{const part=samples.slice(start*rate,end*rate);return Math.sqrt(part.reduce((sum,v)=>sum+v*v,0)/part.length);};
         const energy=(frequency,start,end)=>{let re=0,im=0;for(let i=Math.floor(start*rate);i<end*rate;i++){const angle=2*Math.PI*frequency*i/rate;re+=samples[i]*Math.cos(angle);im+=samples[i]*Math.sin(angle);}return re*re+im*im;};
-        const windows=kind==='success'?[[.035,.1],[.19,.28]]:[[.035,.09],[.19,.24]];
-        return {peak:Math.max(...samples.map(Math.abs)),first:rms(...windows[0]),second:rms(...windows[1]),gap:rms(.13,.15),tail:rms(.5,.8),energies:windows.map(([a,b])=>[740,784,1046.5].map(hz=>energy(hz,a,b)))};
+        const windows=kind==='success'?[[.035,.2],[.42,.65]]:[[.035,.09],[.19,.24]];
+        return {peak:Math.max(...samples.map(Math.abs)),first:rms(...windows[0]),second:rms(...windows[1]),gap:kind==='success'?rms(.33,.36):rms(.13,.15),tail:kind==='success'?rms(.9,.98):rms(.5,.8),sustain:kind==='success'?[rms(.16,.2),rms(.62,.65)]:[],energies:windows.map(([a,b])=>[740,784,1046.5].map(hz=>energy(hz,a,b)))};
       },kind);
       assert(audio.first>0.005&&audio.second>0.005,'Both actual synthesized notes must be non-silent');
       assert(audio.peak<0.5&&audio.tail===0,'No clipping or stuck tone');
-      if(kind==='success'){assert(audio.energies[0][2]>audio.energies[0][0]*5);assert(audio.energies[1][1]>audio.energies[1][2]*5);}
+      if(kind==='success'){
+        assert(audio.energies[0][2]>audio.energies[0][0]*5);assert(audio.energies[1][1]>audio.energies[1][2]*5);
+        assert(audio.sustain.every(rms=>rms>0.2),'Success notes must remain clearly audible instead of decaying immediately');
+        assert(audio.gap===0,'Separate the two longer success notes');
+      }
       else{assert(audio.gap===0,'Two separate error beeps');assert(audio.energies.every(e=>e[0]>e[2]*5));}
       await page.close();console.log(`PASS: ${kind} actual offline waveform, two audible notes, expected pitch/timing, no clipping or trailing sound`);
     }
