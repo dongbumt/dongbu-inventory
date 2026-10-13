@@ -23,7 +23,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261012smhistory1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261013dist1">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261013spec3">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -532,17 +532,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#666;"></div>제품스펙 목록 <span id="spec-count" class="spec-count"></span></div>
       <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.clearFilters()">검색 초기화</button>
     </div>
-    <div class="spec-filters" aria-label="제품스펙 항목별 검색">
-      <div class="form-group"><label for="spec-filter-trader">거래처 조회</label><input id="spec-filter-trader" data-spec-filter="trader" placeholder="거래처"></div>
-      <div class="form-group"><label for="spec-filter-distribution">유통 조회</label><input id="spec-filter-distribution" data-spec-filter="distribution" placeholder="유통처"></div>
-      <div class="form-group"><label for="spec-filter-material">원재료 조회</label><input id="spec-filter-material" data-spec-filter="material" placeholder="원재료"></div>
-      <div class="form-group"><label for="spec-filter-origin">원산지 조회</label><input id="spec-filter-origin" data-spec-filter="origin" placeholder="원산지"></div>
-      <div class="form-group"><label for="spec-filter-cutting">세절스펙 조회</label><input id="spec-filter-cutting" data-spec-filter="cutting_spec" placeholder="세절스펙"></div>
-      <div class="form-group"><label for="spec-filter-inner-packaging">내포장 스펙 조회</label><input id="spec-filter-inner-packaging" data-spec-filter="inner_packaging_spec" placeholder="내포장 스펙"></div>
-      <div class="form-group"><label for="spec-filter-outer-packaging">외포장 스펙 조회</label><input id="spec-filter-outer-packaging" data-spec-filter="outer_packaging_spec" placeholder="외포장 스펙"></div>
-      <div class="form-group"><label for="spec-filter-price-kg">단가(KG) 조회</label><input id="spec-filter-price-kg" data-spec-filter="price_kg" inputmode="decimal" placeholder="금액"></div>
-      <div class="form-group"><label for="spec-filter-price-box">단가(BOX) 조회</label><input id="spec-filter-price-box" data-spec-filter="price_box" inputmode="decimal" placeholder="금액"></div>
-      <div class="form-group"><label for="spec-filter-note">비고 조회</label><input id="spec-filter-note" data-spec-filter="note" placeholder="비고"></div>
+    <div class="spec-search">
+      <div class="form-group"><label for="spec-search">검색</label><input id="spec-search" type="search" autocomplete="off" placeholder="거래처 · 유통 · 원재료 · 원산지 검색"></div>
     </div>
     <div class="spec-table-wrap"><table class="spec-table"><thead><tr><th>거래처</th><th>유통</th><th>원재료</th><th>원산지</th><th>세절스펙</th><th>내포장 스펙</th><th>외포장 스펙</th><th class="spec-money">단가(KG)</th><th class="spec-money">단가(BOX)</th><th>비고</th><th>관리</th></tr></thead><tbody id="spec-rows"></tbody></table></div>
   </div>
@@ -22035,7 +22026,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="production-schedule.js?v=20261007drag1"></script>
-<script src="product-specs.js?v=20261013dist1"></script>
+<script src="product-specs.js?v=20261013spec3"></script>
 <script src="m02-auth.js?v=20261002stockcount1"></script>
 </body>
 </html>

@@ -44,13 +44,11 @@
     syncControls();render();
   }
   function filteredRows(){
-    const filters=Object.fromEntries(fields.map(key=>[key,normalize(el('filter-'+inputs[key]).value).replaceAll(',','')]));
-    return state.rows.filter(row=>fields.every(key=>{
-      const term=filters[key];
-      if(!term)return true;
-      const value=key.startsWith('price_') ? row[key]===null?'':String(Number(row[key])) : key==='inner_packaging_spec'?(row[key]??row.packaging_spec):row[key];
-      return normalize(value).includes(term);
-    }));
+    const terms=normalize(el('search').value).split(/\s+/).filter(Boolean);
+    return state.rows.filter(row=>{
+      const values=[row.trader,row.distribution,row.material,row.origin].map(normalize);
+      return terms.every(term=>values.some(value=>value.includes(term)));
+    });
   }
   function render(){
     const rows=filteredRows();
@@ -143,7 +141,7 @@
     if(button.dataset.action==='edit')edit(button.dataset.id);
     else if(button.dataset.action==='delete')remove(button.dataset.id);
   });
-  document.querySelectorAll('#p-product-specs [data-spec-filter]').forEach(input=>input.addEventListener('input',render));
+  el('search').addEventListener('input',render);
   el('distribution-choice').addEventListener('change',changeDistribution);
-  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,clearFilters(){document.querySelectorAll('#p-product-specs [data-spec-filter]').forEach(input=>input.value='');render();}};
+  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,clearFilters(){el('search').value='';render();}};
 })();

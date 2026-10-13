@@ -11,7 +11,7 @@ const root=path.resolve(__dirname,'..');
     const page=await browser.newPage({viewport:{width:1440,height:900}});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-    await page.setContent('<!doctype html><html lang="ko"><head><meta charset="utf-8"></head><body><main></main></body></html>');
+    await page.setContent('<!doctype html><html lang="ko"><head><meta charset="utf-8"></head><body><main class="main"></main></body></html>');
     await page.evaluate(markup=>{
       const template=document.createElement('template');template.innerHTML=markup;
       const panel=template.content.querySelector('#p-product-specs');panel.classList.add('active');
@@ -84,17 +84,29 @@ const root=path.resolve(__dirname,'..');
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.material==='우둔살').price_kg),null);
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.material==='우둔살').distribution),'지역 급식유통');
     const screenshot=path.join(os.tmpdir(),'dbmt-product-specs-qa.png');
-    await page.screenshot({path:screenshot,fullPage:true});
-    const filters={trader:'삼성',distribution:'삼성',material:'등심',origin:'국내',cutting:'슬라이스','inner-packaging':'진공포장','outer-packaging':'2팩','price-kg':'12000','price-box':'120000',note:'납품'};
-    for(const [key,value] of Object.entries(filters)){
-      await page.locator('#spec-filter-'+key).fill(value);
-      assert.equal(await page.locator('#spec-rows tr[data-id]').count(),1,key+' filter');
-      assert.match(await page.locator('#spec-rows').textContent(),/돈등심/);
-      await page.locator('#spec-filter-'+key).fill('');
+    for(const width of [1440,1366,1280]){
+      await page.setViewportSize({width,height:900});
+      const layout=await page.evaluate(()=>{
+        const wrap=document.querySelector('.spec-table-wrap'),bounds=wrap.getBoundingClientRect();
+        return {fits:wrap.scrollWidth<=wrap.clientWidth,buttonsFit:[...document.querySelectorAll('#spec-rows button')].every(button=>{
+          const rect=button.getBoundingClientRect();return rect.left>=bounds.left&&rect.right<=bounds.right;
+        })};
+      });
+      assert.equal(layout.fits,true,`Table fits at ${width}px`);
+      assert.equal(layout.buttonsFit,true,`Management buttons remain fully visible at ${width}px`);
     }
-    await page.locator('#spec-filter-origin').fill('국내');
-    await page.locator('#spec-filter-outer-packaging').fill('10KG');
-    assert.equal(await page.locator('#spec-rows tr[data-id]').count(),0,'Combined filters');
+    await page.setViewportSize({width:1366,height:900});
+    await page.screenshot({path:screenshot,fullPage:true});
+    assert.equal(await page.locator('.spec-search input').count(),1);
+    for(const [value,material] of [['가상','우둔살'],['급식','우둔살'],['등심','돈등심'],['호주','우둔살'],['  삼성 국내 돈등심  ','돈등심']]){
+      await page.locator('#spec-search').fill(value);
+      assert.equal(await page.locator('#spec-rows tr[data-id]').count(),1,value+' search');
+      assert.match(await page.locator('#spec-rows').textContent(),new RegExp(material));
+    }
+    for(const value of ['국내 우둔살','슬라이스','진공포장','12000','납품용']){
+      await page.locator('#spec-search').fill(value);
+      assert.equal(await page.locator('#spec-rows tr[data-id]').count(),0,value+' has no matching trader/distribution/material/origin');
+    }
     await page.getByRole('button',{name:'검색 초기화'}).click();
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),2);
     await page.locator('[data-id="qa-1"] [data-action="edit"]').click();
@@ -111,6 +123,9 @@ const root=path.resolve(__dirname,'..');
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-1').distribution),'CJ프레시웨이');
     await page.evaluate(()=>DBMTProductSpecs.load());
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),2,'Server reload');
+    await page.locator('#spec-search').fill('cj프레시웨이');
+    assert.equal(await page.locator('#spec-rows tr[data-id]').count(),1,'Case-insensitive distribution search');
+    await page.getByRole('button',{name:'검색 초기화'}).click();
     await page.locator('[data-id="qa-2"] [data-action="edit"]').click();
     assert.equal(await page.locator('#spec-distribution-choice').inputValue(),'__custom__');
     assert.equal(await page.locator('#spec-distribution').isVisible(),true);
@@ -144,7 +159,7 @@ const root=path.resolve(__dirname,'..');
     assert.match(fs.readFileSync(path.join(root,'m02-auth.js'),'utf8'),/'nav-product-specs':'product_specs'/);
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Mobile table scroll stays inside its card');
-    console.log('PASS: product specs preset/custom distribution, blank direct entry, edit/reload, legacy defaults, ten filters, create/edit/delete, permissions and failure handling');
+    console.log('PASS: product specs unified four-field search, desktop management visibility, distribution, create/edit/delete, permissions and failure handling');
     console.log('Screenshot: '+screenshot);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
