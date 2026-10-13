@@ -1,0 +1,16 @@
+.exp-store-picker{position:relative;min-width:0;}
+.exp-store-picker input{width:100%;padding-right:36px;}
+.exp-store-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:#555;cursor:pointer;}
+.exp-store-toggle:hover{background:#eee;}
+.exp-store-popup{position:absolute;top:calc(100% + 4px);right:0;left:0;z-index:120;min-width:240px;padding:6px;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:0 4px 16px #0002;}
+.exp-store-popup[hidden]{display:none;}
+.exp-store-status{padding:5px 6px 8px;font-size:11px;color:#666;line-height:1.5;overflow-wrap:anywhere;}
+.exp-store-options{overflow-y:auto;overscroll-behavior:contain;}
+.exp-store-option{display:flex;align-items:center;gap:6px;border-top:1px solid #eee;}
+.exp-store-select{flex:1;min-width:0;padding:9px 6px;text-align:left;border:0;background:transparent;color:var(--text);font:inherit;font-size:12px;overflow-wrap:anywhere;cursor:pointer;}
+.exp-store-select:hover{background:#f4f5f6;}
+.exp-store-delete,.exp-store-retry{flex-shrink:0;padding:4px 7px;border:1px solid #ccc;border-radius:5px;background:#f7f7f7;color:#555;font-size:11px;cursor:pointer;}
+.exp-store-delete:hover,.exp-store-retry:hover{background:#e8e8e8;}
+.exp-store-delete:disabled{opacity:.5;cursor:wait;}
+.exp-store-picker button:focus-visible{outline:2px solid #777;outline-offset:-2px;}
+@media(max-width:520px){.exp-store-popup{min-width:0;}}

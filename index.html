@@ -24,6 +24,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/main.css?v=20261012smhistory1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
+<link rel="stylesheet" href="styles/expense-stores.css?v=20261013store1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
 <link rel="stylesheet" href="styles/m02-access-control.css?v=20260827requiredlogin1">
@@ -3412,7 +3413,16 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <option value="기타">기타</option>
         </select>
       </div>
-      <div class="form-group"><label>구매처명</label><input id="exp-store" placeholder="구매처명" list="exp-store-list"><datalist id="exp-store-list"></datalist></div>
+      <div class="form-group"><label for="exp-store">구매처명</label>
+        <div class="exp-store-picker" id="exp-store-picker">
+          <input id="exp-store" name="dbmt_expense_store" placeholder="구매처명" autocomplete="off" aria-haspopup="dialog" aria-expanded="false" aria-controls="exp-store-popup">
+          <button type="button" class="exp-store-toggle" id="exp-store-toggle" aria-label="구매처 후보 보기" aria-haspopup="dialog" aria-expanded="false" aria-controls="exp-store-popup">▾</button>
+          <div class="exp-store-popup" id="exp-store-popup" role="dialog" aria-label="구매처 후보" hidden>
+            <div class="exp-store-status" id="exp-store-status" role="status"></div>
+            <div class="exp-store-options" id="exp-store-options"></div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -5304,9 +5314,9 @@ function renderPageById(id, reason='menu'){
         initializePageOnce(id, ()=>{
           const monthEl = document.getElementById('exp-month');
           if(monthEl && !monthEl.value) monthEl.value = expMonthKey(new Date());
-          updateExpStoreList();
           clearExpenseForm();
         });
+        updateExpStoreList();
         renderExpenses();
         break;
       case 'p-factorysim':
@@ -19766,6 +19776,7 @@ function expSetRelativeMonth(offset){
 }
 
 function clearExpenseForm(){
+  window.DBMTExpenseStores?.close();
   document.getElementById('exp-date').value    = today;
   document.getElementById('exp-paytype').value = '우리카드';
   document.getElementById('exp-storetype').value = '인터넷구매';
@@ -19865,9 +19876,7 @@ function deleteExpense(id){
 }
 
 function updateExpStoreList(){
-  const stores = [...new Set(expenseList.map(e=>e.store).filter(Boolean))].sort();
-  const dl = document.getElementById('exp-store-list');
-  if(dl) dl.innerHTML = stores.map(s=>`<option value="${s}">`).join('');
+  window.DBMTExpenseStores?.load();
 }
 
 const EXP_PAY_COLORS = {
@@ -22039,6 +22048,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="production-schedule.js?v=20261007drag1"></script>
 <script src="product-specs.js?v=20261013spec4"></script>
-<script src="m02-auth.js?v=20261002stockcount1"></script>
+<script src="expense-stores.js?v=20261013store1"></script>
+<script src="m02-auth.js?v=20261013stores1"></script>
 </body>
 </html>
