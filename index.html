@@ -14134,7 +14134,13 @@ function getShipLogSelectedTrader(){
   return String(document.getElementById('ship-trader')?.value || '').trim();
 }
 function getShipLogOuts(date, trader=getShipLogSelectedTrader()){
-  return transactions.filter(t=>t.type==='출고'&&t.date===date&&(!trader||String(t.trader||'').trim()===trader));
+  return transactions
+    .filter(t=>t.type==='출고'&&t.date===date&&(!trader||String(t.trader||'').trim()===trader))
+    .sort((a,b)=>{
+      const left=String(a.trader||'').trim(),right=String(b.trader||'').trim();
+      if(!left||!right) return Number(!left)-Number(!right);
+      return left.localeCompare(right,'ko',{numeric:true,sensitivity:'base'});
+    });
 }
 function loadShipLog(){
   const date=document.getElementById('ship-date').value;
