@@ -1049,7 +1049,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
     </div>
     <div style="font-size:12px;color:#666;line-height:1.7;margin-bottom:12px;">
-      선택한 날짜의 거래내역 중 <strong>입고</strong> 항목을 자동으로 불러옵니다. 검사 항목은 출력 후 수기로 표시할 수 있습니다.
+      선택한 날짜의 거래내역 중 <strong>입고</strong> 항목을 자동으로 불러옵니다. 다섯 검사 항목은 입고 품목 전체에 공통으로 적용하며, 출력 후 수기로 체크할 수 있습니다.
     </div>
     <div id="incheck-preview"></div>
   </div>
@@ -14474,6 +14474,9 @@ function buildIncheckHTML(date, rows, printMode=false){
   const b = 'border:1px solid #999;padding:3px 4px;font-size:10px;vertical-align:middle;line-height:1.15;';
   const blank = `border:1px solid #999;padding:3px 4px;font-size:10px;height:${rowHeight}px;line-height:1.15;`;
   const verdict = blank + 'padding:3px 1px;text-align:center;white-space:nowrap;font-size:8px;';
+  const commonVerdicts = Array.from({length: 5}, () => `<td class="incheck-common-verdict" rowspan="${rows.length + emptyCount}" style="${b}padding:3px 1px;text-align:center;white-space:nowrap;font-size:9px;">
+    <div>□ 적합</div><div style="margin-top:8px;">□ 부적합</div>
+  </td>`).join('');
   const dataRows = rows.map((r, i) => `<tr>
     <td style="${b}text-align:center;">${i + 1}</td>
     <td style="${b}">${htmlEscape(r.trader)}</td>
@@ -14482,13 +14485,9 @@ function buildIncheckHTML(date, rows, printMode=false){
     <td style="${b}text-align:right;">${(Number(r.weight) || 0).toFixed(2)}</td>
     <td style="${b}text-align:center;">${htmlEscape(r.storage)}</td>
     <td style="${blank}"></td>
-    <td style="${verdict}">적합/부적합</td>
-    <td style="${verdict}">적합/부적합</td>
-    <td style="${verdict}">적합/부적합</td>
-    <td style="${verdict}">적합/부적합</td>
-    <td style="${verdict}">적합/부적합</td>
+    ${i === 0 ? commonVerdicts : ''}
   </tr>`).join('');
-  const emptyRowCells = Array.from({length: 11}).map(() => `<td style="${blank}"></td>`).join('');
+  const emptyRowCells = Array.from({length: 6}).map(() => `<td style="${blank}"></td>`).join('');
   const emptyRows = Array.from({length: emptyCount}).map((_, idx) => `<tr>
     <td style="${b}text-align:center;color:#bbb;">${rows.length + idx + 1}</td>
     ${emptyRowCells}
@@ -14521,11 +14520,11 @@ function buildIncheckHTML(date, rows, printMode=false){
       </div>
     </div>
     <div style="font-size:10px;color:#444;margin-bottom:8px;border:1px solid #bbb;padding:5px 8px;background:#fafafa;">
-      온도 기준: 냉장 -2~5℃ / 냉동 -18℃ 이하
+      온도 기준: 냉장 -2~5℃ / 냉동 -18℃ 이하 · 다섯 검사 항목은 입고 품목 전체에 공통 체크
     </div>
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 5.7cm;grid-template-rows:auto auto auto;gap:8px;align-items:stretch;">
     <div>
-    <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
+    <table class="incheck-raw-table" style="width:100%;border-collapse:collapse;table-layout:fixed;">
       <colgroup>
         <col style="width:4%;"><col style="width:11%;"><col style="width:12%;"><col style="width:11%;">
         <col style="width:8%;"><col style="width:7%;"><col style="width:9%;"><col style="width:7%;">
@@ -14654,7 +14653,7 @@ function exportIncheckCSV(){
   const date = document.getElementById('incheck-date')?.value || localDateString();
   const rows = getIncheckRows(date);
   const header = ['입고일자','거래처','제품명','이력번호','입고중량(KG)','보관방법','원료육 심부온도','온도이탈','입고차량 청결관리','표시사항 및 포장상태','성상(색택, 이취)','이물혼입 유무'];
-  const body = rows.map(r => [date, r.trader, r.product, r.lot, (Number(r.weight)||0).toFixed(2), r.storage, '', '적합/부적합', '적합/부적합', '적합/부적합', '적합/부적합', '적합/부적합']);
+  const body = rows.map((r, i) => [date, r.trader, r.product, r.lot, (Number(r.weight)||0).toFixed(2), r.storage, '', ...Array(5).fill(i === 0 ? '공통: □ 적합 / □ 부적합' : '')]);
   downloadCSV([header, ...body], `원부재료_입고검사일지_${date}.csv`);
 }
 
