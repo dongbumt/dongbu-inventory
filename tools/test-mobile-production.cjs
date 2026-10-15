@@ -23,7 +23,7 @@ new vm.Script(fs.readFileSync(path.join(root,'mobile-production.js'),'utf8'));
       const request=route.request(),url=new URL(request.url());
       if(url.origin==='http://mobile.test'){
         const file=url.pathname==='/'?'mobile-admin.html':url.pathname.slice(1);
-        if(!['mobile-admin.html','mobile-production.js','styles/mobile-production.css'].includes(file))return route.fulfill({status:404,body:''});
+        if(!['mobile-admin.html','mobile-production.js','stock-ledger.js','styles/mobile-production.css'].includes(file))return route.fulfill({status:404,body:''});
         return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html',body:fs.readFileSync(path.join(root,file),'utf8')});
       }
       const headers={'access-control-allow-origin':'*','access-control-allow-headers':'apikey,authorization,content-type','access-control-allow-methods':'POST,OPTIONS'};

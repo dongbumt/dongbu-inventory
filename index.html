@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
+<script src="stock-ledger.js?v=20261015shared1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
 <script src="label-layout.js?v=20261013inner1"></script>
@@ -8313,260 +8314,9 @@ function stockLedgerDateKey(value){
 
 // 기준일 지정 시 해당일까지 재계산한다. 출고/생산 입력용 현재 재고 캐시와 분리한다.
 function getStockMap(asOfDate=''){
-  const cutoff = asOfDate ? stockLedgerDateKey(asOfDate) : '';
-  if(asOfDate && !cutoff) throw new Error('올바른 재고 기준일을 선택해주세요.');
-  if(!cutoff && _stockMapCache) return _stockMapCache;
-  if(cutoff && EXCEL_STOCK.length) throw new Error('기초재고의 기준일 정보가 없어 날짜별 재고를 계산할 수 없습니다.');
-  const map={};
-  // 박스수는 중량과 독립적인 장부다. 과거 미기록분을 0박스로 추정하지 않는다.
-  const applyStockBoxes = (bucket, value, sign=1) => {
-    const boxes = parseOptionalBoxCount(value);
-    if(bucket.stockBoxes === null || boxes === null || Number.isNaN(boxes)){
-      bucket.stockBoxes = null;
-      return;
-    }
-    const next = bucket.stockBoxes + sign * boxes;
-    bucket.stockBoxes = next >= 0 ? next : null;
-  };
-
-  // EXCEL_STOCK 기준값 (빈 배열이면 건너뜀)
-  EXCEL_STOCK.forEach(s=>{
-    const price = parseAppNumber(s.price);
-    const proddate = stockDateKey(s.proddate || s.producedDate || '');
-    const stockLocation = normalizeStockLocation(s.stockLocation || s.location || '');
-    const key=stockMapKey(s.product, s.lot, price, s.origin, s.packunit || '', proddate, stockLocation, s.stockRowId || '');
-    map[key]={
-      product:s.product, packunit:s.packunit || '', lot:String(s.lot||''), origin:s.origin, proddate, stockLocation,
-      stockRowId:s.stockRowId || '', stockNote:s.stockNote || '',
-      total_in:Number(s.total_in)||0, total_use:Number(s.total_use)||0, total_out:Number(s.total_out)||0,
-      total_adjust:Number(s.total_adjust)||0,
-      stock:Number(s.stock)||0, stockBoxes:parseOptionalBoxCount(s.boxCount),
-      total_in_amount:0, price,
-      inbound_weight:0, inbound_amount:0, produced_weight:0, produced_amount:0, source:''
-    };
-  });
-
-  const ensureBucket = (product, lot, origin, price, packunit='', proddate='', stockLocation='', stockRowId='') => {
-    const stockProddate = stockDateKey(proddate || '');
-    const loc = normalizeStockLocation(stockLocation);
-    const key = stockMapKey(product, lot, price, origin, packunit, stockProddate, loc, stockRowId);
-    if(!map[key]) map[key]={
-      product, packunit:String(packunit||'').trim(), lot:String(lot||''), origin:normalizeOriginName(origin||''), stockLocation:loc,
-      stockRowId:String(stockRowId || ''), stockNote:'',
-      total_in:0, total_use:0, total_out:0, stock:0, stockBoxes:0, proddate:stockProddate,
-      total_adjust:0,
-      total_in_amount:0, price:parseAppNumber(price),
-      inbound_weight:0, inbound_amount:0, produced_weight:0, produced_amount:0, source:''
-    };
-    if(map[key].total_adjust === undefined) map[key].total_adjust = 0;
-    if(map[key].total_in_amount === undefined) map[key].total_in_amount = 0;
-    if(map[key].price === undefined) map[key].price = parseAppNumber(price);
-    if(map[key].inbound_weight === undefined) map[key].inbound_weight = 0;
-    if(map[key].inbound_amount === undefined) map[key].inbound_amount = 0;
-    if(map[key].produced_weight === undefined) map[key].produced_weight = 0;
-    if(map[key].produced_amount === undefined) map[key].produced_amount = 0;
-    if(map[key].source === undefined) map[key].source = '';
-    if(!map[key].origin && origin) map[key].origin = normalizeOriginName(origin);
-    if(!map[key].proddate && stockProddate) map[key].proddate = stockProddate;
-    if(!map[key].stockLocation) map[key].stockLocation = loc;
-    return map[key];
-  };
-
-  const applyBucketProductMeta = (bucket, row) => {
-    if(!bucket || !row) return bucket;
-    const note = typeof productionStockNote === 'function' ? productionStockNote({stockNote:row.stockNote, samsung:row.samsung, samsungVendorName:row.samsungVendorName, samsungSpec:row.samsungSpec}) : String(row.stockNote || '');
-    if(row.type === '생산입고' && row.stockRowId) bucket.stockNote = note;
-    else if(note && !bucket.stockNote.split(' / ').includes(note)) bucket.stockNote = [...new Set([bucket.stockNote, note].filter(Boolean))].join(' / ');
-    const labelProductId = row.labelProductId || row.productId || '';
-    if(labelProductId && !bucket.labelProductId) bucket.labelProductId = labelProductId;
-    if(row.productCode && !bucket.productCode) bucket.productCode = row.productCode;
-    if(row.brand && !bucket.brand) bucket.brand = row.brand;
-    if(row.factoryNo && !bucket.factoryNo) bucket.factoryNo = row.factoryNo;
-    if(row.nationalPartCode && !bucket.nationalPartCode) bucket.nationalPartCode = row.nationalPartCode;
-    if(row.nationalPartName && !bucket.nationalPartName) bucket.nationalPartName = row.nationalPartName;
-    if(row.taxType && !bucket.taxType) bucket.taxType = normalizeLabelProductTaxType(row.taxType);
-    if(row.grade && !bucket.grade) bucket.grade = row.grade;
-    return bucket;
-  };
-
-  const stockTxns = userTransactions
-    .map((t, idx)=>({t, idx, date:cutoff ? stockLedgerDateKey(t.date) : ''}))
-    .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동','박스기준'].includes(x.t.type))
-    .filter(x=>!cutoff || (x.date && x.date <= cutoff))
-    .sort((a,b)=>{
-      const ad = cutoff ? a.date : String(a.t.date||'').replace(/\//g,'-');
-      const bd = cutoff ? b.date : String(b.t.date||'').replace(/\//g,'-');
-      const d = ad.localeCompare(bd);
-      return d || (a.idx - b.idx);
-    });
-
-  stockTxns.forEach(({t})=>{
-    const lot = String(t.lot||'');
-    const product = String(t.product||'').trim();
-    if(!product) return;
-    const weight = parseAppNumber(t.weight);
-    const unitPrice = getTxnUnitPrice(t);
-    let packunit = String(t.packunit || '').trim();
-    const stockProddate = getStockTxnProddate(t);
-    const selectedStockPrice = parseAppNumber(t.stockUnitPrice || t.sourceStockPrice || t.stockPrice || 0);
-    const stockLocation = getTxnStockLocation(t);
-    // Untagged history stays in its original aggregate; never allocate it to new production rows.
-    const stockRowId = String(t.stockRowId || '');
-    const matchesRow = s => String(s.stockRowId || '') === stockRowId;
-
-    if(t.type==='박스기준'){
-      const baselineKey = stockMapKey(product, lot, unitPrice, t.origin, packunit, stockProddate, stockLocation, stockRowId);
-      const bucket = map[baselineKey];
-      if(bucket){
-        const baseline = parseOptionalBoxCount(t.boxCountAfter);
-        if(baseline !== null && !Number.isNaN(baseline)) bucket.stockBoxes = baseline;
-      }
-    } else if(t.type==='재고조정'){
-      if(!packunit){
-        const inferredPackunits = [...new Set(Object.values(map)
-          .filter(s => sameStockIdentity(s, product, lot, t.origin, '', unitPrice, stockProddate, stockLocation))
-          .map(s => String(s.packunit || '').trim())
-          .filter(Boolean))];
-        if(inferredPackunits.length === 1) packunit = inferredPackunits[0];
-      }
-      const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation, stockRowId);
-      applyBucketProductMeta(bucket, t);
-      bucket.total_adjust += weight;
-      bucket.stock += weight;
-      applyStockBoxes(bucket, t.boxCount, weight >= 0 ? 1 : -1);
-      if(!bucket.source) bucket.source = '재고조정';
-    } else if(t.type==='입고' || t.type==='생산입고'){
-      const bucket = ensureBucket(product, lot, t.origin, unitPrice, packunit, stockProddate, stockLocation, stockRowId);
-      applyBucketProductMeta(bucket, t);
-      bucket.total_in += weight;
-      bucket.stock += weight;
-      applyStockBoxes(bucket, t.boxCount);
-      if(unitPrice > 0 && weight > 0){
-        bucket.total_in_amount += unitPrice * weight;
-        bucket.price = Math.round(bucket.total_in_amount / bucket.total_in);
-        if(t.type==='입고'){
-          bucket.inbound_weight += weight;
-          bucket.inbound_amount += unitPrice * weight;
-        } else {
-          bucket.produced_weight += weight;
-          bucket.produced_amount += unitPrice * weight;
-        }
-      }
-      if(t.type==='생산입고'){
-        bucket.source = '생산입고';
-        if(!bucket.proddate) bucket.proddate = stockProddate || t.proddate || t.date || '';
-      } else if(!bucket.source) {
-        bucket.source = '입고';
-      }
-    } else if(t.type==='재고이동'){
-      const origin = normalizeOriginName(t.origin||'');
-      const fromLocation = normalizeStockLocation(t.fromLocation || stockLocation);
-      const toLocation = normalizeStockLocation(t.toLocation || '');
-      const movePrice = selectedStockPrice || unitPrice;
-      let remaining = weight;
-      const movedBuckets = [];
-      let candidates = Object.values(map)
-        .filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(fromLocation) : sameStockIdentity(s, product, lot, origin, packunit, movePrice, stockProddate, fromLocation)))
-        .filter(s=>s.stock>0.01)
-        .sort((a,b)=>String(a.proddate||'').localeCompare(String(b.proddate||'')) || (a.price||0)-(b.price||0));
-      candidates.forEach(s=>{
-        if(remaining <= 0) return;
-        const moved = Math.min(remaining, Math.max(0, s.stock));
-        s.total_adjust -= moved;
-        s.stock -= moved;
-        movedBuckets.push(s);
-        remaining -= moved;
-      });
-      if(remaining > 0.01){
-        const fallback = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, fromLocation, stockRowId);
-        applyBucketProductMeta(fallback, t);
-        fallback.total_adjust -= remaining;
-        fallback.stock -= remaining;
-        movedBuckets.push(fallback);
-      }
-      const moveBoxesKnown = movedBuckets.length === 1 && remaining <= 0.01 && movedBuckets[0].stockBoxes !== null && parseOptionalBoxCount(t.boxCount) !== null;
-      movedBuckets.forEach(s=>{ if(moveBoxesKnown) applyStockBoxes(s, t.boxCount, -1); else s.stockBoxes = null; });
-      const dest = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, toLocation, stockRowId);
-      applyBucketProductMeta(dest, t);
-      dest.total_adjust += weight;
-      dest.stock += weight;
-      if(moveBoxesKnown && movedBuckets[0].stockBoxes !== null) applyStockBoxes(dest, t.boxCount);
-      else dest.stockBoxes = null;
-      if(!dest.source) dest.source = '재고이동';
-    } else {
-      let remaining = weight;
-      const usedBuckets = [];
-      const origin = normalizeOriginName(t.origin||'');
-      let candidates = Object.values(map).filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(stockLocation) : sameStockIdentity(s, product, lot, origin, packunit, '', '', stockLocation)));
-      candidates = candidates.filter(s=>s.stock>0.01);
-      const preferredStockPrice = selectedStockPrice || (t.type==='사용' ? unitPrice : 0);
-      if(stockProddate){
-        const exactDate = candidates.filter(s=>stockDateKey(s.proddate || '') === stockProddate);
-        if(exactDate.length) candidates = exactDate;
-      }
-      if(preferredStockPrice){
-        const exact = candidates.filter(s=>stockPriceKey(s.price) === stockPriceKey(preferredStockPrice));
-        if(exact.length) {
-          const rest = candidates.filter(s=>stockPriceKey(s.price) !== stockPriceKey(preferredStockPrice))
-            .sort((a,b)=>String(a.source||'').localeCompare(String(b.source||'')) || (a.price||0)-(b.price||0));
-          candidates = [...exact, ...rest];
-        } else {
-          candidates = candidates.sort((a,b)=>String(a.source||'').localeCompare(String(b.source||'')) || (a.price||0)-(b.price||0));
-        }
-      } else {
-        candidates = candidates.sort((a,b)=>String(a.source||'').localeCompare(String(b.source||'')) || (a.price||0)-(b.price||0));
-      }
-      candidates.forEach(s=>{
-        if(remaining <= 0) return;
-        const used = Math.min(remaining, Math.max(0, s.stock));
-        if(t.type==='출고') s.total_out += used;
-        else s.total_use += used;
-        s.stock -= used;
-        usedBuckets.push(s);
-        remaining -= used;
-      });
-      if(remaining > 0.01){
-        const fallback = ensureBucket(product, lot, origin, t.type==='사용' ? unitPrice : (selectedStockPrice || 0), packunit, stockProddate, stockLocation, stockRowId);
-        applyBucketProductMeta(fallback, t);
-        if(t.type==='출고') fallback.total_out += remaining;
-        else fallback.total_use += remaining;
-        fallback.stock -= remaining;
-        usedBuckets.push(fallback);
-      }
-      if(usedBuckets.length === 1 && remaining <= 0.01) applyStockBoxes(usedBuckets[0], t.boxCount, -1);
-      else usedBuckets.forEach(s=>{ s.stockBoxes = null; });
-    }
-  });
-  const productionNotes = new Map();
-  const inboundPrices = new Map();
-  stockTxns.forEach(({t})=>{
-    if(t.type === '생산입고' && t.stockRowId) productionNotes.set(String(t.stockRowId), String(t.stockNote || ''));
-    if(t.type === '입고' && t.stockRowId) inboundPrices.set(String(t.stockRowId), getTxnUnitPrice(t));
-  });
-  Object.values(map).forEach(bucket=>{
-    if(bucket.stockRowId && productionNotes.has(bucket.stockRowId)) bucket.stockNote = productionNotes.get(bucket.stockRowId);
-    // 이동 당시 단가가 남아 있어도 현재 재고 평가는 정정한 입고원본 단가를 따른다.
-    if(bucket.stockRowId && inboundPrices.has(bucket.stockRowId)) bucket.price = inboundPrices.get(bucket.stockRowId);
-  });
-  // 과거 재고행은 품목 스냅샷이 없을 수 있다. 영구 ID/제품코드 또는 유일하게
-  // 식별되는 품목만 마스터와 연결해 브랜드·등급을 보완한다.
-  Object.values(map).forEach(bucket=>{
-    let managed = null;
-    const managedId = bucket.labelProductId || bucket.productId || '';
-    if(managedId) managed = labelProducts.find(p=>String(p.id||'')===String(managedId));
-    if(!managed && bucket.productCode) managed = labelProducts.find(p=>String(p.productCode||'')===String(bucket.productCode));
-    if(!managed){
-      let candidates = labelProducts.filter(p=>samePriceText(p.name,bucket.product));
-      if(bucket.origin) candidates = candidates.filter(p=>sameOriginText(p.origin,bucket.origin));
-      if(bucket.packunit) candidates = candidates.filter(p=>samePriceText(p.packunit,bucket.packunit));
-      if(bucket.brand) candidates = candidates.filter(p=>samePriceText(p.brand,bucket.brand));
-      if(candidates.length===1) managed=candidates[0];
-    }
-    if(managed) applyBucketProductMeta(bucket,managed);
-    if(bucket.brand===undefined) bucket.brand='';
-    if(bucket.grade===undefined) bucket.grade='';
-  });
-  if(!cutoff) _stockMapCache = map;
+  if(!asOfDate && _stockMapCache) return _stockMapCache;
+  const map = DBMTStockLedger.calculate(userTransactions, {asOfDate, openingStock:EXCEL_STOCK, products:labelProducts});
+  if(!asOfDate) _stockMapCache = map;
   return map;
 }
 function priceKey(value){
@@ -12050,9 +11800,6 @@ function renderStock(){
   const canAdjustStock = stockCanAdjustCurrent();
   const canSetBoxBaseline = canAdjustStock && typeof DBMTAuth === 'object' && DBMTAuth.can('transactions','create');
   const filters = getStockQueryFilters();
-  const q = filters.query.toLowerCase();
-  const filterStatus = filters.status;
-  const locationFilter = filters.location;
   if(document.getElementById('stock-as-of-date')?.validity?.badInput) throw new Error('올바른 재고 기준일을 선택해주세요.');
 
   const stockMap=getStockMap(filters.asOfDate);
@@ -12060,17 +11807,8 @@ function renderStock(){
   stockSearchActivated = true;
   stockSearchDirty = false;
 
-  // 부동소수점 오차 보정: ±0.01 미만은 0으로 처리 (-0.00 소진 분류)
-  const allRows=Object.values(stockMap).map(s=>({...s, stock:Math.abs(s.stock)<0.01 ? 0 : s.stock}));
-  let rows=[...allRows];
-
-  // 필터
-  if(filterStatus==='재고')        rows=rows.filter(s=>s.stock>0.01||s.stock<-0.01);
-  else if(filterStatus==='소진')   rows=rows.filter(s=>s.stock>=-0.01&&s.stock<=0.01);
-  if(locationFilter) rows=rows.filter(s=>stockLocationKey(s.stockLocation || '') === stockLocationKey(locationFilter));
-  // 전체('')는 필터 없음
-
-  if(q) rows=rows.filter(s=>(s.stockLocation+s.product+(s.brand||'')+(s.grade||'')+(s.packunit||'')+s.lot+(s.proddate||'')+s.origin+String(s.price||'')+(s.stockNote||'')+(s.stockRowId||'')).toLowerCase().includes(q));
+  const allRows = DBMTStockLedger.rows(stockMap);
+  let rows = DBMTStockLedger.filterRows(allRows, filters);
 
   // 정렬: 클릭한 열 기준 오름차순/내림차순
   const _dir = stockSortDir === 'asc' ? 1 : -1;
@@ -12097,9 +11835,7 @@ function renderStock(){
   });
 
   // 통계 (전체 기준)
-  const totalItems=rows.length;
-  const totalStockQty = rows.reduce((sum,s)=>sum + (Number(s.stock)||0), 0);
-  const totalStockAmount = rows.reduce((sum,s)=>sum + Math.round((Number(s.stock)||0) * (Number(s.price)||0)), 0);
+  const {count:totalItems, totalWeight:totalStockQty, totalAmount:totalStockAmount} = DBMTStockLedger.summarize(rows);
   const inStock   =allRows.filter(s=>s.stock>0.01).length;
   const outStock  =allRows.filter(s=>s.stock>=-0.01&&s.stock<=0.01).length;
   const minusStock=allRows.filter(s=>s.stock<-0.01).length;

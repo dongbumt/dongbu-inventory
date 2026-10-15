@@ -10,7 +10,7 @@ const repo = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(repo, 'index.html'), 'utf8');
 const printSource = fs.readFileSync(path.join(repo, 'stock-report.js'), 'utf8');
 const auth = fs.readFileSync(path.join(repo, 'm02-auth.js'), 'utf8');
-const functions = [
+const functions = fs.readFileSync(path.join(repo, 'stock-ledger.js'), 'utf8') + '\n' + [
   'localDateString','normProdDate','priceKey','priceProductKey','samePriceText','samePriceProductText',
   'normalizeOriginName','originKey','sameOriginText','normalizeStockLocation','stockLocationKey','getTxnStockLocation',
   'parseAppNumber','stockPriceKey','stockDateKey','stockMapKey','sameStockIdentity','getTxnUnitPrice','getStockTxnProddate',

@@ -23,7 +23,7 @@ const stockFunctions = [
   'parseAppNumber', 'stockPriceKey', 'stockDateKey', 'stockMapKey', 'sameStockIdentity', 'getTxnUnitPrice',
   'getStockTxnProddate', 'stockLedgerDateKey', 'parseOptionalBoxCount', 'boxCountDisplay', 'getStockMap', 'invalidateStockMap', 'htmlEscape', 'jsArg'
 ];
-const stockSource = stockFunctions.map(source).join('\n');
+const stockSource = fs.readFileSync(path.join(repo, 'stock-ledger.js'), 'utf8') + '\n' + stockFunctions.map(source).join('\n');
 const common = {
   product: '가상 돈등심 생산품', productId: 'qa-product', labelProductId: 'qa-product',
   origin: '국내산', lot: 'QA-LOT-0001', packunit: '5 KG', price: 6000,
