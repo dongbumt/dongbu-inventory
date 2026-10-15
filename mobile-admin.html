@@ -39,6 +39,7 @@
     .phone{color:#1769aa;text-decoration:none;font-weight:800}.warning{color:var(--warn)}
     @media(max-width:390px){.menu button{font-size:10px}.section-head{top:59px}.control-row.three{grid-template-columns:1fr 1fr}.control-row.three .wide-small{grid-column:1/-1}.row{padding:9px 10px}.schedule-editor-grid{grid-template-columns:1fr}}
   </style>
+  <link rel="stylesheet" href="styles/mobile-production.css?v=20261015mobile1">
 </head>
 <body>
   <section id="login-view" class="login-wrap">
@@ -63,8 +64,10 @@
     <div id="sync-line" class="sync-line"></div>
     <nav class="menu" aria-label="관리자 메뉴">
       <button type="button" data-view="schedule" onclick="showView('schedule')"><span class="mark">▣</span>일정관리</button>
+      <button type="button" data-view="production-plan" onclick="showView('production-plan')"><span class="mark">▦</span>생산일정</button>
       <button type="button" data-view="transactions" onclick="showView('transactions')"><span class="mark">↔</span>거래내역</button>
       <button type="button" data-view="production" onclick="showView('production')"><span class="mark">▤</span>생산일보</button>
+      <button type="button" data-view="workorders" onclick="showView('workorders')"><span class="mark">☷</span>작업지시</button>
       <button type="button" data-view="stock" onclick="showView('stock')"><span class="mark">▦</span>재고현황</button>
       <button type="button" data-view="driver" onclick="showView('driver')"><span class="mark">◉</span>기사근태</button>
       <button type="button" data-view="employees" onclick="showView('employees')"><span class="mark">●</span>직원정보</button>
@@ -84,6 +87,31 @@
       <div id="schedule-list" class="list"></div>
     </section>
 
+    <section id="view-production-plan" class="view">
+      <div class="section-head"><h1>생산일정</h1><span id="mp-count" class="count"></span></div>
+      <div class="controls"><div class="mp-toolbar">
+        <button id="mp-prev" type="button" aria-label="이전 주">‹</button><input id="mp-anchor" type="date" aria-label="생산일정 기준일">
+        <button id="mp-next" type="button" aria-label="다음 주">›</button><button id="mp-today" type="button">오늘</button>
+      </div></div>
+      <div id="mp-range" class="mp-range"></div>
+      <div class="calendar-wrap mp-calendar"><div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div><div id="mp-grid" class="calendar-grid"></div></div>
+      <div class="agenda-head"><strong id="mp-selected-label"></strong><span id="mp-selected-count"></span><button id="mp-add" class="agenda-add" type="button" aria-label="생산일정 추가">+</button></div>
+      <div id="mp-totals" class="mp-totals"></div>
+      <div id="mp-message" class="mp-message" role="status" aria-live="polite"></div>
+      <form id="mp-editor" class="mp-editor hidden">
+        <div class="control-row">
+          <div><label for="mp-date">생산예정일</label><input id="mp-date" type="date" required></div>
+          <div><label for="mp-status">상태</label><select id="mp-status"><option value="planned">예정</option><option value="completed">완료</option></select></div>
+          <div class="wide"><label for="mp-product">생산예정 품목</label><input id="mp-product" maxlength="200" required></div>
+          <div><label for="mp-qty">예정수량(KG)</label><input id="mp-qty" type="number" min="0.01" max="999999999" step="0.01" inputmode="decimal" placeholder="미정"></div>
+          <div><label for="mp-trader">거래처(선택)</label><input id="mp-trader" maxlength="200"></div>
+          <div class="wide"><label for="mp-note">비고(선택)</label><textarea id="mp-note" maxlength="500" placeholder="규격·포장단위·작업 요청사항"></textarea></div>
+        </div>
+        <div class="mp-editor-actions"><button id="mp-delete" class="small-action delete hidden" type="button">삭제</button><button id="mp-cancel" class="small-action" type="button">취소</button><button id="mp-save" class="small-action save" type="submit">저장</button></div>
+      </form>
+      <div id="mp-list" class="list"></div>
+    </section>
+
     <section id="view-transactions" class="view">
       <div class="section-head"><h1>거래내역</h1><span id="transaction-count" class="count"></span></div>
       <div class="controls"><div class="control-row three">
@@ -101,6 +129,16 @@
         <input id="prod-search" class="wide" type="search" placeholder="생산품·원료·작업번호 검색" oninput="renderProduction()">
       </div></div>
       <div id="production-list" class="list"></div>
+    </section>
+
+    <section id="view-workorders" class="view">
+      <div class="section-head"><h1>작업지시 <span class="tag">조회 전용</span></h1><span id="mw-count" class="count"></span></div>
+      <div class="controls"><div class="control-row">
+        <div><label for="mw-from">작업일 시작</label><input id="mw-from" type="date"></div><div><label for="mw-to">작업일 종료</label><input id="mw-to" type="date"></div>
+        <input id="mw-search" class="wide" type="search" placeholder="생산물·작업명·원료육·LOT 검색" aria-label="작업지시 검색">
+        <button id="mw-load" class="small-action" type="button">조회</button><button id="mw-today" class="small-action" type="button">오늘</button>
+      </div></div>
+      <div id="mw-message" class="mp-message" role="status" aria-live="polite"></div><div id="mw-list" class="list"></div>
     </section>
 
     <section id="view-stock" class="view">
@@ -138,6 +176,7 @@
     </section>
   </main>
 
+  <script src="mobile-production.js?v=20261015mobile1"></script>
   <script>
     const SUPABASE_URL='https://hdwjwtmbsxfjrlvicgnn.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY='sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
@@ -149,6 +188,7 @@
     let stockRows=[];
     let currentView=localStorage.getItem(VIEW_KEY)||'schedule';
     let selectedScheduleDate=localDate();
+    let snapshotRequest=0;
 
     async function rpc(name,body){
       const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${SUPABASE_PUBLISHABLE_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
@@ -176,29 +216,33 @@
       try{
         const result=await rpc('dbmt_mobile_admin_login',{p_login_id:document.getElementById('login-id').value.trim(),p_pin:document.getElementById('login-pin').value});
         if(!result?.ok)throw new Error(result?.message||'로그인에 실패했습니다.');
-        adminToken=result.token;localStorage.setItem(TOKEN_KEY,adminToken);document.getElementById('login-pin').value='';await loadSnapshot();
+        DBMTMobileProduction.reset();adminToken=result.token;localStorage.setItem(TOKEN_KEY,adminToken);document.getElementById('login-pin').value='';await loadSnapshot();
       }catch(err){setMessage(err.message,'error')}
       finally{button.disabled=false;button.textContent='로그인'}
     }
     async function logoutAdmin(){
       const token=adminToken;adminToken='';snapshot=null;driverData=null;stockRows=[];localStorage.removeItem(TOKEN_KEY);
+      snapshotRequest++;DBMTMobileProduction.reset();
       document.getElementById('app-view').classList.add('hidden');document.getElementById('login-view').classList.remove('hidden');
       if(token)rpc('dbmt_mobile_admin_logout',{p_token:token}).catch(()=>{});
     }
     async function loadSnapshot(){
-      if(!adminToken)return;setLoading(true);
+      if(!adminToken)return;const token=adminToken,request=++snapshotRequest;setLoading(true);
       try{
-        snapshot=await rpc('dbmt_mobile_admin_snapshot',{p_token:adminToken});stockRows=buildStockRows(snapshot.transactions||[]);prepareFilters();
+        const result=await rpc('dbmt_mobile_admin_snapshot',{p_token:token});
+        if(token!==adminToken||request!==snapshotRequest)return;
+        snapshot=result;stockRows=buildStockRows(snapshot.transactions||[]);prepareFilters();
         document.getElementById('account-label').textContent=`${snapshot.account?.displayName||'관리자'} · ${new Date(snapshot.serverTime).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})}`;
         document.getElementById('login-view').classList.add('hidden');document.getElementById('app-view').classList.remove('hidden');showView(currentView);await loadDriverWeek(true);
-      }catch(err){adminToken='';localStorage.removeItem(TOKEN_KEY);document.getElementById('app-view').classList.add('hidden');document.getElementById('login-view').classList.remove('hidden');setMessage(err.message,'error')}
-      finally{setLoading(false)}
+      }catch(err){if(token!==adminToken||request!==snapshotRequest)return;adminToken='';snapshot=null;DBMTMobileProduction.reset();localStorage.removeItem(TOKEN_KEY);document.getElementById('app-view').classList.add('hidden');document.getElementById('login-view').classList.remove('hidden');setMessage(err.message,'error')}
+      finally{if(request===snapshotRequest)setLoading(false)}
     }
     async function refreshAll(){await loadSnapshot()}
     function showView(name){
-      const valid=['schedule','transactions','production','stock','driver','employees','expenses'];if(!valid.includes(name))name='schedule';currentView=name;localStorage.setItem(VIEW_KEY,name);
+      const valid=['schedule','production-plan','transactions','production','workorders','stock','driver','employees','expenses'];if(!valid.includes(name))name='schedule';currentView=name;localStorage.setItem(VIEW_KEY,name);
       document.querySelectorAll('.view').forEach(el=>el.classList.toggle('active',el.id===`view-${name}`));document.querySelectorAll('.menu button').forEach(el=>el.classList.toggle('active',el.dataset.view===name));
-      ({schedule:renderSchedule,transactions:renderTransactions,production:renderProduction,stock:renderStock,driver:renderDriver,employees:renderEmployees,expenses:renderExpenses}[name])();window.scrollTo({top:0,behavior:'instant'});
+      if(name==='production-plan'||name==='workorders')DBMTMobileProduction.show(name);
+      else ({schedule:renderSchedule,transactions:renderTransactions,production:renderProduction,stock:renderStock,driver:renderDriver,employees:renderEmployees,expenses:renderExpenses}[name])();window.scrollTo({top:0,behavior:'instant'});
     }
     function prepareFilters(){
       const now=localDate(),from=monthStart();['tx-from','prod-from'].forEach(id=>{if(!document.getElementById(id).value)document.getElementById(id).value=from});['tx-to','prod-to'].forEach(id=>{if(!document.getElementById(id).value)document.getElementById(id).value=now});

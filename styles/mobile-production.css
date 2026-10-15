@@ -1,0 +1,17 @@
+.menu{grid-template-columns:repeat(3,minmax(0,1fr));}
+.mp-toolbar{display:grid;grid-template-columns:36px minmax(0,1fr) 36px 48px;gap:6px;}
+.mp-toolbar button{height:38px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-weight:800;}
+.mp-range,.mp-totals,.mp-message{padding:8px 12px;font-size:11px;line-height:1.5;}
+.mp-range{color:var(--muted);border-bottom:1px solid var(--line);}
+.mp-totals{display:flex;flex-wrap:wrap;gap:4px 14px;background:var(--soft);border-bottom:1px solid var(--line);}
+.mp-message{color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere;}
+.mp-message:empty{display:none;}.mp-message.error{color:var(--danger);}
+.mp-calendar{padding-bottom:8px;}.mp-editor{padding:12px;background:var(--soft);border-bottom:1px solid var(--line);}
+.mp-editor label{margin:0 0 5px;}.mp-editor textarea{width:100%;min-height:72px;resize:vertical;font:inherit;font-size:13px;border:1px solid #cfd6de;border-radius:6px;padding:9px 11px;background:#fff;color:var(--ink);}
+.mp-editor-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin-top:10px;}
+.mp-editor-actions .delete{margin-right:auto;color:var(--danger);}
+.mp-card-note{margin-top:5px;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;}
+.mp-order-details{margin-top:8px;font-size:12px;line-height:1.5;}.mp-order-details summary{cursor:pointer;color:#45515e;font-weight:800;}
+.mp-source{padding:8px;margin-top:6px;border:1px solid var(--line);border-radius:5px;background:#f8f9fa;overflow-wrap:anywhere;}
+#view-production-plan .row-title,#view-workorders .row-title{overflow-wrap:anywhere;}
+#view-production-plan .agenda-edit{font-size:12px;width:42px;flex-basis:42px;}
