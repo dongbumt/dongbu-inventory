@@ -15080,20 +15080,7 @@ function exportShipLogExcel(){
   const trader=getShipLogSelectedTrader();
   const dayOuts=getShipLogOuts(date,trader);
   if(!dayOuts.length){alert(trader ? `${trader} 거래처의 출고 내역이 없습니다.` : '출고 내역이 없습니다.');return;}
-  const pages=[];
-  for(let i=0;i<dayOuts.length;i+=10) pages.push(dayOuts.slice(i,i+10));
-  const totalPages=pages.length;
-  const [yr,mo,da]=date.split('-');
-  const pagesHTML=pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages,trader)).join('');
-  const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html lang="ko"><head>
-    <meta charset="UTF-8"><title>완제품 출고일지 ${yr}-${mo}-${da}</title>
-    <style>*{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;padding:10mm;}
-    .shiplog-page{page-break-inside:avoid;}
-    @media print{@page{size:A4;margin:10mm;}body{padding:0;}.shiplog-page{page-break-after:always;}.shiplog-page:last-child{page-break-after:avoid;}}
-    </style></head><body>`+pagesHTML+`</body></html>`);
-  w.document.close();setTimeout(()=>{w.print();},500);
+  return DBMTShipLogPrint.open({title:`완제품 출고일지 ${date}`,groups:[{date,trader,items:dayOuts}],renderPage:buildShipLogPageHTML});
 }
 
 function getShipLogPrintRange(){
@@ -15116,14 +15103,6 @@ function getShipLogDatesInRange(start, end){
     .sort((a,b)=>String(a||'').localeCompare(String(b||'')));
 }
 
-function buildShipLogPrintPages(date, trader=getShipLogSelectedTrader()){
-  const dayOuts = getShipLogOuts(date,trader);
-  const pages = [];
-  for(let i=0;i<dayOuts.length;i+=10) pages.push(dayOuts.slice(i,i+10));
-  const totalPages = pages.length;
-  return pages.map((items,idx)=>buildShipLogPageHTML(date,items,idx+1,totalPages,trader));
-}
-
 function exportShipLogRange(){
   const range = getShipLogPrintRange();
   if(!range) return;
@@ -15133,34 +15112,27 @@ function exportShipLogRange(){
     alert(trader ? `${trader} 거래처의 선택한 기간 출고 내역이 없습니다.` : '선택한 기간에 출고 내역이 없습니다.');
     return;
   }
-  const pagesHTML = dates.flatMap(date => buildShipLogPrintPages(date,trader)).join('');
-  const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html lang="ko"><head>
-    <meta charset="UTF-8"><title>완제품 출고일지 ${range.start}~${range.end}</title>
-    <style>*{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;padding:10mm;}
-    .shiplog-page{page-break-inside:avoid;}
-    @media print{@page{size:A4;margin:10mm;}body{padding:0;}.shiplog-page{page-break-after:always;}.shiplog-page:last-child{page-break-after:avoid;}}
-    </style></head><body>`+pagesHTML+`</body></html>`);
-  w.document.close();setTimeout(()=>{w.print();},500);
+  const groups=dates.map(date=>({date,trader,items:getShipLogOuts(date,trader)}));
+  return DBMTShipLogPrint.open({title:`완제품 출고일지 ${range.start}~${range.end}`,groups,renderPage:buildShipLogPageHTML});
 }
 
-function buildShipLogPageHTML(date,items,pageNo,totalPages,trader=''){
+function buildShipLogPageHTML(date,items,pageNo,totalPages,trader='',startIndex=0){
   const [yr,mo,da]=date.split('-');
   const dateStr=`${yr}년 ${mo}월 ${da}일`;
   const pageLabel=totalPages>1?` (${pageNo}/${totalPages}페이지)`:'';
   const showSharedSections=pageNo===1;
   let itemRows='';
-  for(let i=0;i<10;i++){
+  const rowCount=showSharedSections?Math.max(10,items.length):items.length;
+  for(let i=0;i<rowCount;i++){
     const o=items[i];
     const b='border:1px solid #bbb;padding:5px 6px;font-size:11px;';
     const nb='text-align:center;'+b;
     const lb=b+'font-family:monospace;font-size:10px;word-break:break-all;';
     if(o){
       const pd=o.proddate?o.proddate.replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$1-$2-$3'):'';
-      itemRows+=`<tr style="height:22px"><td style="${nb}">${(pageNo-1)*10+i+1}</td><td style="${b}">${o.product||''}</td><td style="${b}overflow-wrap:anywhere;">${htmlEscape(o.origin||'-')}</td><td style="${b}">${o.trader||''}</td><td style="${b}">${pd}</td><td style="${lb}">${o.lot||''}</td><td style="text-align:right;${b}">${o.weight!=null?o.weight.toFixed(2):''}</td></tr>`;
+      itemRows+=`<tr style="height:22px"><td style="${nb}">${startIndex+i+1}</td><td style="${b}">${htmlEscape(o.product||'')}</td><td style="${b}overflow-wrap:anywhere;">${htmlEscape(o.origin||'-')}</td><td style="${b}">${htmlEscape(o.trader||'')}</td><td style="${b}">${htmlEscape(pd)}</td><td style="${lb}">${htmlEscape(o.lot||'')}</td><td style="text-align:right;${b}">${o.weight!=null?o.weight.toFixed(2):''}</td></tr>`;
     }else{
-      itemRows+=`<tr style="height:22px"><td style="${nb};color:#ccc">${(pageNo-1)*10+i+1}</td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${lb}"></td><td style="${b}"></td></tr>`;
+      itemRows+=`<tr style="height:22px"><td style="${nb};color:#ccc">${startIndex+i+1}</td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${b}"></td><td style="${lb}"></td><td style="${b}"></td></tr>`;
     }
   }
   const checkRows=['보관상태','포장상태','표시사항','배송차량점검'].map((it, idx)=>`<tr style="height:22px"><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;">${it}</td><td style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:100px;"></td>${idx===0?'<td rowspan="4" style="border:1px solid #bbb;padding:4px 6px;font-size:11px;min-width:80px;height:88px;text-align:center;vertical-align:middle;color:#999;">서명</td>':''}</tr>`).join('');
@@ -21977,6 +21949,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="production-schedule.js?v=20261007drag1"></script>
 <script src="product-specs.js?v=20261013spec4"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
+<script src="shiplog-print.js?v=20261015fit1"></script>
 <script src="m02-auth.js?v=20261013pda2"></script>
 </body>
 </html>
