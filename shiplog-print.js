@@ -29,7 +29,7 @@
         let offset=0;
         while(offset<group.items.length){
           const pageNo=pages.length+1,items=[];
-          const limit=pageNo===1?Math.min(10,group.items.length-offset):group.items.length-offset;
+          const limit=group.items.length-offset;
           for(let i=0;i<limit;i++){
             const trial=items.concat(group.items[offset+i]);
             measure.innerHTML=renderPage(group.date,trial,pageNo,2,group.trader,offset);

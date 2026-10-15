@@ -15122,7 +15122,7 @@ function buildShipLogPageHTML(date,items,pageNo,totalPages,trader='',startIndex=
   const pageLabel=totalPages>1?` (${pageNo}/${totalPages}페이지)`:'';
   const showSharedSections=pageNo===1;
   let itemRows='';
-  const rowCount=showSharedSections?Math.max(10,items.length):items.length;
+  const rowCount=items.length;
   for(let i=0;i<rowCount;i++){
     const o=items[i];
     const b='border:1px solid #bbb;padding:5px 6px;font-size:11px;';
@@ -21949,7 +21949,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="production-schedule.js?v=20261007drag1"></script>
 <script src="product-specs.js?v=20261013spec4"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
-<script src="shiplog-print.js?v=20261015fit1"></script>
+<script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="m02-auth.js?v=20261013pda2"></script>
 </body>
 </html>

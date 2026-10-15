@@ -67,15 +67,19 @@ const makeRows=(count,date='2026-10-15',long=false)=>Array.from({length:count},(
       for(const group of test.groups){
         const groupPages=layout.filter(item=>item.rows[0].lot===group.items[0].lot||item.rows.some(row=>group.items.some(entry=>entry.lot===row.lot)));
         assert.deepEqual(groupPages.flatMap(item=>item.rows).map(row=>row.number),group.items.map((_,i)=>i+1),test.name+': continuous numbering');
-        assert.ok(groupPages[0].rows.length<=10,test.name+': first page limit');
+        if(test.name!=='long'&&group.items.length>10)assert.ok(groupPages[0].rows.length>10,test.name+': first page must use space beyond ten rows');
         assert.ok(groupPages.slice(1).every(item=>item.approvals===0&&item.checks===0),test.name+': continuation duplicates');
       }
       const pdf=await popup.pdf({preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false,...(['80','long','range'].includes(test.name)?{path:path.join(artifactDir,test.name+'.pdf')}:{})});
       assert.equal((await PDFDocument.load(pdf)).getPageCount(),layout.length,test.name+': unexpected physical PDF page');
       assert.equal(await popup.evaluate(()=>window.printCalls),1,test.name+': print lifecycle');
+      if(test.name==='11')assert.equal(layout.length,1,'Eleven short products should fit with checks on one page');
       if(test.name==='21')assert.equal(layout.length,2,'21 products should use two pages');
+      if(test.name==='45')assert.equal(layout.length,2,'45 short products should use two pages');
       if(test.name==='80'){
+        assert.equal(layout.length,3,'80 short products should use three pages');
         normalCapacity=layout[1].rows.length;assert.ok(normalCapacity>=30,'Continuation page should use its free space');
+        await popup.locator('.shiplog-page').first().screenshot({path:path.join(artifactDir,'first-page.png')});
         await popup.locator('.shiplog-page').nth(1).screenshot({path:path.join(artifactDir,'continuation.png')});
       }
       if(test.name==='long')assert.ok(layout[1].rows.length<normalCapacity,'Long names must reduce page capacity');
@@ -84,7 +88,7 @@ const makeRows=(count,date='2026-10-15',long=false)=>Array.from({length:count},(
       await popup.close();
     }
     assert.deepEqual(errors,[]);
-    console.log('PASS: automatic A4 capacity, long rows, physical PDF pagination, continuous numbering, one shared section per date, single/range/trader integration, escaping and popup handling');
+    console.log('PASS: automatic A4 capacity on first and continuation pages, long rows, physical PDF pagination, continuous numbering, one shared section per date, single/range/trader integration, escaping and popup handling');
     console.log('Artifacts: '+artifactDir);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
