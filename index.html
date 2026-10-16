@@ -24,7 +24,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261012smhistory1">
+<link rel="stylesheet" href="styles/main.css?v=20261016usage1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
 <link rel="stylesheet" href="styles/expense-stores.css?v=20261013store1">
@@ -278,28 +278,38 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </div>
 
 <!-- ── 생산작업 부자재 사용 등록 모달 ── -->
-<div id="sm-usage-modal" class="edit-modal-bg hidden">
-  <div class="edit-modal" style="max-width:940px;">
-    <h3 style="margin-bottom:8px;">부자재 사용 등록</h3>
+<div id="sm-usage-modal" class="edit-modal-bg hidden" role="dialog" aria-modal="true" aria-labelledby="sm-usage-title">
+  <div class="edit-modal sm-usage-dialog">
+    <h3 id="sm-usage-title" style="margin-bottom:8px;">부자재 사용 등록</h3>
     <div id="sm-usage-prod-summary" style="font-size:12px;color:#4b5563;line-height:1.6;margin-bottom:12px;"></div>
-    <div id="sm-usage-editor-status" style="font-size:12px;color:#c0392b;margin-bottom:8px;display:none;"></div>
-    <div class="tbl-wrap" style="max-height:430px;">
-      <table style="min-width:790px;">
-        <thead><tr>
-          <th style="min-width:180px;">부자재 품목</th>
-          <th style="min-width:230px;">입고 LOT</th>
-          <th style="width:90px;text-align:right;">사용 가능</th>
-          <th style="width:95px;text-align:right;">사용수량</th>
-          <th style="width:70px;">단위</th>
-          <th style="min-width:140px;">비고</th>
-          <th style="width:42px;"></th>
-        </tr></thead>
-        <tbody id="sm-usage-edit-body"></tbody>
-      </table>
+    <div class="sm-usage-layout">
+      <section class="sm-usage-pane" aria-labelledby="sm-usage-reference-title">
+        <h4 id="sm-usage-reference-title" class="sm-usage-pane-title">저장된 생산일보</h4>
+        <div id="sm-usage-production-details" class="sm-usage-production-details"></div>
+      </section>
+      <section class="sm-usage-pane" aria-labelledby="sm-usage-input-title">
+        <h4 id="sm-usage-input-title" class="sm-usage-pane-title">부자재 사용 입력</h4>
+        <div id="sm-usage-editor-status" style="font-size:12px;color:#c0392b;margin:8px;display:none;"></div>
+        <div class="tbl-wrap sm-usage-table-wrap">
+          <table class="sm-usage-table">
+            <colgroup><col style="width:22%;"><col style="width:27%;"><col style="width:10%;"><col style="width:12%;"><col style="width:6%;"><col style="width:18%;"><col style="width:5%;"></colgroup>
+            <thead><tr>
+              <th>부자재 품목</th>
+              <th>입고 LOT</th>
+              <th style="text-align:right;">사용 가능</th>
+              <th style="text-align:right;">사용수량</th>
+              <th>단위</th>
+              <th>비고</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="sm-usage-edit-body"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
     <div class="em-btns" style="justify-content:space-between;">
       <button class="btn btn-secondary" onclick="addSubMaterialUsageDraftRow()">+ 사용항목</button>
-      <div style="display:flex;gap:8px;">
+      <div class="sm-usage-actions">
         <button id="sm-usage-print-btn" class="btn btn-secondary" onclick="printSubMaterialUsage()">🖨 출력 (A4)</button>
         <button class="btn btn-secondary" onclick="closeSubMaterialUsageModal()">닫기</button>
         <button class="btn btn-primary" onclick="saveSubMaterialUsageModal()">저장</button>
@@ -12952,6 +12962,34 @@ function renderSubMaterialUsageDraftRows(){
   }).join('');
 }
 
+function buildSubMaterialProductionReference(entry){
+  const quantity = value => parseAppNumber(value).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const boxLabel = value => boxCountDisplay(value,'') ? `${boxCountDisplay(value)} 박스` : '박스 미기록';
+  const section = (items, title, quantityLabel) => {
+    const rows = asArray(items);
+    const weight = rows.reduce((sum,row)=>sum+parseAppNumber(row.qty ?? row.weight),0);
+    const boxes = totalRecordedBoxes(rows);
+    return `<section class="sm-usage-production-group">
+      <div class="sm-usage-production-heading"><h5>${title}</h5><span>합계 <strong>${quantity(weight)} KG</strong> · ${boxes === null ? '박스 미기록' : `${boxCountDisplay(boxes)} 박스`}</span></div>
+      ${rows.length ? rows.map(row=>`<article class="sm-usage-production-item">
+        <div class="sm-usage-production-item-top"><strong>${htmlEscape(row.product || row.name || '-')}</strong><span>${quantityLabel} <b>${quantity(row.qty ?? row.weight)} KG</b> · ${boxLabel(row.boxCount)}</span></div>
+        <div class="sm-usage-production-meta">
+          ${row.packunit ? `<span>포장 ${htmlEscape(row.packunit)}</span>` : ''}
+          ${row.origin ? `<span>원산지 ${htmlEscape(row.origin)}</span>` : ''}
+          <span>이력번호 ${htmlEscape(row.lot || '-')}</span>
+          ${row.proddate || row.stockProddate ? `<span>생산일 ${htmlEscape(row.proddate || row.stockProddate)}</span>` : ''}
+          ${parseAppNumber(row.price)>0 ? `<span>단가 ${Math.round(parseAppNumber(row.price)).toLocaleString('ko-KR')}원/KG</span>` : ''}
+        </div>
+        ${row.note || row.stockNote ? `<div class="sm-usage-production-note">비고 ${htmlEscape(row.note || row.stockNote)}</div>` : ''}
+      </article>`).join('') : '<div class="sm-usage-production-empty">등록된 품목이 없습니다.</div>'}
+    </section>`;
+  };
+  const note = getProdEntryNote(entry);
+  return `${note ? `<div class="sm-usage-production-job-note"><strong>작업 비고</strong> ${htmlEscape(note)}</div>` : ''}
+    ${section(entry.inputs,'투입 품목','투입량')}
+    ${section(entry.outputs,'생산 품목','생산량')}`;
+}
+
 async function openSubMaterialUsageModal(productionId){
   const entry = subMaterialUsageProductionEntry(productionId);
   if(!entry){
@@ -12971,7 +13009,12 @@ async function openSubMaterialUsageModal(productionId){
     : [createSubMaterialUsageDraft(), createSubMaterialUsageDraft()];
   const summaryEl = document.getElementById('sm-usage-prod-summary');
   if(summaryEl){
-    summaryEl.innerHTML = `<strong>${htmlEscape(subMaterialUsageWorkDate(entry))} · 작업 ${htmlEscape(entry.job_no || '')}</strong><br>${htmlEscape(subMaterialProductionSummary(entry))}`;
+    summaryEl.innerHTML = `<strong>${htmlEscape(subMaterialUsageWorkDate(entry))} · 작업 ${htmlEscape(entry.job_no || '')} · ${htmlEscape(getProdJobType(entry))}</strong>`;
+  }
+  const referenceEl = document.getElementById('sm-usage-production-details');
+  if(referenceEl){
+    referenceEl.innerHTML = buildSubMaterialProductionReference(entry);
+    referenceEl.scrollTop = 0;
   }
   const statusEl = document.getElementById('sm-usage-editor-status');
   if(statusEl){
@@ -12984,6 +13027,8 @@ async function openSubMaterialUsageModal(productionId){
 
 function closeSubMaterialUsageModal(){
   document.getElementById('sm-usage-modal')?.classList.add('hidden');
+  const referenceEl = document.getElementById('sm-usage-production-details');
+  if(referenceEl) referenceEl.innerHTML = '';
   activeSubMaterialUsageProductionId = '';
   subMaterialUsageDraftRows = [];
 }

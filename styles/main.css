@@ -362,6 +362,35 @@
   .em-row input:focus,.em-row select:focus{border-color:#2980b9;outline:none;}
   .em-btns{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;}
 
+  /* 생산일보를 보면서 부자재 사용 등록 */
+  #sm-usage-modal .sm-usage-dialog{width:calc(100% - 32px);max-width:1500px;max-height:calc(100dvh - 32px);padding:20px 24px;display:flex;flex-direction:column;overflow:hidden;}
+  .sm-usage-layout{display:grid;grid-template-columns:minmax(340px,.85fr) minmax(0,1.35fr);gap:16px;min-height:0;overflow:hidden;}
+  .sm-usage-pane{min-width:0;min-height:0;display:flex;flex-direction:column;border:1px solid #d9dee5;border-radius:7px;overflow:hidden;}
+  .sm-usage-pane-title{flex-shrink:0;margin:0;padding:10px 12px;background:#f4f5f6;border-bottom:1px solid #d9dee5;font-size:13px;font-weight:700;}
+  .sm-usage-production-details{padding:12px;overflow:auto;min-height:0;}
+  .sm-usage-production-job-note{margin-bottom:12px;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;}
+  .sm-usage-production-group+.sm-usage-production-group{margin-top:16px;}
+  .sm-usage-production-heading{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:7px;font-size:11px;color:#555;}
+  .sm-usage-production-heading h5{margin:0;color:#26313d;font-size:12px;}
+  .sm-usage-production-item{padding:9px 10px;border:1px solid #e1e4e8;border-radius:5px;}
+  .sm-usage-production-item+.sm-usage-production-item{margin-top:7px;}
+  .sm-usage-production-item-top{display:flex;justify-content:space-between;align-items:baseline;gap:6px 12px;flex-wrap:wrap;font-size:12px;line-height:1.5;overflow-wrap:anywhere;}
+  .sm-usage-production-item-top>span{font-size:11px;color:#424b56;}
+  .sm-usage-production-meta{display:flex;gap:2px 10px;flex-wrap:wrap;margin-top:4px;font-size:11px;color:#667085;line-height:1.6;overflow-wrap:anywhere;}
+  .sm-usage-production-note{margin-top:4px;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;}
+  .sm-usage-production-empty{padding:12px 0;color:#888;font-size:12px;}
+  #sm-usage-modal .sm-usage-table-wrap{margin:0;border:0;border-radius:0;min-height:0;overflow:auto;}
+  #sm-usage-modal .sm-usage-table{width:100%;min-width:650px;table-layout:fixed;}
+  #sm-usage-modal .sm-usage-table td,#sm-usage-modal .sm-usage-table th{padding:8px 6px;}
+  #sm-usage-modal .sm-usage-table select,#sm-usage-modal .sm-usage-table input{min-width:0;padding:7px 6px;font-size:12px;}
+  #sm-usage-modal .sm-usage-table .btn{padding:4px 8px;}
+  #sm-usage-modal .em-btns{flex-shrink:0;flex-wrap:wrap;margin-top:14px;}
+  .sm-usage-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  @media(max-width:1100px){
+    #sm-usage-modal .sm-usage-dialog{width:calc(100% - 24px);height:calc(100dvh - 24px);max-height:calc(100dvh - 24px);padding:16px;}
+    .sm-usage-layout{flex:1;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(110px,1fr) minmax(170px,1.1fr);gap:12px;}
+  }
+
   /* 입고 품목 검색 */
   .form-row.txn-inbound-primary-row{grid-template-columns:minmax(150px,180px) minmax(110px,140px) minmax(520px,1fr) minmax(120px,150px);align-items:start;}
   .txn-inbound-primary-row .form-group.txn-product-managed-active{grid-column:auto;min-width:0;}

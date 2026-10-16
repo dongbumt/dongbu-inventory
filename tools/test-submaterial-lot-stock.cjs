@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const repo = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(repo, 'index.html'), 'utf8');
 const auth = fs.readFileSync(path.join(repo, 'm02-auth.js'), 'utf8');
-const names = ['parseAppNumber', 'htmlEscape', 'jsArg', 'subMaterialUsageMatchesItem',
+const names = ['parseAppNumber', 'htmlEscape', 'jsArg', 'parseOptionalBoxCount','boxCountDisplay','totalRecordedBoxes','getProdEntryNote','getProdJobType','buildSubMaterialProductionReference','subMaterialUsageMatchesItem',
   'subMaterialRecordIsAfterCount', 'getSubMaterialLotUsedQty', 'getSubMaterialLotAvailable',
   'getSubMaterialLotCounts', 'getSubMaterialLotAdjustmentQty', 'subMaterialPersonalCan',
   'getSubMaterialStockRows', 'getSubMaterialLotStockRows', 'getFilteredSubMaterialLotStockRows',
