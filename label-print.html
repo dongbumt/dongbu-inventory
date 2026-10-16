@@ -782,7 +782,7 @@
       button.textContent = completed ? '생산일보 전송 완료' : (reopened ? '생산완료 · 생산일보 재전송' : '생산완료 · 생산일보 전송');
       $('completion-status').textContent = completed
         ? `${completed.date || ''} #${completed.jobNo || ''} 생산일보에 등록되었습니다. 원료·생산품목·중량 등은 ERP에서 수정할 수 있습니다.`
-        : (reopened ? '생산일보가 삭제되어 전송 전 상태로 돌아왔습니다. 기존 출력이력은 유지됩니다. 잘못 출력한 라벨을 삭제하고 필요한 라벨을 출력한 뒤 재전송하세요.' : '외포장만 생산일보·재고에 반영합니다. 내포장은 생산 집계에서 제외됩니다.');
+        : (reopened ? '생산일보가 삭제되어 전송 전 상태로 돌아왔습니다. 기존 출력이력은 유지됩니다. 잘못 출력한 라벨을 삭제하고 필요한 라벨을 출력한 뒤 재전송하세요.' : '외포장 라벨 1장당 생산품 1박스로 생산일보·재고에 반영합니다. 내포장은 생산 집계에서 제외됩니다.');
       $('print-btn').disabled = state.loading || !row || !!completed;
       for(const id of ['print-weight','print-weight-custom','print-copies','print-size']){
         $(id).disabled = state.loading || !row || !!completed || (id==='print-weight-custom' && $(id).hidden);
@@ -799,10 +799,10 @@
       if(!logs.length){ setStatus('출력한 라벨이 없습니다.', 'warn'); return; }
       const weight = logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
       const groups=window.DBMTLabelProducts?.group(logs)||[];
-      const detail=groups.map(g=>`${g.name}${g.packunit?' / '+g.packunit:''}: ${g.count}장 · ${kg(g.weight)}`).join('\n');
+      const detail=groups.map(g=>`${g.name}${g.packunit?' / '+g.packunit:''}: ${g.count}박스 · ${kg(g.weight)}`).join('\n');
       const sourceDetail=(Array.isArray(row.sourceInputs)&&row.sourceInputs.length?row.sourceInputs:[{sourceStock:row.sourceStock,inputWeight:row.inputWeight}])
         .map(input=>`${input.sourceStock?.product || '-'} · ${kg(input.inputWeight)} · LOT ${input.sourceStock?.lot || '-'}`).join('\n');
-      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장)\n${sourceDetail}\n${detail}\n\n원료 투입은 한 번만, 생산품목별로 생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
+      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장 = ${logs.length}박스)\n${sourceDetail}\n${detail}\n\n원료 투입은 한 번만, 생산품목별 중량과 박스수를 생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
       setLoading(true);
       setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
       try {
@@ -812,7 +812,7 @@
         if(result?.ok !== true) throw new Error(result?.message || '생산완료를 확인하지 못했습니다.');
         state.completions = normalizeArray(result.completions);
         renderAll();
-        setStatus('생산일보 전송 완료. ERP → 생산관리 → 생산일보에서 작업일자로 조회하세요.', 'ok');
+        setStatus(`생산일보 전송 완료: ${logs.length}박스 · ${kg(weight)}. ERP → 생산관리 → 생산일보에서 작업일자로 조회하세요.`, 'ok');
       } catch(err) {
         setStatus(`생산완료 확인 실패: ${err.message || err} (새로고침 후 확인하거나 다시 누르세요. 중복 등록되지 않습니다.)`, 'err');
       } finally { setLoading(false); }

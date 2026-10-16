@@ -11,7 +11,7 @@ const logs=[{id:'a',labelWeight:5,status:'active'},{id:'b',labelWeight:7.35,stat
 const entry={id:'prod_label_qa',date:'2026/09/10',job_no:'1',job_type:'생산',key:['2026/09/10','1'],note:'QA 생산완료',_isUser:true,
   _labelCompletion:{workOrderId:order.id,lockedInputCount:1,completedAt:'2026-09-10T01:00:00Z'},
   inputs:[{product:'돈등심 원료',lot:'RAW-LOT',qty:100,price:5000,amount:500000,origin:'국내산',stockLocation:'가공장',sourceStockKey:'qa-stock'}],
-  outputs:[{product:'냉장돈등심',productId:'qa-product',labelProductId:'qa-product',lot:'OUT-LOT',qty:12.35,price:40486,amount:500003,origin:'국내산',proddate:'2026-09-10'}]};
+  outputs:[{product:'냉장돈등심',productId:'qa-product',labelProductId:'qa-product',lot:'OUT-LOT',qty:12.35,boxCount:2,price:40486,amount:500003,origin:'국내산',proddate:'2026-09-10'}]};
 const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}const mime={'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'};res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));});
 (async()=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url=`http://127.0.0.1:${server.address().port}`;
@@ -44,13 +44,16 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       }
       await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});
     });
-    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());
+    const page=await context.newPage(),errors=[],dialogs=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>{dialogs.push(dialog.message());return dialog.accept();});
     await page.goto(url+'/label-print.html');assert(await page.locator('#complete-production-btn').isDisabled());
     await page.locator('#app-password').fill('0927');await page.locator('#connect-btn').click();await page.waitForFunction(()=>!state.loading);
     assert.equal(await page.locator('#metric-output').textContent(),'12.35 kg');
+    assert.match(await page.locator('#completion-status').textContent(),/외포장 라벨 1장당 생산품 1박스/);
     await page.locator('#complete-production-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert.match(dialogs.at(-1),/2장 = 2박스/);
     assert.match(await page.locator('#status').textContent(),/QA 통신 오류/);assert(await page.locator('#complete-production-btn').isEnabled());
     fail=false;await page.locator('#complete-production-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert.match(await page.locator('#status').textContent(),/2박스 · 12.35 kg/);
     assert(await page.locator('#complete-production-btn').isDisabled());assert(await page.locator('#print-btn').isDisabled());
     assert.equal(await page.locator('#history-body button[data-act="void"]:enabled').count(),0);
     assert.match(await page.locator('#completion-status').textContent(),/2026\/09\/10 #1/);
@@ -125,6 +128,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       openEditProdEntry('prod_label_qa');
     `});
     assert(await erp.locator('#prod-label-notice').isVisible());assert.match(await erp.locator('#prod-label-notice').textContent(),/모든 입력 항목을 수정/);
+    assert.equal(await erp.locator('#prod-out-box-count-1').inputValue(),'2','Automatically counted outer boxes load into the ordinary production editor');
     for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-in-product-1','prod-in-qty-1','prod-in-price-1','prod-out-product-1','prod-out-qty-1','prod-out-price-1','prod-output-add-btn']) assert(await erp.locator('#'+id).isEnabled(),id);
     assert.equal(await erp.locator('#prod-input-rows button:disabled,#prod-output-rows button:disabled').count(),0);
     await erp.locator('#prod-date').fill('2026-09-09');await erp.locator('#prod-job-no').fill('7');await erp.locator('#prod-note').fill('수정 테스트');await erp.locator('#prod-job-type').selectOption('묶음');
