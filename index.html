@@ -24,7 +24,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261017trader1">
+<link rel="stylesheet" href="styles/main.css?v=20261017wo2">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261017split1">
@@ -3761,9 +3761,9 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <div id="wo-source-rows"></div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;">
             <button type="button" class="btn btn-secondary btn-sm" onclick="addWorkOrderSourceRow()">+ 원료육 추가</button>
-            <span id="wo-input-total" style="font-size:12px;color:#555;">투입 예정량 합계 0.00 KG</span>
+            <span id="wo-input-total" style="font-size:12px;color:#555;">투입량 합계 0.00 KG</span>
           </div>
-          <div style="font-size:11px;color:#777;margin-top:5px;">원료육마다 현재고와 투입 예정량을 입력하세요. 여러 LOT를 섞는 경우 생산물 이력번호를 확인해주세요.</div>
+          <div style="font-size:11px;color:#777;margin-top:5px;">재고를 선택하면 현재 중량과 박스수가 입력됩니다. 실제 투입량으로 수정할 수 있으며, 여러 LOT를 섞는 경우 생산물 이력번호를 확인해주세요.</div>
         </div>
         <div class="form-group">
           <label>라벨 크기</label>
@@ -20403,7 +20403,7 @@ function labelCrossFacilityNoticeFromText(product='', ingredients=''){
 
 function workOrderSourceInputs(order){
   if(Array.isArray(order?.sourceInputs) && order.sourceInputs.length) return order.sourceInputs;
-  return order?.sourceStock ? [{sourceStockKey:order.sourceStockKey || order.sourceStock.key || '',sourceStock:order.sourceStock,inputWeight:order.inputWeight || 0}] : [];
+  return order?.sourceStock ? [{sourceStockKey:order.sourceStockKey || order.sourceStock.key || '',sourceStock:order.sourceStock,inputWeight:order.inputWeight || 0,boxCount:parseOptionalBoxCount(order.inputBoxCount)}] : [];
 }
 
 function workOrderSourceRows(){
@@ -20414,8 +20414,9 @@ function updateWorkOrderInputTotal(){
   const rows=workOrderSourceRows();
   const total=rows.reduce((sum,row)=>sum+parseAppNumber(row.querySelector('.wo-input-weight')?.value),0);
   const count=rows.filter(row=>row.querySelector('.wo-stock-key')?.value).length;
+  const boxes=totalRecordedBoxes(rows.filter(row=>row.querySelector('.wo-stock-key')?.value).map(row=>({boxCount:row.querySelector('.wo-input-box-count')?.value})));
   const el=document.getElementById('wo-input-total');
-  if(el) el.textContent=`선택 원료육 ${count}건 · 투입 예정량 합계 ${total.toFixed(2)} KG`;
+  if(el) el.textContent=`선택 원료육 ${count}건 · 투입량 합계 ${total.toFixed(2)} KG${boxes===null?'':' · '+boxCountDisplay(boxes)+' 박스'}`;
 }
 
 function addWorkOrderSourceRow(source=null){
@@ -20424,7 +20425,7 @@ function addWorkOrderSourceRow(source=null){
   if(workOrderSourceRows().length>=30){alert('한 작업지시에 원료육은 최대 30건까지 입력할 수 있습니다.');return null;}
   const row=document.createElement('div');
   row.className='wo-source-row';
-  row.innerHTML=`<div class="form-group"><label>원료육 현재고 선택</label><div class="txn-managed-product-field production-picker-field"><input class="wo-stock-search" data-picker-context="workorder-input" placeholder="품목명·이력번호 검색" autocomplete="off" oninput="onWorkOrderStockInput(this)" onkeydown="handleWorkOrderPickerKeydown(event,'stock')"><button type="button" class="btn btn-secondary" onclick="openWorkOrderStockPicker(this)">검색</button></div><input type="hidden" class="wo-stock-key"></div><div class="form-group"><label>예정량(KG)</label><input class="wo-input-weight" type="number" min="0.01" step="0.01" placeholder="0.00" oninput="updateWorkOrderInputTotal()"></div><button type="button" class="btn btn-secondary wo-remove" onclick="removeWorkOrderSourceRow(this)" aria-label="원료육 행 삭제">×</button><div class="wo-source-summary">현재고에서 원료육을 선택하세요.</div>`;
+  row.innerHTML=`<div class="form-group wo-source-stock"><label>원료육 현재고 선택</label><div class="txn-managed-product-field production-picker-field"><input class="wo-stock-search" data-picker-context="workorder-input" placeholder="품목명·이력번호 검색" autocomplete="off" oninput="onWorkOrderStockInput(this)" onkeydown="handleWorkOrderPickerKeydown(event,'stock')"><button type="button" class="btn btn-secondary" onclick="openWorkOrderStockPicker(this)">검색</button></div><input type="hidden" class="wo-stock-key"></div><div class="form-group"><label>박스수(선택)</label><input class="wo-input-box-count" type="number" min="0" max="999999999" step="1" inputmode="numeric" placeholder="미기록" oninput="updateWorkOrderInputTotal()"></div><div class="form-group"><label>투입량(KG)</label><input class="wo-input-weight" type="number" min="0.01" step="0.01" placeholder="0.00" oninput="updateWorkOrderInputTotal()"></div><button type="button" class="btn btn-secondary wo-remove" onclick="removeWorkOrderSourceRow(this)" aria-label="원료육 행 삭제">×</button><div class="wo-source-summary">현재고에서 원료육을 선택하세요.</div>`;
   container.appendChild(row);
   if(source?.sourceStock){
     row._sourceStock=source.sourceStock;
@@ -20432,6 +20433,8 @@ function addWorkOrderSourceRow(source=null){
     row.querySelector('.wo-stock-search').value=source.sourceStock.product || '';
     row.querySelector('.wo-source-summary').textContent=workOrderStockLabel(source.sourceStock);
     row.querySelector('.wo-input-weight').value=parseAppNumber(source.inputWeight)>0?String(source.inputWeight):'';
+    const boxes=parseOptionalBoxCount(source.boxCount);
+    row.querySelector('.wo-input-box-count').value=Number.isNaN(boxes)?'':(boxes??'');
   }
   updateWorkOrderInputTotal();
   return row;
@@ -20443,6 +20446,7 @@ function removeWorkOrderSourceRow(button){
   if(workOrderSourceRows().length===1){
     row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-stock-search').value='';
     row.querySelector('.wo-input-weight').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
+    row.querySelector('.wo-input-box-count').value='';
     row._sourceStock=null;
   }else row.remove();
   updateWorkOrderInputTotal();refreshWorkOrderPreview();
@@ -20516,6 +20520,7 @@ function onWorkOrderStockInput(input){
   const lotEl=document.getElementById('wo-lot');
   if(previous && lotEl.dataset.autoSourceLot===lotEl.value && lotEl.value===previous.lot){lotEl.value='';lotEl.dataset.autoSourceLot='';}
   row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
+  row.querySelector('.wo-input-weight').value='';row.querySelector('.wo-input-box-count').value='';
   row._sourceStock=null;updateWorkOrderInputTotal();refreshWorkOrderPreview();
 }
 
@@ -20585,6 +20590,11 @@ function findWorkOrderStock(key){
   return workOrderStockOptions().find(s => s.key === key) || null;
 }
 
+function workOrderStockBoxes(stock){
+  const boxes=parseOptionalBoxCount(stock?.stockBoxes);
+  return Number.isNaN(boxes)?null:boxes;
+}
+
 function workOrderStockLabel(s){
   if(!s) return '';
   const parts = [
@@ -20595,6 +20605,7 @@ function workOrderStockLabel(s){
     s.origin || '',
     s.proddate ? `생산일 ${s.proddate}` : '',
     `${parseAppNumber(s.stock).toFixed(2)}KG`,
+    workOrderStockBoxes(s)===null ? '박스수 미기록' : `${boxCountDisplay(workOrderStockBoxes(s))}박스`,
     s.price ? `${Number(s.price).toLocaleString()}원/KG` : '',
     s.stockNote || ''
   ].filter(Boolean);
@@ -20610,7 +20621,8 @@ function selectWorkOrderStock(key,targetInput){
   row.querySelector('.wo-stock-key').value=s.key;
   row.querySelector('.wo-stock-search').value=s.product || '';
   row.querySelector('.wo-source-summary').textContent=workOrderStockLabel(s);
-  if(!row.querySelector('.wo-input-weight').value)row.querySelector('.wo-input-weight').value=parseAppNumber(s.stock).toFixed(2);
+  row.querySelector('.wo-input-weight').value=parseAppNumber(s.stock).toFixed(2);
+  row.querySelector('.wo-input-box-count').value=workOrderStockBoxes(s)??'';
   const lotEl=document.getElementById('wo-lot');
   const selected=workOrderSourceRows().filter(item=>item.querySelector('.wo-stock-key').value);
   if(selected.length===1 && (!lotEl.value || lotEl.dataset.autoSourceLot===lotEl.value)){lotEl.value=s.lot || '';lotEl.dataset.autoSourceLot=lotEl.value;}
@@ -20630,7 +20642,7 @@ function workOrderStockSnapshot(stock){
     key:stock.key,stockRowId:stock.stockRowId || '',stockNote:stock.stockNote || '',
     product:stock.product || '',packunit:stock.packunit || '',lot:stock.lot || '',origin:stock.origin || '',
     proddate:stock.proddate || '',stockLocation:stock.stockLocation || '',
-    price:parseAppNumber(stock.price),stock:parseAppNumber(stock.stock)
+    price:parseAppNumber(stock.price),stock:parseAppNumber(stock.stock),stockBoxes:workOrderStockBoxes(stock)
   };
 }
 
@@ -20647,17 +20659,26 @@ function collectWorkOrderForm(){
     const key=row.querySelector('.wo-stock-key').value;
     const search=row.querySelector('.wo-stock-search').value.trim();
     const qtyText=row.querySelector('.wo-input-weight').value;
-    if(!key && !search && !qtyText)continue;
+    const boxText=row.querySelector('.wo-input-box-count').value;
+    if(!key && !search && !qtyText && !boxText)continue;
     const stock=key && (row._sourceStock?.key===key?row._sourceStock:findWorkOrderStock(key));
     if(!stock){alert('각 투입 원료육을 현재고 검색에서 선택해주세요.');return null;}
     const qty=Number(qtyText);
     if(!qtyText || !Number.isFinite(qty) || qty<=0 || qty>999999999 || Math.abs(qty*100-Math.round(qty*100))>0.000001){
-      alert('원료육마다 투입 예정량을 0보다 크게, 소수 둘째 자리까지 입력해주세요.');return null;
+      alert('원료육마다 투입량을 0보다 크게, 소수 둘째 자리까지 입력해주세요.');return null;
+    }
+    const boxCount=parseOptionalBoxCount(boxText);
+    if(Number.isNaN(boxCount) || (boxCount!==null && boxCount>999999999)){
+      alert('박스수는 0 이상의 정수로 입력하거나 비워두세요.');return null;
+    }
+    const availableBoxes=workOrderStockBoxes(stock);
+    if(boxCount!==null && availableBoxes!==null && boxCount>availableBoxes){
+      alert(`${stock.product}: 현재 재고 ${boxCountDisplay(availableBoxes)}박스보다 투입 박스수가 큽니다.`);return null;
     }
     const identity=stock.stockRowId || key;
-    if(usedKeys.has(identity)){alert('같은 재고는 한 번만 선택하고 예정량을 합쳐 입력해주세요.');return null;}
+    if(usedKeys.has(identity)){alert('같은 재고는 한 번만 선택하고 투입량을 합쳐 입력해주세요.');return null;}
     usedKeys.add(identity);
-    sourceInputs.push({sourceStockKey:key,sourceStock:workOrderStockSnapshot(stock),inputWeight:qty});
+    sourceInputs.push({sourceStockKey:key,sourceStock:workOrderStockSnapshot(stock),inputWeight:qty,boxCount});
   }
   if(!sourceInputs.length){alert('투입 원료육을 하나 이상 선택해주세요.');return null;}
   if(sourceInputs.length>1 && !val('wo-lot').trim()){alert('여러 원료육을 투입할 때는 생산물 이력번호를 입력해주세요.');return null;}
@@ -20671,6 +20692,7 @@ function collectWorkOrderForm(){
     sourceStock:sourceInputs[0].sourceStock,
     sourceInputs,
     inputWeight,
+    inputBoxCount:totalRecordedBoxes(sourceInputs),
     labelProductId: val('wo-label-product-id') || selectedProduct?.id || '',
     productCode: selectedProduct?.productCode || '',
     brand: selectedProduct?.brand || '',
@@ -20779,14 +20801,14 @@ function renderWorkOrders(){
   }
   wrap.innerHTML = `<table style="min-width:680px;">
     <thead><tr>
-      <th>생산물</th><th>이력번호</th><th>투입 원료육</th><th>투입 예정량</th><th>관리</th>
+      <th>생산물</th><th>이력번호</th><th>투입 원료육</th><th>투입량</th><th>관리</th>
     </tr></thead>
     <tbody>${rows.map(r => `
       <tr>
         <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div></td>
         <td>${htmlEscape(r.lot || '')}</td>
-        <td>${workOrderSourceInputs(r).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
-        <td style="text-align:right;white-space:nowrap;">${r.inputWeight == null || r.inputWeight === '' ? '-' : parseAppNumber(r.inputWeight).toFixed(2)+' KG'}</td>
+        <td>${workOrderSourceInputs(r).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${boxCountDisplay(source.boxCount,'') ? boxCountDisplay(source.boxCount)+'박스 · ' : ''}${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
+        <td style="text-align:right;white-space:nowrap;">${r.inputWeight == null || r.inputWeight === '' ? '-' : parseAppNumber(r.inputWeight).toFixed(2)+' KG'}${totalRecordedBoxes(workOrderSourceInputs(r))===null?'':'<br><small>'+boxCountDisplay(totalRecordedBoxes(workOrderSourceInputs(r)))+' 박스</small>'}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm" onclick="editWorkOrder(${jsArg(r.id)})">수정</button>
           <button class="btn btn-primary btn-sm" onclick="selectLabelWorkOrder(${jsArg(r.id)})">라벨</button>

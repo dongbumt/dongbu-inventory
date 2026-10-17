@@ -1232,6 +1232,7 @@
         ingredients: row.ingredients || '',
         temptype: row.temptype || '냉동',
         inputWeight: toNumber(row.inputWeight),
+        ...(row.inputBoxCount!=null?{inputBoxCount:row.inputBoxCount}:{}),
         sourceStock: row.sourceStock || null,
         ...(Array.isArray(row.sourceInputs)&&row.sourceInputs.length?{sourceInputs:row.sourceInputs}:{}),
         labelSize: row.labelSize || '7x10'
