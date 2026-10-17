@@ -446,8 +446,7 @@
   .bulk-in-row-product-search .btn{flex:0 0 auto;padding:5px 8px;white-space:nowrap;}
   .bulk-in-row-product-content .bulk-in-product{width:100%;padding:6px 7px;font-size:12px;}
   .bulk-in-row-product-content .bulk-in-product-meta{flex:1 1 340px;grid-template-columns:minmax(90px,1.25fr) minmax(70px,.9fr) minmax(70px,.9fr) minmax(60px,.75fr);}
-  .bulk-in-trader-search-wrap{min-width:0;}
-  .bulk-in-trader-search-wrap .bulk-in-trader-results{width:max(100%,280px);}
+  .bulk-trader-search-wrap{min-width:0;}
   .bulk-out-stock-search{display:flex;align-items:center;gap:4px;min-width:210px;}
   .bulk-out-stock-search .bulk-out-stock-input{flex:1;min-width:0;width:100%;padding:5px 6px;font-size:12px;}
   .bulk-out-stock-search .btn{flex:0 0 auto;padding:5px 8px;white-space:nowrap;}

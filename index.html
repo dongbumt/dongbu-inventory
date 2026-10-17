@@ -24,7 +24,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261016usage1">
+<link rel="stylesheet" href="styles/main.css?v=20261017trader1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
 <link rel="stylesheet" href="styles/expense-stores.css?v=20261013store1">
@@ -892,9 +892,9 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <div class="form-group bulk-in-common-trader">
           <label>거래처 일괄 채우기</label>
           <div style="display:flex;gap:4px;">
-            <div class="txn-trader-search-wrap bulk-in-trader-search-wrap" style="flex:1;min-width:0;">
-              <input id="bulk-in-trader-common" class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkInboundTraderSearch(this,true)" onfocus="onBulkInboundTraderSearch(this,false)" onblur="hideBulkInboundTraderResults(this)" onkeydown="handleBulkInboundTraderSearchKeydown(event,this)" style="width:100%;">
-              <div class="txn-trader-results bulk-in-trader-results" role="listbox" style="display:none;"></div>
+            <div class="txn-trader-search-wrap bulk-trader-search-wrap" style="flex:1;min-width:0;">
+              <input id="bulk-in-trader-common" class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkTraderSearch(this,true)" onfocus="onBulkTraderSearch(this,false)" onblur="hideBulkTraderResults(this)" onkeydown="handleBulkTraderSearchKeydown(event,this)" style="width:100%;">
+              <div class="txn-trader-results bulk-trader-results" role="listbox" style="display:none;"></div>
             </div>
             <button class="btn btn-sm btn-secondary" onclick="applyBulkInboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
           </div>
@@ -954,7 +954,10 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <div class="form-group" style="max-width:260px;">
           <label>거래처 일괄 채우기</label>
           <div style="display:flex;gap:4px;">
-            <input id="bulk-out-trader-common" list="sales-trader-list" placeholder="거래처명" style="flex:1;">
+            <div class="txn-trader-search-wrap bulk-trader-search-wrap" style="flex:1;min-width:0;">
+              <input id="bulk-out-trader-common" class="bulk-out-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkTraderSearch(this,true)" onfocus="onBulkTraderSearch(this,false)" onblur="hideBulkTraderResults(this)" onkeydown="handleBulkTraderSearchKeydown(event,this)" style="width:100%;">
+              <div class="txn-trader-results bulk-trader-results" role="listbox" style="display:none;"></div>
+            </div>
             <button class="btn btn-sm btn-secondary" onclick="applyBulkOutboundTrader()" title="비어있는 모든 행에 거래처 채우기" style="white-space:nowrap;">↓ 적용</button>
           </div>
         </div>
@@ -8588,8 +8591,7 @@ let txnTraderSearchRows = [];
 let txnTraderSearchIndex = -1;
 let txnTraderSearchHideTimer = null;
 
-function getTxnTraderSearchRows(){
-  const type = document.getElementById('t-type')?.value || '';
+function getTxnTraderSearchRows(type = document.getElementById('t-type')?.value || ''){
   return Object.keys(traderInfoMap || {})
     .filter(name => {
       const info = traderInfoMap?.[name] || {};
@@ -9191,56 +9193,45 @@ function hideBulkProductResults(inp){
   }, 180);
 }
 
-let bulkInboundTraderSearchRows = [];
-let bulkInboundTraderSearchIndex = -1;
-let bulkInboundTraderSearchInput = null;
-let bulkInboundTraderSearchHideTimer = null;
+// 일괄 입고·출고도 새 거래내역과 같은 검색 대상과 표시 형식을 사용한다.
+let bulkTraderSearchRows = [];
+let bulkTraderSearchIndex = -1;
+let bulkTraderSearchInput = null;
+let bulkTraderSearchHideTimer = null;
 
-function getBulkInboundTraderSearchRows(){
-  return Object.keys(traderInfoMap || {})
-    .filter(name=>{
-      const info = traderInfoMap?.[name] || {};
-      if(!name || info.alias === true || info.active === false) return false;
-      const tradeType = String(info.tradeType || '').trim();
-      return tradeType === '매입' || tradeType === '매입/매출';
-    })
-    .map(name=>({name, info:traderInfoMap[name] || {}}))
-    .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+function bulkTraderSearchBox(inp){
+  return inp?.closest('.bulk-trader-search-wrap')?.querySelector('.bulk-trader-results') || null;
 }
 
-function bulkInboundTraderSearchBox(inp){
-  return inp?.closest('.bulk-in-trader-search-wrap')?.querySelector('.bulk-in-trader-results') || null;
-}
-
-function onBulkInboundTraderSearch(inp){
+function onBulkTraderSearch(inp, isInput=false){
   if(!inp) return;
-  if(bulkInboundTraderSearchHideTimer){
-    clearTimeout(bulkInboundTraderSearchHideTimer);
-    bulkInboundTraderSearchHideTimer = null;
-  }
-  document.querySelectorAll('#bulk-inbound-body .bulk-in-trader-results').forEach(box=>{
-    if(box !== bulkInboundTraderSearchBox(inp)) box.style.display = 'none';
-  });
-  bulkInboundTraderSearchInput = inp;
-  const box = bulkInboundTraderSearchBox(inp);
+  const box = bulkTraderSearchBox(inp);
   if(!box) return;
+  if(bulkTraderSearchInput && bulkTraderSearchInput !== inp) hideBulkTraderResults(bulkTraderSearchInput, true);
+  if(bulkTraderSearchHideTimer){
+    clearTimeout(bulkTraderSearchHideTimer);
+    bulkTraderSearchHideTimer = null;
+  }
+  bulkTraderSearchInput = inp;
+  const isOutbound = inp.classList.contains('bulk-out-trader');
+  if(isInput && isOutbound) refreshBulkOutboundPrice(inp.closest('tr'));
   const query = String(inp.value || '').trim().toLowerCase();
-  bulkInboundTraderSearchRows = getBulkInboundTraderSearchRows()
+  bulkTraderSearchRows = getTxnTraderSearchRows(isOutbound ? '출고' : '입고')
     .filter(row=>!query || txnTraderSearchText(row).includes(query))
     .slice(0,80);
-  const exactIndex = bulkInboundTraderSearchRows.findIndex(row=>samePriceText(row.name, inp.value));
-  bulkInboundTraderSearchIndex = exactIndex >= 0 ? exactIndex : (bulkInboundTraderSearchRows.length ? 0 : -1);
-  if(!bulkInboundTraderSearchRows.length){
+  const exactIndex = bulkTraderSearchRows.findIndex(row=>samePriceText(row.name, inp.value));
+  bulkTraderSearchIndex = exactIndex >= 0 ? exactIndex : (bulkTraderSearchRows.length ? 0 : -1);
+  if(!bulkTraderSearchRows.length){
     box.innerHTML = '<div class="txn-trader-empty">검색 결과 없음</div>';
   }else{
-    box.innerHTML = bulkInboundTraderSearchRows.map((row,index)=>`<div class="txn-trader-option${index===bulkInboundTraderSearchIndex?' active':''}" role="option" aria-selected="${index===bulkInboundTraderSearchIndex?'true':'false'}" data-index="${index}">
+    box.innerHTML = bulkTraderSearchRows.map((row,index)=>`<div class="txn-trader-option${index===bulkTraderSearchIndex?' active':''}" role="option" aria-selected="${index===bulkTraderSearchIndex?'true':'false'}" data-index="${index}">
       <strong>${htmlEscape(row.name)}</strong>
       <span>${htmlEscape(txnTraderOptionDetail(row.info))}</span>
     </div>`).join('');
     box.querySelectorAll('.txn-trader-option').forEach(option=>{
       option.addEventListener('mousedown', event=>{
         event.preventDefault();
-        selectBulkInboundTraderSearchResult(Number(option.dataset.index));
+        selectBulkTraderSearchResult(Number(option.dataset.index));
       });
     });
   }
@@ -9248,61 +9239,62 @@ function onBulkInboundTraderSearch(inp){
   inp.setAttribute('aria-expanded','true');
 }
 
-function syncBulkInboundTraderSearchSelection(){
-  const box = bulkInboundTraderSearchBox(bulkInboundTraderSearchInput);
+function syncBulkTraderSearchSelection(){
+  const box = bulkTraderSearchBox(bulkTraderSearchInput);
   if(!box) return;
   box.querySelectorAll('.txn-trader-option').forEach(option=>{
-    const selected = Number(option.dataset.index) === bulkInboundTraderSearchIndex;
+    const selected = Number(option.dataset.index) === bulkTraderSearchIndex;
     option.classList.toggle('active', selected);
     option.setAttribute('aria-selected', selected ? 'true' : 'false');
   });
-  box.querySelector(`.txn-trader-option[data-index="${bulkInboundTraderSearchIndex}"]`)?.scrollIntoView({block:'nearest'});
+  box.querySelector(`.txn-trader-option[data-index="${bulkTraderSearchIndex}"]`)?.scrollIntoView({block:'nearest'});
 }
 
-function selectBulkInboundTraderSearchResult(index){
-  const row = bulkInboundTraderSearchRows[index];
-  const inp = bulkInboundTraderSearchInput;
+function selectBulkTraderSearchResult(index){
+  const row = bulkTraderSearchRows[index];
+  const inp = bulkTraderSearchInput;
   if(!row || !inp) return;
   inp.value = row.name;
-  hideBulkInboundTraderResults(inp, true);
+  hideBulkTraderResults(inp, true);
+  if(inp.classList.contains('bulk-out-trader')) refreshBulkOutboundPrice(inp.closest('tr'));
 }
 
-function handleBulkInboundTraderSearchKeydown(event, inp){
-  const box = bulkInboundTraderSearchBox(inp);
+function handleBulkTraderSearchKeydown(event, inp){
+  const box = bulkTraderSearchBox(inp);
   const isOpen = box && box.style.display !== 'none';
   if(event.key === 'Escape'){
     event.preventDefault();
-    hideBulkInboundTraderResults(inp, true);
+    hideBulkTraderResults(inp, true);
     return;
   }
   if(event.key === 'ArrowDown' || event.key === 'ArrowUp'){
     event.preventDefault();
-    if(!isOpen) onBulkInboundTraderSearch(inp, false);
-    if(!bulkInboundTraderSearchRows.length) return;
+    if(!isOpen) onBulkTraderSearch(inp, false);
+    if(!bulkTraderSearchRows.length) return;
     const delta = event.key === 'ArrowDown' ? 1 : -1;
-    bulkInboundTraderSearchIndex = Math.max(0, Math.min((bulkInboundTraderSearchIndex < 0 ? 0 : bulkInboundTraderSearchIndex) + delta, bulkInboundTraderSearchRows.length - 1));
-    syncBulkInboundTraderSearchSelection();
+    bulkTraderSearchIndex = Math.max(0, Math.min((bulkTraderSearchIndex < 0 ? 0 : bulkTraderSearchIndex) + delta, bulkTraderSearchRows.length - 1));
+    syncBulkTraderSearchSelection();
     return;
   }
-  if(event.key === 'Enter' && isOpen && bulkInboundTraderSearchIndex >= 0){
+  if(event.key === 'Enter' && isOpen && bulkTraderSearchIndex >= 0){
     event.preventDefault();
-    selectBulkInboundTraderSearchResult(bulkInboundTraderSearchIndex);
+    selectBulkTraderSearchResult(bulkTraderSearchIndex);
   }
 }
 
-function hideBulkInboundTraderResults(inp, immediate=false){
+function hideBulkTraderResults(inp, immediate=false){
   const hide = ()=>{
-    const box = bulkInboundTraderSearchBox(inp);
+    const box = bulkTraderSearchBox(inp);
     if(box) box.style.display = 'none';
     if(inp) inp.setAttribute('aria-expanded','false');
   };
-  if(bulkInboundTraderSearchHideTimer) clearTimeout(bulkInboundTraderSearchHideTimer);
+  if(bulkTraderSearchHideTimer) clearTimeout(bulkTraderSearchHideTimer);
   if(immediate){
-    bulkInboundTraderSearchHideTimer = null;
+    bulkTraderSearchHideTimer = null;
     hide();
   }else{
-    bulkInboundTraderSearchHideTimer = setTimeout(()=>{
-      bulkInboundTraderSearchHideTimer = null;
+    bulkTraderSearchHideTimer = setTimeout(()=>{
+      bulkTraderSearchHideTimer = null;
       hide();
     },180);
   }
@@ -9314,7 +9306,7 @@ function addBulkInboundRow(){
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td class="bulk-in-product-cell"><div class="bulk-in-row-product-content"><div class="bulk-in-product-search-shell"><div class="bulk-in-row-product-search"><input class="bulk-in-product" placeholder="품목명 검색" autocomplete="off" oninput="onBulkInboundProductInput(this)" onkeydown="handleBulkInboundProductPickerKeydown(event,this)"><button type="button" class="btn btn-sm btn-secondary" onclick="openBulkInboundProductPicker(this.parentElement.querySelector('.bulk-in-product'))" title="품목 검색 팝업 열기">검색</button></div><input type="hidden" class="bulk-in-product-id"></div><div class="bulk-in-product-meta" aria-live="polite"></div></div></td>
-    <td><div class="txn-trader-search-wrap bulk-in-trader-search-wrap"><input class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkInboundTraderSearch(this,true)" onfocus="onBulkInboundTraderSearch(this,false)" onblur="hideBulkInboundTraderResults(this)" onkeydown="handleBulkInboundTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-in-trader-results" role="listbox" style="display:none;"></div></div></td>
+    <td><div class="txn-trader-search-wrap bulk-trader-search-wrap"><input class="bulk-in-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkTraderSearch(this,true)" onfocus="onBulkTraderSearch(this,false)" onblur="hideBulkTraderResults(this)" onkeydown="handleBulkTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-trader-results" role="listbox" style="display:none;"></div></div></td>
     <td class="bulk-in-lot-cell"><input class="bulk-in-lot" placeholder="LOT번호" oninput="clearBulkInboundMeatwatchResult(this.closest('tr'),{removeNote:true})"><input type="hidden" class="bulk-in-meatwatch-process-begin"><input type="hidden" class="bulk-in-meatwatch-process-end"><input type="hidden" class="bulk-in-meatwatch-expiry"><input type="hidden" class="bulk-in-meatwatch-queried-at"><input type="hidden" class="bulk-in-livestock-species"><input type="hidden" class="bulk-in-livestock-trace-type"><input type="hidden" class="bulk-in-livestock-slaughter-date"><input type="hidden" class="bulk-in-livestock-slaughter-end-date"><input type="hidden" class="bulk-in-livestock-slaughter-houses"><input type="hidden" class="bulk-in-livestock-grades"><input type="hidden" class="bulk-in-livestock-inspection-results"><input type="hidden" class="bulk-in-livestock-process-date"><input type="hidden" class="bulk-in-livestock-process-end-date"><input type="hidden" class="bulk-in-livestock-process-companies"><input type="hidden" class="bulk-in-livestock-queried-at"><div class="bulk-in-meatwatch-status"></div></td>
     <td><input class="bulk-in-box-count" type="number" min="0" step="1" inputmode="numeric" placeholder="미기록" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-in-weight" type="number" step="0.01" placeholder="0.00" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
@@ -9769,7 +9761,7 @@ function addBulkOutboundRow(){
     <td class="bulk-out-origin-cell" style="font-size:11px;color:#666;text-align:center;">-</td>
     <td class="bulk-out-lot-cell" style="font-size:11px;color:#666;text-align:center;font-family:monospace;">-</td>
     <td class="bulk-out-stock-cell" style="font-size:11px;color:#666;text-align:right;">-</td>
-    <td><input class="bulk-out-trader" list="sales-trader-list" placeholder="거래처" oninput="refreshBulkOutboundPrice(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;"></td>
+    <td><div class="txn-trader-search-wrap bulk-trader-search-wrap"><input class="bulk-out-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkTraderSearch(this,true)" onfocus="onBulkTraderSearch(this,false)" onblur="hideBulkTraderResults(this)" onkeydown="handleBulkTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-trader-results" role="listbox" style="display:none;"></div></div></td>
     <td><input class="bulk-out-box-count" type="number" min="0" step="1" inputmode="numeric" placeholder="미기록" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
