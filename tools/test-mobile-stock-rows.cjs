@@ -75,5 +75,6 @@ assert.equal(ledger.filterRows(normalized,{status:'소진'}).length,1);
 assert.equal(ledger.summarize(ledger.filterRows(normalized)).totalWeight,3);
 assert.equal(ledger.summarize([{stock:0.25,price:1},{stock:0.25,price:1}]).totalAmount,0,'Round each row before summing, like the web');
 assert.match(fs.readFileSync(path.join(root,'index.html'),'utf8'),/DBMTStockLedger\.calculate\(userTransactions/);
-for(const page of ['index.html','mobile-admin.html'])assert.match(fs.readFileSync(path.join(root,page),'utf8'),/src="stock-ledger\.js\?v=20261015shared1"/);
+const ledgerAssets=['index.html','mobile-admin.html'].map(page=>fs.readFileSync(path.join(root,page),'utf8').match(/src="(stock-ledger\.js\?v=[^"]+)"/)[1]);
+assert.equal(ledgerAssets[0],ledgerAssets[1],'Web and mobile load the same shared-ledger version');
 console.log('PASS: shared web/mobile ledger, origin aliases, sale/corrected costs, inferred pack units, boxes/baselines, negative/default filters, row-rounded totals, permanent identities and latest notes');

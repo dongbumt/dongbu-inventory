@@ -1,0 +1,80 @@
+/* Fictional transactions only. Actual ledger, picker DOM and selection handlers. */
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
+const {chromium}=require('playwright');
+const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const ledger=fs.readFileSync(path.join(root,'stock-ledger.js'),'utf8');
+const source=name=>{const match=html.match(new RegExp(`function ${name}\\([^]*?\\n\\}`));assert(match,name);return match[0]};
+const base={product:'가상 냉장돈안심',lot:'L12610121938001',origin:'국내산',packunit:'벌크',proddate:'2026-09-01',stockLocation:'가공장'};
+const tx=[
+  {...base,id:'raw1',stockRowId:'raw1',type:'입고',date:'2026-10-10',price:7300,weight:27.86,boxCount:3},
+  {...base,id:'raw2',stockRowId:'raw2',type:'입고',date:'2026-10-11',price:7500,weight:38.82,boxCount:4},
+  {...base,id:'raw3',stockRowId:'raw3',type:'입고',date:'2026-10-12',price:7500,weight:20.19,boxCount:2},
+  {...base,id:'prod',stockRowId:'prod',type:'생산입고',date:'2026-10-15',proddate:'2026-10-14',product:'가상 생산품',weight:30,price:8000,boxCount:3},
+  {...base,id:'move',stockRowId:'raw1',type:'재고이동',date:'2026-10-16',fromLocation:'가공장',toLocation:'물류창고',stockUnitPrice:7300,weight:7.86,boxCount:1},
+  {...base,id:'old1',type:'입고',date:'2026/10/03',product:'가상 과거 원료',weight:10,price:900},
+  {...base,id:'old2',type:'입고',date:'2026-10-06',product:'가상 과거 원료',weight:5,price:900},
+  {...base,id:'oldmove',type:'재고이동',date:'2026-10-16',product:'가상 과거 원료',fromLocation:'가공장',toLocation:'외부창고',weight:5,price:900},
+  {...base,id:'unknown',type:'재고조정',date:'2026-10-16',product:'가상 날짜 미기록',proddate:'',weight:3,price:100}
+];
+const helpers=['parseAppNumber','normProdDate','priceKey','priceProductKey','samePriceText','samePriceProductText','normalizeOriginName','originKey','sameOriginText','normalizeStockLocation','stockLocationKey','getTxnStockLocation','stockPriceKey','stockDateKey','stockMapKey','getStockMap','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay',
+  'bulkOutboundIdentityKey','bulkOutboundKeyFromValues','bulkOutboundStockOptions','bulkOutboundSearchKey','bulkOutboundSearchText','bulkOutboundStockLabel','getEditingTransaction','stockOptionFromTransaction','sameBulkOutboundStockOption','outboundStockOptionsForEdit','availableStockForEdit','availableBoxesForEdit','getTxnStockSearchOptions','selectTxnStock'];
+const pickerStart=html.indexOf('let txnStockPickerRows ='),pickerEnd=html.indexOf('function selectTxnStock(',pickerStart);
+const setup=`
+var userTransactions=${JSON.stringify(tx)},EXCEL_STOCK=[],labelProducts=[],STOCK_LOCATION_DEFAULT='가공장',_stockMapCache=null,_editTxnId=null;
+var bulkOutboundStockOptionsCacheMap=null,bulkOutboundStockOptionsCacheRows=null,notices=[];
+function getTMoveFromLocation(){return ''}
+function autoFillTxnPrice(){}
+function ensureOutProductOption(){}
+function toast(message){notices.push(message)}
+${ledger}
+${helpers.map(source).join('\n')}
+${html.slice(pickerStart,pickerEnd)}
+`;
+const context=vm.createContext({});vm.runInContext(setup,context);
+const rows=Object.values(context.getStockMap());
+const find=(id,place='가공장')=>rows.find(r=>r.stockRowId===id&&r.stockLocation===place);
+assert.equal(find('raw1').inboundDate,'2026-10-10');assert.equal(find('raw2').inboundDate,'2026-10-11');assert.equal(find('raw3').inboundDate,'2026-10-12');
+assert.equal(find('raw1','물류창고').inboundDate,'2026-10-10','A transfer keeps the original receipt date');
+assert.equal(find('raw1').proddate,'2026-09-01','Receipt dates do not overwrite manufacturing dates');
+assert.equal(context.stockPickerDisplayDate(find('prod')),'2026-10-14');
+assert.ok(rows.filter(r=>r.product==='가상 과거 원료').every(r=>r.inboundDate==='2026-10-03'),'Unsplit historical aggregates use the earliest known receipt');
+const unpadded=Object.values(context.DBMTStockLedger.calculate([{...base,type:'입고',date:'2026-09-06',price:900,weight:5},{...base,type:'입고',date:'2026/9/3',price:900,weight:10}]));
+assert.equal(unpadded[0].inboundDate,'2026-09-03','Historical unpadded dates are normalized before choosing the earliest receipt');
+const before=JSON.stringify(context.userTransactions),keys=Object.keys(context.getStockMap()).sort();
+context.userTransactions[0].date='2026-10-09';context._stockMapCache=null;
+const changed=Object.values(context.getStockMap());assert.deepEqual(Object.keys(context.getStockMap()).sort(),keys,'Receipt dates cannot split or rekey stock');
+for(const row of changed){const original=rows.find(r=>r.stockRowId===row.stockRowId&&r.stockLocation===row.stockLocation&&r.product===row.product);assert.equal(row.stock,original.stock);assert.equal(row.price,original.price);assert.equal(row.stockBoxes,original.stockBoxes)}
+context.userTransactions[0].date='2026-10-10';context._stockMapCache=null;
+assert.equal(JSON.stringify(context.userTransactions),before,'Read-only display metadata never writes source transactions');
+(async()=>{
+  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
+  const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-stock-picker-dates-'));
+  try{
+    const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',route=>route.abort());
+    await page.setContent('<!doctype html><html lang="ko"><meta charset="utf-8"><body></body></html>');
+    await page.evaluate(markup=>{const t=document.createElement('template');t.innerHTML=markup;document.body.append(t.content.querySelector('#txn-stock-picker-modal'));document.body.append(t.content.querySelector('#p-transactions'));},html);
+    await page.addStyleTag({content:fs.readFileSync(path.join(root,'styles/main.css'),'utf8')});await page.addScriptTag({content:setup});
+    await page.evaluate(()=>{document.getElementById('t-type').value='출고';openTxnStockPicker('가상 냉장돈안심');document.getElementById('tsp-search-location').value='가공장';renderTxnStockPicker(true)});
+    assert.equal(await page.locator('#tsp-result-head th').nth(4).innerText(),'입고(생산)일');
+    assert.deepEqual(await page.locator('#tsp-result-body tr').evaluateAll(nodes=>nodes.map(row=>row.cells[4].textContent)),['2026-10-10','2026-10-11','2026-10-12']);
+    await page.screenshot({path:path.join(artifacts,'receipt-dates.png'),fullPage:true});
+    await page.locator('#tsp-search-all').fill('2026-10-11');assert.equal(await page.locator('#tsp-result-body tr[data-tsp-index]').count(),1);
+    await page.locator('#tsp-confirm').click();
+    assert.equal(await page.locator('#t-proddate').inputValue(),'2026-09-01','Selecting a receipt date must not change the stock manufacturing identity');
+    assert.equal(await page.locator('#t-weight').inputValue(),'38.82');assert.equal(await page.locator('#t-box-count').inputValue(),'4');
+    await page.evaluate(()=>openTxnStockPicker('가상 생산품'));
+    assert.equal(await page.locator('#tsp-result-body tr td').nth(4).innerText(),'2026-10-14');
+    await page.evaluate(()=>openTxnStockPicker('가상 날짜 미기록'));assert.equal(await page.locator('#tsp-result-body tr td').nth(4).innerText(),'-');
+    // A fully consumed inbound source stays dated when its outbound transaction is edited.
+    await page.evaluate(()=>{closeTxnStockPicker(false);userTransactions.push({...userTransactions[1],id:'sale',date:'2026-10-17',type:'출고',price:10000,stockUnitPrice:7500,stockProddate:'2026-09-01'});_stockMapCache=null;_editTxnId='sale';openTxnStockPicker('2026-10-11')});
+    assert.equal(await page.locator('#tsp-result-body tr[data-tsp-index]').count(),1);assert.equal(await page.locator('#tsp-result-body tr td').nth(4).innerText(),'2026-10-11');
+    assert.match(await page.locator('#tsp-result-body').innerText(),/38.82 KG/);
+    // The same shared picker is used by production/work-order input rows.
+    await page.evaluate(()=>{closeTxnStockPicker(false);_editTxnId=null;const target=document.createElement('input');target.dataset.pickerContext='production-input';document.body.append(target);openTxnStockPicker('가상 냉장돈안심',target)});
+    assert.equal(await page.locator('#tsp-result-head th').nth(7).innerText(),'입고(생산)일');assert.ok((await page.locator('#tsp-result-body').innerText()).includes('2026-10-10'));
+    assert.deepEqual(errors,[]);
+    console.log('PASS: separate raw receipt dates, preserved production dates/identities, transfers, legacy aggregates, unknown dates, date search, raw selection weight/boxes and fully consumed edit restoration');
+    console.log('Artifacts: '+artifacts);
+  }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1});

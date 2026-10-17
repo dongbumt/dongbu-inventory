@@ -56,7 +56,7 @@ const context = {
 vm.createContext(context);
 for(const name of [
   'parseOptionalBoxCount','boxCountDisplay','availableStockForEdit','availableBoxesForEdit',
-  'getTxnStockSearchOptions','stockPickerBoxLabel','refreshTxnStockPickerColumns',
+  'getTxnStockSearchOptions','stockPickerDisplayDate','stockPickerBoxLabel','refreshTxnStockPickerColumns',
   'renderTxnStockPicker','syncTxnStockPickerSelection','selectTxnStock','selectBulkOutboundStock',
   'selectProdInputStock','confirmTxnStockPicker','renderProdInputStockSuggestions'
 ]) vm.runInContext(source(name),context);

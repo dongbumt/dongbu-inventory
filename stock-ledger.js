@@ -290,6 +290,12 @@ function calculate(transactions, options={}){
       applyBucketProductMeta(bucket, t);
       bucket.total_in += weight;
       bucket.stock += weight;
+      // Display metadata only: an inbound date never becomes part of stock identity.
+      // Legacy aggregates retain the earliest known receipt date without splitting stock.
+      if(t.type==='입고'){
+        const receiptDate = stockLedgerDateKey(t.date);
+        if(receiptDate && (!bucket.inboundDate || receiptDate < bucket.inboundDate)) bucket.inboundDate = receiptDate;
+      }
       applyStockBoxes(bucket, t.boxCount);
       if(unitPrice > 0 && weight > 0){
         bucket.total_in_amount += unitPrice * weight;
@@ -338,6 +344,8 @@ function calculate(transactions, options={}){
       movedBuckets.forEach(s=>{ if(moveBoxesKnown) applyStockBoxes(s, t.boxCount, -1); else s.stockBoxes = null; });
       const dest = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, toLocation, stockRowId);
       applyBucketProductMeta(dest, t);
+      const receiptDates = [dest.inboundDate,...movedBuckets.map(s=>s.inboundDate)].filter(Boolean).sort();
+      if(receiptDates.length) dest.inboundDate = receiptDates[0];
       dest.total_adjust += weight;
       dest.stock += weight;
       if(moveBoxesKnown && movedBuckets[0].stockBoxes !== null) applyStockBoxes(dest, t.boxCount);
@@ -389,14 +397,19 @@ function calculate(transactions, options={}){
   });
   const productionNotes = new Map();
   const inboundPrices = new Map();
+  const inboundDates = new Map();
   stockTxns.forEach(({t})=>{
     if(t.type === '생산입고' && t.stockRowId) productionNotes.set(String(t.stockRowId), String(t.stockNote || ''));
-    if(t.type === '입고' && t.stockRowId) inboundPrices.set(String(t.stockRowId), getTxnUnitPrice(t));
+    if(t.type === '입고' && t.stockRowId){
+      inboundPrices.set(String(t.stockRowId), getTxnUnitPrice(t));
+      inboundDates.set(String(t.stockRowId), stockLedgerDateKey(t.date));
+    }
   });
   Object.values(map).forEach(bucket=>{
     if(bucket.stockRowId && productionNotes.has(bucket.stockRowId)) bucket.stockNote = productionNotes.get(bucket.stockRowId);
     // 이동 당시 단가가 남아 있어도 현재 재고 평가는 정정한 입고원본 단가를 따른다.
     if(bucket.stockRowId && inboundPrices.has(bucket.stockRowId)) bucket.price = inboundPrices.get(bucket.stockRowId);
+    if(bucket.stockRowId && inboundDates.has(bucket.stockRowId)) bucket.inboundDate = inboundDates.get(bucket.stockRowId);
   });
   // 과거 재고행은 품목 스냅샷이 없을 수 있다. 영구 ID/제품코드 또는 유일하게
   // 식별되는 품목만 마스터와 연결해 브랜드·등급을 보완한다.
