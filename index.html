@@ -27,6 +27,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/main.css?v=20261017trader1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
+<link rel="stylesheet" href="styles/label-stock-split.css?v=20261017split1">
 <link rel="stylesheet" href="styles/expense-stores.css?v=20261013store1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
@@ -1118,7 +1119,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="ct-bar" style="background:var(--orange);"></div>
       새 생산일보 입력
     </div>
-    <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 일반 생산일보처럼 모든 입력 항목을 수정할 수 있으며, 저장하면 변경된 내용으로 재고에 반영됩니다. 기존 라벨 출력이력은 변경되지 않습니다.</div>
+    <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 수정 가능한 항목을 저장하면 변경된 내용으로 재고에 반영되며, 기존 라벨 출력이력은 유지됩니다. 라벨 분할된 생산품의 품목·중량·박스수는 직접 변경할 수 없습니다. 추가 분할은 라벨 분할 버튼을 이용하세요.</div>
 
     <div class="form-row">
       <div class="form-group"><label>작업일</label><input type="date" id="prod-date" onchange="autoSetJobNo()"></div>
@@ -11407,7 +11408,7 @@ function renderProduction(){
            <td style="text-align:right;font-weight:500">${out.amount?Math.round(parseAppNumber(out.qty)*parseAppNumber(out.price)).toLocaleString():'-'}</td>
            <td style="font-family:var(--font-mono);font-size:11px">${out.lot||'-'}</td>`
         :'<td colspan="6"></td>';
-      html+='<td></td>'; // 관리열(소계행에서 처리)
+      html+=`<td class="label-split-output-manage">${out && typeof DBMTLabelStockSplit === 'object' ? DBMTLabelStockSplit.buttonHtml(e,out) : ''}</td>`;
       html+='</tr>';
     }
     // 소계 행
@@ -15361,7 +15362,10 @@ async function sbRpc(fnName, body){
   try { data = text ? JSON.parse(text) : null; } catch(e) { data = text; }
   if(!res.ok){
     const msg = data?.message || data?.error || text || `Supabase RPC failed: ${fnName}`;
-    throw new Error(msg);
+    const error = new Error(msg);
+    error.status = res.status;
+    error.code = data?.code || '';
+    throw error;
   }
   return data;
 }
@@ -15642,6 +15646,7 @@ window.startAuthenticatedErp = function(){
 window.lockErpForLogin = function(reload=false){
   document.body.classList.add('erp-auth-locked');
   clearSupabaseSessionPassword();
+  if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
   [
     'dbmt_user_transactions','dbmt_user_prod','dbmt_prices','dbmt_submaterial_usages',
     'dbmt_schedule_events','dbmt_employees','dbmt_leaves','dbmt_weekend_work',
@@ -21731,6 +21736,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="product-specs.js?v=20261013spec4"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
-<script src="m02-auth.js?v=20261013pda2"></script>
+<script src="label-stock-split.js?v=20261017split1"></script>
+<script src="m02-auth.js?v=20261017split1"></script>
 </body>
 </html>

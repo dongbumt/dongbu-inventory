@@ -127,7 +127,9 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       ${block('let _editProdId=null;','// ─── 생산일보 ─')}
       openEditProdEntry('prod_label_qa');
     `});
-    assert(await erp.locator('#prod-label-notice').isVisible());assert.match(await erp.locator('#prod-label-notice').textContent(),/모든 입력 항목을 수정/);
+    assert(await erp.locator('#prod-label-notice').isVisible());
+    assert.match(await erp.locator('#prod-label-notice').textContent(),/라벨 분할된 생산품의 품목·중량·박스수는 직접 변경할 수 없습니다/);
+    assert.match(await erp.locator('#prod-label-notice').textContent(),/기존 라벨 출력이력은 유지/);
     assert.equal(await erp.locator('#prod-out-box-count-1').inputValue(),'2','Automatically counted outer boxes load into the ordinary production editor');
     for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-in-product-1','prod-in-qty-1','prod-in-price-1','prod-out-product-1','prod-out-qty-1','prod-out-price-1','prod-output-add-btn']) assert(await erp.locator('#'+id).isEnabled(),id);
     assert.equal(await erp.locator('#prod-input-rows button:disabled,#prod-output-rows button:disabled').count(),0);

@@ -292,6 +292,7 @@
 
   function notifyPermissionSurfaces(){
     if(window.DBMTExpenseStores) window.DBMTExpenseStores.applyPermissions();
+    if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
     if(window.DBMTProductionSchedule) window.DBMTProductionSchedule.applyPermissions();
     if(typeof window.applySchedulePermissionState === 'function') window.applySchedulePermissionState();
     if(typeof window.renderScheduleCalendar === 'function' && document.getElementById('p-schedule')?.classList.contains('active')){
