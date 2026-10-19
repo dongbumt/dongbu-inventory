@@ -883,7 +883,7 @@
               <span class="order-title">${html(title)}</span>
               <span class="order-sub">${html(sub)}</span>
             </span>
-            <span class="order-badge">${completionFor(row.id) ? '완료 · ' : ''}${activeWeight ? kg(activeWeight) : '0 kg'}</span>
+            <span class="order-badge">${row._carryoverTo?'이월 완료 · ':completionFor(row.id) ? '완료 · ' : ''}${activeWeight ? kg(activeWeight) : '0 kg'}${row._carryoverFrom?'<br>이월 작업':''}</span>
           </button>`;
       }).join('');
       list.querySelectorAll('.order-row').forEach(btn => {
@@ -1005,6 +1005,7 @@
       if(kind!=='inner') kind='outer';
       if(state.loading) return;
       const row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
+      if(row?._carryoverTo){setStatus('잔량을 이월한 작업입니다. 새 라벨은 다음 작업지시에서 출력해주세요. 기존 라벨은 재출력할 수 있습니다.','warn');return;}
       if(window.DBMTLabelTouch?.productError()){setStatus(window.DBMTLabelTouch.productError(),'warn');return;}
       if(kind==='outer' && row && completionFor(row.id)){ setStatus('생산완료된 작업입니다. 기존 라벨은 출력이력에서 재출력하세요.', 'warn'); return; }
       if(!row){
@@ -1355,6 +1356,6 @@
   <script src="label-scale.js?v=20260915touch1"></script>
   <script src="label-product-selection.js?v=20260915touch3"></script>
   <script src="label-fullscreen.js?v=20260916touch4"></script>
-  <script src="label-touch.js?v=20261007noautocomplete1"></script>
+  <script src="label-touch.js?v=20261019carry1"></script>
 </body>
 </html>

@@ -63,7 +63,7 @@
     running=false;ready=false;revision=null;versions={};epoch++;read=null;
     clearInterval(timer);timer=null;status('로그인 후 자동 갱신됩니다.');
   }
-  async function write(row,expectedVersion,remove=false){
+  async function mutate(name,args,remove=false){
     if(!allowed()) throw new Error('작업지시 권한 또는 로그인 상태를 확인해주세요.');
     if(!ready) throw new Error('서버의 작업지시 목록을 불러온 후 다시 저장해주세요.');
     if(busy) throw new Error('작업지시 저장을 처리하고 있습니다. 잠시 기다려주세요.');
@@ -71,9 +71,7 @@
     const requestEpoch=epoch,token=getSupabasePassword();
     status(remove?'삭제 중…':'저장 중…');
     try{
-      const data=await rpc('dbmt_erp_write_work_order',{
-        p_token:token,p_row:row,p_expected_version:expectedVersion??null,p_delete:remove
-      });
+      const data=await rpc(name,{...args,p_token:token});
       if(!running||epoch!==requestEpoch||getSupabasePassword()!==token) throw new Error('로그인 상태가 변경되었습니다. 다시 확인해주세요.');
       if(!data?.ok) throw new Error(data?.message || '서버 저장에 실패했습니다.');
       apply(data);return data;
@@ -85,8 +83,17 @@
       if(running)void refresh(true);
     }
   }
+  function write(row,expectedVersion,remove=false){
+    return mutate('dbmt_erp_write_work_order',{p_row:row,p_expected_version:expectedVersion??null,p_delete:remove},remove);
+  }
+  async function getCarryState(id){
+    if(!allowed())throw new Error('작업지시 조회 권한 또는 로그인 상태를 확인해주세요.');
+    return rpc('dbmt_erp_get_work_order_carryover',{p_token:getSupabasePassword(),p_id:id});
+  }
+  function carry(args){return mutate('dbmt_erp_carry_work_order',args);}
+  function cancelCarry(id,version){return mutate('dbmt_erp_cancel_work_order_carryover',{p_id:id,p_expected_version:version},true);}
   function versionFor(id){return ready&&Object.prototype.hasOwnProperty.call(versions,String(id))?versions[String(id)]:null;}
-  global.DBMTWorkOrders={start,stop,refresh,write,versionFor,isReady:()=>ready};
+  global.DBMTWorkOrders={start,stop,refresh,write,versionFor,isReady:()=>ready,getCarryState,carry,cancelCarry};
   global.addEventListener('focus',()=>{if(visible())void refresh();});
   global.addEventListener('online',()=>{if(visible())void refresh(true);});
   document.addEventListener('visibilitychange',()=>{if(visible())void refresh();});

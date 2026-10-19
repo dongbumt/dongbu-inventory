@@ -91,7 +91,7 @@
     byId('scale-disconnect').disabled=!live.connected||state.loading;
     byId('scale-dialog-status').textContent=live.message;
     for(const kind of ['inner','outer']){
-      const set=s[kind],w=weight(kind),weightOmitted=isWeightOmitted(kind),n=copies(kind),locked=state.loading||!row||(kind==='outer'&&!!completionFor(row.id));
+      const set=s[kind],w=weight(kind),weightOmitted=isWeightOmitted(kind),n=copies(kind),locked=state.loading||!row||!!row._carryoverTo||(kind==='outer'&&!!completionFor(row.id));
       byId(`${kind}-weight-btn`).innerHTML=weightOmitted?'<strong>미표기</strong><small>중량 없음</small>':`<strong>${w?w.toFixed(2):'—'}</strong><small>kg</small>`;
       byId(`${kind}-weight-btn`).disabled=locked||set.mode==='scale';
       byId(`${kind}-weight-help`).textContent=set.mode==='scale'?'저울 안정 중량 자동 적용':weightOmitted?'0 kg · 중량 미표기로 출력':'터치하여 중량 입력';
@@ -120,9 +120,9 @@
     byId('current-work-title').textContent=row?(row.title||row.product):'작업지시를 선택하세요';
     byId('current-work-meta').textContent=row?`${row.date||''} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'먼저 PIN으로 연결하세요.';
     const completed=row&&completionFor(row.id);
-    byId('current-work-state').textContent=completed?'생산일보 전송 완료':row&&completionRecordFor(row.id)?.deleted?'전송 취소 · 수정 가능':row?'라벨 출력 중':'연결 대기';
+    byId('current-work-state').textContent=row?._carryoverTo?`잔량 이월 완료 · ${row._carryoverTo.date}`:completed?'생산일보 전송 완료':row&&completionRecordFor(row.id)?.deleted?'전송 취소 · 수정 가능':row?'라벨 출력 중':'연결 대기';
     byId('cancel-transfer-open').hidden=!completed;
-    byId('cancel-transfer-open').disabled=state.loading||!completed;
+    byId('cancel-transfer-open').disabled=state.loading||!completed||!!row?._carryoverTo;
     byId('complete-production-btn').hidden=!!completed;
     byId('cancel-transfer-confirm').disabled=state.loading;
     document.querySelectorAll('#cancel-transfer-dialog [data-close]').forEach(b=>b.disabled=state.loading);

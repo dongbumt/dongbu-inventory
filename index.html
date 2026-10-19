@@ -28,6 +28,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261017split1">
+<link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
 <link rel="stylesheet" href="styles/expense-stores.css?v=20261013store1">
 <link rel="stylesheet" href="styles/company-master.css?v=20260813m01">
 <link rel="stylesheet" href="styles/cold-storage-request.css?v=20260813d">
@@ -3745,6 +3746,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   <div style="display:grid;grid-template-columns:minmax(360px,1fr) minmax(420px,1.2fr);gap:16px;align-items:start;">
     <div class="card" id="wo-editor">
       <div class="card-title"><div class="ct-bar" style="background:#6c3483;"></div>📝 작업지시 등록 / 수정</div>
+      <div id="wo-carry-note" style="font-size:11px;color:#666;margin-bottom:6px;"></div>
       <input type="hidden" id="wo-edit-id">
 
       <div style="display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px;">
@@ -3760,7 +3762,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <label>투입 원료육</label>
           <div id="wo-source-rows"></div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="addWorkOrderSourceRow()">+ 원료육 추가</button>
+            <button id="wo-add-source" type="button" class="btn btn-secondary btn-sm" onclick="addWorkOrderSourceRow()">+ 원료육 추가</button>
             <span id="wo-input-total" style="font-size:12px;color:#555;">투입량 합계 0.00 KG</span>
           </div>
           <div style="font-size:11px;color:#777;margin-top:5px;">재고를 선택하면 현재 중량과 박스수가 입력됩니다. 실제 투입량으로 수정할 수 있으며, 여러 LOT를 섞는 경우 생산물 이력번호를 확인해주세요.</div>
@@ -20487,6 +20489,7 @@ function initWorkOrderForm(){
 function resetWorkOrderForm(force=false){
   if(workOrderSaving&&!force)return;
   window.workOrderEditVersion=null;workOrderPendingSave=null;
+  window.DBMTWorkOrderCarryover?.applyEditor(null);
   ['wo-edit-id','wo-label-product-id','wo-title',
    'wo-product','wo-origin','wo-grade','wo-weight','wo-itemno','wo-lot','wo-ingredients'].forEach(id => {
     const el = document.getElementById(id);
@@ -20668,12 +20671,13 @@ function workOrderStockSnapshot(stock){
 
 function collectWorkOrderForm(){
   const val = id => document.getElementById(id)?.value || '';
+  const linked=workOrders.find(row=>String(row.id)===String(val('wo-edit-id')));
   const product = val('wo-product').trim();
   const date = val('wo-date');
   const weight = parseAppNumber(val('wo-weight'));
   if(!date){ alert('작업일을 입력해주세요.'); return null; }
   if(!product){ alert('생산물 제품명을 입력해주세요.'); return null; }
-  const sourceInputs=[];
+  let sourceInputs=[];
   const usedKeys=new Set();
   for(const row of workOrderSourceRows()){
     const key=row.querySelector('.wo-stock-key').value;
@@ -20701,10 +20705,12 @@ function collectWorkOrderForm(){
     sourceInputs.push({sourceStockKey:key,sourceStock:workOrderStockSnapshot(stock),inputWeight:qty,boxCount});
   }
   if(!sourceInputs.length){alert('투입 원료육을 하나 이상 선택해주세요.');return null;}
+  if(linked?._carryoverFrom)sourceInputs=workOrderSourceInputs(linked);
   if(sourceInputs.length>1 && !val('wo-lot').trim()){alert('여러 원료육을 투입할 때는 생산물 이력번호를 입력해주세요.');return null;}
   const inputWeight=Math.round(sourceInputs.reduce((sum,item)=>sum+item.inputWeight,0)*100)/100;
   const selectedProduct = selectedWorkOrderLabelProduct();
   return {
+    ...(linked?._carryoverFrom?{_carryoverFrom:linked._carryoverFrom}:{}),
     id: val('wo-edit-id') || workOrderId(),
     date,
     title: val('wo-title').trim(),
@@ -20793,6 +20799,7 @@ function editWorkOrder(id){
   document.getElementById('wo-lot').dataset.autoSourceLot='';
   set('wo-ingredients', row.ingredients);
   set('wo-temptype', row.temptype || '냉동');
+  window.DBMTWorkOrderCarryover?.applyEditor(row);
   refreshWorkOrderPreview();
 }
 
@@ -20849,14 +20856,17 @@ function renderWorkOrders(){
     </tr></thead>
     <tbody>${rows.map(r => `
       <tr>
-        <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div></td>
+        <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div>${window.DBMTWorkOrderCarryover?.relationHtml(r)||''}</td>
         <td>${htmlEscape(r.lot || '')}</td>
         <td>${workOrderSourceInputs(r).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${boxCountDisplay(source.boxCount,'') ? boxCountDisplay(source.boxCount)+'박스 · ' : ''}${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
         <td style="text-align:right;white-space:nowrap;">${r.inputWeight == null || r.inputWeight === '' ? '-' : parseAppNumber(r.inputWeight).toFixed(2)+' KG'}${totalRecordedBoxes(workOrderSourceInputs(r))===null?'':'<br><small>'+boxCountDisplay(totalRecordedBoxes(workOrderSourceInputs(r)))+' 박스</small>'}</td>
         <td style="white-space:nowrap;">
-          <button class="btn btn-sm" onclick="editWorkOrder(${jsArg(r.id)})">수정</button>
+          <div class="wo-actions">
+          ${r._carryoverTo?'':`<button class="btn btn-sm" onclick="editWorkOrder(${jsArg(r.id)})">수정</button>`}
           <button class="btn btn-primary btn-sm" onclick="selectLabelWorkOrder(${jsArg(r.id)})">라벨</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteWorkOrder(${jsArg(r.id)})">삭제</button>
+          ${r._carryoverTo||r._carryoverFrom?'':`<button class="btn btn-danger btn-sm" onclick="deleteWorkOrder(${jsArg(r.id)})">삭제</button>`}
+          ${window.DBMTWorkOrderCarryover?.buttonHtml(r)||''}
+          </div>
         </td>
       </tr>`).join('')}</tbody>
   </table>`;
@@ -21001,6 +21011,7 @@ function updateSelectedWorkOrderLabelPreview(){
 function printSelectedWorkOrderLabel(){
   const row = selectedLabelWorkOrder();
   if(!row){ alert('출력할 작업지시를 선택해주세요.'); return; }
+  if(row._carryoverTo){alert('잔량을 이월한 작업입니다. 다음 작업지시에서 새 라벨을 출력해주세요.');return;}
   const weight = DBMTLabelWeight.value('lbl-weight');
   if(!weight){ alert('라벨 1장 중량을 0보다 큰 값으로 선택하거나 소수 둘째 자리까지 입력해주세요.'); return; }
   printLabelData(workOrderLabelData({...row, weight}), row.labelSize || '7x10', getLabelPrintCount());
@@ -21803,7 +21814,8 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261017split1"></script>
-<script src="work-orders-sync.js?v=20261019row1"></script>
+<script src="work-orders-sync.js?v=20261019carry1"></script>
+<script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="m02-auth.js?v=20261017split1"></script>
 </body>
 </html>
