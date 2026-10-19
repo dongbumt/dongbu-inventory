@@ -1,7 +1,13 @@
 (function(){
   'use strict';
   const plan=id=>document.getElementById('mp-'+id),order=id=>document.getElementById('mw-'+id);
-  const state={events:[],orders:[],editing:null,selected:'',saving:false,loading:false,orderLoading:false,planRequest:0,orderRequest:0};
+  const state={events:[],orders:[],editing:null,selected:'',saving:false,loading:false,refreshing:false,orderLoading:false,planRequest:0,orderRequest:0};
+  const linked=row=>row.source==='work_order';
+  async function openWorkOrder(id){
+    const row=state.events.find(item=>item.id===id);if(!row||!linked(row)||state.saving)return;
+    order('from').value=row.date;order('to').value=row.date;order('search').value='';
+    showView('workorders');
+  }
   function message(node,value='',error=false){node.textContent=value;node.classList.toggle('error',error);}
   function dates(){
     if(!plan('anchor').value)plan('anchor').value=localDate();
@@ -19,7 +25,7 @@
   }
   function reset(){
     state.planRequest++;state.orderRequest++;state.events=[];state.orders=[];state.editing=null;state.selected='';
-    state.saving=false;state.loading=false;state.orderLoading=false;closeEditor();sync();
+    state.saving=false;state.loading=false;state.refreshing=false;state.orderLoading=false;closeEditor();sync();
     plan('anchor').value='';order('search').value='';order('from').value='';order('to').value='';
     for(const id of ['grid','list','totals','count','range','selected-label','selected-count'])plan(id).replaceChildren();
     order('list').replaceChildren();order('count').textContent='';message(plan('message'));message(order('message'));
@@ -44,24 +50,28 @@
     plan('selected-label').textContent=scheduleDayLabel(state.selected);plan('selected-count').textContent=`${rows.length}건`;
     const sum=status=>qty(rows.filter(row=>row.status===status).reduce((total,row)=>total+Number(row.qty||0),0));
     plan('totals').innerHTML=`<span>예정 <strong>${sum('planned')} KG</strong></span><span>완료 <strong>${sum('completed')} KG</strong></span>${rows.some(row=>row.qty===null)?'<span>수량 미정 포함</span>':''}`;
-    plan('list').innerHTML=rows.length?rows.map(row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.product)} <span class="tag">${row.qty===null?'수량 미정':qty(row.qty)+' KG'}</span></div><button type="button" class="agenda-edit" data-plan-edit="${text(row.id)}" ${state.saving||state.loading?'disabled':''}>수정</button></div><div class="meta"><span class="tag">${row.status==='completed'?'완료':'예정'}</span>${row.trader?`<span>${text(row.trader)}</span>`:''}</div>${row.note?`<div class="mp-card-note">${text(row.note)}</div>`:''}</div>`).join(''):state.loading?'<div class="empty">생산일정을 불러오는 중입니다.</div>':empty('선택한 날짜의 생산일정');
+    plan('list').innerHTML=rows.length?rows.map(row=>`<div class="row"><div class="row-top"><div class="row-title">${text(row.product)} <span class="tag">${linked(row)?(row.status==='completed'?'생산 ':'투입 '):''}${row.qty===null?'수량 미정':qty(row.qty)+' KG'}</span></div><button type="button" class="agenda-edit" ${linked(row)?'data-plan-order':'data-plan-edit'}="${text(row.id)}" ${state.saving||state.loading?'disabled':''}>${linked(row)?'작업지시':'수정'}</button></div><div class="meta">${linked(row)?'<span class="tag">작업지시 자동</span>':''}<span class="tag">${row.carryTo?'부분 완료 · '+text(row.carryTo)+'로 이월':row.status==='completed'?'완료':'예정'}</span>${row.trader?`<span>${text(row.trader)}</span>`:''}</div>${row.note?`<div class="mp-card-note">${text(row.note)}</div>`:''}</div>`).join(''):state.loading?'<div class="empty">생산일정을 불러오는 중입니다.</div>':empty('선택한 날짜의 생산일정');
     sync();
   }
-  async function loadPlans(){
+  async function loadPlans({quiet=false}={}){
     if(!adminToken||state.saving)return;
+    if(quiet&&(state.loading||state.refreshing))return;
     const range=dates(),token=adminToken,request=++state.planRequest;
-    state.loading=true;state.events=[];renderPlans();message(plan('message'),'생산일정을 불러오는 중…');
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
+    if(quiet)state.refreshing=true;
+    else{state.loading=true;state.events=[];renderPlans();message(plan('message'),'생산일정을 불러오는 중…');}
     try{
-      const result=await rpc('dbmt_mobile_admin_production_schedule',{p_token:token,p_start:range[0],p_end:range[20]});
+      const result=await rpc('dbmt_mobile_admin_production_schedule',{p_token:token,p_start:range[0],p_end:range[20]},{signal:controller.signal});
       if(token!==adminToken||request!==state.planRequest)return;
       if(!result?.ok)throw new Error(result?.message||'생산일정을 불러오지 못했습니다.');
-      state.events=result.events||[];message(plan('message'));return true;
-    }catch(error){if(request===state.planRequest)await failure(error,token,plan('message'));return false;}
-    finally{if(request===state.planRequest){state.loading=false;renderPlans();}}
+      state.events=result.events||[];if(!quiet)message(plan('message'));return true;
+    }catch(error){if(request===state.planRequest&&(!quiet||/로그인이 만료/.test(error.message||'')))await failure(error,token,plan('message'));return false;}
+    finally{clearTimeout(timeout);if(quiet)state.refreshing=false;if(request===state.planRequest){state.loading=false;renderPlans();}}
   }
   function edit(id=''){
     if(state.saving||state.loading||!adminToken)return;
     const row=id?state.events.find(item=>item.id===id):null;if(id&&!row)return;
+    if(row&&linked(row)){void openWorkOrder(id);return;}
     state.editing=row?{...row}:null;
     for(const key of ['date','product','qty','trader','note','status'])plan(key).value=row?.[key]??(key==='date'?state.selected:key==='status'?'planned':'');
     plan('delete').classList.toggle('hidden',!row);plan('editor').classList.remove('hidden');message(plan('message'));sync();
@@ -86,7 +96,7 @@
   }
   async function remove(){
     const row=state.editing;if(!row||state.saving||state.loading||!adminToken)return;
-    if(!confirm(`${row.date} ${row.product} 생산일정을 삭제할까요?`))return;
+    if(linked(row)||!confirm(`${row.date} ${row.product} 생산일정을 삭제할까요?`))return;
     const token=adminToken,request=++state.planRequest;state.saving=true;sync();message(plan('message'),'생산일정을 삭제하는 중…');
     try{
       const result=await rpc('dbmt_mobile_admin_delete_production_schedule',{p_token:token,p_id:row.id,p_revision:row.revision});
@@ -131,9 +141,11 @@
   plan('today').addEventListener('click',()=>{plan('anchor').value=localDate();state.selected=localDate();loadPlans();});
   plan('anchor').addEventListener('change',()=>{state.selected=plan('anchor').value;loadPlans();});
   plan('grid').addEventListener('click',event=>{const button=event.target.closest('[data-plan-date]');if(button&&!state.saving){state.selected=button.dataset.planDate;renderPlans();}});
-  plan('list').addEventListener('click',event=>{const button=event.target.closest('[data-plan-edit]');if(button)edit(button.dataset.planEdit);});
+  plan('list').addEventListener('click',event=>{const button=event.target.closest('[data-plan-edit],[data-plan-order]');if(button){if(button.dataset.planOrder)void openWorkOrder(button.dataset.planOrder);else edit(button.dataset.planEdit);}});
   plan('add').addEventListener('click',()=>edit());plan('cancel').addEventListener('click',closeEditor);plan('editor').addEventListener('submit',save);plan('delete').addEventListener('click',remove);
   order('search').addEventListener('input',renderOrders);order('from').addEventListener('change',loadOrders);order('to').addEventListener('change',loadOrders);order('load').addEventListener('click',loadOrders);
   order('today').addEventListener('click',()=>{order('from').value=localDate();order('to').value=localDate();loadOrders();});
+  function refreshVisible(){if(adminToken&&!document.hidden&&document.getElementById('view-production-plan').classList.contains('active'))void loadPlans({quiet:true});}
+  setInterval(refreshVisible,5000);window.addEventListener('focus',refreshVisible);document.addEventListener('visibilitychange',refreshVisible);
   window.DBMTMobileProduction={reset,show(name){if(!adminToken)return;if(name==='production-plan')return loadPlans();if(name==='workorders')return loadOrders();}};
 })();

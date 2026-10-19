@@ -1,6 +1,6 @@
 (function(){
   'use strict';
-  const state = {rows:[], editing:null, saving:false, loading:false, request:0, token:''};
+  const state = {rows:[], editing:null, saving:false, loading:false, refreshing:false, request:0, token:''};
   let draggingId=null, dropDate=null;
   const el = id => document.getElementById('ps-' + id);
   const can = action => Boolean(window.DBMTAuth?.isPersonal() && DBMTAuth.can('production_schedule',action));
@@ -8,6 +8,19 @@
   const dateText = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const todayText = () => dateText(new Date());
   const quantity = value => Number(value).toLocaleString('ko-KR',{maximumFractionDigits:2});
+  const linked = row => row.source==='work_order';
+  const canOpenWorkOrder = () => Boolean(window.DBMTAuth?.isPersonal() && DBMTAuth.can('workorders','view'));
+  function linkedState(row){return row.carryTo?'부분 완료 · '+row.carryTo+'로 이월':row.status==='completed'?'✓ 완료':'생산 예정';}
+  async function openWorkOrder(id){
+    const row=state.rows.find(item=>item.id===id);
+    if(!row||!linked(row)||!canOpenWorkOrder())return;
+    const date=document.getElementById('wo-list-date'),search=document.getElementById('wo-list-search');
+    if(date)date.value=row.date;if(search)search.value='';
+    if(typeof showPage==='function')showPage('p-workorders',document.getElementById('nav-workorders'));
+    if(window.DBMTWorkOrders)await DBMTWorkOrders.start();
+    const target=[...document.querySelectorAll('#wo-list-wrap tr[data-work-order-id]')].find(el=>el.dataset.workOrderId===row.workOrderId);
+    target?.scrollIntoView({block:'nearest'});
+  }
   function anchorValue(){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(el('anchor-date').value)) el('anchor-date').value=todayText();
     return el('anchor-date').value;
@@ -43,19 +56,19 @@
     el('date').value=date;
     syncControls();
   }
-  function applyPermissions(){
+  function applyPermissions({renderCalendar=true}={}){
     const token=window.DBMTAuth?.getSessionToken() || '';
     if(token!==state.token || !can('view')){
       clearDrag();
       state.token=token;
       state.request++;
-      state.rows=[];state.editing=null;state.loading=false;state.saving=false;
+      state.rows=[];state.editing=null;state.loading=false;state.saving=false;state.refreshing=false;
       clearEditor(todayText());
       el('calendar').innerHTML='';el('summary').textContent='';
       message('');
     }
     syncControls();
-    if(can('view') && el('calendar').children.length) render();
+    if(renderCalendar && can('view') && el('calendar').children.length) render();
   }
   function render(){
     if(!can('view')) return;
@@ -73,11 +86,11 @@
     el('calendar').innerHTML=head+dates.map((date,i)=>{
       const rows=(byDate.get(date)||[]).slice().sort((a,b)=>(a.status==='completed')-(b.status==='completed')||a.product.localeCompare(b.product,'ko')||a.id.localeCompare(b.id));
       const holiday=typeof getKoreanHoliday==='function'?getKoreanHoliday(date):'';
-      const items=rows.map(row=>`<div class="ps-item ${row.status==='completed'?'completed':''} ${can('delete')?'has-delete':''}" data-plan-id="${esc(row.id)}" draggable="${can('update')&&!state.saving&&!state.loading}" ${can('update')?'title="다른 날짜로 드래그하여 이동"':''}>
-        <button type="button" class="ps-item-main" data-action="edit" data-id="${esc(row.id)}" ${!can('update')||state.saving?'disabled':''} title="클릭하여 수정 · 드래그하여 날짜 이동">
-          <strong>${esc(row.product)} ${row.qty===null?'수량 미정':quantity(row.qty)+' KG'}</strong>
-          ${row.trader||row.note?`<span>${[row.trader,row.note].filter(Boolean).map(esc).join(' · ')}</span>`:''}<span class="ps-item-state">${row.status==='completed'?'✓ 완료':'생산 예정'}</span>
-        </button>${can('delete')?`<button type="button" class="ps-item-delete" data-action="delete" data-id="${esc(row.id)}" aria-label="${esc(row.product)} 일정 삭제" title="삭제" ${state.saving?'disabled':''}>×</button>`:''}</div>`).join('');
+      const items=rows.map(row=>`<div class="ps-item ${row.status==='completed'?'completed':''} ${!linked(row)&&can('delete')?'has-delete':''}" data-plan-id="${esc(row.id)}" draggable="${!linked(row)&&can('update')&&!state.saving&&!state.loading}" ${!linked(row)&&can('update')?'title="다른 날짜로 드래그하여 이동"':''}>
+        <button type="button" class="ps-item-main" data-action="${linked(row)?'workorder':'edit'}" data-id="${esc(row.id)}" ${(linked(row)?!canOpenWorkOrder():!can('update'))||state.saving?'disabled':''} title="${linked(row)?'작업지시에서 확인·수정':'클릭하여 수정 · 드래그하여 날짜 이동'}">
+          <strong>${esc(row.product)} ${linked(row)?(row.status==='completed'?'생산 ':'투입 '):''}${row.qty===null?'수량 미정':quantity(row.qty)+' KG'}</strong>
+          ${row.trader||row.note?`<span>${[row.trader,row.note].filter(Boolean).map(esc).join(' · ')}</span>`:''}<span class="ps-item-state">${linked(row)?'작업지시 · '+esc(linkedState(row)):(row.status==='completed'?'✓ 완료':'생산 예정')}</span>
+        </button>${!linked(row)&&can('delete')?`<button type="button" class="ps-item-delete" data-action="delete" data-id="${esc(row.id)}" aria-label="${esc(row.product)} 일정 삭제" title="삭제" ${state.saving?'disabled':''}>×</button>`:''}</div>`).join('');
       const pendingRows=rows.filter(row=>row.status==='planned');
       const completedRows=rows.filter(row=>row.status==='completed');
       return `<div class="ps-day ${el('date').value===date?'selected':''}" data-date="${date}">
@@ -85,22 +98,26 @@
         ${items}${rows.some(row=>row.qty!==null)?`<div class="ps-day-total"><span>예정 ${quantity(pendingRows.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG</span><span>완료 ${quantity(completedRows.reduce((sum,row)=>sum+Number(row.qty||0),0))} KG</span></div>`:''}</div>`;
     }).join('');
   }
-  async function load(){
+  async function load({quiet=false}={}){
     if(state.saving) return;
-    applyPermissions();
+    if(quiet&&(state.loading||state.refreshing||draggingId))return;
+    applyPermissions({renderCalendar:!quiet});
     if(!can('view')){message('생산일정 조회 권한이 없습니다.',true);return;}
-    clearDrag();
+    if(!quiet)clearDrag();
     const dates=calendarDates(anchorValue()), request=++state.request, token=state.token;
-    state.loading=true;state.rows=[];render();message('생산일정을 불러오는 중입니다…');
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
+    if(quiet)state.refreshing=true;
+    else{state.loading=true;state.rows=[];render();message('생산일정을 불러오는 중입니다…');}
     try{
-      const result=await sbRpc('dbmt_erp_get_production_schedule',{p_token:token,p_start:dates[0],p_end:dates[dates.length-1]});
+      const result=await sbRpc('dbmt_erp_get_production_schedule',{p_token:token,p_start:dates[0],p_end:dates[dates.length-1]},{signal:controller.signal});
       if(request!==state.request || token!==DBMTAuth.getSessionToken()) return;
       if(!result?.ok) throw new Error(result?.message||'생산일정을 불러오지 못했습니다.');
-      state.rows=result.events || [];
-      render();message(state.rows.length?'':'등록된 생산일정이 없습니다. 날짜를 선택해 품목을 추가하세요.');
+      const next=result.events || [];
+      if(JSON.stringify(next)!==JSON.stringify(state.rows)){state.rows=next;render();}
+      if(!quiet)message(state.rows.length?'':'등록된 생산일정이 없습니다. 날짜를 선택해 품목을 추가하세요.');
     }catch(error){
-      if(request===state.request) message(error.message||String(error),true);
-    }finally{if(request===state.request){state.loading=false;syncControls();}}
+      if(!quiet&&request===state.request) message(error.message||String(error),true);
+    }finally{clearTimeout(timeout);if(quiet)state.refreshing=false;if(request===state.request){state.loading=false;syncControls();}}
   }
   function reset(date){
     if(state.saving) return;
@@ -110,6 +127,7 @@
     if(state.saving || !can('update')) return;
     const row=state.rows.find(item=>item.id===id);
     if(!row) return;
+    if(linked(row)){void openWorkOrder(id);return;}
     state.editing={...row};
     for(const key of ['date','product','qty','trader','note','status']) el(key).value=row[key]??'';
     render();el('product').focus();
@@ -141,7 +159,7 @@
   async function move(id,date){
     if(state.saving || state.loading || !can('update') || !calendarDates(anchorValue()).includes(date)) return;
     const row=state.rows.find(item=>item.id===id);
-    if(!row || row.date===date) return;
+    if(!row || linked(row) || row.date===date) return;
     const token=state.token;
     const record={date,product:row.product,qty:row.qty,trader:row.trader,note:row.note,status:row.status};
     state.saving=true;state.request++;render();message(`${row.product} 일정을 ${date}로 옮기는 중입니다…`);
@@ -158,7 +176,7 @@
   async function remove(id){
     if(state.saving || !can('delete')) return;
     const row=state.rows.find(item=>item.id===id);
-    if(!row || !confirm(`${row.date} ${row.product} 생산일정을 삭제할까요?`)) return;
+    if(!row || linked(row) || !confirm(`${row.date} ${row.product} 생산일정을 삭제할까요?`)) return;
     const token=state.token;
     state.saving=true;state.request++;render();message('생산일정을 삭제하는 중입니다…');
     try{
@@ -189,6 +207,7 @@
     if(!button || button.disabled) return;
     if(button.dataset.action==='date'){reset(button.dataset.date);el('product').focus();}
     if(button.dataset.action==='edit') edit(button.dataset.id);
+    if(button.dataset.action==='workorder')void openWorkOrder(button.dataset.id);
     if(button.dataset.action==='delete') remove(button.dataset.id);
   });
   el('calendar').addEventListener('dragstart',event=>{
@@ -227,6 +246,13 @@
     void move(id,date);
   });
   el('calendar').addEventListener('dragend',clearDrag);
+  function refreshVisible(){
+    if(!document.hidden&&document.getElementById('p-production-schedule')?.classList.contains('active')&&can('view'))void load({quiet:true});
+  }
+  setInterval(refreshVisible,5000);
+  window.addEventListener('focus',refreshVisible);
+  document.addEventListener('visibilitychange',refreshVisible);
+  document.addEventListener('dbmt-work-orders-changed',refreshVisible);
   window.DBMTProductionSchedule={init,load,save,reset,moveWeek,applyPermissions,
     today(){if(state.saving)return;el('anchor-date').value=todayText();reset(todayText());return load();}};
 })();

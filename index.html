@@ -25,7 +25,7 @@ try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261017wo2">
-<link rel="stylesheet" href="styles/production-schedule.css?v=20261007drag1">
+<link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261017split1">
 <link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
@@ -505,7 +505,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
     </div>
     <div class="ps-summary"><strong id="ps-title"></strong><span id="ps-summary"></span></div>
-    <p class="ps-guide">날짜를 눌러 품목을 추가하고, 등록한 일정을 눌러 수정하거나 다른 날짜로 드래그해 옮기세요. 생산 실적은 생산일보에서 기록합니다.</p>
+    <p class="ps-guide">작업지시가 자동 표시됩니다. 작업지시 일정은 작업지시에서 수정하며, 예정 수량은 투입량·완료 수량은 생산일보 생산량 기준입니다. 날짜를 눌러 수기 일정도 추가할 수 있습니다. 수기 일정은 수정·삭제·드래그 이동이 가능합니다.</p>
     <form id="ps-editor" class="ps-editor" onsubmit="event.preventDefault();DBMTProductionSchedule.save()" hidden>
       <div class="ps-editor-heading"><strong id="ps-editor-title">생산예정 추가</strong><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductionSchedule.reset()">입력 초기화</button></div>
       <div class="form-group"><label for="ps-date">생산예정일</label><input type="date" id="ps-date" required></div>
@@ -20855,7 +20855,7 @@ function renderWorkOrders(){
       <th>생산물</th><th>이력번호</th><th>투입 원료육</th><th>투입량</th><th>관리</th>
     </tr></thead>
     <tbody>${rows.map(r => `
-      <tr>
+      <tr data-work-order-id="${htmlEscape(r.id)}">
         <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div>${window.DBMTWorkOrderCarryover?.relationHtml(r)||''}</td>
         <td>${htmlEscape(r.lot || '')}</td>
         <td>${workOrderSourceInputs(r).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${boxCountDisplay(source.boxCount,'') ? boxCountDisplay(source.boxCount)+'박스 · ' : ''}${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
@@ -21809,12 +21809,12 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="stock-report.js?v=20261002count1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
-<script src="production-schedule.js?v=20261007drag1"></script>
+<script src="production-schedule.js?v=20261020workorders1"></script>
 <script src="product-specs.js?v=20261013spec4"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261017split1"></script>
-<script src="work-orders-sync.js?v=20261019carry1"></script>
+<script src="work-orders-sync.js?v=20261020schedule1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="m02-auth.js?v=20261017split1"></script>
 </body>

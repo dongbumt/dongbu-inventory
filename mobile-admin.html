@@ -39,7 +39,7 @@
     .phone{color:#1769aa;text-decoration:none;font-weight:800}.warning{color:var(--warn)}
     @media(max-width:390px){.menu button{font-size:10px}.section-head{top:59px}.control-row.three{grid-template-columns:1fr 1fr}.control-row.three .wide-small{grid-column:1/-1}.row{padding:9px 10px}.schedule-editor-grid{grid-template-columns:1fr}}
   </style>
-  <link rel="stylesheet" href="styles/mobile-production.css?v=20261015mobile1">
+  <link rel="stylesheet" href="styles/mobile-production.css?v=20261020workorders1">
 </head>
 <body>
   <section id="login-view" class="login-wrap">
@@ -94,6 +94,7 @@
         <button id="mp-next" type="button" aria-label="다음 주">›</button><button id="mp-today" type="button">오늘</button>
       </div></div>
       <div id="mp-range" class="mp-range"></div>
+      <div class="mp-range">작업지시는 자동 표시됩니다. 예정은 투입량·완료는 생산일보 생산량 기준이며, 수기 일정도 추가할 수 있습니다.</div>
       <div class="calendar-wrap mp-calendar"><div class="calendar-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div><div id="mp-grid" class="calendar-grid"></div></div>
       <div class="agenda-head"><strong id="mp-selected-label"></strong><span id="mp-selected-count"></span><button id="mp-add" class="agenda-add" type="button" aria-label="생산일정 추가">+</button></div>
       <div id="mp-totals" class="mp-totals"></div>
@@ -177,7 +178,7 @@
   </main>
 
   <script src="stock-ledger.js?v=20261017date1"></script>
-  <script src="mobile-production.js?v=20261015mobile1"></script>
+  <script src="mobile-production.js?v=20261020workorders1"></script>
   <script>
     const SUPABASE_URL='https://hdwjwtmbsxfjrlvicgnn.supabase.co';
     const SUPABASE_PUBLISHABLE_KEY='sb_publishable_40Sg1P9a5KKA-2pXtzXJZA_qSXDqPZg';
@@ -191,8 +192,8 @@
     let selectedScheduleDate=localDate();
     let snapshotRequest=0;
 
-    async function rpc(name,body){
-      const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${SUPABASE_PUBLISHABLE_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+    async function rpc(name,body,options={}){
+      const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',signal:options.signal,headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Authorization:`Bearer ${SUPABASE_PUBLISHABLE_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(body||{})});
       const text=await response.text();let data=null;try{data=text?JSON.parse(text):null}catch(e){data=text}
       if(!response.ok)throw new Error(data?.message||data?.error||text||'서버 요청에 실패했습니다.');
       return data;

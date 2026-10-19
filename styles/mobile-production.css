@@ -15,3 +15,4 @@
 .mp-source{padding:8px;margin-top:6px;border:1px solid var(--line);border-radius:5px;background:#f8f9fa;overflow-wrap:anywhere;}
 #view-production-plan .row-title,#view-workorders .row-title{overflow-wrap:anywhere;}
 #view-production-plan .agenda-edit{font-size:12px;width:42px;flex-basis:42px;}
+#view-production-plan [data-plan-order]{width:65px;flex-basis:65px;}

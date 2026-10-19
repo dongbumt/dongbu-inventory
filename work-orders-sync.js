@@ -23,6 +23,7 @@
       if(!Array.isArray(data.rows)||!data.versions) throw new Error('작업지시 응답 형식을 확인해주세요.');
       versions=data.versions;
       workOrders=data.rows;
+      document.dispatchEvent(new Event('dbmt-work-orders-changed'));
       try{localStorage.setItem('dbmt_work_orders',JSON.stringify(workOrders));}catch(_){}
       // Refresh only the list, never initialize or reset the draft form.
       if(document.getElementById('p-workorders')?.classList.contains('active')) renderWorkOrders();
