@@ -3743,7 +3743,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-workorders">
   <div style="display:grid;grid-template-columns:minmax(360px,1fr) minmax(420px,1.2fr);gap:16px;align-items:start;">
-    <div class="card">
+    <div class="card" id="wo-editor">
       <div class="card-title"><div class="ct-bar" style="background:#6c3483;"></div>📝 작업지시 등록 / 수정</div>
       <input type="hidden" id="wo-edit-id">
 
@@ -3823,8 +3823,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
 
       <div style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn btn-primary" onclick="saveWorkOrder()" style="flex:1;">저장</button>
-        <button class="btn btn-secondary" onclick="resetWorkOrderForm()" style="flex:1;">초기화</button>
+        <button id="wo-save-btn" class="btn btn-primary" onclick="saveWorkOrder()" style="flex:1;">저장</button>
+        <button id="wo-reset-btn" class="btn btn-secondary" onclick="resetWorkOrderForm()" style="flex:1;">초기화</button>
       </div>
     </div>
 
@@ -3837,6 +3837,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <input id="wo-list-search" placeholder="제품명·원료육·이력번호 검색" oninput="renderWorkOrders()" style="flex:1;min-width:180px;">
           <span id="wo-count" style="font-size:12px;color:#888;"></span>
         </div>
+        <div id="wo-sync-status" role="status" style="font-size:11px;color:#666;margin-bottom:8px;">작업지시를 불러오는 중입니다.</div>
         <div id="wo-list-wrap" style="overflow-x:auto;">
           <div style="color:#aaa;text-align:center;padding:20px;">작업지시를 등록해 주세요.</div>
         </div>
@@ -5270,9 +5271,11 @@ function renderPageById(id, reason='menu'){
       case 'p-workorders':
         initializePageOnce(id, initWorkOrderForm);
         renderWorkOrders();
+        if(window.DBMTWorkOrders) asyncTask=DBMTWorkOrders.start();
         break;
       case 'p-label':
         initLabelForm();
+        if(window.DBMTWorkOrders) asyncTask=DBMTWorkOrders.start();
         break;
       case 'p-pangwanbi':
         renderPangwanbi();
@@ -5448,7 +5451,7 @@ const APP_DATA_REGISTRY = {
   costCalcHistory:  { get:()=>costCalcHistory,  set:v=>{ costCalcHistory=v; },  ls:'dbmt_costcalc'         },
   labelTemplates:   { get:()=>labelTemplates,   set:v=>{ labelTemplates=v; },   ls:'dbmt_label_templates'  },
   labelProducts:    { get:()=>labelProducts,    set:v=>{ labelProducts=v; invalidateStockMap(); },    ls:'dbmt_label_products', readOnly:true },
-  workOrders:       { get:()=>workOrders,       set:v=>{ workOrders=v; },       ls:'dbmt_work_orders'      },
+  workOrders:       { get:()=>workOrders,       set:v=>{ workOrders=v; },       ls:'dbmt_work_orders', readOnly:true },
   labelPrintLogs:   { get:()=>labelPrintLogs,   set:v=>{ labelPrintLogs=v; },   ls:'dbmt_label_print_logs', readOnly:true },
   subMaterialItems: { get:()=>subMaterialItems, set:v=>{ subMaterialItems=v; }, ls:'dbmt_submaterial_items' },
   subMaterialLots:  { get:()=>subMaterialLots,  set:v=>{ subMaterialLots=v; },  ls:'dbmt_submaterial_lots'  },
@@ -15347,9 +15350,10 @@ function sbMigrationPassword(){
   return (getSupabasePassword() || '').trim();
 }
 
-async function sbRpc(fnName, body){
+async function sbRpc(fnName, body, options={}){
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
     method: 'POST',
+    signal: options.signal,
     headers: {
       apikey: SUPABASE_PUBLISHABLE_KEY,
       Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
@@ -15552,6 +15556,9 @@ function applySupabasePayload(data){
 
   const app = data.appData || {};
   Object.entries(APP_DATA_REGISTRY).forEach(([k, r]) => {
+    // The row sync response owns both work orders and their edit versions.
+    // A delayed full-ERP recovery must not replace just half of that snapshot.
+    if(k==='workOrders' && window.DBMTWorkOrders?.isReady()) return;
     if(app[k] !== undefined){
       r.set(app[k]);
       cacheAppDataValue(k, r, app[k]);
@@ -15631,6 +15638,7 @@ window.startAuthenticatedErp = function(){
     localStorage.setItem(SUPABASE_ENABLED_KEY, '1');
     localStorage.removeItem('dbmt_gs_skip');
     const data = await supabaseInit();
+    if(window.DBMTWorkOrders) await DBMTWorkOrders.start();
     document.body.classList.remove('erp-auth-locked');
     document.getElementById('gs-setup')?.classList.add('hidden');
     document.getElementById('gs-overlay')?.classList.add('hidden');
@@ -15644,6 +15652,7 @@ window.startAuthenticatedErp = function(){
 };
 
 window.lockErpForLogin = function(reload=false){
+  if(window.DBMTWorkOrders) DBMTWorkOrders.stop();
   document.body.classList.add('erp-auth-locked');
   clearSupabaseSessionPassword();
   if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
@@ -20382,10 +20391,19 @@ function workOrderId(){
   return 'wo_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 }
 
-function saveWorkOrdersStore(){
-  localStorage.setItem('dbmt_work_orders', JSON.stringify(workOrders));
-  gsSaveAppData();
-  refreshLabelWorkOrderSelect();
+window.workOrderEditVersion=null;
+let workOrderPendingSave=null,workOrderSaving=false;
+
+function workOrderDraftSignature(){
+  return JSON.stringify([...document.querySelectorAll('#wo-editor input,#wo-editor select')].map(el=>[el.id||el.className,el.value]));
+}
+
+function setWorkOrderSaving(busy){
+  workOrderSaving=busy;
+  const button=document.getElementById('wo-save-btn');
+  if(button){button.disabled=busy;button.textContent=busy?'저장 중…':'저장';}
+  const reset=document.getElementById('wo-reset-btn');
+  if(reset)reset.disabled=busy;
 }
 
 function inferLabelMeatType(product='', ingredients=''){
@@ -20466,7 +20484,9 @@ function initWorkOrderForm(){
   refreshWorkOrderPreview();
 }
 
-function resetWorkOrderForm(){
+function resetWorkOrderForm(force=false){
+  if(workOrderSaving&&!force)return;
+  window.workOrderEditVersion=null;workOrderPendingSave=null;
   ['wo-edit-id','wo-label-product-id','wo-title',
    'wo-product','wo-origin','wo-grade','wo-weight','wo-itemno','wo-lot','wo-ingredients'].forEach(id => {
     const el = document.getElementById(id);
@@ -20715,21 +20735,40 @@ function collectWorkOrderForm(){
   };
 }
 
-function saveWorkOrder(){
-  const row = collectWorkOrderForm();
+async function saveWorkOrder(){
+  if(workOrderSaving)return;
+  let row = collectWorkOrderForm();
   if(!row) return;
-  const idx = workOrders.findIndex(x => String(x.id) === String(row.id));
-  if(idx >= 0) workOrders[idx] = row;
-  else workOrders.unshift(row);
-  saveWorkOrdersStore();
-  renderWorkOrders();
-  resetWorkOrderForm();
-  toast('작업지시가 저장됐습니다.');
+  const draft=workOrderDraftSignature();
+  if(workOrderPendingSave){
+    row=workOrderPendingSave.draft===draft?workOrderPendingSave.row:{...row,id:workOrderPendingSave.row.id};
+  }
+  const expected=workOrderPendingSave?.version??window.workOrderEditVersion;
+  workOrderPendingSave={row,draft,version:expected};
+  setWorkOrderSaving(true);
+  try{
+    if(!window.DBMTWorkOrders)throw new Error('작업지시 저장 기능을 불러오지 못했습니다. 새로고침해주세요.');
+    await DBMTWorkOrders.write(row,expected);
+    workOrderPendingSave=null;
+    if(workOrderDraftSignature()===draft) resetWorkOrderForm(true);
+    else{
+      document.getElementById('wo-edit-id').value=row.id;
+      window.workOrderEditVersion=DBMTWorkOrders.versionFor(row.id);
+    }
+    try{if(typeof recordDataChange==='function')recordDataChange({menu:'작업지시',action:expected?'수정':'저장',target:row.product,summary:row.title||row.product,refId:row.id});}catch(error){console.warn('작업지시 변경이력 표시 실패:',error);}
+    toast('작업지시가 저장됐습니다.');
+  }catch(error){
+    alert('작업지시 저장을 완료하지 못했습니다. 입력 내용은 유지됩니다.\n'+(error?.message||error));
+  }finally{setWorkOrderSaving(false);}
 }
 
 function editWorkOrder(id){
+  if(workOrderSaving)return;
   const row = workOrders.find(x => String(x.id) === String(id));
   if(!row) return;
+  const version=window.DBMTWorkOrders?.versionFor(id);
+  if(!version){alert('서버의 작업지시 목록을 불러온 후 다시 선택해주세요.');window.DBMTWorkOrders?.refresh(true);return;}
+  window.workOrderEditVersion=version;workOrderPendingSave=null;
   initWorkOrderForm();
   const set = (id, value) => {
     const el = document.getElementById(id);
@@ -20757,14 +20796,20 @@ function editWorkOrder(id){
   refreshWorkOrderPreview();
 }
 
-function deleteWorkOrder(id){
+async function deleteWorkOrder(id){
+  if(workOrderSaving)return;
   const row = workOrders.find(x => String(x.id) === String(id));
   if(!row) return;
+  const version=window.DBMTWorkOrders?.versionFor(id);
+  if(!version){alert('서버의 작업지시 목록을 불러온 후 다시 선택해주세요.');window.DBMTWorkOrders?.refresh(true);return;}
   if(!confirm(`"${row.title || row.product}" 작업지시를 삭제할까요?`)) return;
-  workOrders = workOrders.filter(x => String(x.id) !== String(id));
-  saveWorkOrdersStore();
-  renderWorkOrders();
-  updateLabelPreview();
+  setWorkOrderSaving(true);
+  try{
+    await DBMTWorkOrders.write({id:String(id)},version,true);
+    try{if(typeof recordDataChange==='function')recordDataChange({menu:'작업지시',action:'삭제',target:row.product,summary:row.title||row.product,refId:String(id)});}catch(error){console.warn('작업지시 변경이력 표시 실패:',error);}
+    toast('작업지시가 삭제됐습니다.');
+  }catch(error){alert('작업지시 삭제를 완료하지 못했습니다.\n'+(error?.message||error));}
+  finally{setWorkOrderSaving(false);}
 }
 
 function setWorkOrderListToday(){
@@ -20780,7 +20825,6 @@ function workOrderSearchText(row){
 }
 
 function renderWorkOrders(){
-  initWorkOrderForm();
   const dateEl = document.getElementById('wo-list-date');
   if(dateEl && !dateEl.value) dateEl.value = localDateString();
   const date = dateEl?.value || '';
@@ -21759,6 +21803,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261017split1"></script>
+<script src="work-orders-sync.js?v=20261019row1"></script>
 <script src="m02-auth.js?v=20261017split1"></script>
 </body>
 </html>

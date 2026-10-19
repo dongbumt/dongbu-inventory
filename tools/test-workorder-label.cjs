@@ -52,7 +52,11 @@ const server=http.createServer((req,res)=>{
       const inferLabelMeatType=()=> '돼지고기',labelCrossFacilityNoticeFromText=()=> '본 제품은 소고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
       const fmtLblDate=v=>v,buildLabelBody=d=>'<div>'+htmlEscape(d.product)+' / '+htmlEscape(d.weight)+'</div>';
       const labelSizeConfigByKey=()=>({widthCm:7,previewW:264,previewH:378,scale:1,label:'7x10'});
-      const workOrderId=()=> 'qa-workorder',saveWorkOrdersStore=()=>{},toast=()=>{},showPage=()=>{};
+      const workOrderId=()=> 'qa-workorder',toast=()=>{},showPage=()=>{};
+      ${block('window.workOrderEditVersion=null;','function inferLabelMeatType(')}
+      window.DBMTWorkOrders={versionFor:()=> 'fixture-version',refresh:()=>Promise.resolve(),write:async row=>{
+        const i=workOrders.findIndex(item=>item.id===row.id);if(i<0)workOrders.unshift(row);else workOrders[i]=row;renderWorkOrders();
+      }};
       const getPriceFromLot=()=>5000;
       const selectProdInputStock=(...args)=>calls.push(['production-stock',...args]),selectProdOutProduct=(...args)=>calls.push(['production-product',...args]);
       const selectBulkProduct=(input,id)=>calls.push(['bulk-product',id]),selectBulkOutboundStock=(input,key)=>calls.push(['bulk-stock',key]),selectTxnStock=key=>calls.push(['transaction-stock',key]);
