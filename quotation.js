@@ -71,7 +71,7 @@ function quotationBlankDraft(){
     id:'', date:typeof localDateString === 'function' ? localDateString() : new Date().toISOString().slice(0,10),
     customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가', priceOperator:'*', priceMultiplier:'',
     managerName:'김상영 본부장', managerPhone:'010-2414-5406',
-    note:'위 품목은 시세에 따라 단가가 변동됩니다.', rows:[quotationBlankRow()],
+    note:'상기 견적가는 작성일부터 2주간 유효하며 이후 시세에 따라 변동 될수 있습니다.', rows:[quotationBlankRow()],
     companyProfile:null, createdAt:'', updatedAt:''
   };
 }
