@@ -530,6 +530,7 @@
       logs: [],
       completions: [],
       selectedId: '',
+      requestedOrderId: new URLSearchParams(location.search).get('workOrderId') || '',
       loading: false,
       allDates: false,
     };
@@ -693,6 +694,9 @@
         state.labelProducts = normalizeArray(appData.labelProducts);
         state.logs = normalizeArray(appData.labelPrintLogs);
         state.completions = normalizeArray(data?.completions);
+        const requestedOrder=state.workOrders.find(row=>String(row.id)===state.requestedOrderId);
+        if(requestedOrder){state.selectedId=requestedOrder.id;state.allDates=false;$('date-filter').value=requestedOrder.date||'';}
+        state.requestedOrderId='';
         const filterDate = $('date-filter')?.value || '';
         if(!state.allDates && filterDate && state.workOrders.length && !state.workOrders.some(row => String(row.date || '') === filterDate)){
           state.allDates = true;

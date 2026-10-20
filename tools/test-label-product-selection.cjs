@@ -82,6 +82,8 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       const bad=await page.evaluate(()=>[...document.querySelectorAll('.shell button,.pack-fields small')].filter(e=>e.getClientRects().length).filter(e=>{const r=e.getBoundingClientRect(),p=e.closest('.panel')?.getBoundingClientRect();return r.right>innerWidth+1||r.left<0||(p&&r.bottom>p.bottom+1);}).map(e=>e.id||e.textContent));assert.deepEqual(bad,[],`layout ${width}`);
     }
     await page.setViewportSize({width:1280,height:1024});await page.screenshot({path:path.join(dir,'operating-1280.png'),fullPage:true});
+    await page.goto(`http://127.0.0.1:${server.address().port}/label-print.html?workOrderId=wo-b`);await connect();
+    assert.equal(await page.evaluate(()=>state.selectedId),'wo-b','The work-order list opens the selected order in the dedicated label screen');
     assert.deepEqual(errors,[]);assert.equal(context.pages().length,1);
     console.log('PASS: product picker pending/apply/search/pages/reset, metadata/expiry, original input and history, inner exclusion, multi-product totals, original reprint, per-work selection/reload, deleted master protection, failure, completion lock, touch layouts.');console.log('Artifacts: '+dir);
   }finally{await browser.close();await new Promise(r=>server.close(r));}

@@ -137,11 +137,10 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
       openTxnStockPicker('');confirmTxnStockPicker();openTxnProductPicker('');confirmTxnProductPicker();
     });
     assert.deepEqual(await page.evaluate(()=>calls.map(c=>c[0])),['production-stock','production-product','bulk-stock','bulk-product','transaction-stock','transaction-product']);
-    await page.evaluate(()=>{document.getElementById('p-workorders').classList.remove('active');document.getElementById('p-label').classList.add('active');document.getElementById('lbl-workorder-date').value='2026-09-10';refreshLabelWorkOrderSelect();printSelectedWorkOrderLabel();});
-    assert.equal((await page.evaluate(()=>calls.filter(c=>c[0]==='erp-print'))).length,0);
-    await page.locator('#lbl-weight').selectOption('10');await page.evaluate(()=>printSelectedWorkOrderLabel());
-    assert.equal((await page.evaluate(()=>calls.find(c=>c[0]==='erp-print')))[1].weight,'10.00');
-    console.log('PASS: workorder popup selection, full stock KG/boxes and replacement, optional unknown/zero boxes, partial edits, source snapshot, legacy edit, stale search clearing, shared picker regression, ERP label weight');
+    await page.evaluate(()=>{window.open=(url,target)=>calls.push(['label-window',url,target]);selectLabelWorkOrder('qa-workorder');});
+    assert.match((await page.evaluate(()=>calls.find(c=>c[0]==='label-window')))[1],/label-print\.html\?workOrderId=qa-workorder$/);
+    assert.equal(await page.locator('#lbl-workorder-select').count(),0,'Office labels no longer depend on a work-order selection');
+    console.log('PASS: workorder popup selection, full stock KG/boxes and replacement, optional unknown/zero boxes, partial edits, source snapshot, legacy edit, stale search clearing, shared picker regression, dedicated label link');
 
     await page.evaluate(()=>{
       document.getElementById('p-label').classList.remove('active');document.getElementById('p-workorders').classList.add('active');

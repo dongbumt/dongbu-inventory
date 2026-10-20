@@ -6,7 +6,7 @@
     return typeof DBMTAuth==='object' && DBMTAuth.isPersonal() && DBMTAuth.can('workorders','view') && !!getSupabasePassword();
   }
   function visible(){
-    return !document.hidden && ['p-workorders','p-label'].some(id=>document.getElementById(id)?.classList.contains('active'));
+    return !document.hidden && document.getElementById('p-workorders')?.classList.contains('active');
   }
   function status(message){
     const el=document.getElementById('wo-sync-status');
@@ -27,7 +27,6 @@
       try{localStorage.setItem('dbmt_work_orders',JSON.stringify(workOrders));}catch(_){}
       // Refresh only the list, never initialize or reset the draft form.
       if(document.getElementById('p-workorders')?.classList.contains('active')) renderWorkOrders();
-      if(document.getElementById('p-label')?.classList.contains('active')) refreshLabelWorkOrderSelect();
     }
     revision=data.revision;ready=true;
     status('자동 갱신 중 · 5초 간격');

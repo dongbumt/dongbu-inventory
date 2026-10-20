@@ -25,6 +25,7 @@ try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261017wo2">
+<link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261013spec4">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261017split1">
@@ -3861,40 +3862,56 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
      라벨 출력
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-label">
-  <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:16px;align-items:start;">
+  <div class="manual-label-grid">
     <div class="card">
-      <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>🏷️ 작업지시 라벨출력</div>
-      <div style="display:grid;grid-template-columns:1fr;gap:10px;">
-        <div class="form-group">
-          <label>작업일</label>
-          <input id="lbl-workorder-date" type="date" onchange="refreshLabelWorkOrderSelect()">
+      <div class="card-title"><div class="ct-bar" style="background:#646c74;"></div>🏷️ 라벨 내용 입력</div>
+      <p class="manual-label-guide" style="margin-bottom:14px;">작업지시 없이 라벨 내용을 입력해 출력합니다. 바코드는 임의로 생성되며, 생산일보·재고에는 반영되지 않습니다.</p>
+      <form id="manual-label-form" class="manual-label-form" onsubmit="event.preventDefault();printLabel()">
+        <div class="form-group manual-label-full">
+          <label for="lbl-product">제품명</label>
+          <input id="lbl-product-id" type="hidden">
+          <div class="manual-label-product">
+            <input id="lbl-product" readonly data-picker-context="manual-label" placeholder="등록 품목 선택" autocomplete="off" onclick="DBMTManualLabel.openPicker()" onkeydown="DBMTManualLabel.pickerKey(event)">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTManualLabel.openPicker()">검색</button>
+          </div>
+          <div id="lbl-product-meta">품목관리에서 등록한 제품을 선택하세요.</div>
         </div>
-        <div class="form-group">
-          <label>작업지시 선택</label>
-          <select id="lbl-workorder-select" onchange="updateLabelPreview()">
-            <option value="">-- 작업지시 선택 --</option>
-          </select>
-        </div>
+        <div class="form-group"><label for="lbl-origin">원산지</label><input id="lbl-origin" type="text" placeholder="원산지"></div>
+        <div class="form-group"><label for="lbl-grade">성별 및 등급</label><input id="lbl-grade" type="text" placeholder="선택 입력"></div>
+        <div class="form-group"><label for="lbl-mfgdate">제조일</label><input id="lbl-mfgdate" type="date" required></div>
+        <div class="form-group"><label for="lbl-expdate">소비기한</label><input id="lbl-expdate" type="date" required></div>
         <div class="form-group">
           <label for="lbl-weight">라벨 1장 중량(KG)</label>
-          <select id="lbl-weight"><option value="">중량 선택</option></select>
-          <input id="lbl-weight-custom" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="중량 직접 입력" aria-label="라벨 중량 직접 입력(KG)" hidden style="margin-top:6px;">
+          <input id="lbl-weight" type="number" inputmode="decimal" min="0.01" step="0.01" value="1" required>
         </div>
-        <div class="form-group">
-          <label>출력 매수</label>
-          <input id="lbl-print-count" type="number" min="1" step="1" value="1">
+        <div class="form-group"><label for="lbl-temptype">보관방법</label><select id="lbl-temptype"><option value="냉동">냉동 (-18℃ 이하)</option><option value="냉장">냉장 (-2℃ ~ 5℃ 이하)</option></select></div>
+        <div class="form-group"><label for="lbl-itemno">품목보고번호</label><input id="lbl-itemno" type="text" placeholder="품목보고번호"></div>
+        <div class="form-group"><label for="lbl-lot">이력번호(LOT)</label><input id="lbl-lot" type="text" placeholder="이력번호"></div>
+        <div class="form-group manual-label-full"><label for="lbl-ingredients">원료 및 함량</label><input id="lbl-ingredients" type="text" placeholder="예) 돼지고기 100%"></div>
+        <div class="form-group"><label for="lbl-size">라벨 크기</label><select id="lbl-size"><option value="7x10">7 × 10cm</option><option value="10x10">10 × 10cm</option></select></div>
+        <div class="form-group"><label for="lbl-print-count">출력 매수</label><input id="lbl-print-count" type="number" min="1" max="500" step="1" value="1" required></div>
+        <details class="manual-label-advanced manual-label-full">
+          <summary>허가번호·포장재질·제조판매원 정보</summary>
+          <div class="manual-label-extra-fields">
+            <div class="form-group"><label for="lbl-licenseno">허가번호</label><input id="lbl-licenseno" type="text"></div>
+            <div class="form-group"><label for="lbl-prodtype">식품의 유형</label><input id="lbl-prodtype" type="text"></div>
+            <div class="form-group manual-label-full"><label for="lbl-packaging">포장재질</label><input id="lbl-packaging" type="text"></div>
+            <div class="form-group"><label for="lbl-manufacturer">제조판매원</label><input id="lbl-manufacturer" type="text"></div>
+            <div class="form-group"><label for="lbl-phone">연락처</label><input id="lbl-phone" type="text"></div>
+            <div class="form-group manual-label-full"><label for="lbl-address">주소</label><input id="lbl-address" type="text"></div>
+          </div>
+        </details>
+        <div class="manual-label-actions manual-label-full">
+          <button type="submit" class="btn btn-primary" id="manual-label-print" onclick="event.preventDefault();printLabel()">라벨 출력</button>
+          <button type="button" class="btn btn-secondary" onclick="DBMTManualLabel.reset()">초기화</button>
         </div>
-        <button class="btn btn-primary" onclick="printLabel()" style="width:100%;">라벨 출력</button>
-      </div>
-      <div id="lbl-workorder-summary" style="margin-top:12px;font-size:12px;line-height:1.55;color:#555;background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:10px;">
-        작업지시를 선택하면 라벨 정보가 표시됩니다.
-      </div>
+      </form>
     </div>
-
     <div class="card">
-      <div class="card-title"><div class="ct-bar" style="background:#8e44ad;"></div>미리보기 <span id="lbl-preview-size-text" style="font-size:11px;color:#888;">(작업지시 기준)</span></div>
-      <div id="lbl-preview-wrap" style="transform-origin:top left;transform:scale(2.83);width:264px;height:378px;margin-bottom:calc(378px * 1.83);margin-right:calc(264px * 1.83);">
-        <div id="lbl-preview" style="width:264px;height:378px;"></div>
+      <div class="card-title"><div class="ct-bar" style="background:#646c74;"></div>미리보기 <span id="lbl-preview-size-text" style="font-size:11px;color:#888;"></span></div>
+      <div id="lbl-preview-stage">
+        <div id="lbl-preview-empty">제품을 선택하면 라벨이 표시됩니다.</div>
+        <iframe id="lbl-preview-frame" title="실제 출력 양식 라벨 미리보기" hidden></iframe>
       </div>
     </div>
   </div>
@@ -5280,7 +5297,6 @@ function renderPageById(id, reason='menu'){
         break;
       case 'p-label':
         initLabelForm();
-        if(window.DBMTWorkOrders) asyncTask=DBMTWorkOrders.start();
         break;
       case 'p-pangwanbi':
         renderPangwanbi();
@@ -7475,15 +7491,15 @@ function openTxnProductPicker(initialQuery, targetInput=null){
   const pickerContext = targetInput?.dataset?.pickerContext || '';
   const selectedProductId = pickerContext === 'production-output'
     ? (document.getElementById(`prod-out-product-id-${targetInput.dataset.productionRowId}`)?.value || '')
-    : (pickerContext === 'workorder-output' ? (document.getElementById('wo-label-product-id')?.value || '') : '');
+    : (pickerContext === 'workorder-output' ? (document.getElementById('wo-label-product-id')?.value || '') : (pickerContext === 'manual-label' ? (document.getElementById('lbl-product-id')?.value || '') : ''));
   const selectedProduct = selectedProductId
     ? (labelProducts || []).find(product => String(product.id || '') === String(selectedProductId))
     : null;
-  txnProductPickerKind = ['production-output','workorder-output'].includes(pickerContext)
+  txnProductPickerKind = ['production-output','workorder-output','manual-label'].includes(pickerContext)
     ? (selectedProduct ? txnProductKindValue(selectedProduct) : '제품')
     : '원료육';
   const title = document.getElementById('txn-product-picker-title');
-  if(title) title.textContent = pickerContext === 'workorder-output' ? '작업지시 생산물 제품 선택' : (pickerContext === 'production-output' ? '생산 품목 선택' : (targetInput ? '입고일괄 품목 선택' : '입고 품목 선택'));
+  if(title) title.textContent = pickerContext === 'manual-label' ? '라벨 출력 제품 선택' : (pickerContext === 'workorder-output' ? '작업지시 생산물 제품 선택' : (pickerContext === 'production-output' ? '생산 품목 선택' : (targetInput ? '입고일괄 품목 선택' : '입고 품목 선택')));
   syncTxnProductKindButtons();
   const allSearch = document.getElementById('tpp-search-all');
   const nameSearch = document.getElementById('tpp-search-name');
@@ -7600,6 +7616,12 @@ function confirmTxnProductPicker(){
   if(!selectedProduct || selectedProduct.isActive === false){ renderTxnProductPicker(true); return; }
   if(txnProductPickerTargetInput){
     const targetInput = txnProductPickerTargetInput;
+    if(targetInput.dataset?.pickerContext === 'manual-label'){
+      DBMTManualLabel.selectProduct(selectedProduct.id);
+      closeTxnProductPicker(false);
+      requestAnimationFrame(()=>document.getElementById('lbl-origin')?.focus());
+      return;
+    }
     if(targetInput.dataset?.pickerContext === 'workorder-output'){
       selectWorkOrderLabelProduct(selectedProduct.id);
       closeTxnProductPicker(false);
@@ -20960,14 +20982,9 @@ function refreshLabelWorkOrderSelect(){
 }
 
 function selectLabelWorkOrder(id){
-  showPage('p-label', document.getElementById('nav-label'));
-  const row = workOrders.find(x => String(x.id) === String(id));
-  const dateEl = document.getElementById('lbl-workorder-date');
-  if(dateEl && row) dateEl.value = row.date || localDateString();
-  refreshLabelWorkOrderSelect();
-  const sel = document.getElementById('lbl-workorder-select');
-  if(sel) sel.value = id;
-  updateLabelPreview();
+  if(window.DBMTAuth && !DBMTAuth.can('label_print','view')){toast('라벨전용 화면을 조회할 권한이 없습니다.');return;}
+  const url=new URL('label-print.html',document.baseURI);url.searchParams.set('workOrderId',String(id));
+  window.open(url.href,'_blank');
 }
 
 function applyLabelPreviewSizeForConfig(cfg){
@@ -21029,7 +21046,7 @@ function getLabelPrintCount(){
 }
 
 function initLabelForm(){
-  refreshLabelWorkOrderSelect();
+  window.DBMTManualLabel?.init();
 }
 
 // ══════════════════════════════════════════
@@ -21655,8 +21672,6 @@ function labelSizeConfigByKey(size='7x10'){
 }
 
 function getLabelSizeConfig(){
-  const selectedOrder = selectedLabelWorkOrder?.();
-  if(document.getElementById('lbl-workorder-select') && selectedOrder) return labelSizeConfigByKey(selectedOrder.labelSize || '7x10');
   const size = document.getElementById('lbl-size')?.value || '7x10';
   return labelSizeConfigByKey(size);
 }
@@ -21668,6 +21683,7 @@ function applyLabelPreviewSize(){
 }
 
 function updateLabelPreview(){
+  if(window.DBMTManualLabel){DBMTManualLabel.updatePreview();return;}
   if(document.getElementById('lbl-workorder-select')){
     updateSelectedWorkOrderLabelPreview();
     return;
@@ -21716,6 +21732,7 @@ function printLabelData(data, sizeKey='7x10', copies=1){
 }
 
 function printLabel(){
+  if(window.DBMTManualLabel){DBMTManualLabel.print();return;}
   if(document.getElementById('lbl-workorder-select')){
     printSelectedWorkOrderLabel();
     return;
@@ -21819,8 +21836,9 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261017split1"></script>
-<script src="work-orders-sync.js?v=20261020schedule1"></script>
+<script src="work-orders-sync.js?v=20261020manual1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
-<script src="m02-auth.js?v=20261017split1"></script>
+<script src="manual-label.js?v=20261020manual1"></script>
+<script src="m02-auth.js?v=20261020manual1"></script>
 </body>
 </html>
