@@ -2333,6 +2333,10 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <label>결제조건</label>
         <input id="tr-payment-terms" placeholder="예) 월말 마감 익월 15일">
       </div>
+      <div class="form-group" style="grid-column:span 2;">
+        <label for="tr-bank-account">거래계좌</label>
+        <input id="tr-bank-account" type="text" maxlength="300" autocomplete="off" placeholder="은행명 / 계좌번호 / 예금주">
+      </div>
       <div class="form-group">
         <label>결제기일(일)</label>
         <input id="tr-payment-due-days" type="number" min="0" max="3650" step="1" placeholder="예) 30">
@@ -2357,8 +2361,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <label>사용상태</label>
         <select id="tr-active"><option value="1">사용</option><option value="0">중지</option></select>
       </div>
-      <div class="form-group" style="flex:0;">
-        <label>&nbsp;</label>
+      <div class="form-group" style="grid-column:1 / -1;">
         <div style="display:flex;gap:6px;">
           <button class="btn btn-primary btn-sm" onclick="saveTraderInfo()" id="tr-save-btn">➕ 추가</button>
           <button class="btn btn-sm" onclick="cancelTraderEdit()" id="tr-cancel-btn" style="display:none;">취소</button>
@@ -2407,7 +2410,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <th id="tr-th-regno" onclick="traderSort('regno')" title="사업자번호로 정렬">사업자정보 <span id="tr-sort-regno">↕</span></th>
             <th id="tr-th-manager" onclick="traderSort('manager')" title="담당자로 정렬">담당자 <span id="tr-sort-manager">↕</span></th>
             <th id="tr-th-phone" onclick="traderSort('phone')" title="일반전화로 정렬">연락처 <span id="tr-sort-phone">↕</span></th>
-            <th id="tr-th-paymentTerms" onclick="traderSort('paymentTerms')" title="결제조건으로 정렬">결제조건 <span id="tr-sort-paymentTerms">↕</span></th>
+            <th id="tr-th-paymentTerms" onclick="traderSort('paymentTerms')" title="결제조건으로 정렬">결제조건·거래계좌 <span id="tr-sort-paymentTerms">↕</span></th>
             <th id="tr-th-active" onclick="traderSort('active')" title="사용상태로 정렬">상태·관리 <span id="tr-sort-active">↕</span></th>
           </tr>
         </thead>
@@ -15738,6 +15741,7 @@ async function saveTraderInfo(){
   const biz          = document.getElementById('tr-biz').value.trim();
   const businessItems = document.getElementById('tr-business-items').value.trim();
   const paymentTerms = document.getElementById('tr-payment-terms').value.trim();
+  const bankAccount = document.getElementById('tr-bank-account').value.trim();
   const paymentDueDays = document.getElementById('tr-payment-due-days').value.trim();
   const creditLimit = document.getElementById('tr-credit-limit').value.trim();
   const active = document.getElementById('tr-active').value !== '0';
@@ -15753,7 +15757,7 @@ async function saveTraderInfo(){
   const record = {
     id:document.getElementById('tr-id').value || null,
     name, tradeType, category, fullname, regno, ceo, manager, managerPhone,
-    phone, email, fax, faxAlt, addr, biz, businessItems, paymentTerms,
+    phone, email, fax, faxAlt, addr, biz, businessItems, paymentTerms, bankAccount,
     paymentDueDays:paymentDueDays || null, creditLimit:creditLimit || 0, active,
     identifiers:traderIdentifiersFromForm()
   };
@@ -15817,6 +15821,7 @@ function editTrader(name){
   document.getElementById('tr-biz').value      = info.biz||'';
   document.getElementById('tr-business-items').value = info.businessItems||'';
   document.getElementById('tr-payment-terms').value = info.paymentTerms||'';
+  document.getElementById('tr-bank-account').value = info.bankAccount||'';
   document.getElementById('tr-payment-due-days').value = info.paymentDueDays??'';
   document.getElementById('tr-credit-limit').value = Number(info.creditLimit||0);
   document.getElementById('tr-meatwatch-manage-no').value = traderIdentifierValue(info,'meatwatch','partner_manage_no');
@@ -15860,7 +15865,7 @@ function cancelTraderEdit(){
 }
 
 function clearTraderForm(){
-  ['tr-id','tr-revision','tr-code','tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-phone','tr-email','tr-fax','tr-fax-alt','tr-addr','tr-biz','tr-business-items','tr-payment-terms','tr-payment-due-days','tr-credit-limit','tr-meatwatch-manage-no','tr-mtrace-corp-no','tr-warehouse-manage-no'].forEach(id=>{
+  ['tr-id','tr-revision','tr-code','tr-name','tr-trade-type','tr-category','tr-fullname','tr-regno','tr-ceo','tr-manager','tr-manager-phone','tr-phone','tr-email','tr-fax','tr-fax-alt','tr-addr','tr-biz','tr-business-items','tr-payment-terms','tr-bank-account','tr-payment-due-days','tr-credit-limit','tr-meatwatch-manage-no','tr-mtrace-corp-no','tr-warehouse-manage-no'].forEach(id=>{
     document.getElementById(id).value = '';
   });
   document.getElementById('tr-active').value = '1';
@@ -15965,7 +15970,7 @@ function renderTraders(){
       <td>${identity}</td>
       <td>${manager}</td>
       <td class="trader-break-text">${contacts}</td>
-      <td>${payment}</td>
+      <td class="trader-break-text">${payment}${info.bankAccount?`<span class="trader-cell-label">거래계좌</span>${htmlEscape(info.bankAccount)}`:''}</td>
       <td class="trader-actions-cell" rowspan="2">
         <span class="trader-status${isActive?'':' is-inactive'}">${isActive?'사용':'중지'}</span>
         <button class="btn btn-sm" style="font-size:11px;padding:3px 8px;" onclick="editTrader(${nameArg})">수정</button>
