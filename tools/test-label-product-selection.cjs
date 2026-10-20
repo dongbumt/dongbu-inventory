@@ -16,7 +16,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     const order={id:'wo-a',title:'원료 돈등심 작업',date:'2026-09-15',product:'돈등심(기본)',labelProductId:'p0',weight:5,inputWeight:100,origin:'국내산',grade:'1등급',lot:'RAW-LOT',mfgdate:'2026-09-15',expdate:'2027-09-14',itemno:'ORIGINAL',ingredients:'돼지고기 100%',temptype:'냉동',sourceStock:{key:'raw',product:'돈등심',origin:'국내산',lot:'RAW-LOT',stock:100,price:5000}};
     const p1={id:'p1',name:'돈등심(돈까스 10mm)',productCode:'P001',packunit:'2KG',origin:'국내산',storage:'냉장',kind:'제품',meattype:'돼지고기',shelfdays:30,itemno:'REPORT-10',brand:'DBMT',nationalPartCode:'CUT-001',nationalPartName:'삼겹살'};
     const p2={...p1,id:'p2',name:'돈등심(잡채 3mm)',productCode:'P002',packunit:'5KG',storage:'냉동',shelfdays:60,itemno:'REPORT-3'};
-    let products=[{...p1,id:'p0',name:order.product},p1,p2,{...p1,id:'belly-1',name:'냉장삼겹살'},{...p1,id:'belly-2',name:'삼겹살(작업)'},...Array.from({length:15},(_,i)=>({...p1,id:'extra-'+i,name:'추가 품목 '+i}))];
+    let products=[{...p1,id:'p0',name:order.product},p1,p2,{...p1,id:'belly-1',name:'냉장삼겹살',brand:'가상 브랜드 A'},{...p1,id:'belly-2',name:'삼겹살(작업)',brand:'가상 브랜드 B'},...Array.from({length:15},(_,i)=>({...p1,id:'extra-'+i,name:'추가 품목 '+i}))];
     let logs=[],saves=0,done=false,fail=false;
     const completions=()=>done?[{workOrderId:order.id,productionId:'prod-qa',deleted:false}]:[];
     await context.route('https://**/*',async route=>{
@@ -41,6 +41,8 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.locator('#product-open').click();
     await page.locator('#product-search').fill('삼겹살');
     assert.deepEqual(await page.locator('#product-list strong').allTextContents(),['냉장삼겹살','삼겹살(작업)'],'A matching national part name must not include unrelated product names');
+    assert.match(await page.locator('[data-product="belly-1"] small').textContent(),/브랜드 가상 브랜드 A/);
+    assert.match(await page.locator('[data-product="belly-2"] small').textContent(),/브랜드 가상 브랜드 B/);
     await page.locator('#product-dialog').screenshot({path:path.join(dir,'product-name-search.png')});
     for(const query of ['P001','CUT-001','DBMT','2KG','국내산','돼지고기','냉장 전용']){
       await page.locator('#product-search').fill(query);assert.equal(await page.locator('#product-list [data-product]').count(),0,`Exclude non-name metadata: ${query}`);
@@ -56,6 +58,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.locator('[data-close=product-dialog]').click();assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),4);
     await choose('10mm','p1');assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),1);assert.equal(await page.evaluate(()=>DBMTLabelTouch.weight('outer')),5);
     assert.equal(await page.locator('#selected-name').textContent(),p1.name);assert.deepEqual(await page.evaluate(()=>state.workOrders[0]),order);
+    assert.match(await page.locator('#selected-meta').textContent(),/브랜드 DBMT/);
     await page.locator('#preview-btn').click();const label=page.frameLocator('#label-preview-frame').locator('.print-label');await label.waitFor();
     const text=await label.textContent();for(const part of [p1.name,p1.itemno,'2026.10.14','냉장','RAW-LOT','국내산'])assert(text.includes(part),part);await page.locator('#label-preview-close').click();
     const saveBefore=saves;await page.locator('#inner-print-btn').click();await wait();assert.equal(saves,saveBefore);assert.equal(logs.length,1);

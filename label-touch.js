@@ -22,7 +22,7 @@
     try{DBMTLabelProducts.compose(selectedOrder(),registeredProduct(chosenProduct())||null);return '';}catch(e){return e.message;}
   }
   function productDetail(row){
-    return [row.productCode,row.packunit&&`포장 ${row.packunit}`,row.origin,row.storage||row.temptype].filter(Boolean).join(' · ');
+    return [row.productCode,row.brand&&`브랜드 ${row.brand}`,row.packunit&&`포장 ${row.packunit}`,row.origin,row.storage||row.temptype].filter(Boolean).join(' · ');
   }
   function renderProducts(){
     const row=selectedOrder();if(!row)return;
