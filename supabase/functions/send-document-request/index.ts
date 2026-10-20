@@ -609,18 +609,14 @@ function normalizeDocuments(rows: unknown): DocumentRow[] {
   })).filter((row) => row.product || row.lot);
 }
 
-function documentSenderName(sender: RequestSenderProfile) {
-  if (sender.profileId === "dongbumt") return "주식회사 동부엠티";
-  if (sender.profileId === "dongbu_distribution") return "(주)동부축산유통";
-  return sender.name || sender.displayName;
-}
+const DOCUMENT_REQUEST_SENDER_NAME = "주식회사 동부엠티 / (주)동부축산유통";
 
 function requestReplyMethod(sender: RequestSenderProfile) {
   return [sender.email ? `이메일(${sender.email})` : "", sender.fax ? `팩스(${sender.fax})` : ""].filter(Boolean).join(" 또는 ");
 }
 
 function requestSubject(sender: RequestSenderProfile, trader: string, documents: DocumentRow[]) {
-  return `[${documentSenderName(sender)}] 입고 필요서류 요청 - ${trader} (${documents.length}건)`;
+  return `[${DOCUMENT_REQUEST_SENDER_NAME}] 입고 필요서류 요청 - ${trader} (${documents.length}건)`;
 }
 
 function documentEmailTableRows(documents: DocumentRow[]) {
@@ -655,7 +651,7 @@ function requestEmailHtml(sender: RequestSenderProfile, trader: string, document
 <div style="font-size:22px;font-weight:700;border-bottom:2px solid #444;padding-bottom:12px;margin-bottom:20px;">입고 필요서류 요청서</div>
 <div style="font-size:14px;line-height:1.9;margin-bottom:18px;">
   <div><strong style="display:inline-block;min-width:72px;">수신 :</strong> ${escapeHtml(trader)} 귀중</div>
-  <div><strong style="display:inline-block;min-width:72px;">발신 :</strong> ${escapeHtml(documentSenderName(sender))}</div>
+  <div><strong style="display:inline-block;min-width:72px;">발신 :</strong> ${escapeHtml(DOCUMENT_REQUEST_SENDER_NAME)}</div>
   <div><strong style="display:inline-block;min-width:72px;">요청일 :</strong> ${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</div>
 </div>
 <p style="font-size:14px;margin:0 0 18px;">안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.</p>
@@ -689,7 +685,7 @@ td:first-child,th:first-child{text-align:center;width:36px}.lot{overflow-wrap:an
 <div class="title">입고 필요서류 요청서</div>
 <div class="meta">
   <div><strong>수신</strong>${escapeHtml(trader)} 귀중</div>
-  <div><strong>발신 :</strong>${escapeHtml(documentSenderName(sender))}</div>
+  <div><strong>발신 :</strong>${escapeHtml(DOCUMENT_REQUEST_SENDER_NAME)}</div>
   <div><strong>요청일</strong>${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</div>
 </div>
 <p>안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.</p>
@@ -707,7 +703,7 @@ function requestText(sender: RequestSenderProfile, trader: string, documents: Do
   return [
     "입고 필요서류 요청서",
     `수신 : ${trader} 귀중`,
-    `발신 : ${documentSenderName(sender)}`,
+    `발신 : ${DOCUMENT_REQUEST_SENDER_NAME}`,
     "",
     "안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.",
     "",
@@ -724,7 +720,7 @@ function documentContentSnapshot(channel: DeliveryChannel, sender: RequestSender
     text: requestText(sender, trader, documents),
     sender: {
       name: sender.name,
-      displayName: documentSenderName(sender),
+      displayName: DOCUMENT_REQUEST_SENDER_NAME,
       from: channel === "email" ? env("DAUM_SMTP_FROM") : barobillConfig(sender).fromNumber,
       replyEmail: sender.email,
       replyFax: sender.fax,
@@ -749,7 +745,7 @@ async function sendEmail(sender: RequestSenderProfile, trader: string, recipient
   });
   const subject = requestSubject(sender, trader, documents);
   const result = await transporter.sendMail({
-    from: `"${documentSenderName(sender)}" <${from}>`,
+    from: `"${DOCUMENT_REQUEST_SENDER_NAME}" <${from}>`,
     to: recipient,
     replyTo: sender.email || from,
     subject,

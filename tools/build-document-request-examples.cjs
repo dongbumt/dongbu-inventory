@@ -17,7 +17,7 @@ const senders=[{profileId:'dongbumt',name:'주식회사동부엠티',displayName
    const body=(type==='메일'?sandbox.requestEmailHtml:sandbox.requestFaxHtml)(sender,'예시 거래처',rows);
    const file=path.join(output,`${type}_${sender.file}_예시.html`);fs.writeFileSync(file,body,'utf8');
    await page.setContent(body);assert.deepEqual(await page.locator('th').allTextContents(),['No.','품목명','브랜드','원산지','이력번호','필요서류']);
-   const text=await page.locator('body').innerText(),name=sandbox.documentSenderName(sender);
+   const text=await page.locator('body').innerText(),name='주식회사 동부엠티 / (주)동부축산유통';
    assert.equal(text.split(name).length-1,1,'Only one sender name');assert(!text.includes('법인 :'));assert(!text.includes('법인\n'));
    assert(text.includes('예시 브랜드 A'));assert(text.includes('예시 브랜드 B'));assert(!text.includes('이메일()'));
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
