@@ -708,7 +708,22 @@ function requestText(sender: RequestSenderProfile, trader: string, documents: Do
   ].join("\n");
 }
 
-async function sendEmail(sender: RequestSenderProfile, trader: string, recipient: string, documents: DocumentRow[]) {
+function documentContentSnapshot(channel: DeliveryChannel, sender: RequestSenderProfile, trader: string, documents: DocumentRow[]) {
+  return {
+    version: 1,
+    html: channel === "email" ? requestEmailHtml(sender, trader, documents) : requestFaxHtml(sender, trader, documents),
+    text: requestText(sender, trader, documents),
+    sender: {
+      name: sender.name,
+      displayName: sender.displayName,
+      from: channel === "email" ? env("DAUM_SMTP_FROM") : barobillConfig(sender).fromNumber,
+      replyEmail: sender.email,
+      replyFax: sender.fax,
+    },
+  };
+}
+
+async function sendEmail(sender: RequestSenderProfile, trader: string, recipient: string, documents: DocumentRow[], content: ReturnType<typeof documentContentSnapshot>) {
   const user = env("DAUM_SMTP_USER");
   const password = env("DAUM_SMTP_APP_PASSWORD");
   const from = env("DAUM_SMTP_FROM");
@@ -729,8 +744,8 @@ async function sendEmail(sender: RequestSenderProfile, trader: string, recipient
     to: recipient,
     replyTo: sender.email || from,
     subject,
-    text: requestText(sender, trader, documents),
-    html: requestEmailHtml(sender, trader, documents),
+    text: content.text,
+    html: content.html,
   });
   return { subject, messageId: clean(result.messageId, 500), providerStatus: "발송완료" };
 }
@@ -836,7 +851,7 @@ async function barobillErrorMessage(errorCode: string, config: ReturnType<typeof
   }
 }
 
-async function sendFax(sender: RequestSenderProfile, trader: string, recipient: string, recipientName: string, documents: DocumentRow[]) {
+async function sendFax(sender: RequestSenderProfile, trader: string, recipient: string, recipientName: string, documents: DocumentRow[], content: ReturnType<typeof documentContentSnapshot>) {
   const config = barobillConfig(sender);
   if (!isBarobillConfigured(config)) {
     throw new Error("바로빌 연동정보가 아직 설정되지 않았습니다.");
@@ -845,7 +860,7 @@ async function sendFax(sender: RequestSenderProfile, trader: string, recipient: 
     throw new Error("기본 법인의 사업자번호와 바로빌 법인번호가 일치하지 않습니다.");
   }
   const fileName = `dbmt_doc_request_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.html`;
-  await uploadBarobillFile(fileName, requestFaxHtml(sender, trader, documents), config);
+  await uploadBarobillFile(fileName, content.html, config);
   const sendKey = await barobillSoap("SendFaxFromFTP", {
     CERTKEY: config.certKey,
     CorpNum: config.corpNum,
@@ -1218,16 +1233,18 @@ Deno.serve(async (req) => {
 
   const provider = channel === "email" ? "Daum SMTP" : "Barobill";
   const subject = requestSubject(selectedSender, trader, documents);
+  const content = documentContentSnapshot(channel, selectedSender, trader, documents);
   try {
     const result = channel === "email"
-      ? await sendEmail(selectedSender, trader, recipient, documents)
-      : await sendFax(selectedSender, trader, recipient, recipientName, documents);
+      ? await sendEmail(selectedSender, trader, recipient, documents, content)
+      : await sendFax(selectedSender, trader, recipient, recipientName, documents, content);
     await insertLog(supabase, {
       channel,
       trader,
       recipient,
       recipient_name: recipientName,
       subject: result.subject,
+      content_snapshot: content,
       document_count: documents.length,
       documents,
       status: channel === "email" ? "sent" : "accepted",
@@ -1250,6 +1267,7 @@ Deno.serve(async (req) => {
       recipient,
       recipient_name: recipientName,
       subject,
+      content_snapshot: content,
       document_count: documents.length,
       documents,
       status: "failed",

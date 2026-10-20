@@ -295,6 +295,7 @@
     if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
     if(window.DBMTProductionSchedule) window.DBMTProductionSchedule.applyPermissions();
     if(window.DBMTManualLabel) window.DBMTManualLabel.applyPermissions();
+    if(window.DBMTDocumentRequestDetail) window.DBMTDocumentRequestDetail.applyPermissions();
     if(typeof window.applySchedulePermissionState === 'function') window.applySchedulePermissionState();
     if(typeof window.renderScheduleCalendar === 'function' && document.getElementById('p-schedule')?.classList.contains('active')){
       window.renderScheduleCalendar();
