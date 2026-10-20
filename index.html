@@ -16306,6 +16306,13 @@ function closeDocumentRequestModal(){
   docRequestPendingChannel = '';
 }
 
+function documentRequestBrand(row){
+  const saved=String(row?.brand||'').trim();if(saved)return saved;
+  const id=row?.labelProductId||row?.productId;
+  const product=id?(labelProducts||[]).find(item=>String(item.id)===String(id)):null;
+  return String(product?.brand||'').trim();
+}
+
 function openDocumentRequestModal(channel){
   if(channel !== 'email' && channel !== 'fax') return;
   if(!docRequestCapabilities[channel]){
@@ -16370,7 +16377,7 @@ function openDocumentRequestModal(channel){
           <div class="doc-request-group-recipient">${htmlEscape(group.recipient)}</div>
         </div>
         <ul>${group.rows.map(row=>`
-          <li>${htmlEscape(row.product||'-')} · ${htmlEscape(row.origin||'-')} ·
+          <li>${htmlEscape(row.product||'-')} · 브랜드 ${htmlEscape(documentRequestBrand(row)||'-')} · ${htmlEscape(row.origin||'-')} ·
           이력번호 ${htmlEscape(row.lot||'-')} · <strong>${htmlEscape(getRequiredDoc(row.origin))}</strong></li>
         `).join('')}</ul>
       </div>
@@ -16430,6 +16437,7 @@ async function sendDocumentRequests(){
         documents:group.rows.map(row=>({
           date:row.date || '',
           product:row.product || '',
+          brand:documentRequestBrand(row),
           origin:row.origin || '',
           lot:row.lot || '',
           requiredDoc:getRequiredDoc(row.origin)
@@ -21841,7 +21849,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="work-orders-sync.js?v=20261020manual1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="manual-label.js?v=20261020manual1"></script>
-<script src="document-request-detail.js?v=20261020content1"></script>
+<script src="document-request-detail.js?v=20261020brand1"></script>
 <script src="m02-auth.js?v=20261020content1"></script>
 </body>
 </html>

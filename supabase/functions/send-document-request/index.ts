@@ -8,6 +8,7 @@ type DeliveryChannel = "email" | "fax";
 interface DocumentRow {
   date: string;
   product: string;
+  brand: string;
   origin: string;
   lot: string;
   requiredDoc: string;
@@ -601,14 +602,25 @@ function normalizeDocuments(rows: unknown): DocumentRow[] {
   return rows.slice(0, 100).map((row) => ({
     date: clean(row?.date, 20),
     product: clean(row?.product, 100),
+    brand: clean(row?.brand, 100),
     origin: clean(row?.origin, 100),
     lot: clean(row?.lot, 500),
     requiredDoc: clean(row?.requiredDoc, 100),
   })).filter((row) => row.product || row.lot);
 }
 
+function documentSenderName(sender: RequestSenderProfile) {
+  if (sender.profileId === "dongbumt") return "주식회사 동부엠티";
+  if (sender.profileId === "dongbu_distribution") return "(주)동부축산유통";
+  return sender.name || sender.displayName;
+}
+
+function requestReplyMethod(sender: RequestSenderProfile) {
+  return [sender.email ? `이메일(${sender.email})` : "", sender.fax ? `팩스(${sender.fax})` : ""].filter(Boolean).join(" 또는 ");
+}
+
 function requestSubject(sender: RequestSenderProfile, trader: string, documents: DocumentRow[]) {
-  return `[${sender.displayName}] 입고 필요서류 요청 - ${trader} (${documents.length}건)`;
+  return `[${documentSenderName(sender)}] 입고 필요서류 요청 - ${trader} (${documents.length}건)`;
 }
 
 function documentEmailTableRows(documents: DocumentRow[]) {
@@ -616,6 +628,7 @@ function documentEmailTableRows(documents: DocumentRow[]) {
     <tr>
       <td style="border:1px solid #777;padding:9px 7px;text-align:center;vertical-align:middle;">${index + 1}</td>
       <td style="border:1px solid #777;padding:9px 7px;text-align:left;vertical-align:middle;">${escapeHtml(row.product || "-")}</td>
+      <td style="border:1px solid #777;padding:9px 7px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;">${escapeHtml(row.brand || "-")}</td>
       <td style="border:1px solid #777;padding:9px 7px;text-align:center;vertical-align:middle;">${escapeHtml(row.origin || "-")}</td>
       <td style="border:1px solid #777;padding:9px 7px;text-align:left;vertical-align:middle;overflow-wrap:anywhere;word-break:break-all;white-space:normal;">${escapeHtml(row.lot || "-")}</td>
       <td style="border:1px solid #777;padding:9px 7px;text-align:center;vertical-align:middle;"><strong>${escapeHtml(row.requiredDoc || "-")}</strong></td>
@@ -627,6 +640,7 @@ function documentFaxTableRows(documents: DocumentRow[]) {
     <tr>
       <td>${index + 1}</td>
       <td>${escapeHtml(row.product || "-")}</td>
+      <td>${escapeHtml(row.brand || "-")}</td>
       <td>${escapeHtml(row.origin || "-")}</td>
       <td class="lot">${escapeHtml(row.lot || "-")}</td>
       <td><strong>${escapeHtml(row.requiredDoc || "-")}</strong></td>
@@ -641,24 +655,22 @@ function requestEmailHtml(sender: RequestSenderProfile, trader: string, document
 <div style="font-size:22px;font-weight:700;border-bottom:2px solid #444;padding-bottom:12px;margin-bottom:20px;">입고 필요서류 요청서</div>
 <div style="font-size:14px;line-height:1.9;margin-bottom:18px;">
   <div><strong style="display:inline-block;min-width:72px;">수신 :</strong> ${escapeHtml(trader)} 귀중</div>
-  <div><strong style="display:inline-block;min-width:72px;">발신 :</strong> ${escapeHtml(sender.displayName)}</div>
-  <div><strong style="display:inline-block;min-width:72px;">법인 :</strong> ${escapeHtml(sender.name)}</div>
+  <div><strong style="display:inline-block;min-width:72px;">발신 :</strong> ${escapeHtml(documentSenderName(sender))}</div>
   <div><strong style="display:inline-block;min-width:72px;">요청일 :</strong> ${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</div>
 </div>
 <p style="font-size:14px;margin:0 0 18px;">안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.</p>
 <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;margin:0 0 24px;">
 <thead><tr>
   <th style="width:6%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">No.</th>
-  <th style="width:27%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">품목명</th>
-  <th style="width:13%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">원산지</th>
-  <th style="width:36%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">이력번호</th>
-  <th style="width:18%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">필요서류</th>
+  <th style="width:24%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">품목명</th>
+  <th style="width:13%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">브랜드</th>
+  <th style="width:12%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">원산지</th>
+  <th style="width:29%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">이력번호</th>
+  <th style="width:16%;border:1px solid #777;background:#eee;padding:9px 7px;text-align:center;">필요서류</th>
 </tr></thead>
 <tbody>${documentEmailTableRows(documents)}</tbody></table>
 <div style="border-top:1px solid #aaa;padding-top:14px;font-size:13px;line-height:1.7;">
-  <strong style="font-size:14px;">${escapeHtml(sender.displayName)}</strong><br>
-  <span>${escapeHtml(sender.name)}</span><br>
-  <span>회신 방법 : 이메일(${escapeHtml(sender.email)}) or 팩스(${escapeHtml(sender.fax)})</span>
+  <span>회신 방법 : ${escapeHtml(requestReplyMethod(sender))}</span>
 </div></div></body></html>`;
 }
 
@@ -677,34 +689,31 @@ td:first-child,th:first-child{text-align:center;width:36px}.lot{overflow-wrap:an
 <div class="title">입고 필요서류 요청서</div>
 <div class="meta">
   <div><strong>수신</strong>${escapeHtml(trader)} 귀중</div>
-  <div><strong>발신</strong>${escapeHtml(sender.displayName)}</div>
-  <div><strong>법인</strong>${escapeHtml(sender.name)}</div>
+  <div><strong>발신 :</strong>${escapeHtml(documentSenderName(sender))}</div>
   <div><strong>요청일</strong>${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</div>
 </div>
 <p>안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.</p>
-<table><thead><tr><th>No.</th><th>품목명</th><th>원산지</th><th class="lot">이력번호</th><th>필요서류</th></tr></thead>
+<table><thead><tr><th>No.</th><th>품목명</th><th>브랜드</th><th>원산지</th><th class="lot">이력번호</th><th>필요서류</th></tr></thead>
 <tbody>${documentFaxTableRows(documents)}</tbody></table>
 <div class="footer">
-  <strong>${escapeHtml(sender.displayName)}</strong><br>
-  ${escapeHtml(sender.name)}<br>
-  회신 방법 : 이메일(${escapeHtml(sender.email)}) or 팩스(${escapeHtml(sender.fax)})
+  회신 방법 : ${escapeHtml(requestReplyMethod(sender))}
 </div></div></body></html>`;
 }
 
 function requestText(sender: RequestSenderProfile, trader: string, documents: DocumentRow[]) {
   const lines = documents.map((row, index) =>
-    `${index + 1}. 품목명: ${row.product || "-"} / 원산지: ${row.origin || "-"} / 이력번호: ${row.lot || "-"} / 필요서류: ${row.requiredDoc || "-"}`
+    `${index + 1}. 품목명: ${row.product || "-"} / 브랜드: ${row.brand || "-"} / 원산지: ${row.origin || "-"} / 이력번호: ${row.lot || "-"} / 필요서류: ${row.requiredDoc || "-"}`
   );
   return [
-    `${trader} 담당자님께`,
+    "입고 필요서류 요청서",
+    `수신 : ${trader} 귀중`,
+    `발신 : ${documentSenderName(sender)}`,
     "",
-    `안녕하세요. ${sender.displayName}입니다.`,
-    `법인명: ${sender.name}`,
-    "아래 입고 건에 대한 필요서류를 회신 부탁드립니다.",
+    "안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.",
     "",
     ...lines,
     "",
-    `회신 방법 : 이메일(${sender.email}) or 팩스(${sender.fax})`,
+    `회신 방법 : ${requestReplyMethod(sender)}`,
   ].join("\n");
 }
 
@@ -715,7 +724,7 @@ function documentContentSnapshot(channel: DeliveryChannel, sender: RequestSender
     text: requestText(sender, trader, documents),
     sender: {
       name: sender.name,
-      displayName: sender.displayName,
+      displayName: documentSenderName(sender),
       from: channel === "email" ? env("DAUM_SMTP_FROM") : barobillConfig(sender).fromNumber,
       replyEmail: sender.email,
       replyFax: sender.fax,
@@ -740,7 +749,7 @@ async function sendEmail(sender: RequestSenderProfile, trader: string, recipient
   });
   const subject = requestSubject(sender, trader, documents);
   const result = await transporter.sendMail({
-    from: `"${sender.displayName}" <${from}>`,
+    from: `"${documentSenderName(sender)}" <${from}>`,
     to: recipient,
     replyTo: sender.email || from,
     subject,

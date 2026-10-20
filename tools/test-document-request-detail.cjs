@@ -16,7 +16,7 @@ const source=name=>{const match=html.match(new RegExp(`function ${name}\\([^]*?\
     var allowed=true,session='session-one',notices=[],rpcCalls=[],delayed=false,pending=null;
     window.DBMTAuth={isPersonal:()=>!!session,can:(menu,action)=>allowed&&action==='view',getSessionToken:()=>session};
     const toast=message=>notices.push(message);
-    const documents=[{date:'2026-10-20',product:'가상 삼겹살 <A>',origin:'국내산',lot:'001-LOT',requiredDoc:'등급판정서'}];
+    const documents=[{date:'2026-10-20',product:'가상 삼겹살 <A>',brand:'가상 브랜드',origin:'국내산',lot:'001-LOT',requiredDoc:'등급판정서'}];
     var documentRequestLogs=[{id:1,created_at:'2026-10-20T01:00:00Z',channel:'email',trader:'가상 거래처',recipient:'recipient@example.invalid',subject:'이전 메일 요청',status:'sent',documents,document_count:1},
       {id:2,created_at:'2026-10-20T02:00:00Z',channel:'email',trader:'가상 거래처',recipient:'recipient@example.invalid',subject:'새 메일 요청',status:'sent',documents,document_count:1,content_snapshot:{version:1,sender:{displayName:'가상 발신처',from:'sender@example.invalid'},html:'<!doctype html><html><head><meta http-equiv="refresh" content="0;url=https://blocked.invalid"><style>body{font-family:Arial,sans-serif;padding:24px}h2{border-bottom:2px solid #555}table{border-collapse:collapse;width:100%}td,th{border:1px solid #aaa;padding:10px}th{background:#eee}</style></head><body><h2>입고 필요서류 요청서</h2><p>수신: 가상 거래처 귀중</p><p>안녕하세요. 아래 입고 건에 대한 필요서류를 회신 부탁드립니다.</p><table><tr><th>품목명</th><th>이력번호</th><th>필요서류</th></tr><tr><td>가상 삼겹살</td><td>001-LOT</td><td>등급판정서</td></tr></table><script>parent.hacked=true<\\/script><img src="https://blocked.invalid/tracker"><a href="https://blocked.invalid">회신</a></body></html>'}},
       {id:3,created_at:'2026-10-20T03:00:00Z',channel:'fax',trader:'가상 거래처',recipient:'02-1234-5678',subject:'팩스 요청',status:'failed',error_message:'가상 발송 오류',documents,document_count:1,content_snapshot:{version:1,sender:{displayName:'가상 발신처',from:'0211112222'},html:'<html><body><h2>팩스 요청서</h2><p>가상 팩스 내용</p></body></html>'}}];
@@ -29,6 +29,8 @@ const source=name=>{const match=html.match(new RegExp(`function ${name}\\([^]*?\
   await page.locator('[data-doc-request-detail="1"]').click();await page.locator('.document-detail-note').waitFor();
   assert.match(await page.locator('#document-request-detail-body').innerText(),/본문 원본을 보관하지 않아/);
   assert.match(await page.locator('#document-request-detail-body').innerText(),/이전 메일 요청/);
+  assert.deepEqual(await page.locator('.document-detail-table-wrap th').allTextContents(),['입고일','품목명','브랜드','원산지','이력번호','필요서류']);
+  assert.match(await page.locator('.document-detail-table-wrap').innerText(),/가상 브랜드/);
   assert.equal(await page.locator('#document-request-body-frame').count(),0);
   await page.keyboard.press('Escape');
   await page.locator('[data-doc-request-detail="2"]').click();const frame=page.frameLocator('#document-request-body-frame');await frame.locator('h2').waitFor();

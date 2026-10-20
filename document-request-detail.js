@@ -35,7 +35,7 @@
       ${content?.html?'<h4>발송 본문</h4><iframe id="document-request-body-frame" title="보낸 메일 또는 팩스 요청서" sandbox="" referrerpolicy="no-referrer"></iframe>':
         content?.text?`<h4>발송 본문</h4><pre class="document-detail-text">${escape(content.text)}</pre>`:
         '<p class="document-detail-note">이전 이력은 본문 원본을 보관하지 않아 저장된 제목과 요청서류 목록만 표시합니다.</p>'}
-      <h4>요청서류 목록 (${rows.length}건)</h4><div class="document-detail-table-wrap"><table><thead><tr><th>입고일</th><th>품목명</th><th>원산지</th><th>이력번호</th><th>필요서류</th></tr></thead><tbody>${rows.length?rows.map(row=>`<tr>${[row.date,row.product,row.origin,row.lot,row.requiredDoc].map(value=>`<td>${escape(value||'-')}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="5">저장된 요청서류가 없습니다.</td></tr>'}</tbody></table></div>`;
+      <h4>요청서류 목록 (${rows.length}건)</h4><div class="document-detail-table-wrap"><table><thead><tr><th>입고일</th><th>품목명</th><th>브랜드</th><th>원산지</th><th>이력번호</th><th>필요서류</th></tr></thead><tbody>${rows.length?rows.map(row=>`<tr>${[row.date,row.product,row.brand,row.origin,row.lot,row.requiredDoc].map(value=>`<td>${escape(value||'-')}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="6">저장된 요청서류가 없습니다.</td></tr>'}</tbody></table></div>`;
     const frame=document.getElementById('document-request-body-frame');if(frame)frame.srcdoc=safeHtml(content.html);
   }
   async function open(id){
