@@ -75,6 +75,7 @@
     saveEditTxn:['transactions','update'],
     loadTxnToForm:['transactions','update'],
     updateTxnPrice:['transactions','update'],
+    openPdaTransactionDetails:['transactions','view','uiOnly'],
     deleteTransaction:['transactions','delete'],
 
     loadTraceIntegrationPreview:['trace_integration','view'],

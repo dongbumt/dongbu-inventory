@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
 <script src="stock-ledger.js?v=20261017date1"></script>
+<script src="pda-transaction-summary.js?v=20261020summary1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
 <script src="label-layout.js?v=20261013inner1"></script>
@@ -3630,6 +3631,17 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <!-- ══════════════════════════════════════════
      📦 품목관리
 ══════════════════════════════════════════ -->
+<dialog id="txn-pda-detail-dialog" style="position:fixed;inset:0;margin:auto;width:min(960px,calc(100vw - 24px));max-height:90vh;padding:16px;border:1px solid #bbb;border-radius:8px;" aria-labelledby="txn-pda-detail-title">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;">
+    <h3 id="txn-pda-detail-title" style="font-size:16px;">박스별 출고 내역</h3>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="closePdaTransactionDetails()" aria-label="박스별 내역 닫기" title="닫기">×</button>
+  </div>
+  <div id="txn-pda-detail-summary" style="font-size:12px;line-height:1.6;margin-bottom:10px;"></div>
+  <div class="tbl-wrap" style="max-height:65vh;overflow:auto;">
+    <table style="min-width:720px;"><thead><tr><th>제품 고유바코드</th><th style="text-align:right;">중량(KG)</th><th style="text-align:right;">단가</th><th style="text-align:right;">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="txn-pda-detail-body"></tbody></table>
+  </div>
+</dialog>
+
 <div class="tab-panel" id="p-labelproducts">
   <div style="display:flex;flex-direction:column;gap:16px;align-items:stretch;">
 
@@ -8745,30 +8757,41 @@ function hideTxnTraderResults(immediate=false){
   }
 }
 
+const transactionPricePendingIds=new Set();
 async function updateTxnPrice(id, newPriceStr){
   const newPrice = parseFloat(newPriceStr)||0;
-  const txn = userTransactions.find(t=>String(t.id)===String(id));
-  if(!txn) return;
-  if(txn.stockRowId && txn._prodId){ toast('생산일보에서 생성된 재고의 단가는 해당 생산일보에서 수정해주세요.'); renderTransactions(); return; }
-  if(txn.type === '재고이동'){
+  const summary = findPdaTransactionSummary(id);
+  const ids = summary ? summary._pdaSummaryRows.map(row=>String(row.id)) : [String(id)];
+  const byId = new Map(userTransactions.map(row=>[String(row.id),row]));
+  const targets = ids.map(rowId=>byId.get(rowId));
+  if(targets.some(row=>!row)) return;
+  if(ids.some(rowId=>transactionPricePendingIds.has(rowId))){toast('단가 저장 중입니다. 잠시 후 다시 변경해주세요.');renderTransactions();return;}
+  if(targets.some(txn=>txn.stockRowId && txn._prodId)){ toast('생산일보에서 생성된 재고의 단가는 해당 생산일보에서 수정해주세요.'); renderTransactions(); return; }
+  if(targets.some(txn=>txn.type === '재고이동')){
     toast('재고이동 단가는 선택한 재고의 입고/생산단가로 고정됩니다.', 2500);
     renderTransactions();
     return;
   }
-  txn.price  = newPrice;
-  txn.amount = Math.round(newPrice * txn.weight);
+  const previous = targets.map(txn=>({price:txn.price,amount:txn.amount}));
+  ids.forEach(rowId=>transactionPricePendingIds.add(rowId));
+  targets.forEach(txn=>{txn.price=newPrice;txn.amount=Math.round(newPrice*txn.weight);});
   transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
   invalidateStockMap();
   try{
-    await saveTransactionRows(txn, null, null, {action:'수정'});
+    await saveTransactionRows(targets, null, null, {action:'수정'});
   }catch(err){
+    targets.forEach((txn,index)=>{if(userTransactions.includes(txn)) Object.assign(txn,previous[index]);});
+    transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+    invalidateStockMap();renderTransactions();renderPdaTransactionDetails();
     toast(String(err?.message || err || '단가 수정에 실패했습니다.'));
     return;
-  }
+  }finally{ids.forEach(rowId=>transactionPricePendingIds.delete(rowId));}
   // 금액 셀만 즉시 업데이트 (전체 re-render 없이)
   const domId = String(id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
   const amtEl = document.getElementById(`txn-amt-${domId}`);
-  if(amtEl) amtEl.textContent = txn.amount.toLocaleString();
+  if(summary || targets.some(txn=>txn._pdaRequestId)) renderTransactions();
+  else if(amtEl) amtEl.textContent = targets[0].amount.toLocaleString();
+  renderPdaTransactionDetails();
   updateOutProductList();
   if(document.getElementById('p-stock')?.classList.contains('active')) renderStock();
   if(document.getElementById('p-production')?.classList.contains('active')) initProdForm();
@@ -10132,15 +10155,17 @@ function renderTransactions(){
     setTransactionListIdle();
     return;
   }
-  const {rows} = getFilteredTransactions('desc');
-  document.getElementById('t-count').textContent=`(${rows.length}건)`;
+  const filtered = getFilteredTransactions('desc').rows;
+  const rows = transactionDisplayRows(filtered);
+  const pdaBoxes = filtered.filter(row=>row.type==='출고'&&row._pdaRequestId&&row._pdaLabelId).length;
+  document.getElementById('t-count').textContent=`(${rows.length}건${pdaBoxes ? ` · PDA ${pdaBoxes}박스` : ''})`;
   const b=document.getElementById('t-body');
   if(!rows.length){
     b.innerHTML='<tr><td colspan="12" style="text-align:center;color:#888;padding:24px;">조회 결과가 없습니다.</td></tr>';
     return;
   }
   b.innerHTML=rows.map(t=>{
-    const id = t.id;
+    const isPdaSummary = Boolean(t._pdaSummaryRows);
     const domId = String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
     const isStockAdjust = t.type === '재고조정';
     const isStockMove = t.type === '재고이동';
@@ -10170,7 +10195,7 @@ function renderTransactions(){
     <td style="text-align:right;padding:2px 4px;">
       ${t._isUser
         ? ((isStockAdjust || isStockMove || isBoxBaseline) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
-             onchange="updateTxnPrice(${jsArg(t.id)}, this.value)"
+             onchange="updateTxnPrice(${jsArg(t.id)}, this.value)" ${isPdaSummary?`title="${t._pdaSummaryRows.length}박스 단가 일괄 수정" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''}`:''}
              style="width:80px;text-align:right;font-size:12px;padding:2px 4px;
                     border:1px solid #ddd;border-radius:4px;background:#fffff8;">`)
         : (price?price.toLocaleString():'-')}
@@ -10178,12 +10203,50 @@ function renderTransactions(){
     <td style="text-align:right" id="txn-amt-${domId}">${amount?Math.round(amount).toLocaleString():'-'}</td>
     <td>${note}</td>
     <td style="white-space:nowrap">
-      ${t._isUser
+      ${isPdaSummary ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
          ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
     </td>
   </tr>`;
   }).join('');
+}
+
+function transactionDisplayRows(rows){
+  return DBMTPdaTransactionSummary.group(rows,getTxnStockLocation);
+}
+
+function findPdaTransactionSummary(id){
+  if(!String(id).startsWith('pda-summary:')) return null;
+  return transactionDisplayRows(getFilteredTransactions('desc').rows).find(row=>row.id===id&&row._pdaSummaryRows) || null;
+}
+
+let pdaTransactionDetailIds=[];
+function openPdaTransactionDetails(id){
+  const summary=findPdaTransactionSummary(id);
+  if(!summary) return;
+  pdaTransactionDetailIds=summary._pdaSummaryRows.map(row=>String(row.id));
+  renderPdaTransactionDetails();
+  document.getElementById('txn-pda-detail-dialog').showModal();
+}
+
+function closePdaTransactionDetails(){
+  document.getElementById('txn-pda-detail-dialog')?.close();
+}
+
+function renderPdaTransactionDetails(){
+  const body=document.getElementById('txn-pda-detail-body');
+  const summary=document.getElementById('txn-pda-detail-summary');
+  if(!body||!summary||!pdaTransactionDetailIds.length) return;
+  const ids=new Set(pdaTransactionDetailIds),rows=userTransactions.filter(row=>ids.has(String(row.id)));
+  const first=rows[0];
+  if(!first){closePdaTransactionDetails();return;}
+  const kg=rows.reduce((sum,row)=>sum+Math.round(Number(row.weight||0)*100),0)/100;
+  const amount=rows.reduce((sum,row)=>sum+Number(row.amount||0),0);
+  summary.textContent=`${first.date} · ${first.trader||''} · ${first.product||''} · ${first.lot||''} / ${rows.length}박스 · ${kg.toFixed(2)} KG · ${Math.round(amount).toLocaleString()}원`;
+  body.innerHTML=rows.map(row=>`<tr><td style="font-family:monospace;">${htmlEscape(DBMTLabelLayout.encodePrintCode(row._pdaCode||''))}</td>
+    <td style="text-align:right;">${Number(row.weight||0).toFixed(2)}</td><td style="text-align:right;"><input type="number" aria-label="박스 단가" value="${Number(row.price||0)}" onchange="updateTxnPrice(${jsArg(row.id)},this.value)" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''} style="width:80px;text-align:right;"></td>
+    <td style="text-align:right;" id="txn-pda-detail-amt-${String(row.id).replace(/[^a-zA-Z0-9_-]/g,'_')}">${Math.round(Number(row.amount||0)).toLocaleString()}</td><td>${htmlEscape(row.note||'-')}</td>
+    <td><button type="button" class="btn btn-secondary btn-sm" onclick="closePdaTransactionDetails();loadTxnToForm(${jsArg(row.id)})">수정</button></td></tr>`).join('');
 }
 async function deleteTransaction(id){
   const linked = userTransactions.find(txn=>String(txn.id)===String(id));
@@ -14489,7 +14552,7 @@ function downloadCSV(rows,filename){
 }
 function exportTransactionsCSV(){
   const header=['날짜','구분','거래처','품목명','원산지','보관','이력번호','중량(KG)','박스수','단가','금액','비고'];
-  const rows=transactions.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,t.type==='박스기준'?boxCountDisplay(t.boxCountAfter,''):boxCountDisplay(t.boxCount,''),t.price||'',t.amount||'',t.note||'']);
+  const rows=transactionDisplayRows([...transactions].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,t.type==='박스기준'?boxCountDisplay(t.boxCountAfter,''):boxCountDisplay(t.boxCount,''),t.price||'',t.amount||'',t.note||'']);
   downloadCSV([header,...rows],'원료수불부_거래내역.csv');
 }
 
@@ -14542,7 +14605,8 @@ function printFilteredTransactions(){
     toast('거래목록을 먼저 조회하세요.');
     return;
   }
-  const {rows, exactDate, dateFrom, dateTo, productQ, lotQ, ft}=getFilteredTransactions('desc');
+  const {rows:filtered, exactDate, dateFrom, dateTo, productQ, lotQ, ft}=getFilteredTransactions('desc');
+  const rows=transactionDisplayRows(filtered);
   if(!rows.length){
     toast('현재 검색 조건에 맞는 거래내역이 없습니다.');
     return;
@@ -21850,6 +21914,6 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="manual-label.js?v=20261020manual1"></script>
 <script src="document-request-detail.js?v=20261020brand1"></script>
-<script src="m02-auth.js?v=20261020content1"></script>
+<script src="m02-auth.js?v=20261020summary1"></script>
 </body>
 </html>
