@@ -1,0 +1,6 @@
+.pda-kind-mini{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:16px}
+.pda-kind-mini a{color:#287eb3;font-weight:400;text-decoration:none}
+.pda-kind-mini>:last-child{padding-left:8px;border-left:1px solid var(--border)}
+.raw-wide{grid-column:1/-1}.raw-help{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.raw-product-meta{grid-column:1/-1;font-size:12px;overflow-wrap:anywhere}
+.raw-check{display:flex;align-items:center;gap:8px;min-height:42px;margin-top:10px;font-size:13px}.raw-check input{flex:0 0 20px;width:20px;height:20px}
+#raw-review-code{font-size:12px;overflow-wrap:anywhere;margin:8px 0}#raw-review-message{white-space:pre-line;margin:8px 0}#raw-review-weight{font-size:20px;font-weight:700}

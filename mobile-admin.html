@@ -178,7 +178,7 @@
   </main>
 
   <script src="stock-ledger.js?v=20261017date1"></script>
-  <script src="pda-transaction-summary.js?v=20261020summary1"></script>
+  <script src="pda-transaction-summary.js?v=20261021raw1"></script>
   <script src="mobile-production.js?v=20261020workorders1"></script>
   <script>
     const SUPABASE_URL='https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -301,7 +301,7 @@
       const from=document.getElementById('tx-from').value,to=document.getElementById('tx-to').value,typeValue=document.getElementById('tx-type').value,q=document.getElementById('tx-search').value.trim().toLowerCase();
       const filtered=(snapshot?.transactions||[]).filter(row=>{const d=dateValue(row.date),hay=[row.product,row.trader,row.lot,row.origin].join(' ').toLowerCase();return(!from||d>=from)&&(!to||d<=to)&&(!typeValue||row.type===typeValue)&&(!q||hay.includes(q))}).sort((a,b)=>dateValue(b.date).localeCompare(dateValue(a.date)));
       const rows=DBMTPdaTransactionSummary.group(filtered,row=>String(row.stockLocation||row.location||'').trim()||'가공장');
-      const pdaBoxes=filtered.filter(row=>row.type==='출고'&&row._pdaRequestId&&row._pdaLabelId).length;
+      const pdaBoxes=filtered.filter(DBMTPdaTransactionSummary.isOutboundBox).length;
       const totalWeight=rows.reduce((sum,row)=>sum+number(row.weight),0),totalAmount=rows.reduce((sum,row)=>sum+number(row.amount),0);document.getElementById('transaction-count').textContent=`${rows.length}건${pdaBoxes?` · PDA ${pdaBoxes}박스`:''}`;document.getElementById('transaction-summary').innerHTML=`<span>중량 <strong>${qty(totalWeight)}kg</strong></span><span>금액 <strong>${money(totalAmount)}원</strong></span>`;
       document.getElementById('transaction-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row"><div class="row-top"><div class="row-title">${transactionTag(row.type)} ${text(row.product||'-')}</div><div class="row-value">${qty(row.weight)}kg</div></div><div class="meta"><span>${text(dateValue(row.date))}</span><span>${text(row.trader||'-')}</span><span>${text(row.origin||'-')}</span><span>LOT ${text(row.lot||'-')}</span>${row.boxCount!=null&&row.boxCount!==''?`<span>${qty(row.boxCount)}박스</span>`:''}${number(row.amount)?`<span>${money(row.amount)}원</span>`:''}</div></div>`):empty('거래내역');
     }

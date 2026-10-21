@@ -89,6 +89,9 @@
   $('partner-search').addEventListener('input',renderPartners);
   for(const id of ['work-date','location','partner'])$(id).addEventListener('change',render);
   $('manual-entry').addEventListener('change',()=>{$('barcode').inputMode=$('manual-entry').checked?'text':'none';focusScan();});
+  document.querySelector('.pda-kind-mini a')?.addEventListener('click',event=>{
+    if(state.saving||state.scanning||state.scans.length||(state.items.length||state.pending)&&!confirm('스캔 목록이 남아 있습니다. 원료육 화면으로 이동할까요? 저장 응답 확인 중인 요청은 제품 화면에서 같은 계정으로 재시도해주세요.'))event.preventDefault();
+  });
   async function scanLoop(){
     if(state.scanning)return;state.scanning=true;render();
     while(state.scans.length){

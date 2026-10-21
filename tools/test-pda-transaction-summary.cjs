@@ -25,6 +25,9 @@ assert.equal(group([{...first,type:'입고'},{...first,id:'return2',type:'입고
 const rounded=group([{...first,weight:.2,amount:1},{...first,id:'round2',weight:.2,amount:1}])[0];
 assert.equal(rounded.weight,.4);assert.equal(rounded.amount,2,'Preserve individual-box amount rounding');
 const many=group(Array.from({length:200},(_,i)=>({...first,id:String(i),weight:.1})))[0];assert.equal(many.weight,20);assert.equal(many.boxCount,200);
+const rawBoxes=boxes.map(({_pdaRequestId,_pdaLabelId,...row},i)=>({...row,_pdaRawRequestId:_pdaRequestId,_pdaRawPackageId:_pdaLabelId,_pdaCode:'076623002060046015970094'+String(i).padStart(2,'0')}));
+assert.equal(group(rawBoxes).length,1);assert.equal(group(rawBoxes)[0].weight,240);
+assert.equal(group([...boxes,...rawBoxes]).length,2,'Raw and product boxes never merge even if request IDs match');
 console.log('PASS: exact weight/box/amount totals, identity boundaries, manual/receipt isolation, original row preservation and per-box rounding');
 const names=['htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','setTransactionListIdle','prepareTransactionList','markTransactionSearchPending','markTransactionKeywordSearchPending','validateTransactionDateRange','runTransactionSearch','runTransactionExactDateSearch','exportTransactionsCSV','printFilteredTransactions'];
 const functions=names.map(name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,`Missing ${name}`);return match[0];}).join('\n');
@@ -90,6 +93,12 @@ const server=http.createServer((req,res)=>{
     assert(await page.locator('#t-body input[title]').isDisabled());await page.locator('#t-body').getByRole('button',{name:'박스별',exact:true}).click();assert(await page.locator('#txn-pda-detail-body input').first().isDisabled());
     const saveCount=await page.evaluate(()=>__saves.length);await page.evaluate(()=>updateTxnPrice(userTransactions[0].id,'9999'));assert.equal(await page.evaluate(()=>__saves.length),saveCount,'Readonly direct calls must not save');
     for(const width of [1440,390]){await page.setViewportSize({width,height:900});const bounds=await page.locator('#txn-pda-detail-dialog').boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=width);await page.locator('#txn-pda-detail-dialog').screenshot({path:path.join(artifacts,`boxes-${width}.png`)});}
-    assert.deepEqual(errors,[]);console.log('PASS: actual list/search, 20 boxes -> one sum, barcode details, atomic group price/rollback, one-box edit/split, print/CSV, read-only guards and narrow dialog');console.log('Artifacts: '+artifacts);
+    await page.getByRole('button',{name:'박스별 내역 닫기'}).click();
+    await page.evaluate(async rows=>{__session.permissions=[{menuCode:'transactions',canView:true,canUpdate:true}];await DBMTAuth.initializeSession(true);userTransactions=structuredClone(rows);transactions=[...userTransactions];renderTransactions();},rawBoxes);
+    assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-count').textContent(),/20박스/);
+    await page.locator('#t-body input[type="number"]').fill('8200');await page.locator('#t-body input[type="number"]').press('Tab');await page.waitForFunction(()=>__saves.length===3);
+    assert.equal(await page.evaluate(()=>__saves[2].rows.length),20);assert.equal(await page.evaluate(()=>__saves[2].rows.every(row=>row._pdaRawPackageId&&!row._pdaLabelId&&row.price===8200)),true);
+    await page.locator('#t-body').getByRole('button',{name:'박스별',exact:true}).click();assert.equal(await page.locator('#txn-pda-detail-body tr').first().locator('td').first().textContent(),rawBoxes[0]._pdaCode);
+    assert.deepEqual(errors,[]);console.log('PASS: product/raw list/search aggregation, barcode details, atomic group price/rollback, one-box edit/split, print/CSV, read-only guards and narrow dialog');console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

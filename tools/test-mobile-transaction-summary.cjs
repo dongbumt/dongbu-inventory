@@ -88,6 +88,8 @@ const remote=!!process.env.DBMT_MOBILE_TEST_BASE;
     assert.equal(await page.locator('#transaction-list img').count(),0);assert.match(await rows.innerText(),/<img src=x/);
     await replaceRows(boxes(250));assert.equal(await rows.count(),1);assert.match(await rows.innerText(),/3,000kg/);assert.match(await rows.innerText(),/250박스/);assert.match(await rows.innerText(),/22,500,000원/);
     assert.equal(await page.locator('#transaction-list .more').count(),0,'Aggregate all boxes before the display limit');
+    await replaceRows(boxes(250).map(({_pdaRequestId,_pdaLabelId,...row})=>({...row,_pdaRawRequestId:_pdaRequestId,_pdaRawPackageId:_pdaLabelId})));
+    assert.equal(await rows.count(),1);assert.equal(await page.locator('#transaction-count').innerText(),'1건 · PDA 250박스');
     await page.reload();await page.locator('#app-view').waitFor({state:'visible'});assert.equal(await rows.count(),1);assert.equal(await page.locator('#transaction-count').innerText(),'1건 · PDA 250박스');
     assert.equal(await page.evaluate(()=>JSON.stringify(snapshot.transactions)),JSON.stringify(transactions),'Refresh preserves individual boxes');
     const storage=await page.evaluate(()=>({...localStorage}));assert(Object.keys(storage).every(key=>['dbmt_mobile_admin_session_token','dbmt_mobile_admin_view'].includes(key)),'Do not persist business data');

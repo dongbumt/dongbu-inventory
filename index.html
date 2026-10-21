@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
 <script src="stock-ledger.js?v=20261017date1"></script>
-<script src="pda-transaction-summary.js?v=20261020summary1"></script>
+<script src="pda-transaction-summary.js?v=20261021raw1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
 <script src="label-layout.js?v=20261013inner1"></script>
@@ -401,7 +401,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="nav-group-items">
       <div class="nav-tab" onclick="showPage('p-transactions',this)" id="nav-transactions">📋 거래내역</div>
       <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">📊 재고현황</div>
-      <div class="nav-tab" onclick="window.open('pda.html?v=20261014sound2','_blank');" id="nav-pda">📲 PDA 입출고</div>
+      <div class="nav-tab" onclick="window.open('pda.html?v=20261021raw1','_blank');" id="nav-pda">📲 PDA 입출고</div>
       <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">🧾 거래명세서</div>
       <div class="nav-tab" onclick="showPage('p-submaterials',this);" id="nav-submaterials">📦 부자재 관리</div>
       <div class="nav-tab" onclick="showPage('p-cold-storage-request',this)" id="nav-cold-storage-request">📠 냉동창고 요청</div>
@@ -3638,7 +3638,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   </div>
   <div id="txn-pda-detail-summary" style="font-size:12px;line-height:1.6;margin-bottom:10px;"></div>
   <div class="tbl-wrap" style="max-height:65vh;overflow:auto;">
-    <table style="min-width:720px;"><thead><tr><th>제품 고유바코드</th><th style="text-align:right;">중량(KG)</th><th style="text-align:right;">단가</th><th style="text-align:right;">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="txn-pda-detail-body"></tbody></table>
+    <table style="min-width:720px;"><thead><tr><th>박스 바코드</th><th style="text-align:right;">중량(KG)</th><th style="text-align:right;">단가</th><th style="text-align:right;">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="txn-pda-detail-body"></tbody></table>
   </div>
 </dialog>
 
@@ -8789,7 +8789,7 @@ async function updateTxnPrice(id, newPriceStr){
   // 금액 셀만 즉시 업데이트 (전체 re-render 없이)
   const domId = String(id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
   const amtEl = document.getElementById(`txn-amt-${domId}`);
-  if(summary || targets.some(txn=>txn._pdaRequestId)) renderTransactions();
+  if(summary || targets.some(txn=>txn._pdaRequestId||txn._pdaRawRequestId)) renderTransactions();
   else if(amtEl) amtEl.textContent = targets[0].amount.toLocaleString();
   renderPdaTransactionDetails();
   updateOutProductList();
@@ -10157,7 +10157,7 @@ function renderTransactions(){
   }
   const filtered = getFilteredTransactions('desc').rows;
   const rows = transactionDisplayRows(filtered);
-  const pdaBoxes = filtered.filter(row=>row.type==='출고'&&row._pdaRequestId&&row._pdaLabelId).length;
+  const pdaBoxes = filtered.filter(DBMTPdaTransactionSummary.isOutboundBox).length;
   document.getElementById('t-count').textContent=`(${rows.length}건${pdaBoxes ? ` · PDA ${pdaBoxes}박스` : ''})`;
   const b=document.getElementById('t-body');
   if(!rows.length){
@@ -10243,7 +10243,7 @@ function renderPdaTransactionDetails(){
   const kg=rows.reduce((sum,row)=>sum+Math.round(Number(row.weight||0)*100),0)/100;
   const amount=rows.reduce((sum,row)=>sum+Number(row.amount||0),0);
   summary.textContent=`${first.date} · ${first.trader||''} · ${first.product||''} · ${first.lot||''} / ${rows.length}박스 · ${kg.toFixed(2)} KG · ${Math.round(amount).toLocaleString()}원`;
-  body.innerHTML=rows.map(row=>`<tr><td style="font-family:monospace;">${htmlEscape(DBMTLabelLayout.encodePrintCode(row._pdaCode||''))}</td>
+  body.innerHTML=rows.map(row=>`<tr><td style="font-family:monospace;max-width:280px;overflow-wrap:anywhere;">${htmlEscape(row._pdaRawPackageId?String(row._pdaCode||'').replaceAll(String.fromCharCode(29),'|'):DBMTLabelLayout.encodePrintCode(row._pdaCode||''))}</td>
     <td style="text-align:right;">${Number(row.weight||0).toFixed(2)}</td><td style="text-align:right;"><input type="number" aria-label="박스 단가" value="${Number(row.price||0)}" onchange="updateTxnPrice(${jsArg(row.id)},this.value)" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''} style="width:80px;text-align:right;"></td>
     <td style="text-align:right;" id="txn-pda-detail-amt-${String(row.id).replace(/[^a-zA-Z0-9_-]/g,'_')}">${Math.round(Number(row.amount||0)).toLocaleString()}</td><td>${htmlEscape(row.note||'-')}</td>
     <td><button type="button" class="btn btn-secondary btn-sm" onclick="closePdaTransactionDetails();loadTxnToForm(${jsArg(row.id)})">수정</button></td></tr>`).join('');

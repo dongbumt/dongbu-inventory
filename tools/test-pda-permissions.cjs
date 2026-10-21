@@ -73,7 +73,7 @@ const server=http.createServer((req,res)=>{
     assert(await page.locator('#nav-pda').isVisible());assert(await page.locator('#nav-transactions').isHidden());assert(await page.locator('#nav-stock').isHidden());
     assert.equal(await page.locator('.tab-panel.active').count(),0,'PDA-only role must not see an unauthorized office page');
     assert.equal(await page.evaluate(()=>__opened.length),0,'Logging in must not auto-open the standalone PDA');
-    await page.locator('#nav-pda').click();assert.equal((await page.evaluate(()=>__opened[0]))[0],'pda.html?v=20261014sound2');
+    await page.locator('#nav-pda').click();assert.equal((await page.evaluate(()=>__opened[0]))[0],'pda.html?v=20261021raw1');
     await switchPermissions([{menuCode:'pda',canView:false,canCreate:true}]);assert(await page.locator('#nav-pda').isHidden());
     await switchPermissions([{menuCode:'transactions',canView:true}]);assert.equal(await page.locator('.tab-panel.active').getAttribute('id'),'p-transactions','Returning from a PDA-only session must restore an allowed office page');
     assert.deepEqual(errors,[]);
