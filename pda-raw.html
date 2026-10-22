@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="styles/pda-kind.css?v=20261021raw1">
   <script src="vendor/gs1-parser/BarcodeParser.min.js?v=9989caa6" defer></script>
   <script src="pda-sound.js?v=20261014sound2" defer></script>
-  <script src="pda-raw.js?v=20261021raw1" defer></script>
+  <script src="pda-raw.js?v=20261022trace1" defer></script>
 </head>
 <body>
   <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><a href="pda.html">제품</a><span aria-current="page">원료육</span></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
@@ -34,7 +34,7 @@
           <select class="raw-wide" id="product" aria-label="원료육 품목"><option value="">품목 선택</option></select>
           <div id="product-meta" class="raw-product-meta"></div>
           <label class="raw-wide" id="source-field" hidden>기존 입고 재고<select id="source"><option value="">재고 선택</option></select></label>
-          <label class="raw-wide">이력번호(LOT)<input id="lot" maxlength="100" autocomplete="off" placeholder="직접 입력·이력 바코드 스캔 / GS1 LOT 사용"></label>
+          <label class="raw-wide">이력번호<input id="lot" maxlength="100" autocomplete="off" placeholder="별도 이력번호 바코드 스캔 또는 직접 입력"></label>
         </div>
       </div></details>
       <form id="scan-form" class="scan-form"><label for="barcode">원료육 박스 바코드</label><div class="scan-input"><input id="barcode" name="barcode" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="300"><button id="scan-submit" class="primary" type="submit">조회</button></div><label class="manual-toggle"><input id="manual-entry" type="checkbox">수기입력</label></form>

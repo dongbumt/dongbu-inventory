@@ -44,7 +44,7 @@
   }
   function render(){
     const locked=state.saving||!!state.pending,busy=locked||state.busy||state.queue.length>0;
-    $('items').innerHTML=state.items.map((item,index)=>`<li><div class="scan-product">${esc(item.product)}</div><strong class="scan-weight">${kg(item.labelWeight)} KG</strong><div class="scan-meta">LOT ${esc(item.lot)} · ${esc(item.origin||'')}<br>${esc(item.rule)}${item.labelWeight!==item.calculatedWeight?` · 계산 ${kg(item.calculatedWeight)}KG / 라벨 대조`:''}</div><div class="scan-code">${esc(item.code.replaceAll(String.fromCharCode(29),'|'))}</div><button class="scan-remove" type="button" data-remove="${index}" aria-label="목록에서 제외" ${busy?'disabled':''}>×</button></li>`).join('');
+    $('items').innerHTML=state.items.map((item,index)=>`<li><div class="scan-product">${esc(item.product)}</div><strong class="scan-weight">${kg(item.labelWeight)} KG</strong><div class="scan-meta">이력번호 ${esc(item.lot)} · ${esc(item.origin||'')}<br>${esc(item.rule)}${item.labelWeight!==item.calculatedWeight?` · 계산 ${kg(item.calculatedWeight)}KG / 라벨 대조`:''}</div><div class="scan-code">${esc(item.code.replaceAll(String.fromCharCode(29),'|'))}</div><button class="scan-remove" type="button" data-remove="${index}" aria-label="목록에서 제외" ${busy?'disabled':''}>×</button></li>`).join('');
     $('item-count').textContent=state.items.length;$('total').textContent=`${state.items.length}박스 · ${kg(state.items.reduce((sum,item)=>sum+item.labelWeight,0))} KG`;
     $('save-detail').textContent=state.pending?'저장 응답 확인 필요':state.busy?'바코드 조회 중':'';
     $('save').textContent=state.saving?'저장 확인 중':state.pending?'같은 요청 재시도':state.mode==='outbound'?'출고 확인':$('receive-kind').value==='bind'?'재고 연결 확인':'입고 확인';
@@ -99,7 +99,7 @@
   $('lot').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();focusScan();}});
   $('manual-entry').addEventListener('change',()=>{$('barcode').inputMode=$('manual-entry').checked?'text':'none';focusScan();});
   function review(item){
-    $('raw-review-message').textContent=`${item.product}\nLOT ${item.lot}\n${item.rule} · 계산 ${kg(item.calculatedWeight)}KG`;
+    $('raw-review-message').textContent=`${item.product}\n이력번호 ${item.lot}\n${item.rule} · 계산 ${kg(item.calculatedWeight)}KG`;
     $('raw-review-code').textContent=item.code.replaceAll(String.fromCharCode(29),'|');$('raw-review-weight').value=kg(item.labelWeight);
     $('raw-review-weight').readOnly=Number(item.conversion)===1;$('raw-review-checked').checked=false;
     $('raw-review').showModal();return new Promise(resolve=>{state.review={item,resolve};});
@@ -132,13 +132,13 @@
           if(!$('product').value&&item.productId){$('product-search').value='';renderProducts();$('product').value=item.productId;renderProductMeta();await loadSources();}
           const product=selectedProduct();if(!product)throw Error('입고할 원료육 품목을 먼저 선택해주세요.');
           if(item.productId&&String(item.productId)!==String(product.id))throw Error('GTIN에 연결된 품목과 선택한 품목이 다릅니다.');
-          item.product=product.name;item.origin=product.origin;item.lot=$('lot').value.trim()||item.barcodeLot;
-          if(!item.lot)throw Error('이력번호(LOT)를 입력하거나 별도 이력 바코드를 읽어주세요.');
+          item.product=product.name;item.origin=product.origin;item.lot=$('lot').value.trim();
+          if(!item.lot)throw Error('제품 바코드와 별도로 이력번호 바코드를 읽거나 이력번호를 입력해주세요.');
           if($('receive-kind').value==='bind'&&!$('source').value)throw Error('연결할 기존 입고 재고를 선택해주세요.');
         }
         item.labelWeight=Number(item.weight);
         if(item.requiresReview&&!(await review(item))){sound('error');continue;}
-        if(epoch!==state.epoch)return;state.items.push(item);$('settings-panel').open=false;status(`${item.product} · LOT ${item.lot} · ${kg(item.labelWeight)}KG`,'ok');sound('success');
+        if(epoch!==state.epoch)return;state.items.push(item);$('settings-panel').open=false;status(`${item.product} · 이력번호 ${item.lot} · ${kg(item.labelWeight)}KG`,'ok');sound('success');
       }catch(error){if(epoch===state.epoch){status(error.message,'error');sound('error');}}
     }}finally{state.busy=false;render();focusScan();}
   }
@@ -159,10 +159,11 @@
     if(!bind&&!$('partner').value){status('거래처를 선택해주세요.','error');return;}
     if(!$('work-date').value){status('작업일을 선택해주세요.','error');return;}
     if(state.mode==='inbound'&&(!selectedProduct()||(bind&&!$('source').value))){status('입고 품목과 연결 재고를 선택해주세요.','error');return;}
+    if(state.mode==='inbound'&&!$('lot').value.trim()){status('제품 바코드와 별도로 이력번호 바코드를 읽거나 이력번호를 입력해주세요.','error');return;}
     const price=Number($('unit-price').value);if(!Number.isFinite(price)||price<0||price>1000000000){status('입고 단가를 확인해주세요.','error');return;}
     $('confirm-title').textContent=state.mode==='outbound'?'원료육 출고 확정':bind?'기존 재고 연결 · 중량 증가 없음':'원료육 신규 입고 · 재고 증가';
     $('confirm-summary').textContent=`${$('work-date').value} · ${$('location').value}\n${$('partner').selectedOptions[0]?.textContent||''}\n${$('total').textContent}`;
-    $('confirm-items').innerHTML=state.items.map(item=>`<li>${esc(item.product)} · LOT ${esc(item.lot)} · ${kg(item.labelWeight)}KG<br>${esc(item.rule)}</li>`).join('');
+    $('confirm-items').innerHTML=state.items.map(item=>`<li>${esc(item.product)} · 이력번호 ${esc(item.lot)} · ${kg(item.labelWeight)}KG<br>${esc(item.rule)}</li>`).join('');
     $('confirm-checked').checked=false;$('confirm-save').disabled=true;$('confirm-dialog').showModal();
   });
   $('confirm-checked').addEventListener('change',()=>{$('confirm-save').disabled=!$('confirm-checked').checked;});

@@ -1,13 +1,14 @@
 """Raw-material PDA integration checks. Fixtures and schema are always rolled back."""
 import ast
 import json
+import os
 import uuid
 from pathlib import Path
 import psycopg
 from psycopg.types.json import Jsonb
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMAS = [ROOT / 'supabase/schema-rpc-65-pda-raw-material-movements.sql', ROOT / 'supabase/pda-raw-verified-rules.sql']
+SCHEMAS = [ROOT / 'supabase/schema-rpc-65-pda-raw-material-movements.sql', ROOT / 'supabase/pda-raw-verified-rules.sql', ROOT / 'supabase/schema-rpc-66-pda-raw-traceability-separation.sql']
 PHOTO_CASES = [
     ('07662300206004601597009456', 15.97),
     ('2606251220400045701526', 15.26),
@@ -93,6 +94,26 @@ def check(conn):
     reject(lambda: commit('inbound', [scan()], pid=inactive['id']), '원료육 품목')
     reject(lambda: commit('inbound', [dict(scan(), labelWeight=100)]), '계산 중량')
     reject(lambda: commit('inbound', [dict(scan(), checked=False)]), '중량 대조')
+    with conn.transaction(force_rollback=True):
+        imported = PHOTO_CASES[2][0]
+        assert lookup(imported)['barcodeLot'] == '52476119'
+        for missing in ('', '   ', None):
+            reject(lambda: commit('inbound', [scan(imported)], lot=missing), '별도로 이력번호')
+            assert not lookup(imported)['registered'], 'No receipt may fall back to the manufacturer LOT'
+        traceability = '801091101169'
+        receipt = commit('inbound', [scan(imported)], lot=traceability)
+        assert receipt['items'][0]['lot'] == traceability
+        linked = lookup(imported)
+        assert linked['lot'] == traceability and linked['barcodeLot'] == '52476119'
+        next_box = imported.replace('52476119', 'FACTORY-BATCH-B')
+        next_item = lookup(next_box)
+        assert next_item['productId'] == product_id and not next_item.get('lot'), 'GTIN links products, never traceability numbers'
+        reject(lambda: commit('inbound', [scan(next_box)], lot=''), '별도로 이력번호')
+        next_receipt = commit('inbound', [scan(next_box)], lot='801091101170')
+        assert next_receipt['items'][0]['lot'] == '801091101170'
+        shipment = commit('outbound', [scan(imported)], lot='')
+        assert shipment['items'][0]['lot'] == traceability, 'Outbound must use the saved domestic traceability number'
+    print('PASS: domestic/imported meat requires separate traceability, GS1 manufacturer LOT remains provenance only, GTIN does not reuse traceability, outbound retains the registered number')
     req = uuid.uuid4(); items = [scan()]
     result = commit('inbound', items, req=req)
     assert result['count'] == 1 and result['weight'] == 15.97
@@ -150,23 +171,28 @@ def check(conn):
 
 def main():
     migration = list((ROOT / 'supabase/migrations').glob('*_pda_raw_material_movements.sql'))
-    expected = '\n\n'.join(file.read_text(encoding='utf-8-sig').rstrip() for file in SCHEMAS) + '\n'
+    expected = '\n\n'.join(file.read_text(encoding='utf-8-sig').rstrip() for file in SCHEMAS[:2]) + '\n'
     assert len(migration) == 1 and migration[0].read_text(encoding='utf-8-sig').replace('\r\n','\n') == expected.replace('\r\n','\n'), 'Migration and reviewed schema/rules must match'
+    separation = list((ROOT / 'supabase/migrations').glob('*_pda_raw_traceability_separation.sql'))
+    assert len(separation) == 1 and separation[0].read_text(encoding='utf-8-sig') == SCHEMAS[2].read_text(encoding='utf-8-sig'), 'Traceability migration must match the reviewed function'
     with psycopg.connect('', autocommit=False, sslmode='require', connect_timeout=20, application_name='dbmt_raw_pda_qa') as conn:
         try:
             conn.execute('set local role postgres')
             conn.execute("set local lock_timeout='5s'")
             conn.execute("set local statement_timeout='45s'")
-            before = conn.execute("select p.oid::text,md5(pg_get_functiondef(p.oid)) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='pda_private' or (n.nspname='public' and p.proname like 'dbmt_pda_%') order by 1").fetchall()
-            for file in SCHEMAS:conn.execute(file.read_text(encoding='utf-8-sig'))
+            before = conn.execute("select p.oid::text,p.proname,md5(pg_get_functiondef(p.oid)) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='pda_private' or (n.nspname='public' and p.proname like 'dbmt_pda_%') order by 1").fetchall()
+            apply_schema = os.environ.get('DBMT_RAW_TEST_DEPLOYED') != '1'
+            if apply_schema:
+                for file in SCHEMAS:conn.execute(file.read_text(encoding='utf-8-sig'))
             check(conn)
             tree = ast.parse((ROOT / 'tools/check-pda-product-db.py').read_text(encoding='utf8'))
             definitions = ast.Module(body=[node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef))], type_ignores=[])
             namespace = {'ROOT': ROOT}
             exec(compile(definitions, 'existing_product_tests', 'exec'), namespace)
             namespace['check'](conn)
-            for oid, digest in before:
-                assert conn.execute('select md5(pg_get_functiondef(%s::oid))', (oid,)).fetchone()[0] == digest, 'Existing product functions must not change'
+            for oid, name, digest in before:
+                if apply_schema and name == 'dbmt_pda_raw_commit':continue
+                assert conn.execute('select md5(pg_get_functiondef(%s::oid))', (oid,)).fetchone()[0] == digest, 'Only raw commit may change; existing product functions must not change'
             print('PASS: existing product receive/ship/return integration and unchanged product functions')
         finally:
             conn.rollback()

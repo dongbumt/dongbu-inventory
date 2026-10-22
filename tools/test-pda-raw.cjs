@@ -44,11 +44,13 @@ const server=http.createServer((req,res)=>{
         data={ok:true,item:{...source,calculatedWeight:source.weight,registered:false,revision:0,...registered.get(source.id)}};
       }else if(name==='dbmt_pda_raw_commit'){
         commits.push(body);if(denyCommit)return fail('다른 작업자가 처리했습니다. 스캔 목록을 다시 조회해주세요.');
+        if(body.p_mode==='inbound'&&!String(body.p_lot||'').trim())return fail('별도 이력번호를 입력해주세요.');
         if(!saved.has(body.p_request_id)){
           const result={ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:body.p_items.reduce((sum,item)=>sum+item.labelWeight,0),items:body.p_items.map(scan=>{
             const source=cases.find(item=>item.code===scan.barcode),pack=registered.get(source.id);
-            registered.set(source.id,{registered:true,revision:(pack?.revision||0)+1,state:body.p_mode==='outbound'?'shipped':'in_stock',location:body.p_location,product:product.name,productId:product.id,lot:body.p_lot||source.barcodeLot,weight:scan.labelWeight,origin:product.origin});
-            return {id:source.id,product:product.name,lot:body.p_lot||source.barcodeLot,weight:scan.labelWeight,action:body.p_mode==='outbound'?'ship':body.p_source_id?'bind':'receive'};
+            const lot=body.p_mode==='outbound'?pack.lot:body.p_lot.trim();
+            registered.set(source.id,{registered:true,revision:(pack?.revision||0)+1,state:body.p_mode==='outbound'?'shipped':'in_stock',location:body.p_location,product:product.name,productId:product.id,lot,weight:scan.labelWeight,origin:product.origin});
+            return {id:source.id,product:product.name,lot,weight:scan.labelWeight,action:body.p_mode==='outbound'?'ship':body.p_source_id?'bind':'receive'};
           }),savedAt:new Date().toISOString()};saved.set(body.p_request_id,{body,result});
         }
         if(loseResponse){loseResponse=false;return route.abort();}data=saved.get(body.p_request_id).result;
@@ -64,16 +66,24 @@ const server=http.createServer((req,res)=>{
     const scan=async code=>{await page.locator('#barcode').fill(code);await page.locator('#barcode').press('Enter');};
     const idle=()=>page.waitForFunction(()=>!document.getElementById('save-detail').textContent.includes('조회 중'));
     const confirm=async()=>{await page.locator('#save').click();assert(await page.locator('#confirm-save').isDisabled());await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();};
+    await scan(cases[0].code);await idle();assert.equal(await page.locator('#items li').count(),0,'Manufacturer GS1 LOT must not become a domestic traceability number');
+    assert.match(await page.locator('#status').innerText(),/별도로 이력번호/);assert.equal(await page.locator('#lot').inputValue(),'');assert(await page.locator('#save').isDisabled());assert.equal(commits.length,0);
+    await page.locator('#lot').fill('   ');await scan(cases[1].code);await idle();assert.equal(await page.locator('#items li').count(),0,'Domestic weight barcodes also require a separate traceability number');
+    assert(await page.locator('#raw-review').isHidden());assert.match(await page.locator('#status').innerText(),/별도로 이력번호/);
+    const traceability='801091101169';await page.locator('#lot').fill(traceability);await page.locator('#lot').press('Enter');assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
     await scan(cases[0].code);await idle();assert.equal(await page.locator('#items li').count(),1);assert.match(await page.locator('#items').innerText(),/17\.26 KG/);assert.equal(commits.length,0);
+    assert.match(await page.locator('#items').innerText(),new RegExp('이력번호 '+traceability));assert(!(await page.locator('#items .scan-meta').innerText()).includes(cases[0].barcodeLot));
     assert(await page.locator('#product').isDisabled(),'Freeze receiving identity while boxes are queued');
     await scan(cases[0].code);await idle();assert.match(await page.locator('#status').innerText(),/이미 목록/);assert.equal(await page.locator('#items li').count(),1);
     await scan('L12610134894005');await idle();assert.match(await page.locator('#status').innerText(),/검증된/);
     loseResponse=true;await confirm();await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');assert.equal(commits.length,1);
     const requestId=commits[0].p_request_id;
+    assert.equal(commits[0].p_lot,traceability,'Only the separately scanned number is committed');
     assert.equal(await page.locator('#logout').isDisabled(),false,'An uncertain request must not prevent reauthentication');
     await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('#save').innerText(),'같은 요청 재시도');
     await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.length,2);assert.equal(commits[1].p_request_id,requestId);
     await page.locator('[name="mode"][value="outbound"]').check();await page.locator('#partner').selectOption('qa-partner');await scan(cases[0].code);await idle();
+    assert.match(await page.locator('#items').innerText(),new RegExp('이력번호 '+traceability),'Outbound retrieves the saved domestic traceability number');
     denyCommit=true;await confirm();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('다른 작업자'));assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('#save').innerText(),'출고 확인');
     denyCommit=false;await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     await scan(cases[0].code);await idle();assert.match(await page.locator('#status').innerText(),/이미 출고/);
@@ -106,7 +116,7 @@ const server=http.createServer((req,res)=>{
     const stored=await page.evaluate(()=>({...sessionStorage}));assert.deepEqual(Object.keys(stored),['dbmt_pda_session_token'],'Never persist a draft or business data outside pending retries');
     await page.locator('#logout').click();assert(await page.locator('#workspace').isHidden());
     assert.deepEqual(errors,[]);assert.deepEqual(blocked,[]);assert(calls.every(name=>name.startsWith('dbmt_pda_raw_')||['dbmt_erp_login','dbmt_erp_session','dbmt_erp_logout'].includes(name)),'Raw screen never calls product commit');
-    console.log('PASS: raw keyboard scans/GS1 parser, SM and LB label review, unchanged product navigation, no writes before confirmation, trade-type filters, existing-stock binding, duplicate/error/stale guards, lost-response reload/retry, readonly/offline, history and 320/390/480/1280px');
+    console.log('PASS: separate domestic traceability input for domestic/imported meat, no GS1 manufacturer LOT fallback, outbound traceability preserved, raw keyboard scans/GS1 parser, SM and LB label review, unchanged product navigation, no writes before confirmation, trade-type filters, existing-stock binding, duplicate/error/stale guards, lost-response reload/retry, readonly/offline, history and 320/390/480/1280px');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
