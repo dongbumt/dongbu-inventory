@@ -58,12 +58,17 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
     await page.selectOption('#lp-status-filter','');
     await page.evaluate(()=>editLabelProduct(1));
     assert.equal(await page.locator('#lp-is-active').inputValue(),'true','Legacy defaults active');
+    assert.equal(await page.locator('#lp-ingredient-details').inputValue(),'','Legacy product has no additional ingredients');
+    await page.locator('#lp-ingredient-details').fill('전각(미국산) 85%, 우지방(국내산) 15%');
     await page.selectOption('#lp-is-active','false');
     await page.evaluate(()=>saveLabelProduct());
     assert.equal(await page.evaluate(()=>labelProducts[1].isActive),false);
     assert.equal(await page.evaluate(()=>requests[0].args.p_record.isActive),false);
+    assert.equal(await page.evaluate(()=>requests[0].args.p_record.ingredientDetails),'전각(미국산) 85%, 우지방(국내산) 15%');
+    assert.equal(await page.locator('#lp-ingredient-details').inputValue(),'','Reset clears the new field');
     await page.evaluate(()=>editLabelProduct(1));
     assert.equal(await page.locator('#lp-is-active').inputValue(),'false','Survives server refresh/reopen');
+    assert.equal(await page.locator('#lp-ingredient-details').inputValue(),'전각(미국산) 85%, 우지방(국내산) 15%');
     await page.selectOption('#lp-is-active','true');await page.evaluate(()=>{failSave=true;});
     await page.evaluate(()=>saveLabelProduct());
     assert.equal(await page.evaluate(()=>labelProducts[1].isActive),false,'Failed save never changes local master');

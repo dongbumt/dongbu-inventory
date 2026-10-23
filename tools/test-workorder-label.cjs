@@ -27,6 +27,7 @@ const server=http.createServer((req,res)=>{
     },index);
     await page.addStyleTag({content:fs.readFileSync(path.join(repo,'styles/main.css'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-weight.js'),'utf8')});
+    await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-product-selection.js'),'utf8')});
     await page.addScriptTag({content:`
       const STOCK_LOCATION_DEFAULT='가공장';let workOrders=[];
       const labelProducts=[{id:'raw',name:'돈등심 원료',kind:'원료육',brand:'원료',origin:'국내산'},

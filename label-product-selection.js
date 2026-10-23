@@ -3,6 +3,11 @@
  */
 (function(root){
   'use strict';
+  function ingredients(product,fallback=''){
+    const base=product?.meattype?`${product.meattype} 100%`:fallback;
+    const details=String(product?.ingredientDetails||'').trim();
+    return base+(details?` (${details})`:'');
+  }
   function compose(order,product){
     if(!order)return null;
     if(!product)return {...order};
@@ -15,7 +20,7 @@
     date.setUTCDate(date.getUTCDate()+days-1);
     const result={...order,productSelectionVersion:1,product:product.name||'',labelProductId:String(product.id||''),
       taxType:product.taxType==='과세'?'과세':'면세',mfgdate,expdate:date.toISOString().slice(0,10),
-      ingredients:product.meattype?`${product.meattype} 100%`:(order.ingredients||''),temptype:storage};
+      ingredients:ingredients(product,order.ingredients||''),temptype:storage};
     for(const key of ['productCode','brand','factoryNo','nationalPartCode','nationalPartName','packunit','itemno'])result[key]=product[key]||'';
     return result;
   }
@@ -30,5 +35,5 @@
     }
     return [...groups.values()].map(g=>({...g,weight:g.cents/100})).sort((a,b)=>a.name.localeCompare(b.name,'ko')||a.packunit.localeCompare(b.packunit,'ko'));
   }
-  root.DBMTLabelProducts={compose,group};
+  root.DBMTLabelProducts={compose,group,ingredients};
 })(window);

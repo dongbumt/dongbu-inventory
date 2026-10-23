@@ -34,8 +34,12 @@
     .dbmt-label-body .dl-report-value { font-family:Arial,sans-serif; font-size:8.4pt; text-align:center; overflow-wrap:anywhere; }
     .dbmt-label-body .dl-trace-code { height:8.2mm; display:flex; align-items:center; gap:0.6mm; }
     .dbmt-label-body .dl-trace-code .dl-code-body img { height:4.7mm; }
-    .dbmt-label-body .dl-ingredients-row { height:4.8mm; display:flex; align-items:center; gap:1.5mm; }
-    .dbmt-label-body .dl-ingredients-value { min-width:0; font-size:8pt; }
+    .dbmt-label-body .dl-ingredients-row { min-height:4.8mm; display:flex; align-items:center; gap:1.5mm; }
+    .dbmt-label-body .dl-ingredients-value { min-width:0; font-size:8pt; line-height:1.15; overflow-wrap:anywhere; }
+    .dbmt-label-body .dl-ingredients-long { display:block; }
+    .dbmt-label-body .dl-ingredients-long .dl-key { margin-right:1.5mm; }
+    .dbmt-label-body .dl-ingredients-long .dl-ingredients-value { font-size:7pt; }
+    .dbmt-label-body .dl-ingredients-extra .dl-ingredients-value { font-size:6.5pt; }
     .dbmt-label-body .dl-meat { display:inline-block; background:#000; color:#fff; padding:0.2mm 0.5mm; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .dbmt-label-body .dl-storage-row { height:6.4mm; display:flex; align-items:center; }
     .dbmt-label-body .dl-storage-copy { flex:1; min-width:0; font-size:6pt; line-height:1.18; }
@@ -46,6 +50,7 @@
     .dbmt-label-body .dl-side-code img { display:block; width:100%; height:4.6mm; object-fit:fill; }
     .dbmt-label-body .dl-footer { flex:1; min-height:0; display:flex; flex-direction:column; gap:0.6mm; padding:0.6mm 0.5mm 0; }
     .dbmt-label-body .dl-notices { flex:1; min-height:0; display:flex; flex-direction:column; justify-content:space-between; gap:0.2mm; font-size:6.5pt; line-height:1.15; overflow-wrap:break-word; }
+    .dbmt-label-body.dl-long-ingredients .dl-notices { font-size:6pt; line-height:1.08; gap:0.1mm; }
     .dbmt-label-body .dl-notice-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1mm; }
     .dbmt-label-body .dl-notice-short { flex:1; min-width:0; display:flex; flex-direction:column; gap:0.2mm; }
     .dbmt-label-body .dl-manufacturer { flex-shrink:0; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; min-height:14mm; gap:0.3mm; }
@@ -60,6 +65,8 @@
     #lbl-preview,#wo-preview { display:flex; flex-direction:column; box-sizing:border-box; padding:0.55mm 0.7mm 0.8mm; border:2px solid #000; font-family:"Malgun Gothic","맑은 고딕",Arial,sans-serif; background:#fff; color:#000; }
   `;
   const escape = value => String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const textUnits=value=>Array.from(String(value||'')).reduce((sum,ch)=>sum+(ch.charCodeAt(0)>255?1:0.55),0);
+  const originFont=(value,max=10,capacity=5.5)=>Math.max(6,Math.min(max,max*capacity/Math.max(capacity,textUnits(value))));
   const asset=file=>escape(new URL(file,global.document.baseURI).href);
   // Reversible numeric encoding keeps existing identities while reducing Code 128 modules.
   function encodePrintCode(value){
@@ -107,7 +114,7 @@
         <span style="font-size:6pt;font-weight:900;margin-right:5pt;">제품명: </span><strong style="font-size:${(d.product||'').length>8?'11':'13'}pt;">${escape(d.product||'　')}</strong></div>
       <div style="display:flex;${bb+sh}min-height:17pt;">
         <div style="flex:11;${pad+br}font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">성별및등급:</span><span style="flex:1;text-align:center;font-size:9.1pt;">${escape(d.grade)}</span></div>
-        <div style="flex:9;${pad}font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;">원산지:</span> <strong style="font-size:10.4pt;margin-left:6pt;">${escape(d.origin)}</strong></div></div>
+        <div style="flex:9;min-width:0;${pad}font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">원산지:</span> <strong style="font-size:${originFont(d.origin,10.4,4.5)}pt;margin-left:3pt;white-space:nowrap;">${escape(d.origin)}</strong></div></div>
       <div style="${bb+pad+sh}min-height:20pt;display:flex;align-items:center;">
         <span style="font-size:6pt;font-weight:900;">제조 및 소비기한: </span><strong style="font-size:10pt;margin-left:8pt;">${escape(d.mfgdate)}～ ${escape(d.expdate)}</strong></div>
       <div style="display:flex;align-items:stretch;${bb+sh}min-height:30pt;">
@@ -116,11 +123,11 @@
         <div style="flex:9;${pad}font-size:6pt;"><div style="font-weight:900;">품목보고번호</div><div style="font-size:9.1pt;font-weight:700;margin-top:5pt;text-align:center;">${escape(d.itemno)}</div></div></div>
       <div class="il-trace" style="${bb+pad+sh}min-height:15pt;display:flex;align-items:center;gap:4pt;">
         <span style="font-size:6pt;font-weight:900;flex-shrink:0;">이력번호</span><strong style="font-size:9.1pt;line-height:1.1;word-break:break-all;">${escape(d.lot??d.lotText??'')}</strong></div>
-      <div style="${bb+pad+sh}font-size:6pt;min-height:15pt;display:flex;align-items:center;"><span style="font-weight:900;">원료 및 함량</span> <strong style="margin-left:8pt;font-size:8pt;">${ingredients}</strong></div>
+      <div class="il-ingredients" style="${bb+pad+sh}font-size:6pt;min-height:15pt;display:${textUnits(d.ingredients)>18?'block':'flex'};align-items:center;"><span style="font-weight:900;flex-shrink:0;">원료 및 함량</span> <strong style="margin-left:8pt;min-width:0;overflow-wrap:anywhere;font-size:${textUnits(d.ingredients)>40?6.5:textUnits(d.ingredients)>18?7:8}pt;">${ingredients}</strong></div>
       <div style="${bb+pad+sh}min-height:22pt;"><div style="font-size:6pt;"><span style="font-weight:900;">보관방법:</span> &nbsp; ${chilled?'-2℃ ~ 5℃이하 냉장보관':'-18℃이하 냉동보관'}</div>${chilled?'':'<div style="font-size:6pt;text-align:center;">이미 냉동된바 있으니 해동후 재냉동 시키지 마십시오</div>'}</div>
       <div class="il-footer" style="padding:2pt 2pt 0;font-size:6.5pt;flex:1 1 0;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div class="il-notices" style="flex:1;line-height:1.42;display:flex;flex-direction:column;gap:0.5pt;padding-right:2pt;">
+          <div class="il-notices" style="flex:1;line-height:${textUnits(d.ingredients)>40?1.1:textUnits(d.ingredients)>18?1.2:1.42};display:flex;flex-direction:column;gap:${textUnits(d.ingredients)>18?0.25:0.5}pt;padding-right:2pt;">
             <div>· 허가번호: ${escape(d.licenseno)}</div><div>· 식품의유형: ${escape(d.prodtype)}</div><div>· 포장재질: ${escape(d.packaging)}</div>
             <div>· 반품및교환: 제조원및판매원 하단 표시</div><div>· 부정,불량 축산물 신고는 국번없이 1399</div>
             <div>· 이 제품은 공정거래위원회 고시 소비자 분쟁해결기준에 의거 교환 또는 보상받을 수 있습니다</div>
@@ -148,15 +155,15 @@
     const name=String(d.manufacturer||'주식회사 동부엠티').replace(/주식회사\s*동부엠티/g,'주식회사 동부엠티');
     const ingredients=escape(d.ingredients||'').replace(/(돼지고기|소고기)\s*/g,'<span class="dl-meat">$1</span> ');
     const notice=d.crossNotice||d.crossFacilityNotice||'';
-    return `<div class="dbmt-label-body">
+    return `<div class="dbmt-label-body${textUnits(d.ingredients)>18?' dl-long-ingredients':''}">
       <div class="dl-row dl-top-code"><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code)||'미발급'}</div></div></div>
       <div class="dl-split-body"><div class="dl-main-fields">
         <div class="dl-row dl-product-row"><span class="dl-key">제품명:</span><strong class="dl-product-name" style="font-size:${productFont}pt;">${escape(product)}</strong></div>
-        <div class="dl-row dl-grade-row"><div class="dl-grade-cell"><span class="dl-key">성별및등급:</span><span class="dl-grade-value">${escape(d.grade)}</span></div><div class="dl-grade-cell"><span class="dl-key">원산지:</span><strong class="dl-origin-value">${escape(d.origin)}</strong></div></div>
+        <div class="dl-row dl-grade-row"><div class="dl-grade-cell"><span class="dl-key">성별및등급:</span><span class="dl-grade-value">${escape(d.grade)}</span></div><div class="dl-grade-cell"><span class="dl-key">원산지:</span><strong class="dl-origin-value" style="font-size:${originFont(d.origin)}pt;">${escape(d.origin)}</strong></div></div>
         <div class="dl-row dl-date-row"><span class="dl-key">제조 및 소비기한:</span><strong class="dl-date-value">${escape(d.mfgdate)} ~ ${escape(d.expdate)}</strong></div>
         <div class="dl-row dl-weight-row"><div class="dl-weight-cell"><span class="dl-key">중량:</span><div class="dl-weight-value">${d.weightOmitted?'':`<strong style="font-size:${weightFont}pt;">${escape(weight)}</strong><span>Kg</span>`}</div></div><div class="dl-report-cell"><span class="dl-key">품목보고번호</span><strong class="dl-report-value">${escape(d.itemno)}</strong></div></div>
         <div class="dl-row dl-trace-code"><span class="dl-code-caption">이력번호</span><div class="dl-code-body">${codeImage(traceImage,lot,'trace','이력번호 바코드')}<div class="dl-code-number">${escape(lot)}</div></div></div>
-        <div class="dl-row dl-ingredients-row"><span class="dl-key">원료 및 함량</span><strong class="dl-ingredients-value">${ingredients}</strong></div>
+        <div class="dl-row dl-ingredients-row${textUnits(d.ingredients)>18?' dl-ingredients-long':''}${textUnits(d.ingredients)>40?' dl-ingredients-extra':''}"><span class="dl-key">원료 및 함량</span><strong class="dl-ingredients-value">${ingredients}</strong></div>
         <div class="dl-row dl-storage-row"><div class="dl-storage-copy"><div><strong>보관방법:</strong> ${chilled?'-2℃ ~ 5℃이하 냉장보관':'-18℃이하 냉동보관'}</div>${chilled?'':'<div class="dl-storage-note">이미 냉동된바 있으니 해동후 재냉동 시키지 마십시오</div>'}</div></div>
       </div><div class="dl-side-strip"><div class="dl-side-code">${codeImage(productImage,code,'product','우측 세로 제품 고유바코드')}</div></div></div>
       <div class="dl-footer"><div class="dl-notices"><div class="dl-notice-heading"><div class="dl-notice-short"><div>· 허가번호: ${escape(d.licenseno)}</div><div>· 식품의유형: ${escape(d.prodtype)}</div><div>· 포장재질: ${escape(d.packaging)}</div></div><strong class="dl-temperature">${escape(temperature)}</strong></div>

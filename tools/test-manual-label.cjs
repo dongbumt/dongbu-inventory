@@ -7,7 +7,7 @@ const source=name=>{const m=index.match(new RegExp(`function ${name}\\([^]*?\\n\
 const block=(a,b)=>index.slice(index.indexOf(a),index.indexOf(b,index.indexOf(a)));
 for(const match of index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(match[1]);
 const products=[{id:'p-a',name:'가상 삼겹살(작업)',brand:'가상 A',kind:'제품',origin:'스페인',storage:'냉동',shelfdays:365,grade:'1',itemno:'REPORT-A',meattype:'돼지고기',productCode:'QA001'},
- {id:'p-b',name:'가상 삼겹살(작업)',brand:'가상 B',kind:'제품',origin:'칠레',storage:'냉장',shelfdays:30,itemno:'REPORT-B',meattype:'돼지고기',productCode:'QA002'},
+ {id:'p-b',name:'가상 삼겹살(작업)',brand:'가상 B',kind:'제품',origin:'칠레',storage:'냉장',shelfdays:30,itemno:'REPORT-B',meattype:'돼지고기',productCode:'QA002',ingredientDetails:'삼겹살 95%, 지방 5%'},
  {id:'raw',name:'가상 원료육',kind:'원료육',origin:'국내산',storage:'냉동'},
  {id:'stopped',name:'중지 제품',kind:'제품',isActive:false}];
 const server=http.createServer((req,res)=>{
@@ -27,7 +27,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(html=>{const t=document.createElement('template');t.innerHTML=html;for(const id of ['p-label','txn-product-picker-modal'])document.body.append(t.content.querySelector('#'+id));document.getElementById('p-label').classList.add('active');},index);
   await page.addStyleTag({url:base+'/styles/main.css'});await page.addStyleTag({url:base+'/styles/manual-label.css'});
   await page.addStyleTag({content:'body{padding:16px}#p-label{max-width:1120px;margin:auto}'});
-  for(const file of ['label-weight.js','vendor/jsbarcode/JsBarcode.code128.min.js','label-layout.js','label-print-document.js'])await page.addScriptTag({url:base+'/'+file});
+  for(const file of ['label-weight.js','label-product-selection.js','vendor/jsbarcode/JsBarcode.code128.min.js','label-layout.js','label-print-document.js'])await page.addScriptTag({url:base+'/'+file});
   await page.addScriptTag({content:`
     var labelProducts=${JSON.stringify(products)},workOrders=[],labelPrintLogs=[],userProduction=[],transactions=[];
     const LBL_DEFAULTS={licenseno:'가상 허가번호',prodtype:'포장육(비가열제품)',packaging:'내포장(PE), 외포장(종이)',manufacturer:'주식회사 동부엠티',phone:'032-766-1812',address:'인천광역시 검단구 소담2로 36, 2동 201호 (금곡동)'};
@@ -46,6 +46,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#tpp-result-body tr').count(),2,'Only active registered products: '+errors.join(';'));
   await page.locator('#tpp-search-brand').selectOption('가상 B');await page.locator('#tpp-result-body tr').dblclick();
   assert.equal(await page.locator('#lbl-product-id').inputValue(),'p-b');assert.equal(await page.locator('#lbl-origin').inputValue(),'칠레');
+  assert.equal(await page.locator('#lbl-ingredients').inputValue(),'돼지고기 100% (삼겹살 95%, 지방 5%)');
   assert.equal(await page.locator('#lbl-itemno').inputValue(),'REPORT-B');assert.equal(await page.locator('#lbl-temptype').inputValue(),'냉장');
   await page.locator('#lbl-mfgdate').fill('2026-10-20');await page.locator('#lbl-mfgdate').dispatchEvent('change');assert.equal(await page.locator('#lbl-expdate').inputValue(),'2026-11-18');
   for(const [id,value] of [['origin','미국산'],['grade','수정 등급'],['weight','12.34'],['expdate','2026-11-25'],['lot','L12603096675003'],['itemno','202502930933'],['ingredients','돼지고기 95%, 정제수 5%']])await page.locator('#lbl-'+id).fill(value);

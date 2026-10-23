@@ -4,6 +4,10 @@ const {chromium}=require('playwright');
 const repo=path.resolve(__dirname,'..'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-product-picker-'));
 const pure={window:{}};vm.runInNewContext(fs.readFileSync(path.join(repo,'label-product-selection.js'),'utf8'),pure);
 const model=pure.window.DBMTLabelProducts;
+assert.equal(model.ingredients({meattype:'소고기'}),'소고기 100%');
+assert.equal(model.ingredients({meattype:'돼지고기',ingredientDetails:'  '}),'돼지고기 100%');
+assert.equal(model.ingredients({meattype:'소고기',ingredientDetails:'전각(미국산) 85%, 우지방(국내산) 15%'}),'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)');
+assert.equal(model.compose({date:'2026-10-23',origin:'미국산/국내산'},{meattype:'소고기',ingredientDetails:'전각 85%, 우지방 15%'}).ingredients,'소고기 100% (전각 85%, 우지방 15%)');
 assert.equal(model.compose({date:'2024-02-29'},{id:'p',name:'P',shelfdays:2}).expdate,'2024-03-01');
 assert.equal(model.compose({date:'2026-12-31'},{id:'p',name:'P',shelfdays:2}).expdate,'2027-01-01');
 assert.throws(()=>model.compose({date:'2026-02-30'},{id:'p'}));
@@ -14,7 +18,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}}),page=await context.newPage(),errors=[];
     const order={id:'wo-a',title:'원료 돈등심 작업',date:'2026-09-15',product:'돈등심(기본)',labelProductId:'p0',weight:5,inputWeight:100,origin:'국내산',grade:'1등급',lot:'RAW-LOT',mfgdate:'2026-09-15',expdate:'2027-09-14',itemno:'ORIGINAL',ingredients:'돼지고기 100%',temptype:'냉동',sourceStock:{key:'raw',product:'돈등심',origin:'국내산',lot:'RAW-LOT',stock:100,price:5000}};
-    const p1={id:'p1',name:'돈등심(돈까스 10mm)',productCode:'P001',packunit:'2KG',origin:'국내산',storage:'냉장',kind:'제품',meattype:'돼지고기',shelfdays:30,itemno:'REPORT-10',brand:'DBMT',nationalPartCode:'CUT-001',nationalPartName:'삼겹살'};
+    const p1={id:'p1',name:'돈등심(돈까스 10mm)',productCode:'P001',packunit:'2KG',origin:'국내산',storage:'냉장',kind:'제품',meattype:'돼지고기',shelfdays:30,itemno:'REPORT-10',brand:'DBMT',nationalPartCode:'CUT-001',nationalPartName:'삼겹살',ingredientDetails:'돈등심(국내산) 100%'};
     const p2={...p1,id:'p2',name:'돈등심(잡채 3mm)',productCode:'P002',packunit:'5KG',storage:'냉동',shelfdays:60,itemno:'REPORT-3'};
     let products=[{...p1,id:'p0',name:order.product},p1,p2,{...p1,id:'belly-1',name:'냉장삼겹살',brand:'가상 브랜드 A'},{...p1,id:'belly-2',name:'삼겹살(작업)',brand:'가상 브랜드 B'},...Array.from({length:15},(_,i)=>({...p1,id:'extra-'+i,name:'추가 품목 '+i}))];
     let logs=[],saves=0,done=false,fail=false;
@@ -57,6 +61,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await page.locator('#product-dialog').screenshot({path:path.join(dir,'product-picker.png')});
     await page.locator('[data-close=product-dialog]').click();assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),4);
     await choose('10mm','p1');assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),1);assert.equal(await page.evaluate(()=>DBMTLabelTouch.weight('outer')),5);
+    assert.equal(await page.evaluate(()=>DBMTLabelTouch.printOrder().ingredients),'돼지고기 100% (돈등심(국내산) 100%)');
     assert.equal(await page.locator('#selected-name').textContent(),p1.name);assert.deepEqual(await page.evaluate(()=>state.workOrders[0]),order);
     assert.match(await page.locator('#selected-meta').textContent(),/브랜드 DBMT/);
     await page.locator('#preview-btn').click();const label=page.frameLocator('#label-preview-frame').locator('.print-label');await label.waitFor();

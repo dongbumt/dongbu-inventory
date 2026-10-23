@@ -24,10 +24,13 @@ const server=http.createServer((req,res)=>{
     await page.goto(base+'/label-print.html');
     const fixture={id:'qa-barcode-order',product:'돈사태(작업)',origin:'국내산',grade:'1',mfgdate:'2026-08-21',expdate:'2027-08-20',weight:12,itemno:'2025029309311',lot:'L12608194894027',ingredients:'돼지고기 100%',temptype:'냉동'};
     for(const [name,size,patch] of [
+      ['maximum-details','7x10',{ingredients:'소고기 100% ('+'추가원재료'.repeat(8)+')'}],
       ['frozen','7x10',{}],['chilled','7x10',{product:'냉장돈등심(치즈용)',temptype:'냉장',weight:5}],
       ['wide','10x10',{}],['long-lot','10x10',{lot:'TEST-20260729-12345678901234567890'}],
       ['long-product','7x10',{product:'냉장돈등심(치즈돈까스용 10mm 슬라이스 특수규격)',weight:1000.12}],
-      ['weight-omitted','7x10',{weightOmitted:true,weight:0}],['legacy-lot','7x10',{lot:'수기 LOT-123'}]
+      ['weight-omitted','7x10',{weightOmitted:true,weight:0}],['legacy-lot','7x10',{lot:'수기 LOT-123'}],
+      ['mixed-origin','7x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)'}],
+      ['mixed-origin-wide','10x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)'}]
     ]){
       const doc=await page.evaluate(({fixture,size,patch})=>{
         const log=makePrintLog({...fixture,...patch,labelSize:size},'QA',1);
@@ -65,6 +68,7 @@ const server=http.createServer((req,res)=>{
         const marks=rect(label.querySelector('.dl-marks'));
         return {overflow,addressLineCount:addressLines.length,addressRight:addressLines[0].right,right:bounds.right,
           companyLines,marks,noticesBottom:rect(label.querySelector('.dl-notices')).bottom,manufacturerTop:rect(label.querySelector('.dl-manufacturer')).top,
+          noticeTextBottom:Math.max(...[...label.querySelectorAll('.dl-notices div')].flatMap(el=>textBounds(el).map(r=>r.bottom))),
           badge:rect(label.querySelector('.dl-temperature')),heading:rect(label.querySelector('.dl-notice-heading')),
           sideText:label.querySelector('.dl-side-code').textContent,weightOmitted:label.querySelector('.dl-weight-value').textContent,
           barcodes:[...label.querySelectorAll('[data-barcode-kind]')].map(image=>({kind:image.dataset.barcodeKind,value:image.dataset.barcodeValue,src:image.src,...rect(image)}))};
@@ -74,6 +78,7 @@ const server=http.createServer((req,res)=>{
       assert(result.marks.bottom<=result.companyLines[3].top,'Marks must stay above the one-line address');
       for(let i=1;i<result.companyLines.length;i++)assert(result.companyLines[i-1].bottom<=result.companyLines[i].top,'Manufacturer, company, phone, address order');
       assert(result.noticesBottom<=result.manufacturerTop,'Notice/manufacturer gap');
+      assert(result.noticeTextBottom<=result.manufacturerTop+0.5,`${name}: notice text overlaps manufacturer by ${result.noticeTextBottom-result.manufacturerTop}px`);
       assert(Math.abs(result.badge.top-result.heading.top)<0.1,'Temperature badge must follow the original footer position');
       assert.equal(result.sideText,'','Vertical barcode must not contain human-readable text');
       const products=result.barcodes.filter(b=>b.kind==='product');
@@ -105,7 +110,9 @@ print(json.dumps(results))`,
     }
     for(const [name,size,patch] of [
       ['inner-frozen','7x10',{}],['inner-wide','10x10',{}],
-      ['inner-chilled','7x10',{temptype:'냉장'}],['inner-weight-omitted','7x10',{weightOmitted:true,weight:0}]
+      ['inner-chilled','7x10',{temptype:'냉장'}],['inner-weight-omitted','7x10',{weightOmitted:true,weight:0}],
+      ['inner-mixed-origin','7x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)'}],
+      ['inner-maximum-details','7x10',{ingredients:'소고기 100% ('+'추가원재료'.repeat(8)+')'}]
     ]){
       const doc=await page.evaluate(({fixture,size,patch})=>{
         const log={...makePrintLog({...fixture,...patch,labelSize:size},'QA',1),untrackedLabel:true};
@@ -118,7 +125,7 @@ print(json.dumps(results))`,
       assert.equal(await print.locator('[data-barcode-kind],.dl-top-code,.dl-side-strip,.dbmt-label-body').count(),0,'Inner must have no barcode artwork or reserved outer regions');
       assert.doesNotMatch(await print.locator('.print-label').textContent(),/미발급/);
       assert.match(await print.locator('.il-trace').textContent(),/L12608194894027/,'Keep the LOT as text');
-      assert.match(await print.locator('.il-product').textContent(),/제품명:.*돈사태/s);
+      assert((await print.locator('.il-product').textContent()).includes(patch.product||fixture.product));
       assert.match(await print.locator('.il-manufacturer').textContent(),/제조판매원.*주식회사 동부엠티.*032-766-1812.*소담2로/s);
       assert.equal(await print.locator('img').count(),2,'Only the original recycling and HACCP artwork');
       if(patch.weightOmitted)assert.equal((await print.locator('.il-weight').textContent()).trim(),'');
@@ -127,9 +134,10 @@ print(json.dumps(results))`,
         const rect=el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
         const inner=label.querySelector('.dbmt-inner-label'),product=label.querySelector('.il-product');
         const overflow=[...inner.querySelectorAll('div,span,strong,img')].filter(el=>{const r=rect(el),b=rect(label);return r.left<b.left-.5||r.right>b.right+.5||r.top<b.top-.5||r.bottom>b.bottom+.5;}).map(el=>el.textContent||el.alt);
-        return {inner:rect(inner),product:rect(product),overflow};
+        return {inner:rect(inner),product:rect(product),overflow,noticeBottom:Math.max(...[...label.querySelectorAll('.il-notices div')].map(el=>rect(el).bottom)),manufacturerTop:rect(label.querySelector('.il-manufacturer')).top};
       });
       assert.deepEqual(geometry.overflow,[],`${name}: clipped inner label`);
+      if(patch.ingredients)assert(geometry.noticeBottom<=geometry.manufacturerTop+0.5,`${name}: extended inner notices overlap manufacturer`);
       assert.equal(geometry.product.top,geometry.inner.top,'Product starts at the top without a barcode band');
       assert.equal(geometry.product.right,geometry.inner.right,'Product information uses the full width');
       await print.locator('.print-label').screenshot({path:path.join(artifacts,name+'.png')});

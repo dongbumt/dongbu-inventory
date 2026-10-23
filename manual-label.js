@@ -55,7 +55,7 @@
     el('product-id').value=String(row.id);el('product').value=row.name||'';
     for(const key of ['origin','grade','itemno'])el(key).value=row[key]||'';
     el('temptype').value=row.storage==='냉장'?'냉장':'냉동';
-    el('ingredients').value=(row.meattype||inferLabelMeatType(row.name,''))+' 100%';
+    el('ingredients').value=DBMTLabelProducts.ingredients(row,inferLabelMeatType(row.name,'')+' 100%');
     el('product-meta').textContent=[row.productCode,row.brand&&'브랜드 '+row.brand,row.packunit&&'포장 '+row.packunit].filter(Boolean).join(' · ')||'등록 품목';
     setExpiry();updatePreview();
   }

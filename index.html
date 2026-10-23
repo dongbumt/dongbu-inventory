@@ -7,8 +7,9 @@
 <script src="stock-ledger.js?v=20261017date1"></script>
 <script src="pda-transaction-summary.js?v=20261021raw1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
+<script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-<script src="label-layout.js?v=20261013inner1"></script>
+<script src="label-layout.js?v=20261023ingredients1"></script>
 <script src="label-print-document.js?v=20261013inset2"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
@@ -3728,6 +3729,11 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <label>성별및등급</label>
             <input id="lp-grade" placeholder="예) 암,비거세/1등급" style="font-size:13px;">
           </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label for="lp-ingredient-details">원재료 및 함량 (추가 표시·선택)</label>
+            <input id="lp-ingredient-details" maxlength="40" placeholder="예) 전각(미국산) 85%, 우지방(국내산) 15%" style="font-size:13px;">
+            <small style="color:#666;">비워두면 육종 100%만 표시합니다. 입력하면 소고기 100% (입력한 내용)처럼 옆에 추가합니다. 최대 40자.</small>
+          </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;">
           <button class="btn btn-primary" id="lp-save-btn" onclick="saveLabelProduct()" style="flex:1;">💾 저장</button>
@@ -4294,6 +4300,7 @@ function getLocalTraceInfo(traceNo){
     itemno: managed?.itemno || '',
     shelfdays: managed?.shelfdays || 0,
     meattype: managed?.meattype || '',
+    ingredientDetails: managed?.ingredientDetails || '',
     date: tx.date || '',
     type: tx.type || ''
   };
@@ -4343,7 +4350,7 @@ function normalizeLabelDateValue(value){
 
 function traceIngredientText(d){
   const meat = String(d?.meattype || '').trim();
-  if(meat) return meat + ' 100%';
+  if(meat) return DBMTLabelProducts.ingredients(d, meat + ' 100%');
   const animalType = String(d?.animalType || '').trim();
   if(animalType === '소') return '소고기 100%';
   if(animalType === '돼지') return '돼지고기 100%';
@@ -20680,7 +20687,7 @@ function applyWorkOrderLabelProduct(product){
   set('wo-origin', p.origin);
   set('wo-grade', p.grade);
   set('wo-itemno', p.itemno);
-  set('wo-ingredients', `${p.meattype || inferLabelMeatType(p.name, '')} 100%`);
+  set('wo-ingredients', DBMTLabelProducts.ingredients(p, `${inferLabelMeatType(p.name, '')} 100%`));
   const sourceRows=workOrderSourceRows().filter(row=>row.querySelector('.wo-stock-key').value);
   if(sourceRows.length===1 && !document.getElementById('wo-lot')?.value && sourceRows[0]._sourceStock?.lot) set('wo-lot',sourceRows[0]._sourceStock.lot);
   const workDate = document.getElementById('wo-date')?.value || localDateString();
@@ -21398,7 +21405,7 @@ function applyLabelProduct(){
   sv('lbl-product',     p.name);
   sv('lbl-origin',      p.origin);
   // 원료및함량: {육종}(원산지)100% 자동생성
-  const ingrAuto = (p.meattype||'돼지고기') + ' 100%';
+  const ingrAuto = DBMTLabelProducts.ingredients(p, '돼지고기 100%');
   sv('lbl-ingredients', ingrAuto);
   sv('lbl-grade',       p.grade);
   sv('lbl-itemno',      p.itemno);
@@ -21550,6 +21557,7 @@ async function saveLabelProduct(){
     packunit:    gv('lp-packunit'),
     itemno:      gv('lp-itemno'),
     grade:       gv('lp-grade'),
+    ingredientDetails: gv('lp-ingredient-details'),
   };
   delete prod.stockUnit;
   const dupIdx = labelProducts.findIndex(p => String(p.id || '') !== String(prod.id || '') && sameLabelProduct(p, prod));
@@ -21645,6 +21653,7 @@ function editLabelProduct(idx){
   set('lp-shelfdays', p.shelfdays || getDefaultShelfDays(p.kind || '원료육', p.storage || '냉동'));
   set('lp-itemno', p.itemno || '');
   set('lp-grade', p.grade || '');
+  set('lp-ingredient-details', p.ingredientDetails || '');
   const title = document.getElementById('lp-form-title');
   if(title) title.innerHTML = '<div class="ct-bar" style="background:#e67e22;"></div>✏️ 품목 수정';
   const saveButton = document.getElementById('lp-save-btn');
@@ -21698,7 +21707,7 @@ async function deleteLabelProduct(idx){
 }
 
 function resetLabelProductForm(){
-  ['lp-edit-id','lp-product-code','lp-name','lp-brand','lp-factory-no','lp-national-part-code','lp-packunit','lp-shelfdays','lp-itemno','lp-grade'].forEach(id=>{
+  ['lp-edit-id','lp-product-code','lp-name','lp-brand','lp-factory-no','lp-national-part-code','lp-packunit','lp-shelfdays','lp-itemno','lp-grade','lp-ingredient-details'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value='';
   });
   const origin = document.getElementById('lp-origin'); if(origin) origin.value='국내산';
@@ -21912,7 +21921,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="label-stock-split.js?v=20261017split1"></script>
 <script src="work-orders-sync.js?v=20261020manual1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
-<script src="manual-label.js?v=20261020manual1"></script>
+<script src="manual-label.js?v=20261023ingredients1"></script>
 <script src="document-request-detail.js?v=20261020brand1"></script>
 <script src="m02-auth.js?v=20261020summary1"></script>
 </body>
