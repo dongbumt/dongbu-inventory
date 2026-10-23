@@ -794,31 +794,71 @@
       window.DBMTLabelTouch?.sync();
     }
 
+    function completionInputs(row){
+      return Array.isArray(row.sourceInputs)&&row.sourceInputs.length ? row.sourceInputs :
+        [{sourceStock:row.sourceStock,inputWeight:row.inputWeight,boxCount:row.inputBoxCount}];
+    }
+
+    function completionInputKey(row){
+      // JSON object key order can differ between the browser and Postgres.
+      const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?
+        Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+      return JSON.stringify(canonical({inputWeight:row.inputWeight,sourceStock:row.sourceStock,
+        sourceInputs:row.sourceInputs??null,inputBoxCount:row.inputBoxCount??null}));
+    }
+
     async function completeProduction(){
       if(state.loading) return;
-      const row = selectedOrder();
-      if(!row || completionFor(row.id)) return;
-      const logs = activeLogsForOrder(row.id);
-      const previous = completionRecordFor(row.id);
-      if(!logs.length){ setStatus('출력한 라벨이 없습니다.', 'warn'); return; }
-      const weight = logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
-      const groups=window.DBMTLabelProducts?.group(logs)||[];
-      const detail=groups.map(g=>`${g.name}${g.packunit?' / '+g.packunit:''}: ${g.count}박스 · ${kg(g.weight)}`).join('\n');
-      const sourceDetail=(Array.isArray(row.sourceInputs)&&row.sourceInputs.length?row.sourceInputs:[{sourceStock:row.sourceStock,inputWeight:row.inputWeight}])
-        .map(input=>`${input.sourceStock?.product || '-'} · ${kg(input.inputWeight)} · LOT ${input.sourceStock?.lot || '-'}`).join('\n');
-      if(!confirm(`${row.title || row.product}\n투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장 = ${logs.length}박스)\n${sourceDetail}\n${detail}\n\n원료 투입은 한 번만, 생산품목별 중량과 박스수를 생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)) return;
+      const orderId=selectedOrder()?.id;
+      if(!orderId || completionFor(orderId)) return;
       setLoading(true);
-      setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
+      setStatus('최신 작업지시와 출력이력 확인 중...', 'warn');
       try {
-        const args = {p_pin:state.pin,p_work_order_id:String(row.id),p_log_ids:logs.map(log=>String(log.id))};
-        if(previous?.deleted) args.p_previous_production_id = previous.productionId;
-        const result = await sbRpc(previous?.deleted ? 'dbmt_label_resubmit_production' : 'dbmt_label_complete_production', args);
+        // Review the saved version, including edits from another PC, before confirmation.
+        const data=await sbRpc('dbmt_label_print_get_data',{p_pin:state.pin});
+        state.workOrders=normalizeArray(data?.appData?.workOrders);
+        state.labelProducts=normalizeArray(data?.appData?.labelProducts);
+        state.logs=normalizeArray(data?.appData?.labelPrintLogs);
+        state.completions=normalizeArray(data?.completions);
+        renderAll();
+        const row=state.workOrders.find(item=>String(item.id)===String(orderId));
+        if(!row) throw new Error('작업지시를 찾을 수 없습니다. 사무실에서 확인해주세요.');
+        if(completionFor(orderId)){
+          setStatus('이미 생산일보에 전송된 작업입니다. 중복 등록하지 않습니다.', 'ok');
+          return;
+        }
+        const logs=activeLogsForOrder(orderId),previous=completionRecordFor(orderId);
+        if(!logs.length){setStatus('출력한 라벨이 없습니다.', 'warn');return;}
+        if(logs.some(log=>log.workOrderSnapshot?.date!==row.date)){
+          throw new Error('출력 당시와 현재 작업지시의 작업일이 다릅니다. 사무실에서 작업일을 확인해주세요.');
+        }
+        const changed=logs.some(log=>completionInputKey(log.workOrderSnapshot||{})!==completionInputKey(row));
+        const versions=new Map();
+        for(const log of logs){
+          const snap=log.workOrderSnapshot||{},key=completionInputKey(snap);
+          const version=versions.get(key)||{weight:snap.inputWeight,count:0,sources:completionInputs(snap).length};
+          version.count++;versions.set(key,version);
+        }
+        const review=changed?`출력 중 투입내역이 변경되었습니다.\n출력 당시: ${[...versions.values()].map(v=>`${kg(v.weight)} / 원료 ${v.sources}건 (${v.count}장)`).join(', ')}\n아래 최신 투입내역을 최종 투입량으로 반영합니다.\n기존 라벨의 바코드·제품·중량·이력번호는 유지됩니다.\n\n`:'';
+        const weight=logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0);
+        const groups=window.DBMTLabelProducts?.group(logs)||[];
+        const detail=groups.map(g=>`${g.name}${g.packunit?' / '+g.packunit:''}: ${g.count}박스 · ${kg(g.weight)}`).join('\n');
+        const sourceDetail=completionInputs(row).map(input=>`${input.sourceStock?.product||'-'} · ${kg(input.inputWeight)} · ${input.boxCount==null?'박스 미기록':input.boxCount+'박스'} · LOT ${input.sourceStock?.lot||'-'}`).join('\n');
+        if(!confirm(`${review}${row.title||row.product}\n최종 투입 ${kg(row.inputWeight)} / 외포장 생산 ${kg(weight)} (${logs.length}장 = ${logs.length}박스)\n${sourceDetail}\n${detail}\n\n이 투입내역으로 생산일보와 재고에 반영할까요?\n완료 후 외포장 추가 출력·삭제는 제한됩니다. 내포장 출력과 기존 외포장 재출력은 가능합니다.`)){
+          setStatus('생산완료를 취소했습니다. 출력이력은 유지됩니다.', 'warn');return;
+        }
+        setStatus('생산일보 전송 및 재고 반영 중...', 'warn');
+        const args={p_pin:state.pin,p_work_order_id:String(row.id),p_log_ids:logs.map(log=>String(log.id))};
+        if(previous?.deleted) args.p_previous_production_id=previous.productionId;
+        if(changed) args.p_confirmed_work_order=row;
+        const rpcName=(previous?.deleted?'dbmt_label_resubmit_production':'dbmt_label_complete_production')+(changed?'_reviewed':'');
+        const result = await sbRpc(rpcName, args);
         if(result?.ok !== true) throw new Error(result?.message || '생산완료를 확인하지 못했습니다.');
         state.completions = normalizeArray(result.completions);
         renderAll();
         setStatus(`생산일보 전송 완료: ${logs.length}박스 · ${kg(weight)}. ERP → 생산관리 → 생산일보에서 작업일자로 조회하세요.`, 'ok');
       } catch(err) {
-        setStatus(`생산완료 확인 실패: ${err.message || err} (새로고침 후 확인하거나 다시 누르세요. 중복 등록되지 않습니다.)`, 'err');
+        setStatus(`생산완료 확인 실패: ${err.message || err} (다시 누르면 최신 내역을 확인합니다. 중복 등록되지 않습니다.)`, 'err');
       } finally { setLoading(false); }
     }
 
