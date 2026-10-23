@@ -23,8 +23,8 @@
     .dbmt-label-body .dl-grade-cell:first-child { border-right:0.3mm solid #000; }
     .dbmt-label-body .dl-grade-value { flex:1; min-width:0; text-align:center; font-size:8pt; }
     .dbmt-label-body .dl-origin-value { flex:1; min-width:0; text-align:center; font-size:10pt; }
-    .dbmt-label-body .dl-date-row { height:7.1mm; display:flex; flex-direction:column; justify-content:center; gap:0.45mm; }
-    .dbmt-label-body .dl-date-value { font-size:9.2pt; font-weight:900; text-align:center; white-space:nowrap; }
+    .dbmt-label-body .dl-date-row { height:4.8mm; display:flex; align-items:center; gap:0.8mm; }
+    .dbmt-label-body .dl-date-value { flex:1; min-width:0; font-size:7.5pt; font-weight:900; text-align:right; white-space:nowrap; }
     .dbmt-label-body .dl-weight-row { height:8.3mm; display:grid; grid-template-columns:1fr 1fr; padding:0; }
     .dbmt-label-body .dl-weight-cell { border-right:0.3mm solid #000; display:flex; align-items:center; gap:0.8mm; padding:0.4mm 0.5mm; min-width:0; }
     .dbmt-label-body .dl-weight-value { flex:1; min-width:0; display:flex; align-items:baseline; justify-content:center; gap:0.7mm; white-space:nowrap; }
@@ -115,8 +115,8 @@
       <div style="display:flex;${bb+sh}min-height:17pt;">
         <div style="flex:11;${pad+br}font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">성별및등급:</span><span style="flex:1;text-align:center;font-size:9.1pt;">${escape(d.grade)}</span></div>
         <div style="flex:9;min-width:0;${pad}font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">원산지:</span> <strong style="font-size:${originFont(d.origin,10.4,4.5)}pt;margin-left:3pt;white-space:nowrap;">${escape(d.origin)}</strong></div></div>
-      <div style="${bb+pad+sh}min-height:20pt;display:flex;align-items:center;">
-        <span style="font-size:6pt;font-weight:900;">제조 및 소비기한: </span><strong style="font-size:10pt;margin-left:8pt;">${escape(d.mfgdate)}～ ${escape(d.expdate)}</strong></div>
+      <div class="il-date" style="${bb+pad+sh}min-height:17pt;display:flex;align-items:center;gap:3pt;">
+        <span style="font-size:6pt;font-weight:900;flex-shrink:0;white-space:nowrap;">제조 및 소비기한: </span><strong style="flex:1;min-width:0;text-align:right;font-size:8.5pt;white-space:nowrap;">${escape(d.mfgdate)} ～ ${escape(d.expdate)}</strong></div>
       <div style="display:flex;align-items:stretch;${bb+sh}min-height:30pt;">
         <div style="flex:11;${pad+br}display:flex;align-items:baseline;"><span style="font-size:6pt;font-weight:900;margin-right:3pt;">중량:</span>
           <div class="il-weight" style="flex:1;display:flex;align-items:baseline;justify-content:center;padding-left:5pt;">${d.weightOmitted?'':`<span style="font-size:19.5pt;font-weight:900;line-height:1.05;">${escape(d.weight||'0.00')}</span><span style="font-size:9.2pt;font-weight:700;margin-left:3pt;">Kg</span>`}</div></div>

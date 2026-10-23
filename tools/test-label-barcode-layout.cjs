@@ -49,6 +49,13 @@ const server=http.createServer((req,res)=>{
       assert(Math.abs(bounds.width-(size==='7x10'?66:96)*96/25.4)<0.1,'Retain content width and right 2 mm clearance');
       assert.equal(await print.locator('.dl-top-code .dl-code-caption').count(),0,'Remove the top caption, not the barcode/number');
       assert.equal(await print.locator('.dl-top-code .dl-code-number').textContent(),doc.barcode);
+      const dateLine=await print.locator('.dl-date-row').evaluate(row=>{
+        const key=row.querySelector('span'),value=row.querySelector('strong'),a=key.getBoundingClientRect(),b=value.getBoundingClientRect();
+        const range=document.createRange();range.selectNodeContents(value);
+        return {lines:range.getClientRects().length,horizontal:a.right<=b.left+0.5,sameLine:a.top<b.bottom&&b.top<a.bottom,fits:value.scrollWidth<=value.clientWidth+1,height:row.getBoundingClientRect().height};
+      });
+      assert.equal(dateLine.lines,1,`${name}: date must not wrap`);assert(dateLine.horizontal&&dateLine.sameLine&&dateLine.fits,`${name}: title and dates share one line`);
+      assert(dateLine.height<=5*96/25.4,'Date row saves vertical space');
       const result=await print.locator('.print-label').evaluate(label=>{
         const bounds=label.getBoundingClientRect(),overflow=[];
         const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,top:r.top,bottom:r.bottom,left:r.left,right:r.right};};
@@ -126,6 +133,11 @@ print(json.dumps(results))`,
       assert.doesNotMatch(await print.locator('.print-label').textContent(),/미발급/);
       assert.match(await print.locator('.il-trace').textContent(),/L12608194894027/,'Keep the LOT as text');
       assert((await print.locator('.il-product').textContent()).includes(patch.product||fixture.product));
+      const innerDate=await print.locator('.il-date').evaluate(row=>{
+        const key=row.querySelector('span').getBoundingClientRect(),value=row.querySelector('strong'),r=value.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(value);
+        return range.getClientRects().length===1&&key.right<=r.left+0.5&&key.top<r.bottom&&r.top<key.bottom&&value.scrollWidth<=value.clientWidth+1;
+      });
+      assert(innerDate,`${name}: inner title and dates share one line`);
       assert.match(await print.locator('.il-manufacturer').textContent(),/제조판매원.*주식회사 동부엠티.*032-766-1812.*소담2로/s);
       assert.equal(await print.locator('img').count(),2,'Only the original recycling and HACCP artwork');
       if(patch.weightOmitted)assert.equal((await print.locator('.il-weight').textContent()).trim(),'');
