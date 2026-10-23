@@ -52,10 +52,18 @@ const server=http.createServer((req,res)=>{
       const dateLine=await print.locator('.dl-date-row').evaluate(row=>{
         const key=row.querySelector('span'),value=row.querySelector('strong'),a=key.getBoundingClientRect(),b=value.getBoundingClientRect();
         const range=document.createRange();range.selectNodeContents(value);
-        return {lines:range.getClientRects().length,horizontal:a.right<=b.left+0.5,sameLine:a.top<b.bottom&&b.top<a.bottom,fits:value.scrollWidth<=value.clientWidth+1,height:row.getBoundingClientRect().height};
+        return {lines:range.getClientRects().length,horizontal:a.right<=b.left+0.5,gap:b.left-a.right,sameLine:a.top<b.bottom&&b.top<a.bottom,fits:value.scrollWidth<=value.clientWidth+1,height:row.getBoundingClientRect().height};
       });
       assert.equal(dateLine.lines,1,`${name}: date must not wrap`);assert(dateLine.horizontal&&dateLine.sameLine&&dateLine.fits,`${name}: title and dates share one line`);
+      assert(dateLine.gap<=1.5*96/25.4,`${name}: dates sit immediately after the title`);
       assert(dateLine.height<=5*96/25.4,'Date row saves vertical space');
+      const ingredientLayout=await print.locator('.dl-ingredients-row').evaluate(row=>{
+        const details=row.querySelector('.dl-ingredients-details'),head=row.querySelector('.dl-ingredients-main'),base=row.querySelector('.dl-ingredients-value');
+        return {text:row.textContent.replace(/\s/g,''),details:details?.textContent,below:details&&details.getBoundingClientRect().top>=head.getBoundingClientRect().bottom-0.5,smaller:details&&parseFloat(getComputedStyle(details).fontSize)<parseFloat(getComputedStyle(base).fontSize)};
+      });
+      assert.equal(ingredientLayout.text,('원료 및 함량:'+(patch.ingredients||fixture.ingredients)).replace(/\s/g,''),'Preserve every ingredient character');
+      if(patch.ingredients){assert(ingredientLayout.below&&ingredientLayout.smaller,'Additional composition has its own smaller line');assert(ingredientLayout.details.startsWith('(')&&ingredientLayout.details.endsWith(')'));}
+      if(patch.temptype!=='냉장')assert(await print.locator('.dl-storage-note').evaluate(node=>parseFloat(getComputedStyle(node).fontSize)<parseFloat(getComputedStyle(node.parentElement).fontSize)),'Refreezing note is smaller than storage instructions');
       const result=await print.locator('.print-label').evaluate(label=>{
         const bounds=label.getBoundingClientRect(),overflow=[];
         const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,top:r.top,bottom:r.bottom,left:r.left,right:r.right};};
@@ -66,7 +74,7 @@ const server=http.createServer((req,res)=>{
         }
         for(const row of label.querySelectorAll('.dl-row')){
           const rowRect=row.getBoundingClientRect();
-          for(const el of row.querySelectorAll('span,strong,.dl-code-number,.dl-storage-copy>div'))for(const r of textBounds(el)){
+          for(const el of row.querySelectorAll('span,strong,.dl-code-number,.dl-ingredients-details,.dl-storage-copy>div'))for(const r of textBounds(el)){
             if(r.left<rowRect.left-0.5||r.right>rowRect.right+0.5||r.top<rowRect.top-0.5||r.bottom>rowRect.bottom+0.5)overflow.push({text:el.textContent,row:rect(row),textRect:{left:r.left,right:r.right,top:r.top,bottom:r.bottom}});
           }
         }
@@ -135,9 +143,15 @@ print(json.dumps(results))`,
       assert((await print.locator('.il-product').textContent()).includes(patch.product||fixture.product));
       const innerDate=await print.locator('.il-date').evaluate(row=>{
         const key=row.querySelector('span').getBoundingClientRect(),value=row.querySelector('strong'),r=value.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(value);
-        return range.getClientRects().length===1&&key.right<=r.left+0.5&&key.top<r.bottom&&r.top<key.bottom&&value.scrollWidth<=value.clientWidth+1;
+        return range.getClientRects().length===1&&key.right<=r.left+0.5&&r.left-key.right<=1.5*96/25.4&&key.top<r.bottom&&r.top<key.bottom&&value.scrollWidth<=value.clientWidth+1;
       });
       assert(innerDate,`${name}: inner title and dates share one line`);
+      const innerIngredients=await print.locator('.il-ingredients').evaluate(row=>{
+        const details=row.querySelector('.il-ingredients-details'),head=row.querySelector('.il-ingredients-main');
+        return {text:row.textContent.replace(/\s/g,''),below:details&&details.getBoundingClientRect().top>=head.getBoundingClientRect().bottom-0.5,smaller:details&&parseFloat(getComputedStyle(details).fontSize)<parseFloat(getComputedStyle(head.querySelector('strong')).fontSize)};
+      });
+      assert.equal(innerIngredients.text,('원료 및 함량:'+(patch.ingredients||fixture.ingredients)).replace(/\s/g,''));
+      if(patch.ingredients)assert(innerIngredients.below&&innerIngredients.smaller,'Inner composition has its own smaller line');
       assert.match(await print.locator('.il-manufacturer').textContent(),/제조판매원.*주식회사 동부엠티.*032-766-1812.*소담2로/s);
       assert.equal(await print.locator('img').count(),2,'Only the original recycling and HACCP artwork');
       if(patch.weightOmitted)assert.equal((await print.locator('.il-weight').textContent()).trim(),'');
