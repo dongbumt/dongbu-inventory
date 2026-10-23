@@ -40,4 +40,3 @@ try {
   $connection = $null
   Pop-Location
 }
-
