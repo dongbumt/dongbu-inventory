@@ -8,13 +8,21 @@ const {PDFDocument}=require('pdf-lib');
 const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const moduleSource=fs.readFileSync(path.join(root,'shiplog-print.js'),'utf8');
+const summarySource=fs.readFileSync(path.join(root,'pda-transaction-summary.js'),'utf8');
+const groupingHelpers=['normalizeStockLocation','getTxnStockLocation','transactionDisplayRows'].map(name=>{
+  const match=html.match(new RegExp(`function ${name}\\([^]*?\\n\\}`));assert(match,`Missing ${name}`);return match[0];
+}).join('\n');
 const start=html.indexOf('function getShipLogSelectedTrader()'),printStart=html.indexOf('function exportShipLogExcel()');
-const source=html.slice(start,html.indexOf('// ─── 단가표',start))+html.slice(printStart,html.indexOf('// ━━━━━━━━━',printStart));
+const source="const STOCK_LOCATION_DEFAULT='가공장';\n"+groupingHelpers+html.slice(start,html.indexOf('// ─── 단가표',start))+html.slice(printStart,html.indexOf('// ━━━━━━━━━',printStart));
 const escapeSource=`function htmlEscape(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}`;
 const makeRows=(count,date='2026-10-15',long=false)=>Array.from({length:count},(_,i)=>({id:date+'-'+i,type:'출고',date,
   trader:['한식뷔페','가나유통','동원홈푸드'][i%3]+(long?' 긴 거래처명 확인'.repeat(8):''),
   product:`QA품목${String(i+1).padStart(3,'0')}`+(long?' 긴 세절규격 확인'.repeat(10):''),
   origin:'국내산',proddate:'2026-10-14',lot:`L${date.replace(/-/g,'').slice(2)}${String(i+1).padStart(6,'0')}`,weight:i+0.75}));
+const boxes=Array.from({length:42},(_,i)=>({id:`qa-pda-${i}`,date:'2026-10-15',type:'출고',trader:'동원홈푸드',traderId:'qa-partner',
+  product:'돈사태(작업)',labelProductId:'qa-product',origin:'국내산',lot:'L12610134894030',packunit:'3KG',storage:'냉동',
+  proddate:i%2?'2026-10-13':'2026-10-14',stockRowId:`qa-source-${i%3}`,stockLocation:'가공장',
+  weight:12,boxCount:1,price:7500,amount:90000,note:'',_pdaRequestId:'qa-batch',_pdaLabelId:`qa-label-${i}`}));
 
 (async()=>{
   for(const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))if(match[1].trim())new vm.Script(match[1]);
@@ -22,13 +30,35 @@ const makeRows=(count,date='2026-10-15',long=false)=>Array.from({length:count},(
   const controls={'ship-date':{value:'2026-10-15'},'ship-trader':{value:''},'ship-from':{value:'2026-10-15'},'ship-to':{value:'2026-10-16'},'shiplog-preview':{innerHTML:''}};
   const calls=[],context=vm.createContext({transactions:makeRows(80).concat(makeRows(21,'2026-10-16')),document:{getElementById:id=>controls[id]},
     DBMTShipLogPrint:{open:input=>calls.push(input)},alert:message=>{throw Error(message)},localDateString:()=> '2026-10-15'});
-  vm.runInContext(escapeSource+source,context);
+  context.window=context;vm.runInContext(summarySource+escapeSource+source,context);
   const before=JSON.stringify(context.transactions);
   context.exportShipLogExcel();assert.equal(calls.at(-1).groups[0].items.length,80);
   context.exportShipLogRange();assert.deepEqual(Array.from(calls.at(-1).groups,group=>group.items.length),[80,21]);
   controls['ship-trader'].value='가나유통';context.exportShipLogRange();
   assert.ok(calls.at(-1).groups.every(group=>group.items.every(row=>row.trader==='가나유통')));
   assert.equal(JSON.stringify(context.transactions),before,'Source transactions must remain unchanged');
+  controls['ship-trader'].value='';context.transactions=structuredClone(boxes);
+  const boxesBefore=JSON.stringify(context.transactions);
+  const grouped=context.getShipLogOuts('2026-10-15');
+  assert.equal(grouped.length,1);assert.equal(grouped[0].weight,504);assert.equal(grouped[0].boxCount,42);
+  assert.equal(grouped[0].proddate,'2026-10-13 / 2026-10-14','Never discard distinct manufacturing dates');
+  assert.equal(grouped[0]._pdaSummaryRows.length,42);
+  context.loadShipLog();assert(controls['shiplog-preview'].innerHTML.includes('504.00'));
+  assert(controls['shiplog-preview'].innerHTML.includes('2026-10-13 / 2026-10-14'));
+  assert.equal((controls['shiplog-preview'].innerHTML.match(/돈사태\(작업\)/g)||[]).length,1,'Preview must render one product row');
+  context.exportShipLogExcel();assert.equal(calls.at(-1).groups[0].items.length,1);
+  const groupedPrint=JSON.parse(JSON.stringify(calls.at(-1).groups));
+  context.exportShipLogRange();assert.equal(calls.at(-1).groups[0].items.length,1);
+  assert.equal(JSON.stringify(context.transactions),boxesBefore,'Preview and both print actions must never change box-level stock rows');
+  const extra=changes=>({...boxes[0],id:'extra-'+JSON.stringify(changes),_pdaLabelId:'extra-'+JSON.stringify(changes),...changes});
+  const manual=extra({id:'manual-1'});delete manual._pdaRequestId;delete manual._pdaLabelId;
+  context.transactions=[...structuredClone(boxes),extra({_pdaRequestId:'other-batch'}),extra({lot:'OTHER-LOT'}),extra({trader:'다른 거래처'}),extra({stockLocation:'물류창고'}),manual,{...manual,id:'manual-2'},extra({date:'2026-10-16'}),extra({type:'입고'})];
+  assert.equal(context.getShipLogOuts('2026-10-15').length,7,'Keep other batches/LOTs/traders/locations and manual shipments separate');
+  controls['ship-trader'].value='동원홈푸드';context.exportShipLogRange();
+  assert.deepEqual(Array.from(calls.at(-1).groups,group=>group.items.length),[6,1],'Range and trader filters must run before grouping');
+  context.transactions=[boxes[0],extra({proddate:''})];
+  assert.equal(context.getShipLogOuts('2026-10-15')[0].proddate,'- / 2026-10-14','Missing manufacturing dates must not silently disappear');
+  console.log('PASS: PDA 42-box preview/single/range/trader aggregation, exact 504KG total, all manufacturing dates, manual/batch/LOT/location isolation and immutable original transactions');
   const blocked={window:{open:()=>null},alert:()=>{}};vm.runInNewContext(moduleSource,blocked);
   assert.equal(await blocked.window.DBMTShipLogPrint.open({}),false,'Blocked popup must be handled');
 
@@ -39,11 +69,13 @@ const makeRows=(count,date='2026-10-15',long=false)=>Array.from({length:count},(
     await page.context().addInitScript(()=>{window.print=()=>{window.printCalls=(window.printCalls||0)+1;};});
     page.on('pageerror',error=>errors.push(error.message));
     await page.goto('about:blank');await page.setContent('<button id="print">인쇄</button>');
+    await page.addScriptTag({content:summarySource});
     await page.addScriptTag({content:escapeSource+source});
     await page.addScriptTag({content:moduleSource});
     const cases=[...['1','10','11','21','45','80'].map(count=>({name:count,groups:[{date:'2026-10-15',trader:'',items:makeRows(Number(count))}]})),
       {name:'long',groups:[{date:'2026-10-15',trader:'',items:makeRows(45,'2026-10-15',true)}]},
       {name:'range',groups:[{date:'2026-10-15',trader:'',items:makeRows(80)},{date:'2026-10-16',trader:'',items:makeRows(21,'2026-10-16')}]},
+      {name:'pda-grouped',groups:groupedPrint},
       {name:'escaped',groups:[{date:'2026-10-15',trader:'',items:makeRows(1).map(row=>({...row,product:'QA <img src=x onerror="window.INJECTED=true">',trader:'거래처 "<&>',lot:'LOT "<&>'}))}]}];
     let normalCapacity;
     for(const test of cases){
@@ -74,6 +106,12 @@ const makeRows=(count,date='2026-10-15',long=false)=>Array.from({length:count},(
       assert.equal((await PDFDocument.load(pdf)).getPageCount(),layout.length,test.name+': unexpected physical PDF page');
       assert.equal(await popup.evaluate(()=>window.printCalls),1,test.name+': print lifecycle');
       if(test.name==='11')assert.equal(layout.length,1,'Eleven short products should fit with checks on one page');
+      if(test.name==='pda-grouped'){
+        assert.equal(layout.length,1);assert.equal(layout[0].rows.length,1);
+        const cells=await popup.locator('.shiplog-page table').first().locator('tbody tr').first().locator('td').allTextContents();
+        assert.equal(cells[4],'2026-10-13 / 2026-10-14');assert.equal(cells[6],'504.00');
+        await popup.locator('.shiplog-page').screenshot({path:path.join(artifactDir,'pda-grouped.png')});
+      }
       if(test.name==='21')assert.equal(layout.length,2,'21 products should use two pages');
       if(test.name==='45')assert.equal(layout.length,2,'45 short products should use two pages');
       if(test.name==='80'){

@@ -14018,13 +14018,18 @@ function getShipLogSelectedTrader(){
   return String(document.getElementById('ship-trader')?.value || '').trim();
 }
 function getShipLogOuts(date, trader=getShipLogSelectedTrader()){
-  return transactions
+  const rows=transactions
     .filter(t=>t.type==='출고'&&t.date===date&&(!trader||String(t.trader||'').trim()===trader))
     .sort((a,b)=>{
       const left=String(a.trader||'').trim(),right=String(b.trader||'').trim();
       if(!left||!right) return Number(!left)-Number(!right);
       return left.localeCompare(right,'ko',{numeric:true,sensitivity:'base'});
     });
+  return transactionDisplayRows(rows).map(row=>{
+    if(!row._pdaSummaryRows) return row;
+    const dates=[...new Set(row._pdaSummaryRows.map(box=>String(box.proddate||'').trim()||'-'))].sort();
+    return {...row,proddate:dates.join(' / ')};
+  });
 }
 function loadShipLog(){
   const date=document.getElementById('ship-date').value;
@@ -14038,7 +14043,7 @@ function loadShipLog(){
     rows+=`<tr>
       <td style="text-align:center">${i+1}</td>
       <td>${o.product}</td><td>${htmlEscape(o.origin||'-')}</td><td>${o.trader||''}</td>
-      <td>${o.proddate||'-'}</td>
+      <td>${htmlEscape(o.proddate||'-')}</td>
       <td style="font-family:var(--font-mono);font-size:10px">${o.lot||'-'}</td>
       <td style="text-align:right;font-weight:500">${o.weight.toFixed(2)}</td>
     </tr>`;
