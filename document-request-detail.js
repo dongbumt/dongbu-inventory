@@ -56,6 +56,6 @@
   }
   dialog.querySelectorAll('[data-detail-close]').forEach(button=>button.addEventListener('click',reset));
   dialog.addEventListener('close',()=>{request++;body.replaceChildren();if(returnFocus?.isConnected)returnFocus.focus();});
-  document.getElementById('doc-request-log-tbody').addEventListener('click',event=>{const button=event.target.closest('[data-doc-request-detail]');if(button)void open(button.dataset.docRequestDetail);});
+  for(const id of ['doc-request-log-tbody','doc-tbody'])document.getElementById(id)?.addEventListener('click',event=>{const button=event.target.closest('[data-doc-request-detail]');if(button)void open(button.dataset.docRequestDetail);});
   global.DBMTDocumentRequestDetail={open,reset,applyPermissions};
 })(window);

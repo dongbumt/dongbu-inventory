@@ -26,7 +26,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261017wo2">
+<link rel="stylesheet" href="styles/main.css?v=20261026docsend1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -2219,11 +2219,12 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
               <th>이력번호</th>
               <th>거래처</th>
               <th>필수서류</th>
+              <th style="text-align:center;">요청 발송</th>
               <th style="text-align:center;">수령</th>
             </tr>
           </thead>
           <tbody id="doc-tbody">
-            <tr><td colspan="8" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
+            <tr><td colspan="9" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -16101,6 +16102,11 @@ let docRequestCapabilities = {email:false, fax:false, faxProvider:'바로빌', f
 let docRequestSenderProfiles = null;
 let documentRequestLogs = [];
 let documentRequestLogsLoaded = false;
+let documentRequestLogsToken = '';
+let documentRequestDelivery = new Map();
+let documentRequestDeliveryState = 'loading';
+let documentRequestDeliveryToken = '';
+let documentRequestDeliveryRequest = 0;
 
 // ─── 단가표 정렬 상태 ───────────────────────────────────────
 let priceSortKey = 'product';
@@ -16168,7 +16174,7 @@ async function refreshDocChecksFromSupabase(force=false){
 function openDocCheckPage(){
   renderDocCheck();
   loadDocumentRequestCapabilities();
-  loadDocumentRequestLogs();
+  loadDocumentRequestLogs(true);
   refreshDocChecksFromSupabase(true)
     .then(changed => {
       if(changed && document.getElementById('p-doccheck')?.classList.contains('active')){
@@ -16599,27 +16605,86 @@ function renderDocumentRequestLogs(errorMessage=''){
   }).join('');
 }
 
+function documentRequestDeliveryKey(row){
+  const lot=normalizeDocLot(row?.lot);
+  if(lot) return 'lot:'+lot;
+  return 'row:'+JSON.stringify([String(row?.date||'').trim().replace(/\//g,'-'),
+    String(row?.product||'').trim(),String(row?.origin||'').trim(),String(row?.trader||'').trim()]);
+}
+
+function renderDocumentRequestDelivery(row){
+  const token=getSupabasePassword();
+  if(!token||token!==documentRequestDeliveryToken) return '<span class="doc-delivery-empty">로그인 확인</span>';
+  if(documentRequestDeliveryState!=='ready') return `<span class="doc-delivery-empty">${documentRequestDeliveryState==='loading'?'조회 중…':'조회 실패'}</span>`;
+  const channels=documentRequestDelivery.get(documentRequestDeliveryKey(row));
+  if(!channels?.length) return '<span class="doc-delivery-empty">미발송</span>';
+  return channels.map(item=>{
+    const success=item.success,record=success||item.latest;
+    const channel=item.channel==='fax'?'팩스':'메일';
+    const text=success?(item.channel==='fax'&&success.status==='accepted'?(String(success.provider_status||'').includes('테스트')?'팩스 테스트 접수':'팩스 접수'):channel+' 발송'):
+      (record.status==='failed'?channel+' 실패':channel+' 확인 필요');
+    const failedRetry=success&&item.latest.status==='failed'&&item.latest.id!==success.id;
+    const date=formatDocumentRequestDate(record.created_at);
+    return `<div class="doc-delivery-item"><button type="button" class="doc-delivery-link" data-doc-request-detail="${htmlEscape(record.id)}" title="${htmlEscape(date+' · 발송 내용 보기')}">${text}</button><small>${htmlEscape(date)}</small>${failedRetry?'<small>최근 시도 실패</small>':''}</div>`;
+  }).join('');
+}
+
+async function loadDocumentRequestDelivery(force=false){
+  const token=getSupabasePassword();
+  if(!token){
+    documentRequestDeliveryRequest++;documentRequestDelivery.clear();documentRequestDeliveryToken='';
+    documentRequestDeliveryState='error';renderDocCheck();return;
+  }
+  if(!force&&documentRequestDeliveryState==='ready'&&documentRequestDeliveryToken===token) return;
+  const request=++documentRequestDeliveryRequest;
+  documentRequestDeliveryToken=token;documentRequestDeliveryState='loading';documentRequestDelivery.clear();
+  renderDocCheck();
+  try{
+    const rows=await sbRpc('dbmt_erp_get_document_request_delivery',{p_token:token});
+    if(request!==documentRequestDeliveryRequest||getSupabasePassword()!==token) return;
+    if(!Array.isArray(rows)) throw new Error('발송 상태를 확인하지 못했습니다.');
+    for(const item of rows){
+      if(!item?.identity||!['email','fax'].includes(item.channel)||!item.latest) continue;
+      const key=documentRequestDeliveryKey(item.identity),items=documentRequestDelivery.get(key)||[];
+      items.push(item);documentRequestDelivery.set(key,items);
+    }
+    documentRequestDeliveryState='ready';
+  }catch(error){
+    if(request!==documentRequestDeliveryRequest||getSupabasePassword()!==token) return;
+    documentRequestDeliveryState='error';console.warn('서류 요청 발송 상태 조회 실패:',error);
+  }finally{
+    if(request===documentRequestDeliveryRequest&&getSupabasePassword()===token) renderDocCheck();
+  }
+}
+
 async function loadDocumentRequestLogs(force=false){
-  if(documentRequestLogsLoaded && !force){
+  const delivery=loadDocumentRequestDelivery(force);
+  const token=getSupabasePassword();
+  if(documentRequestLogsLoaded && documentRequestLogsToken===token && !force){
     renderDocumentRequestLogs();
+    await delivery;
     return;
   }
-  const token = getSupabasePassword();
   if(!token){
+    documentRequestLogs=[];documentRequestLogsLoaded=false;documentRequestLogsToken='';
     renderDocumentRequestLogs('ERP 사용자 로그인 후 요청 이력을 확인할 수 있습니다.');
+    await delivery;
     return;
   }
   try{
     const rows = await sbRpc('dbmt_erp_get_document_request_logs', {p_token:token,p_limit:100});
+    if(getSupabasePassword()!==token) return;
     documentRequestLogs = Array.isArray(rows) ? rows : [];
     documentRequestLogsLoaded = true;
+    documentRequestLogsToken=token;
     renderDocumentRequestLogs();
   }catch(err){
+    if(getSupabasePassword()!==token) return;
     const rawMessage = String(err?.message || err);
     renderDocumentRequestLogs(/function|schema cache|404|not found/i.test(rawMessage)
       ? '요청 이력 서버를 설정하는 중입니다.'
       : `요청 이력을 불러오지 못했습니다: ${rawMessage}`);
-  }
+  }finally{ await delivery; }
 }
 
 function renderDocCheck(){
@@ -16677,7 +16742,7 @@ function renderDocCheck(){
   const tbody = document.getElementById('doc-tbody');
   if(!tbody) return;
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
     updateDocumentRequestButtons();
     return;
   }
@@ -16707,6 +16772,7 @@ function renderDocCheck(){
       <td><span style="font-size:11px;font-weight:700;color:${docColor};
         background:${imported?'#f3e8ff':'#e8f4fd'};padding:2px 8px;border-radius:10px;">
         ${htmlEscape(doc)}</span></td>
+      <td class="doc-delivery-cell">${renderDocumentRequestDelivery(r)}</td>
       <td style="text-align:center;">
         <button onclick="toggleDocCheckKeys(${keysArg})"
           style="width:32px;height:32px;border-radius:50%;border:2px solid;
@@ -21927,7 +21993,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="work-orders-sync.js?v=20261020manual1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="manual-label.js?v=20261023ingredients1"></script>
-<script src="document-request-detail.js?v=20261020brand1"></script>
+<script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="m02-auth.js?v=20261020summary1"></script>
 </body>
 </html>

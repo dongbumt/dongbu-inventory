@@ -255,6 +255,11 @@
   .doc-request-history-wrap{max-height:230px;}
   .doc-request-status-ok{color:#1e8449;font-weight:700;}
   .doc-request-status-fail{color:#c0392b;font-weight:700;}
+  .doc-delivery-cell{min-width:114px;text-align:center;}
+  .doc-delivery-item{display:flex;flex-direction:column;align-items:center;gap:2px;margin:3px 0;}
+  .doc-delivery-link{padding:2px 7px;border:1px solid #ccd1d6;border-radius:4px;background:#f3f4f5;color:#3e464e;font-size:11px;white-space:nowrap;cursor:pointer;}
+  .doc-delivery-item small{font-size:10px;color:#707880;white-space:nowrap;}
+  .doc-delivery-empty{font-size:11px;color:#7b838b;white-space:nowrap;}
 
   /* ── 거래명세서 ── */
   .invoice-preview{background:#fff;border-radius:10px;
