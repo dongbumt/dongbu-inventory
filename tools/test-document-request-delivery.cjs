@@ -13,6 +13,9 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
   for(const file of ['styles/main.css','styles/document-request-detail.css'])await page.addStyleTag({content:fs.readFileSync(path.join(root,file),'utf8')});
   await page.addScriptTag({content:`
    var session='qa',allowed=true,requests=[],summaryFail=false,pauseDelivery=false,pendingReads=[];
+   var docChecksRevision=0,docChecksRefreshPromise=null,docChecksRefreshToken='',docChecksLastRefreshAt=0,checkFail=false,pauseChecks=false,pendingChecks=[],serverChecks={L003:true};
+   const SUPABASE_ENABLED_KEY='qa-enabled',APP_DATA_REGISTRY={docChecks:{}},cacheAppDataValue=()=>{};
+   localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
    const getSupabasePassword=()=>session,toast=()=>{},asArray=v=>Array.isArray(v)?v:[];
    window.DBMTAuth={isPersonal:()=>!!session,can:()=>allowed,getSessionToken:()=>session};
    var docChecks={'L003':true},docCheckRowsCache=[],docRequestVisibleRows=[],docRequestSelectedKeys=new Set(),docRequestCapabilities={email:true,fax:true};
@@ -29,18 +32,20 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
     {identity:{lot:'',date:'2026/10/25',product:'이력 없는 품목',origin:'미국산',trader:'가상 매입처'},channel:'email',latest:receipt('51'),success:receipt('51')}];
    async function sbRpc(name,args){
     requests.push({name,args});
+    if(name==='dbmt_erp_get_doc_checks'){if(checkFail)throw Error('QA receipt failure');if(pauseChecks)return new Promise(resolve=>pendingChecks.push(resolve));return {docChecks:structuredClone(serverChecks)};}
     if(name==='dbmt_erp_get_document_request_delivery'){if(summaryFail)throw Error('QA read failure');if(pauseDelivery)return new Promise(resolve=>pendingReads.push(resolve));return structuredClone(summaries);}
     if(name==='dbmt_erp_get_document_request_logs')return [{id:'999',channel:'email',status:'sent',documents:[{lot:'unrelated'}]}];
     if(name==='dbmt_erp_get_document_request_log_detail')return {ok:true,log:{id:args.p_id,channel:'email',status:'sent',subject:'가상 요청',documents:[],content_snapshot:{html:'<p>가상 보낸 내용</p>'}}};
     throw Error('Unexpected RPC: '+name);
    }
-   ${['htmlEscape','jsArg','normalizeDocLot','getDocKey','getLegacyDocKey','getDocKeys','isDocChecked','isImported','getRequiredDoc','updateDocumentRequestButtons','formatDocumentRequestDate','documentRequestLogLots','renderDocumentRequestLogs','documentRequestDeliveryKey','renderDocumentRequestDelivery','loadDocumentRequestDelivery','loadDocumentRequestLogs','renderDocCheck'].map(source).join('\n')}
+   ${['htmlEscape','jsArg','normalizeDocLot','getDocKey','getLegacyDocKey','getDocKeys','isDocChecked','isImported','getRequiredDoc','updateDocumentRequestButtons','formatDocumentRequestDate','documentRequestLogLots','renderDocumentRequestLogs','documentRequestDeliveryKey','renderDocumentRequestDelivery','loadDocumentRequestDelivery','loadDocumentRequestLogs','refreshDocChecksFromSupabase','renderDocCheck'].map(source).join('\n')}
    document.getElementById('doc-filter').value='전체';renderDocCheck();
   `});
   await page.addScriptTag({content:fs.readFileSync(path.join(root,'document-request-detail.js'),'utf8')});
   assert.equal(await page.locator('#doc-tbody').evaluate(el=>el.closest('table').querySelectorAll('thead th').length),9);
   assert.match(await page.locator('#doc-tbody').textContent(),/로그인 확인/);
-  await page.evaluate(()=>loadDocumentRequestLogs(true));
+  await page.evaluate(()=>Promise.all([loadDocumentRequestLogs(true),refreshDocChecksFromSupabase(true)]));
+  assert(!(await page.evaluate(()=>requests)).some(r=>r.name==='dbmt_erp_get_all'),'Receipt refresh must not download the full ERP payload');
   const cell=name=>page.locator('#doc-tbody tr').filter({has:page.locator('td:nth-child(3)',{hasText:name})}).first().locator('.doc-delivery-cell');
   assert.equal(await page.locator('#doc-tbody tr').count(),7,'Existing same-LOT checklist grouping remains intact');
   assert.match(await cell('이전 발송 품목').textContent(),/메일 발송.*26\. 09\. 01.*최근 시도 실패/);
@@ -71,7 +76,17 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
   await page.waitForFunction(()=>documentRequestDeliveryState==='ready');
   await page.evaluate(()=>pendingReads[0](structuredClone(summaries)));await page.waitForTimeout(30);
   assert.equal(await cell('이전 발송 품목').textContent(),'미발송','An older response cannot overwrite a newer result');
-  assert((await page.evaluate(()=>requests.map(r=>r.name))).every(n=>n.startsWith('dbmt_erp_get_document_request_')),'Only read APIs may be invoked');
-  assert.deepEqual(errors,[]);console.log('PASS: channel/date/status column, historical summary, grouped LOTs, blank-LOT identity, failed retries/test fax, content viewer, filters, empty colspan, loading/error/session/race guards, receipt flags unchanged, no sends. Screenshot: '+shot);
+  await page.evaluate(()=>{pauseChecks=true;window.checkRead=refreshDocChecksFromSupabase(true);docChecks.LOCAL=true;docChecksRevision++;pendingChecks.shift()({docChecks:{L003:false}});});
+  assert.equal(await page.evaluate(()=>window.checkRead),false);
+  assert.equal(await page.evaluate(()=>docChecks.LOCAL),true,'An in-flight refresh cannot overwrite a new receipt check');
+  await page.evaluate(()=>{window.oldRead=refreshDocChecksFromSupabase(true);session='next-login';window.newRead=refreshDocChecksFromSupabase(true);pendingChecks[1]({docChecks:{NEW:true}});});
+  assert.equal(await page.evaluate(()=>window.newRead),true);
+  await page.evaluate(()=>pendingChecks[0]({docChecks:{OLD:true}}));await page.evaluate(()=>window.oldRead);
+  assert.deepEqual(await page.evaluate(()=>docChecks),{NEW:true},'An old login cannot replace the current receipt flags');
+  await page.evaluate(()=>{pauseChecks=false;checkFail=true;});
+  assert.equal(await page.evaluate(async()=>{try{await refreshDocChecksFromSupabase(true);return false;}catch{return true;}}),true);
+  assert.deepEqual(await page.evaluate(()=>docChecks),{NEW:true},'Failed reads retain the displayed receipt flags');
+  assert((await page.evaluate(()=>requests.map(r=>r.name))).every(n=>n==='dbmt_erp_get_doc_checks'||n.startsWith('dbmt_erp_get_document_request_')),'Only scoped read APIs may be invoked');
+  assert.deepEqual(errors,[]);console.log('PASS: channel/date/status, history, receipt-only refresh, receipt edit/login/error race guards, grouped LOTs, blank-LOT identity, failed retries/test fax, content viewer, filters, loading/errors, no sends. Screenshot: '+shot);
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

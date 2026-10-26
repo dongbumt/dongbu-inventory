@@ -16092,6 +16092,7 @@ function renderTraders(){
 let docChecks = JSON.parse(localStorage.getItem('dbmt_doc_checks')||'{}');
 let docChecksRevision = 0;
 let docChecksRefreshPromise = null;
+let docChecksRefreshToken = '';
 let docChecksLastRefreshAt = 0;
 let docCheckRowsCache = [];
 let docRequestVisibleRows = [];
@@ -16146,28 +16147,28 @@ async function refreshDocChecksFromSupabase(force=false){
   if(!token) return false;
   const now = Date.now();
   if(!force && now - docChecksLastRefreshAt < 5000) return false;
-  if(docChecksRefreshPromise) return docChecksRefreshPromise;
+  if(docChecksRefreshPromise && docChecksRefreshToken === token) return docChecksRefreshPromise;
 
   const startRevision = docChecksRevision;
-  docChecksRefreshPromise = (async () => {
-    const data = await sbRpc('dbmt_erp_get_all', {p_token:token});
-    const remote = data?.appData?.docChecks;
+  const request = (async () => {
+    const data = await sbRpc('dbmt_erp_get_doc_checks', {p_token:token});
+    if(getSupabasePassword() !== token || docChecksRevision !== startRevision) return false;
+    const remote = data?.docChecks;
+    if(!remote || typeof remote !== 'object' || Array.isArray(remote)) throw new Error('서류 수령 상태를 확인하지 못했습니다.');
     docChecksLastRefreshAt = Date.now();
-    if(docChecksRevision !== startRevision) return false;
-    if(remote && typeof remote === 'object' && !Array.isArray(remote)){
-      const before = JSON.stringify(docChecks || {});
-      docChecks = remote;
-      cacheAppDataValue('docChecks', APP_DATA_REGISTRY.docChecks, docChecks);
-      if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
-      return before !== JSON.stringify(docChecks || {});
-    }
-    return false;
+    const before = JSON.stringify(docChecks || {});
+    docChecks = remote;
+    cacheAppDataValue('docChecks', APP_DATA_REGISTRY.docChecks, docChecks);
+    if(typeof resetDataChangeAppDataBaseline === 'function') resetDataChangeAppDataBaseline();
+    return before !== JSON.stringify(docChecks || {});
   })();
+  docChecksRefreshPromise = request;
+  docChecksRefreshToken = token;
 
   try{
-    return await docChecksRefreshPromise;
+    return await request;
   } finally {
-    docChecksRefreshPromise = null;
+    if(docChecksRefreshPromise === request){docChecksRefreshPromise = null;docChecksRefreshToken = '';}
   }
 }
 

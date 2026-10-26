@@ -15,3 +15,7 @@
 
 검증: `test-document-request-snapshot.cjs`, `test-document-request-detail.cjs`, `check-document-request-content-db.ps1` (모두 가상 자료, 실제 발송 없음).
 발송 열 검증: `test-document-request-delivery.cjs`, `check-document-request-delivery-db.ps1` (`-Installed`는 배포된 함수 검증, DB 가상 자료는 전부 롤백).
+
+2026-10-27 조회 실패 수정: 서류 조회 RPC의 기존 인증 도우미가 같은 로그인 행의 `last_used_at`을 갱신하면서 병렬 조회를 기다리다 제한시간을 넘는 것을 서버 로그에서 확인했습니다. 수령 상태·발송 요약·최근 이력·내용 보기의 조회는 활성 사용자/역할·세션 만료·서류체크 조회 권한을 읽어서 검증하며 로그인 행을 갱신하지 않습니다. 수령 상태는 `dbmt_erp_get_doc_checks`로 필요한 JSON만 읽고 ERP 전체 거래/생산/기준정보를 다시 불러오지 않습니다. 조회 도중 수령 체크를 수정했거나 로그인 계정이 바뀌면 이전 응답은 적용하지 않습니다. 기존 저장·발송 권한 검사와 데이터는 변경하지 않습니다.
+
+검증: `check-document-check-reads-db.ps1`로 3초 제한에서 기존 서류 조회 회귀, 로그인 갱신 시각 유지, 미권한·만료 세션 거절, 수령 상태 단독 조회를 확인합니다. `test-document-request-delivery.cjs`는 수령 상태 조회의 편집·로그인·실패 경합도 확인합니다. 가상 자료는 전부 롤백하고 실제 발송은 하지 않습니다.
