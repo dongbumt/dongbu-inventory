@@ -3,4 +3,4 @@
 .pda-kind-mini>:last-child{padding-left:8px;border-left:1px solid var(--border)}
 .raw-wide{grid-column:1/-1}.raw-help{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.raw-product-meta{grid-column:1/-1;font-size:12px;overflow-wrap:anywhere}
 .raw-check{display:flex;align-items:center;gap:8px;min-height:42px;margin-top:10px;font-size:13px}.raw-check input{flex:0 0 20px;width:20px;height:20px}
-#raw-review-code{font-size:12px;overflow-wrap:anywhere;margin:8px 0}#raw-review-message{white-space:pre-line;margin:8px 0}#raw-review-weight{font-size:20px;font-weight:700}
+.raw-confirm-line{display:flex;align-items:center;gap:10px;margin-top:4px}.raw-confirm-line label{flex:0 0 110px}.raw-confirm-line input{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.raw-confirm-line span{min-width:0;color:var(--muted);overflow-wrap:anywhere}#confirm-error{color:#ad3028;font-size:13px;overflow-wrap:anywhere}

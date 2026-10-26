@@ -18,7 +18,9 @@ const server=http.createServer((req,res)=>{
     const cases=[
       {id:'qa-gs1',code:'01040199194722001126031231020017261052476119',rule:'GS1 3102',ruleKey:'gs1',weight:17.26,conversion:1,barcodeLot:'52476119',requiresReview:false},
       {id:'qa-sm',code:'07662300206004601597009456',rule:'SM 26|17|4|2|1.00000000|3',ruleKey:'26|17|4|2|1.00000000|3',weight:15.97,conversion:1,requiresReview:true},
-      {id:'qa-lb',code:'019001933617340432010007741125092421256481',rule:'GS1 3201',ruleKey:'gs1',weight:35.11,conversion:.45359237,requiresReview:true}
+      {id:'qa-lb',code:'019001933617340432010007741125092421256481',rule:'GS1 3201',ruleKey:'gs1',weight:35.11,conversion:.45359237,requiresReview:true},
+      {id:'qa-lb-photo',code:'0190045310554488320100049211260618219217003319',rule:'GS1 3201',ruleKey:'gs1',weight:22.32,conversion:.45359237,requiresReview:true},
+      {id:'qa-lb-next',code:'0190045310554488320100049211260618219217003320',rule:'GS1 3201',ruleKey:'gs1',weight:22.32,conversion:.45359237,requiresReview:true}
     ];
     const registered=new Map(),saved=new Map(),calls=[],commits=[],lookups=[],errors=[],blocked=[];
     let canSave=true,loseResponse=false,denyCommit=false,lookupDelay=0;
@@ -69,7 +71,7 @@ const server=http.createServer((req,res)=>{
     await scan(cases[0].code);await idle();assert.equal(await page.locator('#items li').count(),0,'Manufacturer GS1 LOT must not become a domestic traceability number');
     assert.match(await page.locator('#status').innerText(),/별도로 이력번호/);assert.equal(await page.locator('#lot').inputValue(),'');assert(await page.locator('#save').isDisabled());assert.equal(commits.length,0);
     await page.locator('#lot').fill('   ');await scan(cases[1].code);await idle();assert.equal(await page.locator('#items li').count(),0,'Domestic weight barcodes also require a separate traceability number');
-    assert(await page.locator('#raw-review').isHidden());assert.match(await page.locator('#status').innerText(),/별도로 이력번호/);
+    assert.equal(await page.locator('dialog[open]').count(),0);assert.match(await page.locator('#status').innerText(),/별도로 이력번호/);
     const traceability='801091101169';await page.locator('#lot').fill(traceability);await page.locator('#lot').press('Enter');assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
     await scan(cases[0].code);await idle();assert.equal(await page.locator('#items li').count(),1);assert.match(await page.locator('#items').innerText(),/17\.26 KG/);assert.equal(commits.length,0);
     assert.match(await page.locator('#items').innerText(),new RegExp('이력번호 '+traceability));assert(!(await page.locator('#items .scan-meta').innerText()).includes(cases[0].barcodeLot));
@@ -89,25 +91,57 @@ const server=http.createServer((req,res)=>{
     await scan(cases[0].code);await idle();assert.match(await page.locator('#status').innerText(),/이미 출고/);
     await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#receive-kind').selectOption('bind');
     await page.waitForFunction(()=>document.getElementById('source').options.length===2);await page.locator('#source').selectOption('qa-existing');assert.equal(await page.locator('#lot').inputValue(),'QA-EXISTING');
-    await scan(cases[1].code);await page.locator('#raw-review').waitFor({state:'visible'});assert(await page.locator('#raw-review-weight').getAttribute('readonly')!==null);
-    assert.equal(await page.locator('#items li').count(),0,'Reviewed SM boxes are not appended before checking');
-    await page.locator('#raw-review-checked').check();await page.locator('#raw-review-add').click();await idle();assert.equal(await page.locator('#items li').count(),1);
+    await scan(cases[1].code);await idle();assert.equal(await page.locator('#items li').count(),1);
+    assert.equal(await page.locator('dialog[open]').count(),0,'SM rules must not interrupt scanning');
     await page.locator('#save').click();assert.match(await page.locator('#confirm-title').innerText(),/중량 증가 없음/);
+    assert.equal(await page.locator('#confirm-items input').count(),0,'SM weights remain fixed');assert(await page.locator('#confirm-save').isDisabled());
     await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     assert.equal(commits.at(-1).p_source_id,'qa-existing');assert.equal(commits.at(-1).p_items[0].labelWeight,15.97);
     await page.locator('#receive-kind').selectOption('new');await page.locator('#partner').selectOption('qa-partner');
-    await scan(cases[2].code);await page.locator('#raw-review').waitFor({state:'visible'});assert.equal(await page.locator('#raw-review-weight').getAttribute('readonly'),null);
-    await page.locator('#raw-review-weight').fill('35.10');await page.locator('#raw-review-checked').check();await page.locator('#raw-review-add').click();await idle();
-    assert.match(await page.locator('#items').innerText(),/35\.10 KG/);assert.match(await page.locator('#items').innerText(),/계산 35\.11KG/);
-    await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_items[0].labelWeight,35.1);
-    await page.locator('#history-open').click();await page.waitForFunction(()=>document.querySelectorAll('#history-list .history-row').length===4);await page.locator('#history-close').click();
+    const beforeLb=commits.length;lookupDelay=80;
+    for(const item of cases.slice(2)){await scan(item.code);assert.equal(await page.locator('dialog[open]').count(),0,'Pound boxes, including the reported photo, must scan continuously');}
+    await idle();lookupDelay=0;assert.equal(await page.locator('#items li').count(),3);assert.equal(commits.length,beforeLb);
+    assert.match(await page.locator('#total').innerText(),/3박스 · 79\.75 KG/);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
+    await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input[data-weight]').count(),3);assert(await page.locator('#confirm-save').isDisabled());
+    assert.deepEqual(await page.locator('#confirm-items .scan-code').allTextContents(),cases.slice(2).map(item=>item.code),'Keep each barcode visible for physical label comparison');
+    const weight=page.locator('#confirm-items input[data-weight="0"]');
+    await weight.fill('35.10');assert.match(await page.locator('#confirm-summary').innerText(),/79\.74 KG/);
+    await page.locator('#confirm-cancel').click();assert.equal(commits.length,beforeLb);assert.match(await page.locator('#items').innerText(),/35\.11 KG/,'Cancel discards unconfirmed weight edits');
+    assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));await page.locator('#save').click();
+    for(const invalid of ['', '0', '1001', '35.101', '35.14']){
+      await weight.fill(invalid);await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();
+      assert(await page.locator('#confirm-dialog').isVisible());assert(await page.locator('#confirm-error').isVisible());assert.equal(commits.length,beforeLb,'Invalid rounding must never save');
+    }
+    await weight.fill('35.10');assert(await page.locator('#confirm-save').isDisabled());assert.equal(await page.locator('#confirm-checked').isChecked(),false);
+    await page.locator('#confirm-checked').check();await page.locator('#confirm-items input[data-weight="1"]').fill('22.31');
+    assert.equal(await page.locator('#confirm-checked').isChecked(),false,'Editing after review requires confirmation again');assert(await page.locator('#confirm-save').isDisabled());
+    await page.locator('#confirm-items input[data-weight="1"]').fill('22.32');assert.match(await page.locator('#confirm-summary').innerText(),/79\.74 KG/);
+    for(const width of [320,390,480,1280]){
+      await page.setViewportSize({width,height:800});const bounds=await page.locator('#confirm-dialog').boundingBox();
+      assert(bounds.x>=0&&bounds.x+bounds.width<=width);assert(await page.locator('#confirm-items input').evaluateAll(inputs=>inputs.every(input=>input.getBoundingClientRect().right<=document.getElementById('confirm-dialog').getBoundingClientRect().right)));
+      await page.locator('#confirm-dialog').screenshot({path:path.join(artifacts,`batch-confirm-${width}.png`)});
+    }
+    await page.setViewportSize({width:480,height:800});loseResponse=true;await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();
+    await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');const lbRequest=commits.at(-1);
+    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#items').innerText(),/35\.10 KG/);
+    assert.equal(await page.locator('dialog[open]').count(),0);await page.locator('#save').click();
+    await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.equal(commits.at(-1).p_request_id,lbRequest.p_request_id);assert.deepEqual(commits.at(-1).p_items,lbRequest.p_items,'Reviewed rounding must survive lost responses and retries unchanged');
+    assert.equal(commits.at(-1).p_items.length,3);assert.equal(commits.at(-1).p_items[0].labelWeight,35.1);assert(commits.at(-1).p_items.every(item=>item.checked===true));
+    await page.locator('[name="mode"][value="outbound"]').check();await page.locator('#partner').selectOption('qa-partner');await scan(cases[2].code);await idle();
+    assert.equal(await page.locator('dialog[open]').count(),0);assert.match(await page.locator('#items').innerText(),/35\.10 KG/);
+    await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input').count(),0,'Outbound uses saved label weight, never editable or recalculated');
+    await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_items[0].labelWeight,35.1);
+    await page.locator('#history-open').click();await page.waitForFunction(()=>document.querySelectorAll('#history-list .history-row').length===5);await page.locator('#history-close').click();
+    await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#partner').selectOption('qa-partner');
     const extra={...cases[1],id:'qa-extra',code:'07662300206004601597009457'};cases.push(extra);
-    await scan(extra.code);await page.locator('#raw-review').waitFor({state:'visible'});await page.keyboard.press('Escape');await idle();assert.equal(await page.locator('#items li').count(),0);
-    lookupDelay=80;await scan(extra.code);assert(await page.locator('#save').isDisabled());await page.locator('#raw-review').waitFor({state:'visible'});await page.locator('#raw-review-cancel').click();await idle();lookupDelay=0;
+    await scan(extra.code);await idle();await page.locator('#save').click();await page.keyboard.press('Escape');assert(await page.locator('#confirm-dialog').isHidden());assert.equal(await page.locator('#items li').count(),1);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
+    await page.locator('#clear-items').click();lookupDelay=80;await scan(extra.code);assert(await page.locator('#save').isDisabled());await idle();lookupDelay=0;
+    assert.equal(await page.locator('dialog[open]').count(),0);await page.locator('#clear-items').click();
     await context.setOffline(true);assert(await page.locator('#save').isDisabled());await context.setOffline(false);
     canSave=false;await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#status').innerText(),/조회만/);
     await page.locator('#product').selectOption(product.id);await page.locator('#lot').fill('QA-READONLY');await scan(extra.code);
-    await page.locator('#raw-review').waitFor({state:'visible'});await page.locator('#raw-review-checked').check();await page.locator('#raw-review-add').click();await idle();assert(await page.locator('#save').isDisabled());
+    await idle();assert.equal(await page.locator('dialog[open]').count(),0);assert(await page.locator('#save').isDisabled());
     for(const width of [320,390,480,1280]){
       await page.setViewportSize({width,height:800});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`No overflow at ${width}px`);
       await page.screenshot({path:path.join(artifacts,`raw-${width}.png`),fullPage:true});
@@ -116,7 +150,7 @@ const server=http.createServer((req,res)=>{
     const stored=await page.evaluate(()=>({...sessionStorage}));assert.deepEqual(Object.keys(stored),['dbmt_pda_session_token'],'Never persist a draft or business data outside pending retries');
     await page.locator('#logout').click();assert(await page.locator('#workspace').isHidden());
     assert.deepEqual(errors,[]);assert.deepEqual(blocked,[]);assert(calls.every(name=>name.startsWith('dbmt_pda_raw_')||['dbmt_erp_login','dbmt_erp_session','dbmt_erp_logout'].includes(name)),'Raw screen never calls product commit');
-    console.log('PASS: separate domestic traceability input for domestic/imported meat, no GS1 manufacturer LOT fallback, outbound traceability preserved, raw keyboard scans/GS1 parser, SM and LB label review, unchanged product navigation, no writes before confirmation, trade-type filters, existing-stock binding, duplicate/error/stale guards, lost-response reload/retry, readonly/offline, history and 320/390/480/1280px');
+    console.log('PASS: uninterrupted SM/LB/photo scans, single batch confirmation, reviewed rounding limits and live totals, cancel/edit/recheck and immutable outbound weights, separate domestic traceability, no writes before confirmation, GS1 parser, product isolation, trade-type filters, existing-stock binding, duplicate/error/stale guards, lost-response reload/retry, readonly/offline, history and 320/390/480/1280px');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

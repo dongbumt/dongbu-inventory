@@ -5,7 +5,7 @@
   const SESSION='dbmt_pda_session_token',PENDING='dbmt_pda_raw_pending_batch_';
   const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const kg=value=>Number(value||0).toFixed(2);
-  const state={token:'',user:null,epoch:0,mode:'inbound',products:[],partners:[],sources:[],items:[],queue:[],busy:false,saving:false,pending:null,canSave:false,review:null,sourceRequest:0};
+  const state={token:'',user:null,epoch:0,mode:'inbound',products:[],partners:[],sources:[],items:[],queue:[],busy:false,saving:false,pending:null,canSave:false,sourceRequest:0};
   const storage={get(key){try{return sessionStorage.getItem(key)||'';}catch(_){return '';}},set(key,value){sessionStorage.setItem(key,value);},remove(key){try{sessionStorage.removeItem(key);}catch(_){}}};
   const today=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));return `${parts.year}-${parts.month}-${parts.day}`;};
   function uuid(){const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const s=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');return s.slice(0,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16)+'-'+s.slice(16,20)+'-'+s.slice(20);}
@@ -21,7 +21,7 @@
     }catch(error){if(error.name==='AbortError')throw Error('응답 시간이 초과되었습니다.');throw error;}
     finally{clearTimeout(timer);}
   }
-  function focusScan(){if(!state.pending&&!state.saving&&!state.review&&!$('workspace').hidden)$('barcode').focus({preventScroll:true});}
+  function focusScan(){if(!state.pending&&!state.saving&&!document.querySelector('dialog[open]')&&!$('workspace').hidden)$('barcode').focus({preventScroll:true});}
   function selectedProduct(){return state.products.find(p=>String(p.id)===$('product').value);}
   function renderProducts(){
     const selected=$('product').value,q=$('product-search').value.trim().toLowerCase();
@@ -98,20 +98,20 @@
   $('source').addEventListener('change',()=>{const src=state.sources.find(row=>row.id===$('source').value);if(src)$('lot').value=src.lot||'';});
   $('lot').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();focusScan();}});
   $('manual-entry').addEventListener('change',()=>{$('barcode').inputMode=$('manual-entry').checked?'text':'none';focusScan();});
-  function review(item){
-    $('raw-review-message').textContent=`${item.product}\n이력번호 ${item.lot}\n${item.rule} · 계산 ${kg(item.calculatedWeight)}KG`;
-    $('raw-review-code').textContent=item.code.replaceAll(String.fromCharCode(29),'|');$('raw-review-weight').value=kg(item.labelWeight);
-    $('raw-review-weight').readOnly=Number(item.conversion)===1;$('raw-review-checked').checked=false;
-    $('raw-review').showModal();return new Promise(resolve=>{state.review={item,resolve};});
+  function confirmationWeights(){
+    return state.items.map((item,index)=>{
+      const input=$('confirm-items').querySelector(`[data-weight="${index}"]`),weight=input?Number(input.value):item.labelWeight;
+      if(input&&(!Number.isFinite(weight)||weight<=0||weight>1000||Math.abs(weight*100-Math.round(weight*100))>.00001||Math.abs(weight-item.calculatedWeight)>.020001)){
+        const error=Error(`${index+1}번째 박스 중량을 확인해주세요. 계산 ${kg(item.calculatedWeight)}KG과 차이가 0.02KG 이내여야 합니다.`);error.input=input;throw error;
+      }
+      return weight;
+    });
   }
-  function endReview(accepted){const pending=state.review;if(!pending)return;state.review=null;$('raw-review').close();pending.resolve(accepted);}
-  $('raw-review-cancel').addEventListener('click',()=>endReview(false));$('raw-review').addEventListener('cancel',event=>{event.preventDefault();endReview(false);});
-  $('raw-review-add').addEventListener('click',()=>{
-    if(!$('raw-review-checked').checked){status('라벨 대조 완료를 체크해주세요.','error');return;}
-    const item=state.review.item,w=Number($('raw-review-weight').value);
-    if(!Number.isFinite(w)||w<=0||Math.abs(w*100-Math.round(w*100))>.00001||Math.abs(w-item.calculatedWeight)>.020001){status('라벨과 계산 중량이 다릅니다. 원문과 판독형식을 확인해주세요.','error');return;}
-    item.labelWeight=w;endReview(true);
-  });
+  function updateConfirmationSummary(){
+    let total='중량 확인 필요';
+    try{total=`${kg(confirmationWeights().reduce((sum,weight)=>sum+weight,0))} KG`;}catch(_){}
+    $('confirm-summary').textContent=`${$('work-date').value} · ${$('location').value}\n${$('partner').selectedOptions[0]?.textContent||''}\n${state.items.length}박스 · ${total}`;
+  }
   async function scanLoop(){
     if(state.busy)return;state.busy=true;const epoch=state.epoch;render();
     try{while(state.queue.length&&epoch===state.epoch){
@@ -137,13 +137,12 @@
           if($('receive-kind').value==='bind'&&!$('source').value)throw Error('연결할 기존 입고 재고를 선택해주세요.');
         }
         item.labelWeight=Number(item.weight);
-        if(item.requiresReview&&!(await review(item))){sound('error');continue;}
         if(epoch!==state.epoch)return;state.items.push(item);$('settings-panel').open=false;status(`${item.product} · 이력번호 ${item.lot} · ${kg(item.labelWeight)}KG`,'ok');sound('success');
       }catch(error){if(epoch===state.epoch){status(error.message,'error');sound('error');}}
     }}finally{state.busy=false;render();focusScan();}
   }
   function enqueue(value){
-    if(state.pending||state.saving)return;const code=String(value||'').trim();
+    if(state.pending||state.saving||document.querySelector('dialog[open]'))return;const code=String(value||'').trim();
     if(!code){status('원료육 박스 바코드를 읽어주세요.','error');sound('error');return;}
     if(!navigator.onLine){status('인터넷 연결 후 다시 읽어주세요.','error');sound('error');return;}
     $('barcode').value='';state.queue.push(code);scanLoop();
@@ -162,14 +161,21 @@
     if(state.mode==='inbound'&&!$('lot').value.trim()){status('제품 바코드와 별도로 이력번호 바코드를 읽거나 이력번호를 입력해주세요.','error');return;}
     const price=Number($('unit-price').value);if(!Number.isFinite(price)||price<0||price>1000000000){status('입고 단가를 확인해주세요.','error');return;}
     $('confirm-title').textContent=state.mode==='outbound'?'원료육 출고 확정':bind?'기존 재고 연결 · 중량 증가 없음':'원료육 신규 입고 · 재고 증가';
-    $('confirm-summary').textContent=`${$('work-date').value} · ${$('location').value}\n${$('partner').selectedOptions[0]?.textContent||''}\n${$('total').textContent}`;
-    $('confirm-items').innerHTML=state.items.map(item=>`<li>${esc(item.product)} · 이력번호 ${esc(item.lot)} · ${kg(item.labelWeight)}KG<br>${esc(item.rule)}</li>`).join('');
+    $('confirm-items').innerHTML=state.items.map((item,index)=>`<li><div>${esc(item.product)} · 이력번호 ${esc(item.lot)}</div><div class="scan-code">${esc(item.code.replaceAll(String.fromCharCode(29),'|'))}</div><div class="raw-confirm-line">${state.mode==='inbound'&&Number(item.conversion)!==1?`<label>라벨 중량(KG)<input type="number" data-weight="${index}" aria-label="${index+1}번째 박스 라벨 중량" min="0.01" max="1000" step="0.01" inputmode="decimal" value="${kg(item.labelWeight)}"></label><span>계산 ${kg(item.calculatedWeight)}KG<br>${esc(item.rule)}</span>`:`<strong>${kg(item.labelWeight)} KG</strong><span>${esc(item.rule)}</span>`}</div></li>`).join('');
+    updateConfirmationSummary();$('confirm-error').hidden=true;
     $('confirm-checked').checked=false;$('confirm-save').disabled=true;$('confirm-dialog').showModal();
   });
+  $('confirm-items').addEventListener('input',()=>{$('confirm-checked').checked=false;$('confirm-save').disabled=true;$('confirm-error').hidden=true;updateConfirmationSummary();});
   $('confirm-checked').addEventListener('change',()=>{$('confirm-save').disabled=!$('confirm-checked').checked;});
   $('confirm-cancel').addEventListener('click',()=>{$('confirm-dialog').close();focusScan();});
+  $('confirm-dialog').addEventListener('close',focusScan);
   $('confirm-save').addEventListener('click',()=>{
-    if(state.saving||state.pending||!$('confirm-checked').checked)return;$('confirm-dialog').close();
+    if(state.saving||state.pending||!$('confirm-checked').checked)return;
+    let weights;
+    try{weights=confirmationWeights();}
+    catch(error){$('confirm-error').textContent=error.message;$('confirm-error').hidden=false;error.input?.focus();return;}
+    state.items.forEach((item,index)=>{item.labelWeight=weights[index];});
+    $('confirm-dialog').close();
     state.pending={p_token:state.token,p_request_id:uuid(),p_mode:state.mode,p_location:$('location').value,p_trader_id:$('partner').value||null,p_date:$('work-date').value,
       p_items:state.items.map(item=>({barcode:item.code,revision:item.revision,rule:item.ruleKey,labelWeight:item.labelWeight,checked:true})),
       p_product_id:state.mode==='inbound'?$('product').value:null,p_lot:state.mode==='inbound'?$('lot').value.trim():'',

@@ -6,10 +6,10 @@
   <meta name="robots" content="noindex,nofollow">
   <title>동부엠티 ERP · PDA 원료육 입출고</title>
   <link rel="stylesheet" href="styles/pda.css?v=20261013pda1">
-  <link rel="stylesheet" href="styles/pda-kind.css?v=20261021raw1">
+  <link rel="stylesheet" href="styles/pda-kind.css?v=20261026batch1">
   <script src="vendor/gs1-parser/BarcodeParser.min.js?v=9989caa6" defer></script>
   <script src="pda-sound.js?v=20261014sound2" defer></script>
-  <script src="pda-raw.js?v=20261022trace1" defer></script>
+  <script src="pda-raw.js?v=20261026batch1" defer></script>
 </head>
 <body>
   <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><a href="pda.html">제품</a><span aria-current="page">원료육</span></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
@@ -44,8 +44,7 @@
     </section>
   </main>
   <footer id="save-bar" hidden><div><strong id="total">0박스 · 0.00 KG</strong><span id="save-detail"></span></div><button id="save" class="primary" type="button" disabled>입고 확인</button></footer>
-  <dialog id="raw-review"><h2>라벨 중량 확인</h2><div id="raw-review-message"></div><div id="raw-review-code"></div><label>라벨에 표시된 중량(KG)<input id="raw-review-weight" type="number" min="0.01" max="1000" step="0.01" inputmode="decimal"></label><label class="raw-check"><input id="raw-review-checked" type="checkbox">라벨과 품목·이력번호·중량 대조 완료</label><div class="dialog-actions"><button id="raw-review-cancel" type="button">취소</button><button id="raw-review-add" class="primary" type="button">목록 추가</button></div></dialog>
-  <dialog id="confirm-dialog"><h2 id="confirm-title">원료육 입출고 확인</h2><div id="confirm-summary"></div><ul id="confirm-items"></ul><label class="raw-check"><input id="confirm-checked" type="checkbox">라벨과 품목·이력번호·중량 대조 완료</label><div class="dialog-actions"><button id="confirm-cancel" type="button">돌아가기</button><button id="confirm-save" class="primary" type="button" disabled>확정 저장</button></div></dialog>
+  <dialog id="confirm-dialog"><h2 id="confirm-title">원료육 입출고 확인</h2><div id="confirm-summary"></div><ul id="confirm-items"></ul><div id="confirm-error" role="alert" hidden></div><label class="raw-check"><input id="confirm-checked" type="checkbox">전체 라벨과 품목·이력번호·중량 대조 완료</label><div class="dialog-actions"><button id="confirm-cancel" type="button">돌아가기</button><button id="confirm-save" class="primary" type="button" disabled>확정 저장</button></div></dialog>
   <dialog id="history-dialog"><div class="dialog-heading"><h2>원료육 최근 처리이력</h2><button id="history-close" type="button">닫기</button></div><div id="history-list"></div></dialog>
 </body>
 </html>
