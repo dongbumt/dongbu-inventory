@@ -9212,7 +9212,7 @@ function onBulkProductSearch(inp, isInput){
   const q = (inp.value||'').toLowerCase().trim();
   let list = (labelProducts || []).filter(p=>p.isActive !== false);
   if(q) list = list.filter(p =>
-    `${p.productCode||''} ${p.name||''} ${p.brand||''} ${p.factoryNo||''} ${p.nationalPartCode||''} ${nationalPartNameForCode(p.nationalPartCode)} ${p.origin||''} ${p.storage||''} ${p.packunit||''}`.toLowerCase().includes(q)
+    `${p.productCode||''} ${p.name||''} ${p.brand||''} ${p.factoryNo||''} ${p.origin||''} ${p.storage||''} ${p.packunit||''}`.toLowerCase().includes(q)
   );
   list = list.slice(0, 80);
   if(!list.length){
@@ -10805,7 +10805,7 @@ function labelProductPackUnitText(p){
 }
 
 function labelProductSearchText(p){
-  return [p?.productCode, p?.name, p?.brand, p?.factoryNo, p?.nationalPartCode, nationalPartNameForCode(p?.nationalPartCode), p?.grade, p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
+  return [p?.productCode, p?.name, p?.brand, p?.factoryNo, p?.grade, p?.packunit, p?.origin, p?.kind, p?.storage, p?.meattype].join(' ');
 }
 
 function findLabelProductForProduction(name, packunit='', productId=''){

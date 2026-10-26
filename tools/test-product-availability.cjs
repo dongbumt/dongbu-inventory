@@ -31,7 +31,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
       window.requests=[];window.alerts=[];window.failSave=false;
       const toast=()=>{},alert=s=>alerts.push(s),STOCK_LOCATION_DEFAULT='가공장';
       const priceKey=v=>String(v??'').trim().toLowerCase(),samePriceText=(a,b)=>priceKey(a)===priceKey(b),sameOriginText=samePriceText;
-      const normalizeOriginName=v=>v||'',normalizeLabelProductTaxType=v=>v||'면세',nationalPartNameForCode=code=>code==='P01'?'설도':'';
+      const normalizeOriginName=v=>v||'',normalizeLabelProductTaxType=v=>v||'면세',nationalPartNameForCode=code=>({P01:'설도',BF005:'우둔'})[code]||'';
       const usesNationalPartCode=()=>false,isNationalPartCodeForProduct=()=>true,getDefaultShelfDays=()=>365;
       const autoFillLabelProductShelfDays=()=>{},autoFillLabelProductShelfDaysIfBlank=()=>{},refreshLabelProductNationalPartSelect=()=>{},refreshLabelProductSelect=()=>{};
       const invalidateStockMap=()=>{},safeLocalStorageSet=()=>{},saveDataChangeLogsLocal=()=>{},resetDataChangeAppDataBaseline=()=>{},makeAppId=()=> 'new';
@@ -39,7 +39,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
       const bulkOutboundStockOptions=()=>stocks,getTxnStockSearchOptions=()=>stocks;
       const getStockMap=()=>Object.fromEntries(stocks.map(s=>[s.key,s]));
       const sbRpc=async(name,args)=>{requests.push({name,args});if(failSave)throw Error('QA failure');const products=labelProducts.map(p=>p.id===args.p_record.id?structuredClone(args.p_record):p);return {ok:true,products,product:args.p_record};};
-      ${['htmlEscape','labelProductSearchText','labelProductSortValue','labelProductSortMark','labelProductSortHeader','renderLabelProducts','sameLabelProduct','applyLabelProductServerResult','saveLabelProduct','editLabelProduct','resetLabelProductForm','refreshTxnManagedProductControls','getManagedProductNames','getStockOptions','labelProductPackUnitText','findLabelProductForProduction','renderProdOutProductSuggestions','selectProdOutProduct','onBulkProductSearch','bulkProductWrap','bulkInboundProductInputValue'].map(source).join('\n')}
+      ${['htmlEscape','labelProductSearchText','labelProductSortValue','labelProductSortMark','labelProductSortHeader','renderLabelProducts','sameLabelProduct','applyLabelProductServerResult','saveLabelProduct','editLabelProduct','resetLabelProductForm','refreshTxnManagedProductControls','getManagedProductNames','getStockOptions','labelProductPackUnitText','findLabelProductForProduction','renderProdOutProductSuggestions','selectProdOutProduct','onBulkProductSearch','bulkProductWrap','bulkInboundProductInputValue','updateBulkInboundProductMeta'].map(source).join('\n')}
       ${block('let txnProductPickerKind =','function handleManagedProductInputKeydown(')}
       ${source('isStockProductSelectable')}
       let txnStockPickerTargetInput=null;
@@ -116,7 +116,42 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
     assert.equal(await page.locator('#lp-list-wrap tbody tr').count(),2,'Product name remains searchable');
     await page.locator('#lp-search').fill('P01');
     assert.equal(await page.locator('#lp-list-wrap tbody tr').count(),0,'National part code itself is excluded');
+
+    await page.evaluate(()=>{
+      labelProducts.push(
+        {id:'raw-udun',name:'우둔',productCode:'Q100041',brand:'오코너',factoryNo:'F123',grade:'GF',origin:'호주산',storage:'냉동',packunit:'5KG',kind:'원료육'},
+        {id:'raw-chilled-udun',name:'냉장우둔',origin:'국내산',storage:'냉장',kind:'원료육'},
+        {id:'raw-cut-mapped',name:'홍두깨',nationalPartCode:'BF005',origin:'호주산',kind:'원료육'},
+        {id:'raw-cut-literal',name:'홍두깨살',nationalPartCode:'우둔',origin:'호주산',kind:'원료육'},
+        {id:'product-udun',name:'우둔(작업)',origin:'호주산',kind:'제품'},
+        {id:'product-cut-mapped',name:'홍두깨(작업)',nationalPartCode:'BF005',origin:'호주산',kind:'제품'}
+      );
+      openTxnProductPicker('우둔');
+    });
+    const pickerIds=()=>page.evaluate(()=>txnProductPickerRows.map(p=>p.id));
+    assert.deepEqual((await pickerIds()).sort(),['raw-chilled-udun','raw-udun'],'Inbound unified search excludes mapped and literal part codes');
+    assert.doesNotMatch(await page.locator('#tpp-result-body').textContent(),/홍두깨/);
+    for(const query of ['Q100041','오코너','F123','GF']){
+      await page.locator('#tpp-search-all').fill(query);
+      assert.deepEqual(await pickerIds(),['raw-udun'],`Keep normal item metadata searchable: ${query}`);
+    }
+    await page.locator('#tpp-search-all').fill('BF005');
+    assert.deepEqual(await pickerIds(),[],'Do not search the national part code itself');
+    await page.locator('#tpp-search-all').fill('우둔');
+    await page.locator('#tpp-search-brand').selectOption('오코너');
+    assert.deepEqual(await pickerIds(),['raw-udun'],'Brand filter still works');
+    await page.locator('#tpp-kind-product').click();
+    assert.deepEqual(await pickerIds(),['product-udun'],'Product tab also excludes part-code matches');
+    await page.locator('#tpp-kind-raw').click();
+    await page.locator('#tpp-search-name').fill('냉장');
+    assert.deepEqual(await pickerIds(),['raw-chilled-udun'],'Independent product-name filter still works');
+    await page.evaluate(()=>{
+      closeTxnProductPicker(false);
+      const input=document.getElementById('qa-bulk');input.value='우둔';onBulkProductSearch(input,true);
+    });
+    assert.match(await page.locator('.bulk-in-product-results').textContent(),/우둔/);
+    assert.doesNotMatch(await page.locator('.bulk-in-product-results').textContent(),/홍두깨/,'Bulk inbound suggestions use the same exclusion');
     assert.deepEqual(errors,[]);
-    console.log('PASS: product status UI/save/failure/reactivation, master/raw-stock choices, historical selection, keyword search excluding national part codes');
+    console.log('PASS: product status UI/save/failure/reactivation, master/raw-stock choices, historical selection; inbound raw/product popup and bulk suggestions exclude literal/mapped part codes while item codes, names, brands, factory numbers, grades and filters remain searchable');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
