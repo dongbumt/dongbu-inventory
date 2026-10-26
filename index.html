@@ -26,7 +26,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261026docsend1">
+<link rel="stylesheet" href="styles/main.css?v=20261027doccontact1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -2218,13 +2218,14 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
               <th>원산지</th>
               <th>이력번호</th>
               <th>거래처</th>
+              <th style="text-align:center;">연락처 등록</th>
               <th>필수서류</th>
               <th style="text-align:center;">요청 발송</th>
               <th style="text-align:center;">수령</th>
             </tr>
           </thead>
           <tbody id="doc-tbody">
-            <tr><td colspan="9" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
+            <tr><td colspan="10" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -16606,6 +16607,18 @@ function renderDocumentRequestLogs(errorMessage=''){
   }).join('');
 }
 
+function renderDocumentRequestContact(row){
+  const trader=String(row?.trader||'').trim();
+  const info=trader?getTraderInfo(trader):{};
+  const email=String(info.email||'').trim(),fax=String(info.fax||'').trim(),faxAlt=String(info.faxAlt||'').trim();
+  const labels=[];
+  if(email) labels.push('메일');
+  if(fax) labels.push('팩스');
+  else if(faxAlt) labels.push('팩스2');
+  const details=[email?'메일: '+email:'메일 미등록',fax?'팩스: '+fax:'기본 팩스 미등록',faxAlt?'팩스2: '+faxAlt:''].filter(Boolean).join('\n');
+  return `<span class="doc-contact-status${labels.length?'':' is-empty'}" title="${htmlEscape(details)}">${labels.length?labels.join(' · '):'미등록'}</span>`;
+}
+
 function documentRequestDeliveryKey(row){
   const lot=normalizeDocLot(row?.lot);
   if(lot) return 'lot:'+lot;
@@ -16743,7 +16756,7 @@ function renderDocCheck(){
   const tbody = document.getElementById('doc-tbody');
   if(!tbody) return;
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
     updateDocumentRequestButtons();
     return;
   }
@@ -16770,6 +16783,7 @@ function renderDocCheck(){
       <td>${htmlEscape(r.origin||'-')}</td>
       <td style="font-family:monospace;font-size:11px">${htmlEscape(r.lot||'-')}</td>
       <td>${htmlEscape(r.trader||'-')}</td>
+      <td class="doc-contact-cell">${renderDocumentRequestContact(r)}</td>
       <td><span style="font-size:11px;font-weight:700;color:${docColor};
         background:${imported?'#f3e8ff':'#e8f4fd'};padding:2px 8px;border-radius:10px;">
         ${htmlEscape(doc)}</span></td>

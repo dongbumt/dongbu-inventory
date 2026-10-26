@@ -21,7 +21,8 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
    var docChecks={'L003':true},docCheckRowsCache=[],docRequestVisibleRows=[],docRequestSelectedKeys=new Set(),docRequestCapabilities={email:true,fax:true};
    var documentRequestLogs=[],documentRequestLogsLoaded=false,documentRequestLogsToken='',documentRequestDelivery=new Map(),documentRequestDeliveryState='loading',documentRequestDeliveryToken='',documentRequestDeliveryRequest=0;
    const inbound=(product,lot,date='2026-10-26',trader='가상 매입처')=>({type:'입고',product,lot,date,trader,origin:'미국산'});
-   var userTransactions=[inbound('이전 발송 품목','L-001'),inbound('팩스 품목','L-002'),inbound('두 채널 품목','L-003'),inbound('실패 품목','L-004'),inbound('미발송 품목','L-005'),inbound('이력 없는 품목','','2026-10-25'),inbound('이력 없는 품목','','2026-10-24'),inbound('이전 발송 품목 중복','L-001','2026-10-25')];
+   var traderInfoMap={'가상 매입처':{email:'fixture@example.invalid'},'팩스 거래처':{fax:'02-1234-5678'},'모두 거래처':{email:'both@example.invalid',fax:'031-123-4567',faxAlt:'031-123-4568'},'미등록 거래처':{email:'  ',fax:' ',faxAlt:''},'팩스2 거래처':{faxAlt:'032-123-4567'}};
+   var userTransactions=[inbound('이전 발송 품목','L-001'),inbound('팩스 품목','L-002','2026-10-26','팩스 거래처'),inbound('두 채널 품목','L-003','2026-10-26','모두 거래처'),inbound('실패 품목','L-004','2026-10-26','미등록 거래처'),inbound('미발송 품목','L-005','2026-10-26','팩스2 거래처'),inbound('이력 없는 품목','','2026-10-25'),inbound('이력 없는 품목','','2026-10-24'),inbound('이전 발송 품목 중복','L-001','2026-10-25')];
    const receipt=(id,status='sent',created_at='2026-10-26T02:00:00Z',provider_status='')=>({id,created_at,status,provider_status});
    const identity=lot=>({lot});
    var summaries=[{identity:identity('l 001'),channel:'email',latest:receipt('12','failed'),success:receipt('11','sent','2026-09-01T02:00:00Z')},
@@ -38,15 +39,26 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
     if(name==='dbmt_erp_get_document_request_log_detail')return {ok:true,log:{id:args.p_id,channel:'email',status:'sent',subject:'가상 요청',documents:[],content_snapshot:{html:'<p>가상 보낸 내용</p>'}}};
     throw Error('Unexpected RPC: '+name);
    }
-   ${['htmlEscape','jsArg','normalizeDocLot','getDocKey','getLegacyDocKey','getDocKeys','isDocChecked','isImported','getRequiredDoc','updateDocumentRequestButtons','formatDocumentRequestDate','documentRequestLogLots','renderDocumentRequestLogs','documentRequestDeliveryKey','renderDocumentRequestDelivery','loadDocumentRequestDelivery','loadDocumentRequestLogs','refreshDocChecksFromSupabase','renderDocCheck'].map(source).join('\n')}
+   ${['htmlEscape','jsArg','getTraderInfo','normalizeDocLot','getDocKey','getLegacyDocKey','getDocKeys','isDocChecked','isImported','getRequiredDoc','updateDocumentRequestButtons','formatDocumentRequestDate','documentRequestLogLots','renderDocumentRequestLogs','renderDocumentRequestContact','documentRequestDeliveryKey','renderDocumentRequestDelivery','loadDocumentRequestDelivery','loadDocumentRequestLogs','refreshDocChecksFromSupabase','renderDocCheck'].map(source).join('\n')}
    document.getElementById('doc-filter').value='전체';renderDocCheck();
   `});
   await page.addScriptTag({content:fs.readFileSync(path.join(root,'document-request-detail.js'),'utf8')});
-  assert.equal(await page.locator('#doc-tbody').evaluate(el=>el.closest('table').querySelectorAll('thead th').length),9);
+  assert.equal(await page.locator('#doc-tbody').evaluate(el=>el.closest('table').querySelectorAll('thead th').length),10);
   assert.match(await page.locator('#doc-tbody').textContent(),/로그인 확인/);
   await page.evaluate(()=>Promise.all([loadDocumentRequestLogs(true),refreshDocChecksFromSupabase(true)]));
   assert(!(await page.evaluate(()=>requests)).some(r=>r.name==='dbmt_erp_get_all'),'Receipt refresh must not download the full ERP payload');
   const cell=name=>page.locator('#doc-tbody tr').filter({has:page.locator('td:nth-child(3)',{hasText:name})}).first().locator('.doc-delivery-cell');
+  const contact=name=>page.locator('#doc-tbody tr').filter({has:page.locator('td:nth-child(3)',{hasText:name})}).first().locator('.doc-contact-status');
+  assert.equal(await contact('이전 발송 품목').textContent(),'메일');
+  assert.equal(await contact('팩스 품목').textContent(),'팩스');
+  assert.equal(await contact('두 채널 품목').textContent(),'메일 · 팩스');
+  assert.equal(await contact('실패 품목').textContent(),'미등록');
+  assert.equal(await contact('미발송 품목').textContent(),'팩스2');
+  assert.match(await contact('두 채널 품목').getAttribute('title'),/both@example.invalid.*\n팩스: 031-123-4567.*\n팩스2: 031-123-4568/);
+  const callsBeforeContact=await page.evaluate(()=>requests.length);
+  await page.evaluate(()=>{traderInfoMap['가상 매입처'].fax='02-9999-0000';renderDocCheck();});
+  assert.equal(await contact('이전 발송 품목').textContent(),'메일 · 팩스','Registered contacts update from the same trader data');
+  assert.equal(await page.evaluate(()=>requests.length),callsBeforeContact,'Contact indicators must not add server reads or writes');
   assert.equal(await page.locator('#doc-tbody tr').count(),7,'Existing same-LOT checklist grouping remains intact');
   assert.match(await cell('이전 발송 품목').textContent(),/메일 발송.*26\. 09\. 01.*최근 시도 실패/);
   assert.equal(await cell('이전 발송 품목').locator('button').getAttribute('data-doc-request-detail'),'11','Link the successful request even after a failed retry');
@@ -62,7 +74,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
   assert.equal(await page.frameLocator('#document-request-body-frame').locator('p').textContent(),'가상 보낸 내용');
   assert.equal(await page.evaluate(()=>requests.at(-1).args.p_id),'11');await page.locator('[data-detail-close]').first().click();
   await page.locator('#doc-search').fill('미발송 품목');assert.equal(await page.locator('#doc-tbody tr').count(),1);
-  await page.locator('#doc-search').fill('not-a-product');assert.equal(await page.locator('#doc-tbody td').getAttribute('colspan'),'9');
+  await page.locator('#doc-search').fill('not-a-product');assert.equal(await page.locator('#doc-tbody td').getAttribute('colspan'),'10');
   await page.locator('#doc-search').fill('');
   await page.evaluate(()=>{summaryFail=true;});await page.evaluate(()=>loadDocumentRequestLogs(true));
   assert.match(await cell('미발송 품목').textContent(),/조회 실패/);assert.doesNotMatch(await cell('미발송 품목').textContent(),/미발송/);

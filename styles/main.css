@@ -260,6 +260,9 @@
   .doc-delivery-link{padding:2px 7px;border:1px solid #ccd1d6;border-radius:4px;background:#f3f4f5;color:#3e464e;font-size:11px;white-space:nowrap;cursor:pointer;}
   .doc-delivery-item small{font-size:10px;color:#707880;white-space:nowrap;}
   .doc-delivery-empty{font-size:11px;color:#7b838b;white-space:nowrap;}
+  .doc-contact-cell{min-width:94px;text-align:center;}
+  .doc-contact-status{display:inline-block;padding:2px 6px;border:1px solid #d4d8dc;border-radius:4px;background:#f3f4f5;color:#4b535b;font-size:11px;white-space:nowrap;}
+  .doc-contact-status.is-empty{border-color:transparent;background:transparent;color:#7b838b;}
 
   /* ── 거래명세서 ── */
   .invoice-preview{background:#fff;border-radius:10px;
