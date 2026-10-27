@@ -2192,7 +2192,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <option value="국내산">국내산만</option>
             <option value="수입산">수입산만</option>
           </select>
-          <input id="doc-search" placeholder="품목/이력번호 검색..." oninput="renderDocCheck()"
+          <input id="doc-search" placeholder="품목/이력번호/업체명 검색" oninput="renderDocCheck()"
             style="width:180px;font-size:12px;">
         </div>
         <div class="doc-request-actions">
@@ -16707,7 +16707,7 @@ function renderDocCheck(){
   const originFilterEl = document.getElementById('doc-origin-filter');
   const originFilter = originFilterEl ? originFilterEl.value : '';
   const searchEl = document.getElementById('doc-search');
-  const q = searchEl ? searchEl.value.toLowerCase() : '';
+  const q = String(searchEl?.value || '').trim().toLowerCase();
 
   const inbounds = userTransactions.filter(t=>t.type==='입고');
   inbounds.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
@@ -16750,7 +16750,7 @@ function renderDocCheck(){
   let filtered = originRows;
   if(filter==='미수령') filtered = originRows.filter(r=>!isDocChecked(r));
   else if(filter==='수령완료') filtered = originRows.filter(r=>isDocChecked(r));
-  if(q) filtered = filtered.filter(r=>(r.product+r.origin+r.lot+r.date).toLowerCase().includes(q));
+  if(q) filtered = filtered.filter(r=>[r.product,r.origin,r.lot,r.date,r.trader].some(value=>String(value||'').toLowerCase().includes(q)));
   docRequestVisibleRows = filtered.filter(row=>!isDocChecked(row));
 
   const tbody = document.getElementById('doc-tbody');
