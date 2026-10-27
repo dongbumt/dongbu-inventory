@@ -116,6 +116,7 @@
     updateSubMaterialCountPreview:['submaterials','create','uiOnly'],
 
     savePrice:['prices','write'],
+    saveOutboundPrices:['prices','write'],
     editPrice:['prices','update'],
     deletePrice:['prices','delete'],
     doImport:['import','create'],
