@@ -21,7 +21,7 @@
 .spec-sort-indicator{display:inline-block;min-width:10px;font-size:10px;color:#777;text-align:center;}
 .spec-table th:nth-child(4){width:68px;}
 .spec-table th:nth-child(8),.spec-table th:nth-child(9){width:104px;}
-.spec-table th:last-child{width:120px;text-align:right;}
+.spec-table th:last-child{width:160px;text-align:right;}
 .spec-table th,.spec-table td{padding:9px 6px;border-bottom:1px solid #e4e6e8;vertical-align:top;overflow-wrap:anywhere;}
 .spec-table td{white-space:pre-wrap;}
 .spec-table .spec-money{text-align:right;white-space:nowrap;}

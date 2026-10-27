@@ -78,7 +78,7 @@
       <td>${esc(row.trader)}</td><td>${esc(row.distribution)}</td><td>${esc(row.material)}</td><td>${esc(row.origin)}</td>
       <td>${esc(row.cutting_spec)}</td><td>${esc(row.inner_packaging_spec??row.packaging_spec)}</td><td>${esc(row.outer_packaging_spec)}</td>
       <td class="spec-money">${money(row.price_kg)}</td><td class="spec-money">${money(row.price_box)}</td><td>${esc(row.note)}</td>
-      <td>${can('update')?`<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${esc(row.id)}">수정</button>`:''}${can('delete')?`<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(row.id)}">삭제</button>`:''}</td>
+      <td>${can('create')?`<button type="button" class="btn btn-secondary btn-sm" data-action="copy" data-id="${esc(row.id)}">복사</button>`:''}${can('update')?`<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${esc(row.id)}">수정</button>`:''}${can('delete')?`<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(row.id)}">삭제</button>`:''}</td>
     </tr>`).join(''):`<tr><td colspan="11" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
   }
   async function load(){
@@ -115,6 +115,16 @@
     const number=Number(value);
     if(!Number.isFinite(number)||number<0||number>999999999||Math.abs(number*100-Math.round(number*100))>0.000001)throw new Error('단가는 0 이상, 소수 둘째 자리까지 입력해주세요.');
     return number;
+  }
+  function copy(id){
+    if(state.saving||state.loading||!can('create'))return;
+    const row=state.rows.find(item=>item.id===id);
+    if(!row)return;
+    state.editing=null;
+    fields.forEach(key=>{el(inputs[key]).value=key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');});
+    setDistribution(row.distribution);
+    syncControls();message('스펙을 입력칸에 복사했습니다. 내용을 수정한 후 새 스펙으로 등록하세요.');
+    el('editor').scrollIntoView({block:'nearest',behavior:'smooth'});el('trader').focus();
   }
   async function save(){
     if(state.saving||state.loading||!can(state.editing?'update':'create'))return;
@@ -159,6 +169,7 @@
     const button=event.target.closest('button[data-action]');
     if(!button)return;
     if(button.dataset.action==='edit')edit(button.dataset.id);
+    else if(button.dataset.action==='copy')copy(button.dataset.id);
     else if(button.dataset.action==='delete')remove(button.dataset.id);
   });
   el('search').addEventListener('input',render);
