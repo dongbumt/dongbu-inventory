@@ -12,7 +12,8 @@ const server=http.createServer((req,res)=>{
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
     const context=await browser.newContext({viewport:{width:1280,height:900}}),page=await context.newPage(),errors=[];
-    await context.route('https://**/*',r=>r.abort());
+    const innerFixture=require('./label-inner-test-fixture.cjs')();
+    await context.route('https://**/*',async r=>{if(!(await innerFixture(r)))await r.abort();});
     await context.addInitScript(()=>{
       if(parent===window){
         window.__full=null;window.__requests=0;window.__deny=false;window.__prints=0;window.__mode='exit';window.__waiting=null;
@@ -48,7 +49,7 @@ const server=http.createServer((req,res)=>{
       await page.setViewportSize({width,height});
       assert.deepEqual(await summaryClipped(),[],`Full product/scale/metrics at ${width}x${height}`);
       assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),`No horizontal page overflow at ${width}x${height}`);
-      const clipped=await page.evaluate(()=>[...document.querySelectorAll('.touch-pack button,.pack-fields small,.calc-keys button')].filter(el=>{
+      const clipped=await page.evaluate(()=>[...document.querySelectorAll('.touch-pack button,.pack-fields small,.calc-keys button')].filter(el=>el.getClientRects().length).filter(el=>{
         const b=el.getBoundingClientRect(),p=el.closest('.panel').getBoundingClientRect();return b.bottom>p.bottom+1||b.top<p.top-1;
       }).map(el=>el.id||el.textContent));
       assert.deepEqual(clipped,[],`Touch controls fit panels at ${width}x${height}`);
@@ -86,7 +87,8 @@ const server=http.createServer((req,res)=>{
     // Also exercise the real browser Fullscreen API, without invoking native
     // printing or hardware. Exit is simulated by the mock print function only.
     const native=await browser.newContext({viewport:{width:1280,height:900}}),nativePage=await native.newPage(),nativeErrors=[];
-    await native.route('https://**/*',r=>r.abort());
+    const nativeInnerFixture=require('./label-inner-test-fixture.cjs')();
+    await native.route('https://**/*',async r=>{if(!(await nativeInnerFixture(r)))await r.abort();});
     await native.addInitScript(()=>{
       window.print=()=>{
         if(parent===window)throw new Error('No operator page printing');

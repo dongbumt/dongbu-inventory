@@ -13,9 +13,11 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}}),page=await context.newPage(),errors=[];
     let saves=0,completeIds=[],fail=false,logs=[],done=false,cancelled=false,cancelMode='',cancelCalls=0,generation=1;
-    const order={id:'a',title:'돈등심 작업',product:'돈등심(작업)',date:'2026-09-15',mfgdate:'2026-09-15',expdate:'2027-09-14',lot:'903112100182',origin:'미국산',inputWeight:100,weight:20};
+    const order={id:'a',title:'돈등심 작업',product:'돈등심(작업)',date:'2026-09-15',mfgdate:'2026-09-15',expdate:'2027-09-14',lot:'903112100182',origin:'미국산',inputWeight:100,weight:20,sourceStock:{key:'qa-raw',product:'원료',lot:'903112100182',price:5000}};
     const completion=()=>done?[{workOrderId:'a',productionId:'qa-production-'+generation,date:'2026-09-15',jobNo:String(generation),deleted:cancelled}]:[];
+    const innerFixture=require('./label-inner-test-fixture.cjs')();
     await context.route('https://**/*',async route=>{
+      if(await innerFixture(route))return;
       const name=route.request().url().split('/').pop(),body=route.request().postDataJSON();let result={};
       if(name==='dbmt_label_print_get_data')result={appData:{workOrders:[order,{...order,id:'b',product:'LA갈비(작업)',title:'LA갈비 작업',lot:'OTHER-LOT',weight:5},{...order,id:'c'},{...order,id:'d'}],labelProducts:[],labelPrintLogs:logs},completions:completion()};
       else if(name==='dbmt_label_print_save_logs'){

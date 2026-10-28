@@ -23,7 +23,9 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     let products=[{...p1,id:'p0',name:order.product},p1,p2,{...p1,id:'belly-1',name:'냉장삼겹살',brand:'가상 브랜드 A'},{...p1,id:'belly-2',name:'삼겹살(작업)',brand:'가상 브랜드 B'},...Array.from({length:15},(_,i)=>({...p1,id:'extra-'+i,name:'추가 품목 '+i}))];
     let logs=[],saves=0,done=false,fail=false;
     const completions=()=>done?[{workOrderId:order.id,productionId:'prod-qa',deleted:false}]:[];
+    const innerFixture=require('./label-inner-test-fixture.cjs')();
     await context.route('https://**/*',async route=>{
+      if(await innerFixture(route))return;
       const name=route.request().url().split('/').pop(),body=route.request().postDataJSON();let data={};
       if(name==='dbmt_label_print_get_data')data={appData:{workOrders:[order,{...order,id:'wo-b',lot:'OTHER-LOT'}],labelProducts:products,labelPrintLogs:logs},completions:completions()};
       if(name==='dbmt_label_print_save_logs'){

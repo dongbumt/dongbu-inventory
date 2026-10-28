@@ -394,6 +394,7 @@
     }
   </style>
   <link rel="stylesheet" href="label-touch.css?v=20260928history1">
+  <link rel="stylesheet" href="label-lot-ui.css?v=20261029lots1">
 </head>
 <body>
   <header class="topbar">
@@ -706,6 +707,7 @@
         const exists = state.workOrders.some(row => String(row.id) === String(state.selectedId));
         state.selectedId = exists ? state.selectedId : (visibleRows[0]?.id || '');
         renderAll();
+        void window.DBMTLabelLotUI?.refresh();
         setStatus(`연결됨: 작업지시 ${state.workOrders.length}건, 출력이력 ${state.logs.length}건`, 'ok');
       } catch(err) {
         setStatus(`연결 실패: ${err.message || err}`, 'err');
@@ -1066,14 +1068,17 @@
       if(!count){ setStatus('출력 매수는 1~500 사이의 정수로 입력하세요.', 'warn'); return; }
       const batchId = `LPB-${compactDateTime()}-${hashText(`${row.id}-${Date.now()}`).slice(0, 5)}`;
       const records = Array.from({length: count}, (_, index) => makePrintLog(printRow, batchId, index + 1));
-      // Inner packaging is intentionally never submitted to labelPrintLogs.
-      // Thus all saved logs (including legacy ones) remain outer production.
+      // Inner labels have their own ledger. Only outer logs enter production.
       if(kind==='inner'){
         setLoading(true);
+        let saved=false;
         try {
-          await writePrintDocument(null, records.map(log=>({...log,untrackedLabel:true})), size);
+          if(!window.DBMTLabelLotUI)throw new Error('내포장 집계 기능을 불러오지 못했습니다. 새로고침해주세요.');
+          const innerRecords=records.map(log=>({...log,id:'inner_'+log.id,code:log.code.replace(/^DB/,'IN'),packageKind:'inner'}));
+          await DBMTLabelLotUI.saveInner(innerRecords);saved=true;
+          await writePrintDocument(null, innerRecords.map(log=>({...log,untrackedLabel:true})), size);
           setStatus(`내포장 ${count}장 출력 요청${weightOmitted?' · 중량 미표기':''} · 생산이력·재고에는 반영하지 않습니다. 실제 출력을 확인해주세요.`, 'ok');
-        } catch(err){ setStatus(`내포장 인쇄 확인 필요: ${err.message || err} 실제 출력 여부를 먼저 확인해주세요.`, 'err'); }
+        } catch(err){ setStatus(`${saved?'내포장 이력은 저장됐습니다. 인쇄 확인 필요':'내포장 출력 저장 실패'}: ${err.message || err}${saved?' 실제 출력 여부를 확인한 뒤 내포장 이력에서 재출력해주세요.':''}`, 'err'); }
         finally { setLoading(false); }
         return;
       }
@@ -1255,6 +1260,7 @@
     function snapshotOrder(row){
       return {
         ...(row.productSelectionVersion===1?{productSelectionVersion:1}:{}),
+        ...(row.outputLotSelectionVersion===1?{outputLotSelectionVersion:1,outputLots:row.outputLots,defaultOutputLot:row.defaultOutputLot}:{}),
         id: row.id || '',
         date: row.date || '',
         title: row.title || '',
@@ -1400,6 +1406,8 @@
   <script src="label-scale.js?v=20260915touch1"></script>
   <script src="label-product-selection.js?v=20261023ingredients1"></script>
   <script src="label-fullscreen.js?v=20260916touch4"></script>
-  <script src="label-touch.js?v=20261020brand1"></script>
+  <script src="label-lots.js?v=20261029lots1"></script>
+  <script src="label-lot-ui.js?v=20261029lots1"></script>
+  <script src="label-touch.js?v=20261029lots1"></script>
 </body>
 </html>

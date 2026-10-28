@@ -14,10 +14,11 @@
   function printOrder(){
     const row=selectedOrder(),id=chosenProduct(),product=id&&registeredProduct(id);
     if(id&&!product)return null;
-    try{return DBMTLabelProducts.compose(row,product||null);}catch(e){return null;}
+    try{const composed=DBMTLabelProducts.compose(row,product||null);return window.DBMTLabelLotUI?DBMTLabelLotUI.apply(composed):composed;}catch(e){return null;}
   }
   function productError(){
     if(!selectedOrder())return '';
+    if(window.DBMTLabelLotUI?.error(selectedOrder()))return DBMTLabelLotUI.error(selectedOrder());
     if(chosenProduct()&&!registeredProduct(chosenProduct()))return '선택했던 생산품목이 삭제되었습니다. 생산품목 변경에서 다시 선택하세요.';
     try{DBMTLabelProducts.compose(selectedOrder(),registeredProduct(chosenProduct())||null);return '';}catch(e){return e.message;}
   }
@@ -113,14 +114,15 @@
     byId('outer-total').textContent=byId('active-count').textContent;
     byId('metric-label-weight').textContent=weight('outer')?kg(weight('outer')):'—';
     byId('selected-name').textContent=selectionError?'생산품목 확인 필요':effective?.product||'작업지시를 선택하세요';
-    byId('selected-meta').textContent=selectionError|| (row?`${productDetail(effective||row)} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'연결 후 작업지시를 선택하세요.');
+    byId('selected-meta').textContent=selectionError|| (row?`${productDetail(effective||row)} · LOT ${effective?.lot||row.lot||row.sourceStock?.lot||'-'}`:'연결 후 작업지시를 선택하세요.');
     byId('product-open').disabled=state.loading||!row||!state.pin;
     byId('product-totals-open').disabled=state.loading||!row;
     byId('work-order-open').disabled=state.loading||!state.pin;
     byId('current-work-title').textContent=row?(row.title||row.product):'작업지시를 선택하세요';
-    byId('current-work-meta').textContent=row?`${row.date||''} · LOT ${row.lot||row.sourceStock?.lot||'-'}`:'먼저 PIN으로 연결하세요.';
+    byId('current-work-meta').textContent=row?`${row.date||''} · LOT ${effective?.lot||row.lot||row.sourceStock?.lot||'-'}`:'먼저 PIN으로 연결하세요.';
     const completed=row&&completionFor(row.id);
     byId('current-work-state').textContent=row?._carryoverTo?`잔량 이월 완료 · ${row._carryoverTo.date}`:completed?'생산일보 전송 완료':row&&completionRecordFor(row.id)?.deleted?'전송 취소 · 수정 가능':row?'라벨 출력 중':'연결 대기';
+    window.DBMTLabelLotUI?.sync(row);
     byId('cancel-transfer-open').hidden=!completed;
     byId('cancel-transfer-open').disabled=state.loading||!completed||!!row?._carryoverTo;
     byId('complete-production-btn').hidden=!!completed;

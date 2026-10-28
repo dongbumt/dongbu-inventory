@@ -152,7 +152,8 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
     assert.equal(await page.locator('.wo-source-row').count(),2);
     assert.equal(await page.locator('#wo-lot').inputValue(),'','Different source LOTs must not silently reuse the first LOT');
     await page.locator('.wo-source-row:nth-child(2) .wo-input-weight').fill('20');
-    await page.locator('#wo-lot').fill('MIX-LOT');
+    // Legacy common-LOT compatibility fixture; the new selector is tested separately.
+    await page.evaluate(()=>document.getElementById('wo-lot').value='MIX-LOT');
     await page.locator('.wo-source-row:nth-child(2) .wo-input-box-count').fill('');
     assert.equal((await page.evaluate(()=>collectWorkOrderForm())).inputBoxCount,null,'A mixed known/unknown input total stays unrecorded');
     await page.locator('.wo-source-row:nth-child(2) .wo-input-box-count').fill('3');
@@ -180,7 +181,9 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
         setTimeout(()=>window.dispatchEvent(new Event('afterprint')),0);
       }
     };});
+    const innerFixture=require('./label-inner-test-fixture.cjs')();
     await context.route('https://**/*',async route=>{
+      if(await innerFixture(route))return;
       if(route.request().url().endsWith('/dbmt_label_print_save_logs')){
         if(failSave){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"mock save failure"}'});return;}
         saved.push(route.request().postDataJSON());await route.fulfill({contentType:'application/json',body:'{"ok":true}'});return;

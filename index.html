@@ -8,6 +8,8 @@
 <script src="pda-transaction-summary.js?v=20261021raw1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
+<script src="label-lots.js?v=20261029lots1"></script>
+<link rel="stylesheet" href="styles/work-order-output-lots.css?v=20261029lots1">
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
 <script src="label-layout.js?v=20261023spacing1"></script>
 <script src="label-print-document.js?v=20261013inset2"></script>
@@ -3772,13 +3774,13 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
      작업지시
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-workorders">
-  <div style="display:grid;grid-template-columns:minmax(360px,1fr) minmax(420px,1.2fr);gap:16px;align-items:start;">
+  <div class="work-order-layout">
     <div class="card" id="wo-editor">
       <div class="card-title"><div class="ct-bar" style="background:#6c3483;"></div>📝 작업지시 등록 / 수정</div>
       <div id="wo-carry-note" style="font-size:11px;color:#666;margin-bottom:6px;"></div>
       <input type="hidden" id="wo-edit-id">
 
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px;">
+      <div class="work-order-fields">
         <div class="form-group">
           <label>작업일</label>
           <input id="wo-date" type="date" onchange="onWorkOrderDateChange()">
@@ -3794,7 +3796,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <button id="wo-add-source" type="button" class="btn btn-secondary btn-sm" onclick="addWorkOrderSourceRow()">+ 원료육 추가</button>
             <span id="wo-input-total" style="font-size:12px;color:#555;">투입량 합계 0.00 KG</span>
           </div>
-          <div style="font-size:11px;color:#777;margin-top:5px;">재고를 선택하면 현재 중량과 박스수가 입력됩니다. 실제 투입량으로 수정할 수 있으며, 여러 LOT를 섞는 경우 생산물 이력번호를 확인해주세요.</div>
+          <div class="work-order-source-help">재고를 선택하면 중량·박스수가 입력됩니다. 실제 투입량으로 수정해주세요.</div>
         </div>
         <div class="form-group">
           <label>라벨 크기</label>
@@ -3843,9 +3845,13 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <label>품목보고번호</label>
           <input id="wo-itemno" placeholder="제2025-0293093호" oninput="refreshWorkOrderPreview()">
         </div>
-        <div class="form-group">
-          <label>이력번호</label>
-          <input id="wo-lot" placeholder="원료 선택 시 자동입력" oninput="this.dataset.autoSourceLot='';refreshWorkOrderPreview()">
+        <div class="wo-output-lot-group">
+          <input id="wo-lot" type="hidden">
+          <div class="wo-output-lot-heading"><strong>제품 라벨 이력번호</strong><span id="wo-output-lot-count">0 / 최대 3개</span></div>
+          <div class="wo-output-lot-head"><span>순서</span><span>출력에 사용할 이력번호</span><span>투입 KG</span><span>기본</span><span></span></div>
+          <div id="wo-output-lots"></div>
+          <button id="wo-output-lot-add" type="button" class="btn btn-secondary btn-sm" style="margin-top:4px">+ 이력번호 추가</button>
+          <div class="wo-output-lot-help">최대 3개 선택 · 기본: 라벨 화면을 열 때 처음 선택할 번호</div>
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label>원료 및 함량</label>
@@ -21056,7 +21062,7 @@ function renderWorkOrders(){
     <tbody>${rows.map(r => `
       <tr data-work-order-id="${htmlEscape(r.id)}">
         <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div>${window.DBMTWorkOrderCarryover?.relationHtml(r)||''}</td>
-        <td>${htmlEscape(r.lot || '')}</td>
+        <td>${(r.outputLotSelectionVersion===1?r.outputLots:[r.lot||'']).map(lot=>htmlEscape(lot)).join('<br>')}</td>
         <td>${workOrderSourceInputs(r).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${boxCountDisplay(source.boxCount,'') ? boxCountDisplay(source.boxCount)+'박스 · ' : ''}${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
         <td style="text-align:right;white-space:nowrap;">${r.inputWeight == null || r.inputWeight === '' ? '-' : parseAppNumber(r.inputWeight).toFixed(2)+' KG'}${totalRecordedBoxes(workOrderSourceInputs(r))===null?'':'<br><small>'+boxCountDisplay(totalRecordedBoxes(workOrderSourceInputs(r)))+' 박스</small>'}</td>
         <td style="white-space:nowrap;">
@@ -22011,6 +22017,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261017split1"></script>
 <script src="work-orders-sync.js?v=20261020manual1"></script>
+<script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="manual-label.js?v=20261023ingredients1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>
