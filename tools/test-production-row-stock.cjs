@@ -351,6 +351,56 @@ async function testProductionGuards(page) {
   console.log('PASS: production edits allow safe quantity corrections and note changes while guarding consumed stock, identity changes, row deletion and duplicate IDs');
 }
 
+async function testProductionLabelLotCorrections(page) {
+  await page.evaluate(common=>{
+    window.lotSavedState={entries:userProdEntries,txns:userTransactions};
+    userProdEntries=[{id:'qa-label-lots',date:'2026/09/13',job_no:'3',job_type:'생산',note:'라벨 분할',inputs:[],
+      _labelCompletion:{workOrderId:'qa-order'},outputs:[
+        {...common,stockRowId:'lot-first',productId:'qa-product',labelProductId:'qa-product',qty:40,boxCount:2,amount:240000,note:'거래처 A'},
+        {...common,stockRowId:'lot-second',productId:'qa-product',labelProductId:'qa-product',qty:60,boxCount:3,amount:360000,note:'거래처 B'}]}];
+    userTransactions=[]; invalidateStockMap();
+    openEditProdEntry('qa-label-lots');
+    window.lotConfirmations=[]; window.lotAccept=false;
+    window.confirm=message=>{lotConfirmations.push(message);return lotAccept;};
+  },common);
+  const calls=await page.evaluate(()=>saveCalls.length);
+  assert.match(await page.locator('#prod-label-notice').innerText(),/이력번호는 수정/);
+  await page.locator('#prod-out-lot-1').fill('LOT-CORRECTED-A');
+  await page.locator('#prod-out-lot-2').fill('LOT-CORRECTED-B');
+  await page.evaluate(()=>saveProdEntry());
+  assert.equal(await page.evaluate(()=>saveCalls.length),calls,'Cancelling confirmation must not submit or modify saved rows');
+  assert.equal(await page.evaluate(()=>_editProdId),'qa-label-lots');
+  assert.equal(await page.evaluate(()=>userProdEntries[0].outputs[0].lot),common.lot);
+  assert.equal(await page.locator('#prod-out-lot-1').inputValue(),'LOT-CORRECTED-A','Cancellation retains the draft');
+  const message=await page.evaluate(()=>lotConfirmations[0]);
+  assert.match(message,/강제 수정/); assert.match(message,/거래처 A/); assert.match(message,/거래처 B/);
+  assert.match(message,/고유바코드는 유지/); assert.match(message,/재출력 내용은 바뀌지/);
+  await page.locator('#prod-out-lot-1').fill('');
+  await page.evaluate(()=>saveProdEntry());
+  assert.equal(await page.evaluate(()=>saveCalls.length),calls);
+  assert.match(await page.evaluate(()=>notices.at(-1)),/1~100자/);
+  await page.locator('#prod-out-lot-1').fill('LOT-CORRECTED-A');
+  await page.evaluate(()=>{window.lotAccept=true;});
+  await page.evaluate(()=>saveProdEntry());
+  const saved=await page.evaluate(()=>saveCalls.at(-1));
+  assert.deepEqual(saved.entry._labelLotCorrections,[
+    {stockRowId:'lot-first',fromLot:common.lot,toLot:'LOT-CORRECTED-A'},
+    {stockRowId:'lot-second',fromLot:common.lot,toLot:'LOT-CORRECTED-B'}]);
+  assert.deepEqual(saved.entry.outputs.map(o=>[o.stockRowId,o.qty,o.boxCount]),[['lot-first',40,2],['lot-second',60,3]]);
+  assert.deepEqual(saved.rows.map(t=>t.lot),['LOT-CORRECTED-A','LOT-CORRECTED-B']);
+  const stock=await page.evaluate(()=>Object.values(getStockMap()).map(s=>[s.stockRowId,s.lot,s.stock,s.stockBoxes]).sort());
+  assert.deepEqual(stock,[['lot-first','LOT-CORRECTED-A',40,2],['lot-second','LOT-CORRECTED-B',60,3]]);
+  await page.evaluate(()=>{
+    const entry=userProdEntries[0];
+    window.workOrders=[{sourceInputs:[{sourceStock:{stockRowId:'lot-first'},inputWeight:1}]}];
+    window.linkedLotError=validateProductionStockRowChanges(entry,{...entry,outputs:entry.outputs.map((o,i)=>i===0?{...o,lot:'OTHER'}:o)});
+    window.workOrders=[];
+    userProdEntries=lotSavedState.entries;userTransactions=lotSavedState.txns;invalidateStockMap();window.confirm=()=>true;
+  });
+  assert.match(await page.evaluate(()=>linkedLotError),/변경할 수 없습니다/);
+  console.log('PASS: actual label LOT editor, multi-row confirmation/cancel, blank rejection, preserved draft/stock IDs/kg/boxes, corrected postings and multi-input work-order guard');
+}
+
 async function testBrowser() {
   const {chromium} = require('playwright');
   const executablePath = process.env.CHROME_PATH || [chromium.executablePath(), 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'].find(candidate => fs.existsSync(candidate));
@@ -465,6 +515,7 @@ async function testBrowser() {
     assert.equal(legacySaved.outputs[0].stockRowId || '', '');
     assert.deepEqual(legacySaved.outputs[0].samsung, legacyMeta, 'Removing Samsung controls must preserve historical metadata');
     await testProductionGuards(page);
+    await testProductionLabelLotCorrections(page);
     await testTransactionFlows(page, artifacts);
     assert.deepEqual(errors, []);
     console.log('PASS: real production DOM, automatic IDs, row notes, save/reopen/reorder, outbound history retention, reuse linkage, legacy metadata preservation and Samsung controls removal');

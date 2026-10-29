@@ -1130,7 +1130,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="ct-bar" style="background:var(--orange);"></div>
       새 생산일보 입력
     </div>
-    <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 수정 가능한 항목을 저장하면 변경된 내용으로 재고에 반영되며, 기존 라벨 출력이력은 유지됩니다. 라벨 분할된 생산품의 품목·중량·박스수는 직접 변경할 수 없습니다. 추가 분할은 라벨 분할 버튼을 이용하세요.</div>
+    <div id="prod-label-notice" hidden style="padding:12px;margin-bottom:12px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#444;">라벨 생산완료로 등록된 일보입니다. 이력번호는 수정 후 저장할 때 변경 내용을 확인하여 정정할 수 있습니다. 기존 고유바코드는 수정된 재고에 연결되며, 이미 인쇄된 라벨과 재출력 내용은 유지됩니다. 출고·재투입·작업지시·PDA 처리 내역이 연결된 경우에는 먼저 해당 내역을 확인해주세요. 라벨 분할된 생산품의 품목·중량·박스수는 직접 변경할 수 없습니다. 추가 분할은 라벨 분할 버튼을 이용하세요.</div>
 
     <div class="form-row">
       <div class="form-group"><label>작업일</label><input type="date" id="prod-date" onchange="autoSetJobNo()"></div>
@@ -6094,6 +6094,7 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
     p_replace_id:deletedProdId ? String(deletedProdId) : null
   });
   assertPersonalServerResult(result, '생산일보를 저장할 권한이 없습니다.');
+  if(entry) delete entry._labelLotCorrections;
   if(result.entry && Array.isArray(result.transactionRows)){
     Object.assign(entry, result.entry);
     userProdEntries = userProdEntries.filter(e=>String(e.id)!==String(entry.id));
@@ -10463,6 +10464,32 @@ function productionOutputStockIdentity(output, entry){
   ]);
 }
 
+function productionLabelLotCorrections(previous, next){
+  if(!previous?._labelCompletion) return [];
+  const previousRows = new Map((previous.outputs || []).map(row=>[String(row.stockRowId || ''), row]));
+  return (next?.outputs || []).flatMap(row=>{
+    const id = String(row.stockRowId || ''), before = previousRows.get(id);
+    const fromLot = String(before?.lot || ''), toLot = String(row.lot || '').trim();
+    return id && before && fromLot !== toLot ? [{stockRowId:id, fromLot, toLot}] : [];
+  });
+}
+
+function confirmProductionLabelLotCorrections(previous, next){
+  const changes = productionLabelLotCorrections(previous, next);
+  if(!changes.length) return true;
+  if(changes.some(change=>!change.toLot || change.toLot.length>100)){
+    alert('정정할 이력번호는 1~100자로 입력해주세요.');
+    return false;
+  }
+  const summary = changes.map(change=>{
+    const row = next.outputs.find(row=>String(row.stockRowId || '')===change.stockRowId);
+    return `${row.product}${row.note ? ' / '+row.note : ''}: ${change.fromLot || '(공란)'} → ${change.toLot}`;
+  }).join('\n');
+  if(!confirm(`라벨 생산품의 이력번호를 강제 수정하시겠습니까?\n\n${summary}\n\n생산일보와 연결 재고에 반영되며 기존 고유바코드는 유지됩니다.\n이미 인쇄된 라벨과 재출력 내용은 바뀌지 않습니다.\n변경 전후 이력번호는 수정 이력에 기록됩니다.`)) return false;
+  next._labelLotCorrections = changes;
+  return true;
+}
+
 function validateProductionStockRowChanges(previous, next){
   const nextOutputs = next?.outputs || [];
   const nextById = new Map();
@@ -10476,7 +10503,9 @@ function validateProductionStockRowChanges(previous, next){
   for(const output of previous.outputs || []){
     const rowId = String(output.stockRowId || '');
     if(!rowId) continue;
-    const linkedOrders = typeof workOrders !== 'undefined' ? workOrders.filter(order=>String(order.sourceStock?.stockRowId || '') === rowId) : [];
+    const linkedOrders = typeof workOrders !== 'undefined' ? workOrders.filter(order=>
+      (Array.isArray(order.sourceInputs) && order.sourceInputs.length ? order.sourceInputs : [{sourceStock:order.sourceStock}])
+        .some(source=>String(source.sourceStock?.stockRowId || '') === rowId)) : [];
     const linked = linkedOrders.length || userTransactions.some(txn=>String(txn.stockRowId || '') === rowId &&
       String(txn._prodId || '') !== String(previous.id) && ['출고','사용','재고이동','재고조정'].includes(txn.type));
     if(!linked) continue;
@@ -11035,6 +11064,7 @@ async function saveProdEntry(){
   const previousEntry = userProdEntries.find(e=>String(e.id)===String(editingProdId)) || null;
   const rowError = validateProductionStockRowChanges(previousEntry, entry) || validateProductionStockInputs(inputs, previousEntry, outputs);
   if(rowError){ alert(rowError); return; }
+  if(!confirmProductionLabelLotCorrections(previousEntry, entry)) return;
 
   // 수정 모드: 기존 항목과 관련 트랜잭션 삭제 후 교체
   let deletedProdId = null;

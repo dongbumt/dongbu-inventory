@@ -15,7 +15,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 
-def fixture_tests(conn):
+def fixture_tests(conn, verify_lot_correction=False):
     suffix = uuid.uuid4().hex[:12]
     uid = lambda kind: 'qa_split_' + suffix + '_' + kind
     pin = '0927'  # Rollback-contained fictional PIN, never an operator credential.
@@ -190,6 +190,92 @@ def fixture_tests(conn):
     assert {r['id'] for r in get(first)['labels']} == {logs[0]['id'], logs[1]['id']}
     assert {r['id'] for r in get(remaining)['labels']} == {l['id'] for l in logs[2:]}
 
+    if verify_lot_correction:
+        with conn.transaction(force_rollback=True):
+            def corrected(value, row_id=first, new_lot='QA-CORRECTED'):
+                candidate = copy.deepcopy(value)
+                target = next(o for o in candidate['outputs'] if o['stockRowId'] == row_id)
+                candidate['_labelLotCorrections'] = [dict(stockRowId=row_id, fromLot=target.get('lot', ''), toLot=new_lot)]
+                target['lot'] = new_lot
+                return candidate
+
+            def save_lot(value, session=token):
+                return rpc('dbmt_erp_save_production', session, value, [], pid)
+
+            candidate = corrected(after)
+            baseline_bindings = conn.execute('select jsonb_agg(to_jsonb(a) order by label_id) from public.label_stock_assignments a where production_id=%s', (pid,)).fetchone()[0]
+            baseline_postings = conn.execute('select jsonb_agg(raw order by id) from public.transactions where prod_id=%s and deleted_at is null', (pid,)).fetchone()[0]
+            no_proof = copy.deepcopy(candidate)
+            no_proof.pop('_labelLotCorrections')
+            reject(lambda: save_lot(no_proof), '최신 화면')
+            reject(lambda: save_lot(candidate, 'invalid-token'))
+            for invalid_lot in ['', ' ' * 3, 'X' * 101]:
+                reject(lambda invalid_lot=invalid_lot: save_lot(corrected(after, new_lot=invalid_lot)))
+            with conn.transaction(force_rollback=True):
+                conn.execute("update public.erp_role_permissions set can_update=false where role_id=%s and menu_code='production'", (role,))
+                reject(lambda: save_lot(candidate))
+            bad = copy.deepcopy(candidate)
+            bad['_labelLotCorrections'][0]['fromLot'] = 'STALE'
+            reject(lambda: save_lot(bad), '다른 PC')
+            for field, value in [('qty', 39), ('boxCount', 1), ('product', '임의 품명'), ('origin', '수정 원산지')]:
+                bad = copy.deepcopy(candidate)
+                next(o for o in bad['outputs'] if o['stockRowId'] == first)[field] = value
+                reject(lambda bad=bad: save_lot(bad), '함께 변경')
+            # Existing dependency protections must roll back all attempted bindings.
+            for kind in ['출고', '사용', '재고이동', '재고조정']:
+                with conn.transaction(force_rollback=True):
+                    raw = dict(id=uid('lot_dep'), stockRowId=first, product=order['product'], lot='QA-OUTPUT', weight=1)
+                    conn.execute("insert into public.transactions(id,date,type,product,weight,raw) values(%s,'2026-10-17',%s,%s,1,%s)", (raw['id'], kind, order['product'], Jsonb(raw)))
+                    reject(lambda: save_lot(candidate), '연결된')
+            with conn.transaction(force_rollback=True):
+                reserved = dict(id=uid('lot_reserved'), sourceInputs=[dict(sourceStock=dict(stockRowId=first), inputWeight=10)])
+                conn.execute("update public.app_data set payload=payload||%s where key='workOrders'", (Jsonb([reserved]),))
+                reject(lambda: save_lot(candidate), '연결된')
+            with conn.transaction(force_rollback=True):
+                audit_name = 'qa_lot_audit_' + suffix
+                conn.execute('create function public.' + audit_name + "() returns trigger language plpgsql as $$ begin if new.action='라벨 이력번호 정정' then raise exception 'QA lot audit failure'; end if; return new; end $$")
+                conn.execute('create trigger ' + audit_name + ' before insert on public.change_logs for each row execute function public.' + audit_name + '()')
+                reject(lambda: save_lot(candidate), 'QA lot audit failure')
+                assert entry() == after
+                assert conn.execute('select jsonb_agg(to_jsonb(a) order by label_id) from public.label_stock_assignments a where production_id=%s', (pid,)).fetchone()[0] == baseline_bindings
+                assert conn.execute('select jsonb_agg(raw order by id) from public.transactions where prod_id=%s and deleted_at is null', (pid,)).fetchone()[0] == baseline_postings
+            saved = save_lot(candidate)
+            assert saved['ok'] and '_labelLotCorrections' not in saved['entry']
+            current = entry()
+            assert immutable_totals(current) == original_totals
+            assert {o['stockRowId']: o['lot'] for o in current['outputs']} == {first: 'QA-CORRECTED', remaining: 'QA-OUTPUT'}
+            assert lookup(0)['lot'] == 'QA-CORRECTED' and lookup(0)['stockRowId'] == first and lookup(0)['code'] == logs[0]['code']
+            assert lookup(1)['lot'] == 'QA-CORRECTED' and lookup(2)['lot'] == 'QA-OUTPUT'
+            assert get(first)['canSplit'] and get(first)['row']['lot'] == 'QA-CORRECTED'
+            assert conn.execute("select payload from public.app_data where key='labelPrintLogs'").fetchone()[0] == original_logs
+            audit = conn.execute("select payload from public.change_logs where entity_id=%s and action='라벨 이력번호 정정'", (pid,)).fetchall()
+            assert len(audit) == 1 and audit[0][0]['changes'] == candidate['_labelLotCorrections']
+            assert str(audit[0][0]['userId']) == str(user)
+            assert save_lot(candidate)['ok'], 'Lost-response retry keeps the same correction without a duplicate correction audit'
+            assert conn.execute("select count(*) from public.change_logs where entity_id=%s and action='라벨 이력번호 정정'", (pid,)).fetchone()[0] == 1
+            reject(lambda: save_lot(after), '최신 화면')
+            # A stale second row must not partially commit the first row's LOT.
+            bad = corrected(current, new_lot='QA-SECOND')
+            bad['_labelLotCorrections'].append(dict(stockRowId=remaining, fromLot='STALE', toLot='OTHER'))
+            next(o for o in bad['outputs'] if o['stockRowId'] == remaining)['lot'] = 'OTHER'
+            reject(lambda: save_lot(bad), '다른 PC')
+            assert lookup(0)['lot'] == 'QA-CORRECTED'
+            with conn.transaction(force_rollback=True):
+                moved = split([logs[0]['id']], source_id=first)
+                assert moved['ok'] and lookup(0)['lot'] == lookup(1)['lot'] == 'QA-CORRECTED'
+                assert lookup(0)['stockRowId'] != lookup(1)['stockRowId']
+            shipment = pda('outbound', [scan(0)])
+            raw = conn.execute('select raw from public.transactions where id=%s', (shipment['items'][0]['transactionId'],)).fetchone()[0]
+            assert raw['lot'] == 'QA-CORRECTED' and raw['stockRowId'] == first and raw['boxCount'] == 1
+            reject(lambda: save_lot(corrected(current, row_id=remaining, new_lot='PDA-BLOCKED')), 'PDA')
+            returned = pda('inbound', [scan(0)])
+            raw = conn.execute('select raw from public.transactions where id=%s', (returned['items'][0]['transactionId'],)).fetchone()[0]
+            assert raw['lot'] == 'QA-CORRECTED' and lookup(0)['lot'] == 'QA-CORRECTED'
+            assert conn.execute("select payload from public.app_data where key='labelPrintLogs'").fetchone()[0] == original_logs
+            for role_name in ['anon', 'authenticated']:
+                assert not conn.execute("select has_function_privilege(%s,'public.dbmt_erp_save_production_before_lot_correction(text,jsonb,jsonb,text)','execute')", (role_name,)).fetchone()[0]
+        assert entry() == after, 'LOT correction fixtures roll back before the original split regression continues'
+
     # Actual outbound posting hits only the selected group's stock identity.
     with conn.transaction(force_rollback=True):
         shipped = pda('outbound', [scan(0)])
@@ -299,7 +385,7 @@ def main():
     if 'hdwjwtmbsxfjrlvicgnn' not in os.environ.get('PGUSER', '') + os.environ.get('PGHOST', ''):
         raise RuntimeError('Wrong linked project')
     sql = '' if '--installed' in sys.argv else sys.stdin.buffer.read().decode('utf-8-sig')
-    if '--installed' not in sys.argv and 'dbmt_erp_split_label_stock' not in sql:
+    if '--installed' not in sys.argv and ('dbmt_erp_save_production_before_lot_correction' if '--lot-correction' in sys.argv else 'dbmt_erp_split_label_stock') not in sql:
         raise RuntimeError('Expected additive label-split schema on stdin')
     with psycopg.connect(sslmode='require', connect_timeout=20, autocommit=True, application_name='dbmt_label_split_rollback_qa') as conn:
         with conn.transaction(force_rollback=True):
@@ -308,7 +394,9 @@ def main():
             conn.execute("set local statement_timeout='45s'")
             if sql:
                 conn.execute(sql)
-            checks, prefix = fixture_tests(conn)
+            checks, prefix = fixture_tests(conn, verify_lot_correction='--lot-correction' in sys.argv)
+            if '--lot-correction' in sys.argv:
+                checks += '; LOT correction: permissions/confirmation/stale writes/atomic rollback, unchanged labels/stock weights/boxes, PDA lookup/outbound/return, re-split, audit and replay'
         # Read-only aggregate after rollback verifies no fictional business rows remain.
         with conn.transaction(force_rollback=True):
             conn.execute('set local role postgres')

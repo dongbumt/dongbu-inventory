@@ -130,6 +130,10 @@ ERP의 `배송기사근태` 메뉴에서 기사 계정을 설정합니다. 근�
 
 검증: `node tools/test-production-row-stock.cjs --browser`, `node tools/test-stock-report.cjs`, `node tools/test-label-production.cjs`, `node tools/test-workorder-label.cjs`. 가상 자료로 같은 조건의 생산 30/70kg 분리, 신규 입고원본 두 건의 개별 출고·사용, 비고 수정·행 순서 변경, 재투입·이동·조정, 과거 재고 유지와 삼성 입력 제거를 확인합니다. 브라우저 검증에는 Playwright가 필요합니다. `node tools/test-mobile-stock-rows.cjs`는 모바일 집계를 검사하고, `tools/check-production-stock-rows-db.ps1`, `tools/check-stock-source-tracking-db.ps1`은 연결된 DB에서 스키마와 가상 거래를 트랜잭션 안에서 검증한 뒤 **항상 전체 롤백**합니다.
 
+라벨 분할 생산품의 이력번호 정정은 생산일보 수정 화면에서 번호를 바꾼 뒤 저장 시 변경 전후 번호를 확인합니다. 서버는 라벨별 재고 연결과 생산입고를 함께 갱신하며 고유바코드·인쇄 원본·분할 중량·박스수는 보존합니다. PDA 조회·이후 출고·반입에는 정정된 재고 이력번호가 적용되지만 재출력은 기존 인쇄 내용을 유지합니다. 출고·재투입·이동·조정·작업지시에 연결된 재고 및 PDA 처리된 생산일보의 기존 수정 제한은 유지합니다. 정정자와 변경 전후 번호는 변경 이력에 기록하며, 다른 PC에서 이미 번호를 변경했다면 오래된 수정은 거부합니다.
+
+서버에 `supabase/schema-rpc-72-label-stock-lot-correction.sql`을 먼저 적용한 뒤 화면을 배포합니다. 설치 자체는 업무 데이터를 변경하지 않습니다. `tools/check-label-stock-split-db.ps1 -LotCorrection`은 새 스키마와 가상 자료를 항상 롤백하여 검증하며, 배포 후에는 `-Installed -LotCorrection`으로 확인합니다. 화면 검증은 `node tools/test-production-row-stock.cjs --browser`를 실행합니다.
+
 ## 부자재 관리 · 성적서와 LOT별 실사
 
 품목 등록·수정에서 **성적서 관리 여부와 최근 성적서 날짜**를 입력합니다. 성적서는 외부에서 보관하며 ERP에는 파일을 등록하지 않습니다. 최근 날짜의 6개월 뒤를 다음 갱신일로 계산하고, 그 1개월 전부터 품목표와 상단 요약에 빨간 알림을 표시합니다. 월말은 해당 월의 마지막 날로 맞춥니다. 관리 대상인데 날짜가 없으면 등록 필요로 표시합니다. 기존 품목은 관리 안 함이 기본이고, 관리 해제 시 입력한 날짜는 보존합니다. 기존 입고의 성적서명도 삭제하지 않습니다.

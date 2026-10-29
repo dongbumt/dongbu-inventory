@@ -1,6 +1,9 @@
 [CmdletBinding()]
-param([string]$SchemaPath = 'supabase/schema-rpc-58-label-stock-split.sql', [switch]$Installed)
+param([string]$SchemaPath = 'supabase/schema-rpc-58-label-stock-split.sql', [switch]$Installed, [switch]$LotCorrection)
 $ErrorActionPreference = 'Stop'
+if($LotCorrection -and -not $PSBoundParameters.ContainsKey('SchemaPath')){ $SchemaPath='supabase/schema-rpc-72-label-stock-lot-correction.sql' }
+$taskTestArgs = @()
+if($LotCorrection){ $taskTestArgs += '--lot-correction' }
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskNames = @('PGHOST','PGPORT','PGUSER','PGPASSWORD','PGDATABASE')
 $previous = @{}
@@ -28,10 +31,10 @@ try {
   try {
     $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     if($Installed){
-      & $taskPython (Join-Path $PSScriptRoot 'check-label-stock-split-db.py') --installed
+      & $taskPython (Join-Path $PSScriptRoot 'check-label-stock-split-db.py') --installed @taskTestArgs
     } else {
       $schema = Get-Content -LiteralPath $SchemaPath -Encoding UTF8 -Raw
-      $schema | & $taskPython (Join-Path $PSScriptRoot 'check-label-stock-split-db.py')
+      $schema | & $taskPython (Join-Path $PSScriptRoot 'check-label-stock-split-db.py') @taskTestArgs
     }
     if($LASTEXITCODE -ne 0){ throw 'Label stock split verification failed; schema and fixtures were rolled back.' }
   } finally { $OutputEncoding = $previousEncoding }
