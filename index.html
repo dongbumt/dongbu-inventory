@@ -7889,9 +7889,19 @@ function excludeSelectedProductionInputStock(rows, targetInput){
       stock.proddate, stock.stockLocation, stock.stockRowId)));
 }
 
+function excludeSelectedBulkOutboundStock(rows, targetInput){
+  const currentRow = targetInput?.closest('#bulk-outbound-tbody > tr');
+  if(!currentRow) return rows;
+  const selectedKeys = new Set();
+  document.querySelectorAll('#bulk-outbound-tbody .bulk-out-key').forEach(input=>{
+    if(input.closest('tr') !== currentRow && input.value) selectedKeys.add(input.value);
+  });
+  return selectedKeys.size ? rows.filter(stock=>!selectedKeys.has(stock.key)) : rows;
+}
+
 function getTxnStockPickerOptions(){
   const rows = (txnStockPickerTargetInput ? bulkOutboundStockOptions() : getTxnStockSearchOptions()).filter(isStockProductSelectable);
-  return excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput);
+  return excludeSelectedBulkOutboundStock(excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput), txnStockPickerTargetInput);
 }
 
 function isProductionInputStockPicker(){

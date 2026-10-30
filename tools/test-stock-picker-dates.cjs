@@ -48,6 +48,82 @@ for(const row of changed){const original=rows.find(r=>r.stockRowId===row.stockRo
 context.userTransactions[0].date='2026-10-10';context._stockMapCache=null;
 assert.equal(JSON.stringify(context.userTransactions),before,'Read-only display metadata never writes source transactions');
 
+async function checkBulkOutboundChoices(page){
+  await page.evaluate(rows=>{
+    closeTxnStockPicker(false);_editTxnId=null;userTransactions=rows;_stockMapCache=null;
+    document.getElementById('p-transactions').classList.add('active');
+    document.getElementById('bulk-outbound-body').style.display='block';
+    document.getElementById('bulk-outbound-tbody').innerHTML='';
+  },tx);
+  await page.addScriptTag({content:`
+    function refreshBulkOutboundPrice(){}
+    function updateBulkOutboundAmount(){}
+    function onBulkTraderSearch(){}
+    function hideBulkTraderResults(){}
+    ${['clearBulkOutboundStockSelection','onBulkOutboundStockPickerInput','handleBulkOutboundStockInputKeydown',
+      'openBulkOutboundStockPicker','selectBulkOutboundStock','addBulkOutboundRow','addBulkOutboundRows',
+      'removeBulkOutboundRow','clearBulkOutbound'].map(source).join('\n')}
+    addBulkOutboundRows(4);
+  `});
+  const row=i=>page.locator('#bulk-outbound-tbody > tr').nth(i);
+  const shown=()=>page.evaluate(()=>txnStockPickerRows.map(s=>[s.stockRowId||'',s.stockLocation,s.product]));
+  const has=(rows,id,place='가공장')=>rows.some(r=>r[0]===id&&r[1]===place);
+  async function open(i){
+    await row(i).locator('.bulk-out-stock-search button').click();
+    await page.locator('#tsp-search-all').fill('');
+  }
+  async function pickDate(i,date){
+    await open(i);await page.locator('#tsp-search-location').selectOption('가공장');
+    await page.locator('#tsp-search-all').fill(date);await page.locator('#tsp-confirm').click();
+  }
+  await pickDate(0,'2026-10-10');
+  assert.equal(await row(0).locator('.bulk-out-weight').inputValue(),'20.00');
+  assert.equal(await row(0).locator('.bulk-out-box-count').inputValue(),'2');
+  await open(1);
+  assert.ok(!has(await shown(),'raw1'),'Bulk choices exclude stock selected in another row');
+  assert.ok(has(await shown(),'raw2')&&has(await shown(),'raw3'),'Distinct receipts with the same product/LOT remain selectable');
+  assert.ok(has(await shown(),'raw1','물류창고'),'Other stock locations remain independently selectable');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await open(0);assert.ok(has(await shown(),'raw1'),'The current bulk row retains its selection');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await pickDate(1,'2026-10-11');await pickDate(2,'2026-10-12');
+  await open(3);await page.locator('#tsp-search-location').selectOption('가공장');
+  await page.locator('#tsp-search-all').fill('가상 냉장돈안심');
+  assert.equal(await page.locator('#tsp-result-body tr[data-tsp-index]').count(),0);
+  assert.equal(await page.locator('#tsp-confirm').isDisabled(),true);
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await row(0).locator('button.btn-danger').click();await open(2);
+  assert.ok(has(await shown(),'raw1'),'Removing a bulk row releases its stock');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await pickDate(0,'2026-10-10');await open(2);
+  assert.ok(has(await shown(),'raw2')&&!has(await shown(),'raw1'),'Replacing a bulk stock releases the previous selection');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await row(1).locator('.bulk-out-stock-input').fill('다른 재고 검색');await open(2);
+  assert.ok(has(await shown(),'raw3'),'Clearing bulk search releases that stock');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  // Existing legacy selection keys also remain unique, without permanent source IDs.
+  await open(1);await page.locator('#tsp-search-location').selectOption('가공장');
+  await page.locator('#tsp-search-all').fill('가상 과거 원료');await page.locator('#tsp-confirm').click();
+  await open(2);
+  assert.ok(!(await shown()).some(r=>r[2]==='가상 과거 원료'&&r[1]==='가공장'));
+  assert.ok((await shown()).some(r=>r[2]==='가상 과거 원료'&&r[1]==='외부창고'));
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await page.evaluate(()=>clearBulkOutbound());await open(1);
+  assert.ok(has(await shown(),'raw1')&&has(await shown(),'raw2')&&has(await shown(),'raw3'),'Clearing the bulk form releases all stock');
+  // Reject a stale displayed choice if another row acquired it while the popup was open.
+  await page.locator('#tsp-search-location').selectOption('가공장');await page.locator('#tsp-search-all').fill('2026-10-11');
+  await page.evaluate(()=>selectBulkOutboundStock(document.querySelector('#bulk-outbound-tbody .bulk-out-stock-input'),txnStockPickerRows[txnStockPickerIndex].key));
+  await page.locator('#tsp-confirm').click();
+  assert.equal(await row(1).locator('.bulk-out-key').inputValue(),'');
+  assert.equal(await page.locator('#tsp-confirm').isDisabled(),true);
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  // The single-entry picker remains independent of unsaved bulk selections.
+  await page.evaluate(()=>openTxnStockPicker('2026-10-11'));
+  assert.ok(has(await shown(),'raw2'));
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  console.log('PASS: actual bulk outbound popup hides chosen stock, current-row editing, exact receipt/location and legacy keys, kg/boxes autofill, delete/replace/clear/all-clear release, stale confirmation and independent single entry');
+}
+
 async function checkProductionInputChoices(page){
   await page.evaluate(({markup,rows})=>{
     closeTxnStockPicker(false);_editTxnId=null;userTransactions=rows;_stockMapCache=null;
@@ -163,6 +239,7 @@ async function checkProductionInputChoices(page){
     await page.evaluate(()=>{closeTxnStockPicker(false);_editTxnId=null;const target=document.createElement('input');target.dataset.pickerContext='production-input';document.body.append(target);openTxnStockPicker('가상 냉장돈안심',target)});
     assert.equal(await page.locator('#tsp-result-head th').nth(7).innerText(),'입고(생산)일');assert.ok((await page.locator('#tsp-result-body').innerText()).includes('2026-10-10'));
     await checkProductionInputChoices(page);
+    await checkBulkOutboundChoices(page);
     assert.deepEqual(errors,[]);
     console.log('PASS: separate raw receipt dates, preserved production dates/identities, transfers, legacy aggregates, unknown dates, date search, raw selection weight/boxes and fully consumed edit restoration');
     console.log('Artifacts: '+artifacts);
