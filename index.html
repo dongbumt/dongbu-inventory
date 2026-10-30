@@ -7869,8 +7869,29 @@ function isStockProductSelectable(stock){
   return !matches.length || matches.some(p=>p.isActive !== false);
 }
 
+function excludeSelectedProductionInputStock(rows, targetInput){
+  if(targetInput?.dataset?.pickerContext !== 'production-input') return rows;
+  const selectedKeys = new Set(), selectedIdentities = new Set();
+  document.querySelectorAll('#prod-input-rows [data-picker-context="production-input"]').forEach(input=>{
+    if(input === targetInput) return;
+    const id = input.dataset.productionRowId;
+    const value = field=>document.getElementById(`prod-in-${field}-${id}`)?.value || '';
+    const product = value('product'), rowId = value('stock-row-id');
+    if(input.dataset.stockKey) selectedKeys.add(input.dataset.stockKey);
+    if(product || rowId){
+      selectedIdentities.add(stockMapKey(product, value('lot'), value('stock-price'), value('origin'),
+        value('packunit'), value('proddate'), value('location'), rowId));
+    }
+  });
+  if(!selectedKeys.size && !selectedIdentities.size) return rows;
+  return rows.filter(stock=>!selectedKeys.has(stock.key) && !selectedIdentities.has(
+    stockMapKey(stock.product, stock.lot, stock.price, stock.origin, stock.packunit,
+      stock.proddate, stock.stockLocation, stock.stockRowId)));
+}
+
 function getTxnStockPickerOptions(){
-  return (txnStockPickerTargetInput ? bulkOutboundStockOptions() : getTxnStockSearchOptions()).filter(isStockProductSelectable);
+  const rows = (txnStockPickerTargetInput ? bulkOutboundStockOptions() : getTxnStockSearchOptions()).filter(isStockProductSelectable);
+  return excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput);
 }
 
 function isProductionInputStockPicker(){
@@ -8101,7 +8122,7 @@ function moveTxnStockPickerSelection(delta){
 
 function confirmTxnStockPicker(){
   const stock = txnStockPickerRows[txnStockPickerIndex];
-  if(stock && !isStockProductSelectable(stock)){ renderTxnStockPicker(true); return; }
+  if(stock && !getTxnStockPickerOptions().some(option=>option.key === stock.key)){ renderTxnStockPicker(true); return; }
   if(!stock) return;
   const targetInput = txnStockPickerTargetInput;
   if(targetInput){
