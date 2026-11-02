@@ -8,6 +8,70 @@ for(const name of ['index.html','label-print.html'])for(const match of fs.readFi
 new vm.Script(fs.readFileSync(path.join(repo,'label-weight.js'),'utf8'));
 const block=(start,end)=>index.slice(index.indexOf(start),index.indexOf(end,index.indexOf(start)));
 const source=name=>{const match=index.match(new RegExp(`function ${name}\\([^]*?\\n\\}`));assert(match,name);return match[0]};
+async function checkWorkOrderStockChoices(page){
+  await page.evaluate(()=>{
+    window.stockChoiceBackup=stocks;
+    const base={product:'돈등심 원료',lot:'LOT-100',origin:'국내산',price:5000,stockLocation:'가공장',stock:25,stockBoxes:2};
+    stocks=[{...base,key:'choice-a',stockRowId:'source-a',proddate:'2026-10-01'},
+      {...base,key:'choice-b',stockRowId:'source-b',proddate:'2026-10-02'},
+      {...base,key:'choice-c',proddate:'2026-10-03'},
+      {...base,key:'choice-a-external',stockRowId:'source-a',stockLocation:'외부창고',proddate:'2026-10-01'},
+      {...base,key:'choice-other',lot:'LOT-OTHER',proddate:'2026-10-04'}];
+    resetWorkOrderForm();addWorkOrderSourceRow();addWorkOrderSourceRow();
+  });
+  const row=i=>page.locator('#wo-source-rows .wo-source-row').nth(i);
+  const shown=()=>page.evaluate(()=>txnStockPickerRows.map(stock=>stock.key));
+  async function open(i){await row(i).locator('button[onclick="openWorkOrderStockPicker(this)"]').click();}
+  async function pick(i,key){
+    await open(i);const at=(await shown()).indexOf(key);assert.ok(at>=0,key+' must be selectable');
+    await page.locator(`#tsp-result-body tr[data-tsp-index="${at}"]`).dblclick();
+  }
+  await pick(0,'choice-a');
+  assert.equal(await row(0).locator('.wo-input-weight').inputValue(),'25.00');
+  assert.equal(await row(0).locator('.wo-input-box-count').inputValue(),'2');
+  await open(1);
+  assert.ok(!(await shown()).includes('choice-a'),'The next input hides an already selected stock');
+  assert.ok((await shown()).includes('choice-b')&&(await shown()).includes('choice-c'),'Other receipts with the same product and LOT stay selectable');
+  await page.locator('#tsp-search-location').selectOption('외부창고');
+  assert.ok((await shown()).includes('choice-a-external'),'Another location remains selectable');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await open(0);assert.ok((await shown()).includes('choice-a'),'The current input can be selected again');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await pick(1,'choice-b');await pick(2,'choice-c');await page.evaluate(()=>addWorkOrderSourceRow());
+  await open(3);await page.locator('#tsp-search-all').fill('LOT-100');
+  assert.equal(await page.locator('#tsp-result-body tr[data-tsp-index]').count(),0);
+  assert.equal(await page.locator('#tsp-confirm').isDisabled(),true);
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await row(0).locator('.wo-remove').click();await open(2);
+  assert.ok((await shown()).includes('choice-a'),'Removing an input releases its stock');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await pick(0,'choice-a');await open(2);
+  assert.ok((await shown()).includes('choice-b')&&!(await shown()).includes('choice-a'),'Replacing an input releases its previous stock');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await row(1).locator('.wo-stock-search').fill('다른 원료육 검색');await open(2);
+  assert.ok((await shown()).includes('choice-c'),'Clearing a legacy input releases its stock');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await page.evaluate(()=>{
+    const sources=stocks.slice(0,2).map(sourceStock=>({sourceStock,sourceStockKey:sourceStock.key,inputWeight:10,boxCount:1}));
+    const existing={...workOrders[0],id:'qa-stock-choice-edit',sourceInputs:sources,sourceStock:sources[0].sourceStock,inputWeight:20};
+    workOrders.push(existing);editWorkOrder(existing.id);addWorkOrderSourceRow();
+  });
+  await open(2);assert.ok(!(await shown()).includes('choice-a')&&!(await shown()).includes('choice-b'),'Restored work-order inputs are also excluded');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await page.evaluate(()=>resetWorkOrderForm());await pick(0,'choice-a');
+  await row(0).locator('.wo-remove').click();await open(0);
+  assert.ok((await shown()).includes('choice-a'),'Removing the final row clears its selection and releases stock');
+  await page.evaluate(()=>{closeTxnStockPicker(false);addWorkOrderSourceRow();});
+  await open(1);await page.locator('#tsp-search-all').fill('2026-10-01');
+  await page.evaluate(()=>selectWorkOrderStock('choice-a',workOrderSourceRows()[0].querySelector('.wo-stock-search')));
+  await page.locator('#tsp-confirm').click();
+  assert.equal(await row(1).locator('.wo-stock-key').inputValue(),'','Stale popup choices cannot duplicate another input');
+  assert.equal(await page.locator('#tsp-confirm').isDisabled(),true);
+  await page.evaluate(()=>{closeTxnStockPicker(false);openTxnStockPicker('2026-10-01');});
+  assert.ok((await shown()).includes('choice-a'),'Single transaction choices remain independent of the work-order draft');
+  await page.evaluate(()=>{closeTxnStockPicker(false);stocks=stockChoiceBackup;workOrders=workOrders.filter(order=>order.id!=='qa-stock-choice-edit');resetWorkOrderForm();});
+  console.log('PASS: work-order popup excludes chosen raw stock, current row and same-LOT alternatives, locations/legacy stock, kg/boxes, delete/replace/clear/final-row release, restored orders and stale confirmation');
+}
 const server=http.createServer((req,res)=>{
   const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');
   if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
@@ -173,6 +237,7 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
     await page.locator('.wo-source-row:nth-child(2) .wo-remove').click();
     assert.equal(await page.locator('.wo-source-row').count(),1);
     console.log('PASS: multiple raw inputs, per-source weights, explicit mixed LOT, total weight, legacy primary source, edit and remove');
+    await checkWorkOrderStockChoices(page);
 
     const context=await browser.newContext({viewport:{width:1366,height:900}});const saved=[];let failSave=false;
     await context.addInitScript(()=>{window.__printedLabels=[];window.print=()=>{

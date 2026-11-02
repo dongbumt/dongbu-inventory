@@ -7899,9 +7899,22 @@ function excludeSelectedBulkOutboundStock(rows, targetInput){
   return selectedKeys.size ? rows.filter(stock=>!selectedKeys.has(stock.key)) : rows;
 }
 
+function excludeSelectedWorkOrderStock(rows, targetInput){
+  if(targetInput?.dataset?.pickerContext !== 'workorder-input') return rows;
+  const currentRow = targetInput.closest('.wo-source-row');
+  if(!currentRow) return rows;
+  const selectedKeys = new Set();
+  document.querySelectorAll('#wo-source-rows .wo-stock-key').forEach(input=>{
+    if(input.closest('.wo-source-row') !== currentRow && input.value) selectedKeys.add(input.value);
+  });
+  return selectedKeys.size ? rows.filter(stock=>!selectedKeys.has(stock.key)) : rows;
+}
+
 function getTxnStockPickerOptions(){
   const rows = (txnStockPickerTargetInput ? bulkOutboundStockOptions() : getTxnStockSearchOptions()).filter(isStockProductSelectable);
-  return excludeSelectedBulkOutboundStock(excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput), txnStockPickerTargetInput);
+  const available = excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput);
+  const outbound = excludeSelectedBulkOutboundStock(available, txnStockPickerTargetInput);
+  return excludeSelectedWorkOrderStock(outbound, txnStockPickerTargetInput);
 }
 
 function isProductionInputStockPicker(){
