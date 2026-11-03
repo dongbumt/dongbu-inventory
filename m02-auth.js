@@ -215,6 +215,8 @@
   let selectedUserId = '';
   let selectedRoleId = '';
   let sessionPromise = null;
+  let loginBusy = false;
+  let sessionRestoreError = null;
 
   function esc(value){
     if(typeof window.htmlEscape === 'function') return window.htmlEscape(String(value ?? ''));
@@ -249,6 +251,7 @@
   }
 
   function clearSession(){
+    sessionRestoreError = null;
     storeSessionToken('');
     setSession({user:null, permissions:[], authMode:'required'});
   }
@@ -397,6 +400,7 @@
   async function initializeSession(force=false){
     if(sessionPromise && !force) return sessionPromise;
     sessionPromise = (async()=>{
+      sessionRestoreError = null;
       const token = sessionToken();
       if(!token){ setSession({user:null, permissions:[], authMode:'required'}); return null; }
       try{
@@ -406,6 +410,7 @@
         return result;
       }catch(err){
         console.warn('M02 사용자 세션을 확인하지 못했습니다:', err);
+        sessionRestoreError = err;
         setSession({user:null, permissions:[], authMode:'required'});
         return null;
       }
@@ -416,9 +421,86 @@
   function openLogin(){
     const modal = document.getElementById('m02-login-modal');
     if(!modal) return;
-    document.getElementById('m02-login-error')?.classList.remove('show');
     modal.classList.remove('hidden');
-    setTimeout(()=>document.getElementById('m02-login-id')?.focus(), 50);
+    if(!loginBusy) setLoginPhase(isPersonal() ? 'load-error' : sessionRestoreError ? 'session-error' : 'credentials');
+    setTimeout(()=>document.getElementById(isPersonal() ? 'm02-login-submit' : 'm02-login-id')?.focus(), 50);
+  }
+
+  function setLoginPhase(phase, message=''){
+    const authenticated = isPersonal();
+    const loading = ['authenticating','loading','checking'].includes(phase);
+    const title = document.getElementById('m02-login-title');
+    const status = document.getElementById('m02-login-status');
+    const error = document.getElementById('m02-login-error');
+    const submit = document.getElementById('m02-login-submit');
+    const changeUser = document.getElementById('m02-login-change-user');
+    const fields = document.querySelector('.m02-login-fields');
+    if(title) title.textContent = authenticated ? 'ERP 자료 불러오기' : 'ERP 사용자 로그인';
+    if(fields) fields.hidden = authenticated || phase==='session-error' || (phase==='checking' && Boolean(sessionToken()));
+    ['m02-login-id','m02-login-password'].forEach(id=>{
+      const input = document.getElementById(id);
+      if(input) input.disabled = loading;
+    });
+    document.querySelector('.m02-login-box')?.setAttribute('aria-busy', String(loading));
+    if(status){
+      status.textContent = phase==='loading' ? '로그인 완료 · ERP 자료를 불러오는 중입니다.'
+        : phase==='authenticating' ? '아이디와 비밀번호를 확인하는 중입니다.'
+        : phase==='checking' ? '로그인 상태를 확인하는 중입니다.'
+        : phase==='session-error' ? '저장된 로그인 상태를 확인하지 못했습니다. 다시 확인해 주세요.'
+        : phase==='load-error' ? '로그인 완료 · ERP 자료를 불러오지 못했습니다. 자료만 다시 불러올 수 있습니다.' : '';
+      status.classList.toggle('show', Boolean(status.textContent));
+    }
+    if(error){error.textContent=message;error.classList.toggle('show',Boolean(message));}
+    if(submit){
+      submit.disabled = loading;
+      submit.textContent = phase==='loading' ? '자료 불러오는 중…'
+        : phase==='authenticating' || phase==='checking' ? '확인 중…'
+        : authenticated ? '자료 다시 불러오기' : phase==='session-error' ? '로그인 상태 다시 확인' : '로그인';
+    }
+    if(changeUser){changeUser.hidden=!(authenticated || sessionRestoreError);changeUser.disabled=loading;}
+  }
+
+  function loginFailure(error){
+    const message = String(error?.message || error || '알 수 없는 오류입니다.');
+    if(error?.code==='session_expired' || /로그인.*만료|사용자 로그인이 필요/.test(message)) clearSession();
+    const timedOut = error?.code==='57014' || /statement timeout|시간.*초과/i.test(message);
+    const network = /Failed to fetch|NetworkError|fetch failed/i.test(message);
+    const detail = timedOut ? (isPersonal()
+      ? '서버 자료 조회 시간이 초과되었습니다. 아래 버튼으로 다시 불러와 주세요.'
+      : '로그인 요청 시간이 초과되었습니다. 다시 시도해 주세요.')
+      : network ? '서버에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.' : message;
+    setLoginPhase(isPersonal() ? 'load-error' : sessionRestoreError ? 'session-error' : 'credentials', detail);
+  }
+
+  async function loadAuthenticatedErp(verifySession=false){
+    const token = sessionToken();
+    setLoginPhase('loading');
+    if(verifySession){
+      const session = await rpc('dbmt_erp_session', {p_token:token});
+      if(!session?.ok){
+        const error = new Error(session?.message || '사용자 로그인이 만료되었습니다.');
+        error.code = 'session_expired';
+        throw error;
+      }
+      if(sessionToken()!==token) return;
+      setSession(session);
+    }
+    if(typeof window.startAuthenticatedErp === 'function') await window.startAuthenticatedErp();
+    if(sessionToken()!==token || !isPersonal()) return;
+    closeLogin();
+  }
+
+  async function changeLoginUser(){
+    if(loginBusy) return;
+    const token = sessionToken();
+    clearSession();
+    if(typeof window.lockErpForLogin==='function') window.lockErpForLogin();
+    const password = document.getElementById('m02-login-password');
+    if(password) password.value='';
+    setLoginPhase('credentials');
+    document.getElementById('m02-login-id')?.focus();
+    try{if(token) await rpc('dbmt_erp_logout', {p_token:token});}
+    catch(error){console.warn('이전 로그인 세션 정리 실패:', error);}
   }
 
   function closeLogin(){
@@ -429,27 +511,47 @@
   }
 
   async function loginFromModal(){
+    if(loginBusy) return;
+    if(!isPersonal() && sessionToken() && sessionRestoreError){
+      loginBusy=true;
+      setLoginPhase('checking');
+      try{
+        const session = await initializeSession(true);
+        if(session?.ok) await loadAuthenticatedErp();
+        else if(sessionRestoreError) loginFailure(sessionRestoreError);
+        else setLoginPhase('credentials', '로그인이 만료되었습니다. 다시 로그인해 주세요.');
+      }catch(error){loginFailure(error);}
+      finally{loginBusy=false;}
+      return;
+    }
+    if(isPersonal()){
+      loginBusy=true;
+      try{await loadAuthenticatedErp(true);}catch(error){loginFailure(error);}
+      finally{loginBusy=false;}
+      return;
+    }
     const loginId = document.getElementById('m02-login-id')?.value.trim() || '';
     const password = document.getElementById('m02-login-password')?.value || '';
     const errorEl = document.getElementById('m02-login-error');
-    const submit = document.getElementById('m02-login-submit');
     if(!loginId || !/^\d{4}$/.test(password)){
       if(errorEl){errorEl.textContent='아이디와 숫자 4자리 비밀번호를 입력해주세요.';errorEl.classList.add('show');}
       return;
     }
-    if(submit) submit.disabled = true;
+    loginBusy=true;
+    setLoginPhase('authenticating');
     try{
       const result = await rpc('dbmt_erp_login', {p_login_id:loginId, p_login_password:password});
-      if(!result?.ok) throw new Error(result?.message || '로그인에 실패했습니다.');
+      if(!result?.ok || !result.token || !result.user) throw new Error(result?.message || '로그인에 실패했습니다.');
       storeSessionToken(result.token);
       setSession(result);
-      if(typeof window.startAuthenticatedErp === 'function') await window.startAuthenticatedErp();
-      closeLogin();
+      const passwordInput = document.getElementById('m02-login-password');
+      if(passwordInput) passwordInput.value='';
+      await loadAuthenticatedErp();
       if(typeof window.toast === 'function') window.toast(`${result.user?.displayName || loginId}님으로 로그인했습니다.`);
     }catch(err){
-      if(errorEl){errorEl.textContent=String(err?.message || err);errorEl.classList.add('show');}
+      loginFailure(err);
     }finally{
-      if(submit) submit.disabled = false;
+      loginBusy=false;
     }
   }
 
@@ -768,7 +870,7 @@
   function setValue(id,v){const el=document.getElementById(id);if(el)el.value=v ?? '';}
 
   const api={
-    initializeSession, openLogin, closeLogin, loginFromModal, logoutConfirm,
+    initializeSession, openLogin, closeLogin, loginFromModal, changeLoginUser, logoutConfirm,
     can, canAction, requireAction, canOpenPage, isPersonal, getSessionToken, auditIdentity, applyNavigation,
     applyActionPermissions,
     initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole,
@@ -787,20 +889,23 @@
       })));
       observer.observe(document.body, {childList:true, subtree:true});
     }
+    loginBusy=true;
+    setLoginPhase('checking');
     const session = await initializeSession();
     if(session?.ok && typeof window.startAuthenticatedErp === 'function'){
       try{
-        await window.startAuthenticatedErp();
-        closeLogin();
+        await loadAuthenticatedErp();
       }catch(err){
         console.error('개인 로그인 ERP 초기화 실패:', err);
-        const errorEl=document.getElementById('m02-login-error');
-        if(errorEl){errorEl.textContent='서버 자료를 불러오지 못했습니다: '+String(err?.message||err);errorEl.classList.add('show');}
-        openLogin();
+        loginFailure(err);
+        document.getElementById('m02-login-modal')?.classList.remove('hidden');
       }
     }else{
-      openLogin();
+      if(sessionRestoreError) loginFailure(sessionRestoreError);
+      else setLoginPhase('credentials');
+      document.getElementById('m02-login-modal')?.classList.remove('hidden');
     }
+    loginBusy=false;
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bootstrap);
   else bootstrap();

@@ -36,6 +36,11 @@
   padding:8px 10px;font-size:11px;margin:9px 0;}
 .m02-login-error.show{display:block;}
 .m02-login-fields{display:grid;gap:9px;}
+.m02-login-fields[hidden],#m02-login-change-user[hidden]{display:none;}
+.m02-login-status{display:none;margin:12px 0;padding:10px;border:1px solid #d9dde1;border-radius:6px;
+  background:#f4f5f6;color:#424b55;font-size:12px;line-height:1.6;}
+.m02-login-status.show{display:block;}
+.m02-login-box[aria-busy="true"]{cursor:progress;}
 .erp-auth-locked .app-header,.erp-auth-locked .app-body,.erp-auth-locked #gs-sync-bar,
 .erp-auth-locked #gs-overlay,.erp-auth-locked #gs-setup{visibility:hidden;}
 .m02-login-required{z-index:100000;background:#eef1f4;}
