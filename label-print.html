@@ -529,6 +529,10 @@
       workOrders: [],
       labelProducts: [],
       logs: [],
+      logSummaries: [],
+      scopedLogs: false,
+      logsOrderId: '',
+      logsPin: '',
       completions: [],
       selectedId: '',
       requestedOrderId: new URLSearchParams(location.search).get('workOrderId') || '',
@@ -666,6 +670,7 @@
         return;
       }
       state.pin = pin;
+      state.logsPin = '';
       await refreshData();
     }
 
@@ -677,9 +682,10 @@
         return;
       }
       setLoading(true);
+      state.logsPin='';
       setStatus('Supabase 연결 중...', 'warn');
       try {
-        const data = await sbRpc('dbmt_label_print_get_data', {p_pin: pin});
+        const data = await sbRpc('dbmt_label_print_get_data', {p_pin: pin,p_work_order_id:null});
         try {
           if(window.DBMTCompanyMaster?.setMaster){
             const master = await sbRpc('dbmt_label_print_get_company_master', {p_pin: pin});
@@ -689,12 +695,8 @@
         } catch(companyError) {
           console.warn('회사·사업장 기준정보를 불러오지 못해 기존 라벨 기본값을 사용합니다:', companyError);
         }
-        const appData = data?.appData || {};
         state.pin = pin;
-        state.workOrders = normalizeArray(appData.workOrders);
-        state.labelProducts = normalizeArray(appData.labelProducts);
-        state.logs = normalizeArray(appData.labelPrintLogs);
-        state.completions = normalizeArray(data?.completions);
+        applyLabelData(data,null);
         const requestedOrder=state.workOrders.find(row=>String(row.id)===state.requestedOrderId);
         if(requestedOrder){state.selectedId=requestedOrder.id;state.allDates=false;$('date-filter').value=requestedOrder.date||'';}
         state.requestedOrderId='';
@@ -706,14 +708,56 @@
         const visibleRows = filteredOrders();
         const exists = state.workOrders.some(row => String(row.id) === String(state.selectedId));
         state.selectedId = exists ? state.selectedId : (visibleRows[0]?.id || '');
+        if(state.scopedLogs && state.selectedId){
+          const details=await sbRpc('dbmt_label_print_get_data',{p_pin:pin,p_work_order_id:String(state.selectedId)});
+          applyLabelData(details,state.selectedId);
+        }
         renderAll();
         void window.DBMTLabelLotUI?.refresh();
-        setStatus(`연결됨: 작업지시 ${state.workOrders.length}건, 출력이력 ${state.logs.length}건`, 'ok');
+        setStatus(`연결됨: 작업지시 ${state.workOrders.length}건 · 선택 작업 출력이력 ${logsForOrder(state.selectedId).length}건`, 'ok');
       } catch(err) {
         setStatus(`연결 실패: ${err.message || err}`, 'err');
       } finally {
         setLoading(false);
       }
+    }
+
+    function applyLogData(data,logs,expectedId){
+      if(state.scopedLogs && !data?.logScope) throw new Error('출력이력 조회 범위를 확인하지 못했습니다. 새로고침해주세요.');
+      if(data?.logScope){
+        const scope=String(data.logScope.workOrderId||'');
+        if(scope!==String(expectedId||'') || !Array.isArray(logs) || !Array.isArray(data.logSummaries) || logs.some(log=>String(log.workOrderId)!==scope)){
+          throw new Error('선택 작업의 출력이력을 확인하지 못했습니다. 새로고침해주세요.');
+        }
+        state.scopedLogs=true;
+        state.logsOrderId=scope;
+        state.logSummaries=normalizeArray(data.logSummaries);
+      }else{
+        // Compatibility with the original RPC response during staged rollout.
+        state.scopedLogs=false;
+        state.logsOrderId='';
+      }
+      state.logs=normalizeArray(logs);
+      state.logsPin=state.pin;
+    }
+
+    function applyLabelData(data,expectedId){
+      applyLogData(data,data?.appData?.labelPrintLogs,expectedId);
+      state.workOrders=normalizeArray(data?.appData?.workOrders);
+      state.labelProducts=normalizeArray(data?.appData?.labelProducts);
+      state.completions=normalizeArray(data?.completions);
+    }
+
+    function orderLogsReady(){
+      return state.logsPin===state.pin && (!state.scopedLogs || (Boolean(state.selectedId) && state.logsOrderId===String(state.selectedId)));
+    }
+
+    function orderLogTotals(orderId){
+      if(!state.scopedLogs || (state.logsPin===state.pin && state.logsOrderId===String(orderId))){
+        const logs=activeLogsForOrder(orderId);
+        return {count:logs.length,weight:logs.reduce((sum,log)=>sum+toNumber(log.labelWeight),0)};
+      }
+      return state.logSummaries.find(row=>String(row.workOrderId)===String(orderId))||{count:0,weight:0};
     }
 
     async function sbRpc(fnName, body){
@@ -755,10 +799,12 @@
       // The RPC merges these rows into the saved history; resending all rows can exceed its time limit.
       const result = await sbRpc('dbmt_label_print_save_logs', {
         p_pin: state.pin,
-        p_logs: changedLogs
+        p_logs: changedLogs,
+        p_work_order_id:String(state.selectedId)
       });
       if(result?.ok !== true) throw new Error(result?.message || '출력이력 저장을 확인하지 못했습니다.');
-      if(Array.isArray(result.logs)) state.logs = result.logs;
+      if(!Array.isArray(result.logs)) throw new Error('저장된 출력이력을 확인하지 못했습니다. 새로고침해주세요.');
+      applyLogData(result,result.logs,state.selectedId);
       if(Array.isArray(result.completions)) state.completions = result.completions;
       renderAll();
     }
@@ -784,14 +830,14 @@
       const completed = row && completionFor(row.id);
       const reopened = row && completionRecordFor(row.id)?.deleted;
       const button = $('complete-production-btn');
-      button.disabled = state.loading || !row || !!completed || !activeLogsForOrder(row.id).length;
+      button.disabled = state.loading || !row || !orderLogsReady() || !!completed || !activeLogsForOrder(row.id).length;
       button.textContent = completed ? '생산일보 전송 완료' : (reopened ? '생산완료 · 생산일보 재전송' : '생산완료 · 생산일보 전송');
       $('completion-status').textContent = completed
         ? `${completed.date || ''} #${completed.jobNo || ''} 생산일보에 등록되었습니다. 원료·생산품목·중량 등은 ERP에서 수정할 수 있습니다.`
         : (reopened ? '생산일보가 삭제되어 전송 전 상태로 돌아왔습니다. 기존 출력이력은 유지됩니다. 잘못 출력한 라벨을 삭제하고 필요한 라벨을 출력한 뒤 재전송하세요.' : '외포장 라벨 1장당 생산품 1박스로 생산일보·재고에 반영합니다. 내포장은 생산 집계에서 제외됩니다.');
-      $('print-btn').disabled = state.loading || !row || !!completed;
+      $('print-btn').disabled = state.loading || !row || !orderLogsReady() || !!completed;
       for(const id of ['print-weight','print-weight-custom','print-copies','print-size']){
-        $(id).disabled = state.loading || !row || !!completed || (id==='print-weight-custom' && $(id).hidden);
+        $(id).disabled = state.loading || !row || !orderLogsReady() || !!completed || (id==='print-weight-custom' && $(id).hidden);
       }
       window.DBMTLabelTouch?.sync();
     }
@@ -817,11 +863,8 @@
       setStatus('최신 작업지시와 출력이력 확인 중...', 'warn');
       try {
         // Review the saved version, including edits from another PC, before confirmation.
-        const data=await sbRpc('dbmt_label_print_get_data',{p_pin:state.pin});
-        state.workOrders=normalizeArray(data?.appData?.workOrders);
-        state.labelProducts=normalizeArray(data?.appData?.labelProducts);
-        state.logs=normalizeArray(data?.appData?.labelPrintLogs);
-        state.completions=normalizeArray(data?.completions);
+        const data=await sbRpc('dbmt_label_print_get_data',{p_pin:state.pin,p_work_order_id:String(orderId)});
+        applyLabelData(data,orderId);
         renderAll();
         const row=state.workOrders.find(item=>String(item.id)===String(orderId));
         if(!row) throw new Error('작업지시를 찾을 수 없습니다. 사무실에서 확인해주세요.');
@@ -918,8 +961,7 @@
         return;
       }
       list.innerHTML = rows.map(row => {
-        const logs = activeLogsForOrder(row.id);
-        const activeWeight = logs.reduce((sum, log) => sum + toNumber(log.labelWeight), 0);
+        const activeWeight = toNumber(orderLogTotals(row.id).weight);
         const title = row.title || row.product || '이름 없음';
         const sub = `${row.date || '-'} / ${row.product || '-'} / LOT ${row.lot || row.sourceStock?.lot || '-'}`;
         const active = String(row.id) === String(state.selectedId) ? ' active' : '';
@@ -941,10 +983,22 @@
       });
     }
 
-    function selectOrder(id){
+    async function selectOrder(id){
       if(state.loading) return;
       state.selectedId = id;
+      if(!state.scopedLogs){renderAll();return;}
+      state.logsOrderId='';
+      state.logs=[];
+      setLoading(true);
       renderAll();
+      setStatus('선택 작업의 출력이력을 불러오는 중...', 'warn');
+      try{
+        const data=await sbRpc('dbmt_label_print_get_data',{p_pin:state.pin,p_work_order_id:String(id)});
+        applyLabelData(data,id);
+        renderAll();
+        setStatus(`선택 작업 출력이력 ${state.logs.length}건 조회 완료`, 'ok');
+      }catch(error){setStatus(`출력이력 조회 실패: ${error.message||error} · 새로고침하거나 작업을 다시 선택해주세요.`, 'err');}
+      finally{setLoading(false);}
     }
 
     function selectedOrder(){
@@ -1000,6 +1054,9 @@
       $('metric-loss').textContent = inputWeight ? kg(lossWeight) : '-';
       $('metric-yield').textContent = pct(yieldRate);
       $('active-count').textContent = `${active.length.toLocaleString('ko-KR')}장`;
+      if(!orderLogsReady()){
+        ['metric-output','metric-loss','metric-yield','active-count'].forEach(id=>$(id).textContent='조회 필요');
+      }
     }
 
     function renderHistory(){
@@ -1050,6 +1107,7 @@
     async function printSelectedLabels(kind='outer'){
       if(kind!=='inner') kind='outer';
       if(state.loading) return;
+      if(!orderLogsReady()){setStatus('출력이력을 먼저 불러와주세요. 새로고침하거나 작업을 다시 선택해주세요.', 'warn');return;}
       const row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
       if(row?._carryoverTo){setStatus('잔량을 이월한 작업입니다. 새 라벨은 다음 작업지시에서 출력해주세요. 기존 라벨은 재출력할 수 있습니다.','warn');return;}
       if(window.DBMTLabelTouch?.productError()){setStatus(window.DBMTLabelTouch.productError(),'warn');return;}
@@ -1137,7 +1195,7 @@
     }
 
     async function reprintLogs(ids){
-      if(state.loading) return;
+      if(state.loading || !orderLogsReady()) return;
       const selected = new Set(ids.map(String));
       const records = logsForOrder(state.selectedId).filter(item=>selected.has(String(item.id)) && item.status!=='void');
       if(!records.length || records.length!==selected.size){
@@ -1179,7 +1237,7 @@
     }
 
     async function voidLog(id){
-      if(state.loading) return;
+      if(state.loading || !orderLogsReady()) return;
       const idx = state.logs.findIndex(item => String(item.id) === String(id));
       if(idx>=0 && completionFor(state.logs[idx].workOrderId)){ setStatus('생산완료된 라벨은 삭제할 수 없습니다.', 'warn'); return; }
       if(idx < 0){
@@ -1211,7 +1269,7 @@
     }
 
     async function voidAllLogsForOrder(orderId, reason){
-      if(state.loading || String(selectedOrder()?.id) !== String(orderId)) return;
+      if(state.loading || !orderLogsReady() || String(selectedOrder()?.id) !== String(orderId)) return;
       if(completionFor(orderId)){ setStatus('생산완료된 라벨은 삭제할 수 없습니다.', 'warn'); return; }
       const active=activeLogsForOrder(orderId);
       if(!active.length){ setStatus('삭제할 외포장 라벨이 없습니다.', 'warn'); return; }
@@ -1408,6 +1466,6 @@
   <script src="label-fullscreen.js?v=20260916touch4"></script>
   <script src="label-lots.js?v=20261029lots1"></script>
   <script src="label-lot-ui.js?v=20261029lots1"></script>
-  <script src="label-touch.js?v=20261029lots1"></script>
+  <script src="label-touch.js?v=20261104scopedlogs1"></script>
 </body>
 </html>

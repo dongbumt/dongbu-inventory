@@ -15843,7 +15843,10 @@ function applySupabasePayload(data){
   }
 
   const app = data.appData || {};
+  const deferred = new Set(data.deferredAppData || []);
   Object.entries(APP_DATA_REGISTRY).forEach(([k, r]) => {
+    // An intentionally deferred history is not an empty/deleted app-data value.
+    if(deferred.has(k) && r.readOnly) return;
     // The row sync response owns both work orders and their edit versions.
     // A delayed full-ERP recovery must not replace just half of that snapshot.
     if(k==='workOrders' && window.DBMTWorkOrders?.isReady()) return;

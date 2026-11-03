@@ -92,7 +92,7 @@
     byId('scale-disconnect').disabled=!live.connected||state.loading;
     byId('scale-dialog-status').textContent=live.message;
     for(const kind of ['inner','outer']){
-      const set=s[kind],w=weight(kind),weightOmitted=isWeightOmitted(kind),n=copies(kind),locked=state.loading||!row||!!row._carryoverTo||(kind==='outer'&&!!completionFor(row.id));
+      const set=s[kind],w=weight(kind),weightOmitted=isWeightOmitted(kind),n=copies(kind),locked=state.loading||!row||!orderLogsReady()||!!row._carryoverTo||(kind==='outer'&&!!completionFor(row.id));
       byId(`${kind}-weight-btn`).innerHTML=weightOmitted?'<strong>미표기</strong><small>중량 없음</small>':`<strong>${w?w.toFixed(2):'—'}</strong><small>kg</small>`;
       byId(`${kind}-weight-btn`).disabled=locked||set.mode==='scale';
       byId(`${kind}-weight-help`).textContent=set.mode==='scale'?'저울 안정 중량 자동 적용':weightOmitted?'0 kg · 중량 미표기로 출력':'터치하여 중량 입력';
@@ -107,7 +107,7 @@
       byId(kind==='outer'?'preview-btn':'inner-preview-btn').disabled=state.loading||!row||(!w&&!weightOmitted)||!!selectionError;
     }
     byId('print-size').disabled=state.loading||!row; // Shared physical media; inner printing remains available after completion.
-    byId('reprint-open').disabled=state.loading||!row;
+    byId('reprint-open').disabled=state.loading||!row||!orderLogsReady();
     byId('history-print').disabled=state.loading||!selected.size;
     byId('history-print').textContent=`선택 ${selected.size}장 재출력`;
     byId('touch-output').textContent=byId('metric-output').textContent;
@@ -116,7 +116,7 @@
     byId('selected-name').textContent=selectionError?'생산품목 확인 필요':effective?.product||'작업지시를 선택하세요';
     byId('selected-meta').textContent=selectionError|| (row?`${productDetail(effective||row)} · LOT ${effective?.lot||row.lot||row.sourceStock?.lot||'-'}`:'연결 후 작업지시를 선택하세요.');
     byId('product-open').disabled=state.loading||!row||!state.pin;
-    byId('product-totals-open').disabled=state.loading||!row;
+    byId('product-totals-open').disabled=state.loading||!row||!orderLogsReady();
     byId('work-order-open').disabled=state.loading||!state.pin;
     byId('current-work-title').textContent=row?(row.title||row.product):'작업지시를 선택하세요';
     byId('current-work-meta').textContent=row?`${row.date||''} · LOT ${effective?.lot||row.lot||row.sourceStock?.lot||'-'}`:'먼저 PIN으로 연결하세요.';
