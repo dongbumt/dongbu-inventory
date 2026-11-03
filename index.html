@@ -28,7 +28,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261027doccontact1">
+<link rel="stylesheet" href="styles/main.css?v=20261103scheduledrag1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -494,6 +494,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <button type="button" class="btn btn-primary btn-sm" id="sch-event-add-btn" onclick="addScheduleEvent()" style="margin:0;">+ 일정 추가</button>
     </div>
     <div id="sch-permission-note" class="m02-note" style="display:none;margin-bottom:12px;">일정 등록은 개인 사용자 로그인이 필요합니다.</div>
+    <div id="sch-drag-hint" hidden style="margin-bottom:10px;font-size:12px;color:#666;" role="status" aria-live="polite"></div>
     <div id="sch-calendar" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:#dce3ea;border:1px solid #dce3ea;border-radius:8px;overflow:hidden;"></div>
   </div>
 </div>
@@ -6930,6 +6931,8 @@ async function showPage(id, btn){
 
 // ─── 일정관리 ───────────────────────────────────────────
 let scheduleEvents = JSON.parse(localStorage.getItem('dbmt_schedule_events') || '[]');
+let scheduleWritePending = false;
+let scheduleDrag = null;
 
 function saveScheduleEvents(){
   localStorage.setItem('dbmt_schedule_events', JSON.stringify(scheduleEvents));
@@ -6968,6 +6971,8 @@ function applySchedulePermissionState(){
   const editor = document.getElementById('sch-event-editor');
   const note = document.getElementById('sch-permission-note');
   if(editor) editor.style.display = canCreate ? 'flex' : 'none';
+  const addButton = document.getElementById('sch-event-add-btn');
+  if(addButton) addButton.disabled = scheduleWritePending || !canCreate;
   if(note){
     note.style.display = canCreate ? 'none' : 'block';
     note.textContent = (typeof DBMTAuth === 'object' && DBMTAuth.isPersonal())
@@ -6988,6 +6993,7 @@ function applyPersonalScheduleResult(result){
 }
 
 async function addScheduleEvent(date){
+  if(scheduleWritePending) return;
   const dateEl = document.getElementById('sch-event-date');
   const textEl = document.getElementById('sch-event-text');
   const eventDate = date || dateEl?.value || today;
@@ -6995,8 +7001,8 @@ async function addScheduleEvent(date){
   if(!schedulePersonalCan('create')){ toast('일정 등록 권한이 없습니다.'); return; }
   if(!eventDate){ toast('일정 날짜를 선택하세요.'); return; }
   if(!text){ toast('일정 내용을 입력하세요.'); return; }
-  const button = document.getElementById('sch-event-add-btn');
-  if(button) button.disabled = true;
+  scheduleWritePending = true;
+  renderScheduleCalendar();
   try{
     const result = await sbRpc('dbmt_erp_save_schedule', {
       p_token:DBMTAuth.getSessionToken(), p_id:null, p_date:eventDate, p_text:text
@@ -7005,29 +7011,104 @@ async function addScheduleEvent(date){
     if(textEl) textEl.value = '';
     const monthEl = document.getElementById('sch-month');
     if(monthEl && eventDate.slice(0,7) !== monthEl.value) monthEl.value = eventDate.slice(0,7);
-    renderScheduleCalendar();
     toast('일정을 등록했습니다.');
   }catch(err){
     toast(String(err?.message || err || '일정 등록에 실패했습니다.'));
   }finally{
-    if(button) button.disabled = false;
+    scheduleWritePending = false;
+    renderScheduleCalendar();
   }
 }
 
 async function deleteScheduleEvent(id){
+  if(scheduleWritePending) return;
   if(!schedulePersonalCan('delete')){ toast('일정 삭제 권한이 없습니다.'); return; }
   const targetId = String(id ?? '');
   const event = scheduleEvents.find(e => String(e.id ?? '') === targetId);
   if(!event) return;
+  scheduleWritePending = true;
+  renderScheduleCalendar();
   try{
     const result = await sbRpc('dbmt_erp_delete_schedule', {
       p_token:DBMTAuth.getSessionToken(), p_id:targetId
     });
     applyPersonalScheduleResult(result);
-    renderScheduleCalendar();
     toast('일정을 삭제했습니다.');
   }catch(err){
     toast(String(err?.message || err || '일정 삭제에 실패했습니다.'));
+  }finally{
+    scheduleWritePending = false;
+    renderScheduleCalendar();
+  }
+}
+
+function canMoveScheduleEvent(){
+  return !scheduleWritePending && schedulePersonalCan('view') && schedulePersonalCan('update');
+}
+
+function clearScheduleDrag(){
+  document.querySelectorAll('#sch-calendar .sch-dragging,#sch-calendar .sch-drop-target').forEach(node=>{
+    node.classList.remove('sch-dragging','sch-drop-target');
+  });
+  scheduleDrag = null;
+}
+
+function startScheduleDrag(event, id){
+  clearScheduleDrag();
+  const row = scheduleEvents.find(item=>String(item.id ?? '') === String(id));
+  if(!canMoveScheduleEvent() || !row || !event.dataTransfer || event.target.closest('button')){
+    event.preventDefault();return;
+  }
+  scheduleDrag = {id:String(row.id),date:row.date,text:row.text,token:DBMTAuth.getSessionToken()};
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain',String(row.id));
+  event.currentTarget.classList.add('sch-dragging');
+}
+
+function overScheduleDay(event){
+  const day = event.currentTarget;
+  if(!scheduleDrag || !canMoveScheduleEvent() || scheduleDrag.token !== DBMTAuth.getSessionToken()) return;
+  document.querySelector('#sch-calendar .sch-drop-target')?.classList.remove('sch-drop-target');
+  if(day.dataset.scheduleDate === scheduleDrag.date) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  day.classList.add('sch-drop-target');
+}
+
+function leaveScheduleDay(event){
+  if(!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.classList.remove('sch-drop-target');
+}
+
+function dropScheduleDay(event){
+  if(!scheduleDrag) return;
+  event.preventDefault();
+  const drag = scheduleDrag, date = event.currentTarget.dataset.scheduleDate;
+  clearScheduleDrag();
+  void moveScheduleEvent(drag.id,date,drag);
+}
+
+async function moveScheduleEvent(id, date, original){
+  if(!canMoveScheduleEvent() || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return;
+  const row = scheduleEvents.find(item=>String(item.id ?? '') === String(id));
+  if(!row || row.date === date) return;
+  const token = DBMTAuth.getSessionToken();
+  if(!original || original.token !== token || original.date !== row.date || original.text !== row.text){
+    toast('일정 정보가 변경되었습니다. 달력에서 다시 선택해주세요.');return;
+  }
+  scheduleWritePending = true;
+  renderScheduleCalendar();
+  try{
+    const result = await sbRpc('dbmt_erp_save_schedule',{
+      p_token:token,p_id:String(row.id),p_date:date,p_text:row.text
+    });
+    if(token !== DBMTAuth.getSessionToken() || !schedulePersonalCan('view') || !schedulePersonalCan('update')) return;
+    applyPersonalScheduleResult(result);
+    toast(`일정을 ${date}로 옮겼습니다.`);
+  }catch(err){
+    if(token === DBMTAuth.getSessionToken()) toast(String(err?.message || err || '일정 이동에 실패했습니다.'));
+  }finally{
+    scheduleWritePending = false;
+    renderScheduleCalendar();
   }
 }
 
@@ -7094,6 +7175,12 @@ function renderScheduleCalendar(){
   applySchedulePermissionState();
   const canCreateSchedule = schedulePersonalCan('create');
   const canDeleteSchedule = schedulePersonalCan('delete');
+  const canMoveSchedule = canMoveScheduleEvent();
+  const dragHint = document.getElementById('sch-drag-hint');
+  if(dragHint){
+    dragHint.hidden = !schedulePersonalCan('view') || !schedulePersonalCan('update');
+    dragHint.textContent = scheduleWritePending ? '일정을 저장하는 중입니다…' : '등록된 일정을 다른 날짜로 드래그하여 옮길 수 있습니다.';
+  }
   const eventDateEl = document.getElementById('sch-event-date');
   if(eventDateEl && !eventDateEl.value) eventDateEl.value = today;
   const month = scheduleMonthValue();
@@ -7135,9 +7222,9 @@ function renderScheduleCalendar(){
       .sort((a,b)=>String(a.text||'').localeCompare(String(b.text||''),'ko'));
     const prodInputQty = prodInputMap[date] || 0;
     const eventHtml = dayEvents.map(e=>`
-      <div style="display:flex;gap:4px;align-items:flex-start;background:#f8f9fa;border:1px solid #edf0f2;border-radius:6px;padding:4px 5px;margin-bottom:4px;">
+      <div class="sch-event" data-schedule-id="${htmlEscape(e.id)}" draggable="${canMoveSchedule}" ondragstart="startScheduleDrag(event,${jsArg(e.id)})" ondragend="clearScheduleDrag()" ${canMoveSchedule ? 'title="다른 날짜로 드래그하여 이동"' : ''} style="display:flex;gap:4px;align-items:flex-start;background:#f8f9fa;border:1px solid #edf0f2;border-radius:6px;padding:4px 5px;margin-bottom:4px;">
         <div style="flex:1;font-size:11px;line-height:1.35;color:#2c3e50;word-break:break-word;">${htmlEscape(e.text)}</div>
-        ${canDeleteSchedule ? `<button type="button" onclick="deleteScheduleEvent(${jsArg(e.id)})" title="삭제" style="border:0;background:#e74c3c;color:#fff;border-radius:4px;font-size:10px;line-height:1;padding:3px 5px;cursor:pointer;">×</button>` : ''}
+        ${canDeleteSchedule ? `<button type="button" onclick="deleteScheduleEvent(${jsArg(e.id)})" title="삭제" ${scheduleWritePending ? 'disabled' : ''} style="border:0;background:#e74c3c;color:#fff;border-radius:4px;font-size:10px;line-height:1;padding:3px 5px;cursor:pointer;">×</button>` : ''}
       </div>
     `).join('');
     const prodHtml = prodInputQty > 0 ? `
@@ -7146,7 +7233,7 @@ function renderScheduleCalendar(){
       </div>
     ` : '';
     return `
-      <div data-schedule-date="${date}" data-schedule-outside-month="${isOutsideMonth ? 'true' : 'false'}" style="background:${isOutsideMonth?'#fafbfc':holiday?'#fff8f8':'#fff'};min-height:128px;padding:7px;display:flex;flex-direction:column;gap:5px;">
+      <div class="sch-day" data-schedule-date="${date}" data-schedule-outside-month="${isOutsideMonth ? 'true' : 'false'}" ondragover="overScheduleDay(event)" ondragleave="leaveScheduleDay(event)" ondrop="dropScheduleDay(event)" style="background:${isOutsideMonth?'#fafbfc':holiday?'#fff8f8':'#fff'};min-height:128px;padding:7px;display:flex;flex-direction:column;gap:5px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span ${canCreateSchedule ? `onclick="selectScheduleDate('${date}')" title="이 날짜에 일정 입력"` : ''} style="font-weight:800;font-size:12px;color:${isToday?'#fff':dayColor};background:${isToday?dayColor:'transparent'};border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:${canCreateSchedule?'pointer':'default'};">${day}</span>
           ${holiday ? `<span style="font-size:10px;color:#c0392b;font-weight:800;text-align:right;">${htmlEscape(holiday)}</span>` : (dayEvents.length ? `<span style="font-size:10px;color:#777;">${dayEvents.length}건</span>` : '')}
