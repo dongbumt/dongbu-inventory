@@ -29,7 +29,7 @@ const rawBoxes=boxes.map(({_pdaRequestId,_pdaLabelId,...row},i)=>({...row,_pdaRa
 assert.equal(group(rawBoxes).length,1);assert.equal(group(rawBoxes)[0].weight,240);
 assert.equal(group([...boxes,...rawBoxes]).length,2,'Raw and product boxes never merge even if request IDs match');
 console.log('PASS: exact weight/box/amount totals, identity boundaries, manual/receipt isolation, original row preservation and per-box rounding');
-const names=['htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','setTransactionListIdle','prepareTransactionList','markTransactionSearchPending','markTransactionKeywordSearchPending','validateTransactionDateRange','runTransactionSearch','runTransactionExactDateSearch','exportTransactionsCSV','printFilteredTransactions'];
+const names=['localDateString','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','setTransactionListIdle','prepareTransactionList','markTransactionSearchPending','markTransactionKeywordSearchPending','validateTransactionDateRange','runTransactionSearch','runTransactionExactDateSearch','runTransactionAllSearch','exportTransactionsCSV','printFilteredTransactions'];
 const functions=names.map(name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,`Missing ${name}`);return match[0];}).join('\n');
 const template=index.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
 const server=http.createServer((req,res)=>{
@@ -44,7 +44,8 @@ const server=http.createServer((req,res)=>{
   const assets=process.env.DBMT_SUMMARY_TEST_BASE||base;
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
-    const context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage(),errors=[];
+    const context=await browser.newContext({viewport:{width:1440,height:1000},timezoneId:'Asia/Seoul'}),page=await context.newPage(),errors=[];
+    await page.clock.setFixedTime(new Date('2026-10-20T12:00:00+09:00'));
     await context.route('**/*',route=>{const r=route.request();return r.method()==='GET'&&(r.url().startsWith(base)||r.url().startsWith(assets))?route.continue():route.abort();});
     await context.addInitScript(()=>{
       sessionStorage.setItem('dbmt_erp_user_session_token','qa-token');window.__saves=[];window.__fail=false;window.__toasts=[];
@@ -63,7 +64,9 @@ const server=http.createServer((req,res)=>{
     await page.addScriptTag({content:`var userTransactions=[],transactions=[],EXCEL_TRANSACTIONS=[],transactionListQueryActive=false,pdaTransactionDetailIds=[],today='2026-10-20',STOCK_LOCATION_DEFAULT='가공장';const transactionPricePendingIds=new Set();\n${functions}`});
     await page.addScriptTag({url:assets+'m02-auth.js'});await page.waitForFunction(()=>DBMTAuth.isPersonal());
     await page.evaluate(rows=>{userTransactions=structuredClone(rows);transactions=[...userTransactions];showPage('p-transactions');prepareTransactionList();},boxes);
-    assert.equal(await page.locator('#t-body tr').count(),0,'Keep render-on-search behavior');
+    assert.equal(await page.locator('#t-search-date').inputValue(),'2026-10-20');
+    assert.equal(await page.locator('#t-body tr').count(),1,'Show today automatically before any search button is pressed');
+    assert.match(await page.locator('#t-count').textContent(),/1건.*20박스/);
     await page.locator('#p-transactions').getByRole('button',{name:'특정일 조회',exact:true}).click();
     assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-count').textContent(),/1건.*20박스/);
     const cells=await page.locator('#t-body tr').first().locator('td').allTextContents();assert.equal(cells[6],'240.00');assert.equal(cells[7],'20');assert.equal(cells[9],'1,800,000');
@@ -99,6 +102,32 @@ const server=http.createServer((req,res)=>{
     await page.locator('#t-body input[type="number"]').fill('8200');await page.locator('#t-body input[type="number"]').press('Tab');await page.waitForFunction(()=>__saves.length===3);
     assert.equal(await page.evaluate(()=>__saves[2].rows.length),20);assert.equal(await page.evaluate(()=>__saves[2].rows.every(row=>row._pdaRawPackageId&&!row._pdaLabelId&&row.price===8200)),true);
     await page.locator('#t-body').getByRole('button',{name:'박스별',exact:true}).click();assert.equal(await page.locator('#txn-pda-detail-body tr').first().locator('td').first().textContent(),rawBoxes[0]._pdaCode);
-    assert.deepEqual(errors,[]);console.log('PASS: product/raw list/search aggregation, barcode details, atomic group price/rollback, one-box edit/split, print/CSV, read-only guards and narrow dialog');console.log('Artifacts: '+artifacts);
+    await page.getByRole('button',{name:'박스별 내역 닫기'}).click();
+    await page.evaluate(sample=>{
+      userTransactions=[{...sample,id:'today-entry',date:'2026-10-20',product:'TODAY-ENTRY'},
+        {...sample,id:'previous-entry',date:'2026-10-19',product:'PREVIOUS-ENTRY'}];
+      transactions=[...userTransactions];transactionListQueryActive=false;
+      ['t-search-date','t-search-from','t-search-to','t-search-product','t-search-lot','t-filter-type'].forEach(id=>document.getElementById(id).value='');
+      prepareTransactionList();
+    },manual);
+    assert.match(await page.locator('#t-body').textContent(),/TODAY-ENTRY/);
+    assert.doesNotMatch(await page.locator('#t-body').textContent(),/PREVIOUS-ENTRY/);
+    await page.evaluate(()=>{document.getElementById('t-search-date').value='2026-10-19';prepareTransactionList();});
+    assert.match(await page.locator('#t-body').textContent(),/PREVIOUS-ENTRY/);
+    assert.doesNotMatch(await page.locator('#t-body').textContent(),/TODAY-ENTRY/);
+    await page.evaluate(()=>{runTransactionAllSearch();prepareTransactionList();});
+    assert.equal(await page.locator('#t-search-date').inputValue(),'','Returning to an all-dates query keeps that choice');
+    assert.equal(await page.locator('#t-body tr').count(),2);
+    await page.locator('#t-search-product').fill('PREVIOUS');await page.evaluate(()=>prepareTransactionList());
+    assert.equal(await page.locator('#t-search-date').inputValue(),'','A keyword query must not be restricted to today');
+    assert.match(await page.locator('#t-body').textContent(),/PREVIOUS-ENTRY/);
+    await page.evaluate(()=>{
+      document.getElementById('t-search-product').value='';document.getElementById('t-search-from').value='2026-10-19';
+      document.getElementById('t-search-to').value='2026-10-20';transactionListQueryActive=false;prepareTransactionList();
+    });
+    assert.equal(await page.locator('#t-body tr').count(),2,'Explicit range survives menu reentry');
+    await page.evaluate(()=>{transactions=[];renderTransactions();});
+    assert.match(await page.locator('#t-body').textContent(),/조회 결과가 없습니다/);assert.equal(await page.locator('#t-count').textContent(),'(0건)');
+    assert.deepEqual(errors,[]);console.log('PASS: today on first open, preserved date/range/all/keyword searches and empty results; product/raw aggregation, barcode details, atomic price/rollback, print/CSV, permissions and narrow dialog');console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

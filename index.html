@@ -10180,9 +10180,13 @@ function prepareTransactionList(){
   const exactDate = document.getElementById('t-search-date');
   const dateFrom = document.getElementById('t-search-from');
   const dateTo = document.getElementById('t-search-to');
-  if(exactDate && !exactDate.value && !dateFrom?.value && !dateTo?.value) exactDate.value = today;
-  transactionListQueryActive = false;
-  setTransactionListIdle();
+  const productQuery = document.getElementById('t-search-product')?.value.trim();
+  const lotQuery = document.getElementById('t-search-lot')?.value.trim();
+  if(!transactionListQueryActive && exactDate && !exactDate.value && !dateFrom?.value && !dateTo?.value && !productQuery && !lotQuery){
+    exactDate.value = localDateString();
+  }
+  transactionListQueryActive = true;
+  renderTransactions();
 }
 
 function markTransactionSearchPending(dateMode=''){
