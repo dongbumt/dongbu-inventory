@@ -401,6 +401,39 @@ async function testProductionLabelLotCorrections(page) {
   console.log('PASS: actual label LOT editor, multi-row confirmation/cancel, blank rejection, preserved draft/stock IDs/kg/boxes, corrected postings and multi-input work-order guard');
 }
 
+async function testProductionDefaultList(page) {
+  await page.addScriptTag({content:`
+    var productionListQueryActive=false,subMaterialUsages=[];
+    ${['totalRecordedBoxes','setProductionListIdle','prepareProductionList','productionMatchesSearch',
+      'getFilteredProductionEntries','renderProduction'].map(source).join('\n')}
+  `});
+  const dates=await page.evaluate(()=>{
+    const current=localDateString(),prior=new Date(current+'T12:00:00');prior.setDate(prior.getDate()-1);
+    const previous=localDateString(prior);
+    userProdEntries=[{id:'today-list',date:current,job_no:'1',inputs:[],outputs:[{product:'TODAY-LIST-PRODUCT',qty:10,price:1000,amount:10000}]},
+      {id:'previous-list',date:previous.replace(/-/g,'/'),job_no:'2',inputs:[],outputs:[{product:'PREVIOUS-LIST-PRODUCT',qty:5,price:1000,amount:5000}]}];
+    ['prod-filter-date','prod-filter-from','prod-filter-to','prod-filter-product','prod-filter-lot'].forEach(id=>document.getElementById(id).value='');
+    prepareProductionList();return {current,previous};
+  });
+  assert.equal(await page.locator('#prod-filter-date').inputValue(),dates.current);
+  assert.match(await page.locator('#prod-body').innerText(),/TODAY-LIST-PRODUCT/);
+  assert.doesNotMatch(await page.locator('#prod-body').innerText(),/PREVIOUS-LIST-PRODUCT/);
+  assert.match(await page.locator('#prod-filter-status').innerText(),/1건/);
+  await page.evaluate(previous=>{document.getElementById('prod-filter-date').value=previous;prepareProductionList();},dates.previous);
+  assert.match(await page.locator('#prod-body').innerText(),/PREVIOUS-LIST-PRODUCT/);
+  await page.evaluate(()=>{document.getElementById('prod-filter-date').value='';prepareProductionList();});
+  assert.equal(await page.locator('#prod-filter-date').inputValue(),'','Returning to an all-dates query preserves that choice');
+  assert.match(await page.locator('#prod-filter-status').innerText(),/전체 2건/);
+  await page.evaluate(()=>{productionListQueryActive=false;document.getElementById('prod-filter-product').value='PREVIOUS-LIST';prepareProductionList();});
+  assert.equal(await page.locator('#prod-filter-date').inputValue(),'','A keyword query must not be restricted to today');
+  assert.match(await page.locator('#prod-body').innerText(),/PREVIOUS-LIST-PRODUCT/);
+  await page.evaluate(()=>{productionListQueryActive=false;userProdEntries=[];document.getElementById('prod-filter-product').value='';prepareProductionList();});
+  assert.equal(await page.locator('#prod-filter-date').inputValue(),dates.current);
+  assert.match(await page.locator('#prod-body').innerText(),/생산일보가 없습니다/);
+  assert.equal(await page.locator('#prod-filter-status').innerText(),'0건');
+  console.log('PASS: production list opens with today automatically, preserves explicit date/all/keyword queries, normalizes historical dates and shows an empty-result message');
+}
+
 async function testBrowser() {
   const {chromium} = require('playwright');
   const executablePath = process.env.CHROME_PATH || [chromium.executablePath(), 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'].find(candidate => fs.existsSync(candidate));
@@ -517,6 +550,7 @@ async function testBrowser() {
     await testProductionGuards(page);
     await testProductionLabelLotCorrections(page);
     await testTransactionFlows(page, artifacts);
+    await testProductionDefaultList(page);
     assert.deepEqual(errors, []);
     console.log('PASS: real production DOM, automatic IDs, row notes, save/reopen/reorder, outbound history retention, reuse linkage, legacy metadata preservation and Samsung controls removal');
     console.log('Artifacts: ' + artifacts);

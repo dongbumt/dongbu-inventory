@@ -11399,9 +11399,13 @@ function prepareProductionList(){
   const exactDate = document.getElementById('prod-filter-date');
   const dateFrom = document.getElementById('prod-filter-from');
   const dateTo = document.getElementById('prod-filter-to');
-  if(exactDate && !exactDate.value && !dateFrom?.value && !dateTo?.value) exactDate.value = today;
-  productionListQueryActive = false;
-  setProductionListIdle();
+  const productQuery = document.getElementById('prod-filter-product')?.value.trim();
+  const lotQuery = document.getElementById('prod-filter-lot')?.value.trim();
+  if(!productionListQueryActive && exactDate && !exactDate.value && !dateFrom?.value && !dateTo?.value && !productQuery && !lotQuery){
+    exactDate.value = localDateString();
+  }
+  productionListQueryActive = true;
+  renderProduction();
 }
 
 function markProductionSearchPending(dateMode=''){
