@@ -8,7 +8,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMAS = [ROOT / 'supabase/schema-rpc-65-pda-raw-material-movements.sql', ROOT / 'supabase/pda-raw-verified-rules.sql', ROOT / 'supabase/schema-rpc-66-pda-raw-traceability-separation.sql']
+SCHEMAS = [ROOT / 'supabase/schema-rpc-65-pda-raw-material-movements.sql', ROOT / 'supabase/pda-raw-verified-rules.sql', ROOT / 'supabase/schema-rpc-66-pda-raw-traceability-separation.sql', ROOT / 'supabase/schema-rpc-75-pda-raw-domestic-076076.sql']
 PHOTO_CASES = [
     ('07662300206004601597009456', 15.97),
     ('2606251220400045701526', 15.26),
@@ -21,6 +21,7 @@ PHOTO_CASES = [
     ('019829288818906811260513310200111521146134120970', 11.15),
     ('01993526560490683102002640132509242100022656', 26.40),
     ('019933107903812531020020801326062521126766270623', 20.80),
+    ('07607600224004601707009477', 17.07),
 ]
 
 def check(conn):
@@ -36,6 +37,14 @@ def check(conn):
     parse = lambda code, rule=None: conn.execute('select pda_private.raw_parse(%s,%s)', (code, rule)).fetchone()[0]
     for code, kg in PHOTO_CASES:
         assert abs(parse(code)['weight'] - kg) < .001, code
+    domestic = parse(PHOTO_CASES[-1][0])
+    assert domestic['ruleKey'] == '26|17|4|2|1.00000000|1'
+    assert domestic['id'] == parse(PHOTO_CASES[-1][0], domestic['ruleKey'])['id'], 'Automatic and explicit rules must identify the same physical box'
+    for prefix in (']I0', ']Q3'):
+        assert parse(prefix + PHOTO_CASES[-1][0])['id'] == domestic['id'], 'ITF/QR AIM aliases must not create extra boxes'
+    assert domestic['barcodeLot'] is None and domestic['gtin'] is None, 'Never infer a product or domestic traceability number from this weight-only format'
+    reject(lambda: parse(PHOTO_CASES[-1][0].replace('076076', '076077', 1)), '검증된 SM')
+    reject(lambda: parse(PHOTO_CASES[-1][0][:-1]), '검증된 SM')
     assert parse(PHOTO_CASES[5][0])['requiresReview'], 'LB sample differs from label: never bypass review'
     canonical = parse(PHOTO_CASES[2][0])
     assert parse(']C1' + PHOTO_CASES[2][0])['id'] == canonical['id']
@@ -51,7 +60,7 @@ def check(conn):
     reject(lambda: parse('12345678901234567890123456'), '검증된 SM')
     reject(lambda: parse(PHOTO_CASES[0][0], 'not-verified'), '검증된 SM')
     reject(lambda: parse('01040199194722003102000000'), '허용범위')
-    print('PASS: all 11 photo-weight cases, GS1 AI boundaries/check digits/aliases, two domestic formats, product/LOT/unverified rejection')
+    print('PASS: all 12 photo-weight cases, GS1 AI boundaries/check digits/aliases, verified 076076 ITF/QR auto rule, stable box identity, neighboring/unverified rejection')
 
     suffix = uuid.uuid4().hex[:10]
     role, user, partner = (uuid.uuid4() for _ in range(3))
@@ -94,6 +103,20 @@ def check(conn):
     reject(lambda: commit('inbound', [scan()], pid=inactive['id']), '원료육 품목')
     reject(lambda: commit('inbound', [dict(scan(), labelWeight=100)]), '계산 중량')
     reject(lambda: commit('inbound', [dict(scan(), checked=False)]), '중량 대조')
+    with conn.transaction(force_rollback=True):
+        code = '07607600224004601707' + str(uuid.uuid4().int % 1000000).zfill(6)
+        reject(lambda: commit('inbound', [scan(code)], lot=''), '별도로 이력번호')
+        reject(lambda: commit('inbound', [dict(scan(code), labelWeight=17.08)]), '계산 중량')
+        traceability = 'L12610261938001'
+        receipt = commit('inbound', [scan(code)], lot=traceability)
+        assert receipt['weight'] == 17.07 and receipt['items'][0]['lot'] == traceability
+        item = lookup(code)
+        assert item['registered'] and item['lot'] == traceability and item['weight'] == 17.07
+        assert lookup(']I0' + code)['id'] == item['id'] == lookup(']Q3' + code)['id']
+        reject(lambda: commit('inbound', [scan(code)]), '중복 입고')
+        shipment = commit('outbound', [scan(code)], lot='')
+        assert shipment['weight'] == 17.07 and shipment['items'][0]['lot'] == traceability
+    print('PASS: 076076 automatic lookup, exact 17.07KG inbound/outbound, separately scanned traceability, duplicate aliases and fixed-KG protection; fixtures rolled back')
     with conn.transaction(force_rollback=True):
         imported = PHOTO_CASES[2][0]
         assert lookup(imported)['barcodeLot'] == '52476119'
@@ -175,6 +198,8 @@ def main():
     assert len(migration) == 1 and migration[0].read_text(encoding='utf-8-sig').replace('\r\n','\n') == expected.replace('\r\n','\n'), 'Migration and reviewed schema/rules must match'
     separation = list((ROOT / 'supabase/migrations').glob('*_pda_raw_traceability_separation.sql'))
     assert len(separation) == 1 and separation[0].read_text(encoding='utf-8-sig') == SCHEMAS[2].read_text(encoding='utf-8-sig'), 'Traceability migration must match the reviewed function'
+    domestic = list((ROOT / 'supabase/migrations').glob('*_pda_raw_domestic_076076.sql'))
+    assert len(domestic) == 1 and domestic[0].read_text(encoding='utf-8-sig') == SCHEMAS[3].read_text(encoding='utf-8-sig'), 'Domestic auto-rule migration must match the reviewed parser'
     with psycopg.connect('', autocommit=False, sslmode='require', connect_timeout=20, application_name='dbmt_raw_pda_qa') as conn:
         try:
             conn.execute('set local role postgres')
@@ -191,8 +216,8 @@ def main():
             exec(compile(definitions, 'existing_product_tests', 'exec'), namespace)
             namespace['check'](conn)
             for oid, name, digest in before:
-                if apply_schema and name == 'dbmt_pda_raw_commit':continue
-                assert conn.execute('select md5(pg_get_functiondef(%s::oid))', (oid,)).fetchone()[0] == digest, 'Only raw commit may change; existing product functions must not change'
+                if apply_schema and name == 'raw_parse':continue
+                assert conn.execute('select md5(pg_get_functiondef(%s::oid))', (oid,)).fetchone()[0] == digest, 'Only the raw parser may change; product and stock functions must not change'
             print('PASS: existing product receive/ship/return integration and unchanged product functions')
         finally:
             conn.rollback()

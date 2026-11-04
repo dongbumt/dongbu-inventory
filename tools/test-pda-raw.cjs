@@ -20,7 +20,8 @@ const server=http.createServer((req,res)=>{
       {id:'qa-sm',code:'07662300206004601597009456',rule:'SM 26|17|4|2|1.00000000|3',ruleKey:'26|17|4|2|1.00000000|3',weight:15.97,conversion:1,requiresReview:true},
       {id:'qa-lb',code:'019001933617340432010007741125092421256481',rule:'GS1 3201',ruleKey:'gs1',weight:35.11,conversion:.45359237,requiresReview:true},
       {id:'qa-lb-photo',code:'0190045310554488320100049211260618219217003319',rule:'GS1 3201',ruleKey:'gs1',weight:22.32,conversion:.45359237,requiresReview:true},
-      {id:'qa-lb-next',code:'0190045310554488320100049211260618219217003320',rule:'GS1 3201',ruleKey:'gs1',weight:22.32,conversion:.45359237,requiresReview:true}
+      {id:'qa-lb-next',code:'0190045310554488320100049211260618219217003320',rule:'GS1 3201',ruleKey:'gs1',weight:22.32,conversion:.45359237,requiresReview:true},
+      {id:'qa-domestic-076076',code:'07607600224004601707009477',rule:'SM 26|17|4|2|1.00000000|1',ruleKey:'26|17|4|2|1.00000000|1',weight:17.07,conversion:1,requiresReview:true}
     ];
     const registered=new Map(),saved=new Map(),calls=[],commits=[],lookups=[],errors=[],blocked=[];
     let canSave=true,loseResponse=false,denyCommit=false,lookupDelay=0;
@@ -99,11 +100,11 @@ const server=http.createServer((req,res)=>{
     assert.equal(commits.at(-1).p_source_id,'qa-existing');assert.equal(commits.at(-1).p_items[0].labelWeight,15.97);
     await page.locator('#receive-kind').selectOption('new');await page.locator('#partner').selectOption('qa-partner');
     const beforeLb=commits.length;lookupDelay=80;
-    for(const item of cases.slice(2)){await scan(item.code);assert.equal(await page.locator('dialog[open]').count(),0,'Pound boxes, including the reported photo, must scan continuously');}
+    for(const item of cases.slice(2,5)){await scan(item.code);assert.equal(await page.locator('dialog[open]').count(),0,'Pound boxes, including the reported photo, must scan continuously');}
     await idle();lookupDelay=0;assert.equal(await page.locator('#items li').count(),3);assert.equal(commits.length,beforeLb);
     assert.match(await page.locator('#total').innerText(),/3박스 · 79\.75 KG/);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
     await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input[data-weight]').count(),3);assert(await page.locator('#confirm-save').isDisabled());
-    assert.deepEqual(await page.locator('#confirm-items .scan-code').allTextContents(),cases.slice(2).map(item=>item.code),'Keep each barcode visible for physical label comparison');
+    assert.deepEqual(await page.locator('#confirm-items .scan-code').allTextContents(),cases.slice(2,5).map(item=>item.code),'Keep each barcode visible for physical label comparison');
     const weight=page.locator('#confirm-items input[data-weight="0"]');
     await weight.fill('35.10');assert.match(await page.locator('#confirm-summary').innerText(),/79\.74 KG/);
     await page.locator('#confirm-cancel').click();assert.equal(commits.length,beforeLb);assert.match(await page.locator('#items').innerText(),/35\.11 KG/,'Cancel discards unconfirmed weight edits');
@@ -134,6 +135,11 @@ const server=http.createServer((req,res)=>{
     await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_items[0].labelWeight,35.1);
     await page.locator('#history-open').click();await page.waitForFunction(()=>document.querySelectorAll('#history-list .history-row').length===5);await page.locator('#history-close').click();
     await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#partner').selectOption('qa-partner');
+    await page.locator('#lot').fill('L12610261938001');await scan(cases[5].code);await idle();
+    assert.equal(await page.locator('dialog[open]').count(),0);assert.match(await page.locator('#items').innerText(),/17\.07 KG/);assert.match(await page.locator('#items').innerText(),/L12610261938001/);
+    await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input').count(),0,'The new domestic rule is fixed KG, not pound conversion');
+    await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.equal(commits.at(-1).p_items[0].rule,cases[5].ruleKey);assert.equal(commits.at(-1).p_items[0].labelWeight,17.07);assert.equal(commits.at(-1).p_lot,'L12610261938001');
     const extra={...cases[1],id:'qa-extra',code:'07662300206004601597009457'};cases.push(extra);
     await scan(extra.code);await idle();await page.locator('#save').click();await page.keyboard.press('Escape');assert(await page.locator('#confirm-dialog').isHidden());assert.equal(await page.locator('#items li').count(),1);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
     await page.locator('#clear-items').click();lookupDelay=80;await scan(extra.code);assert(await page.locator('#save').isDisabled());await idle();lookupDelay=0;
