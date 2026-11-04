@@ -23,6 +23,7 @@ const server=http.createServer((req,res)=>{
       {id:'qa-lb-next',code:'0190045310554488320100049211260618219217003320',rule:'GS1 3201',ruleKey:'gs1',weight:22.32,conversion:.45359237,requiresReview:true},
       {id:'qa-domestic-076076',code:'07607600224004601707009477',rule:'SM 26|17|4|2|1.00000000|1',ruleKey:'26|17|4|2|1.00000000|1',weight:17.07,conversion:1,requiresReview:true}
     ];
+    const smKey='sm2:v1:mt:130:qa';for(const item of cases.filter(item=>item.ruleKey!=='gs1')){item.ruleKey=smKey;item.rule='SM [130] 탑미트 / 동부엠티';}
     const registered=new Map(),saved=new Map(),calls=[],commits=[],lookups=[],errors=[],blocked=[];
     let canSave=true,loseResponse=false,denyCommit=false,lookupDelay=0;
     page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
@@ -41,10 +42,12 @@ const server=http.createServer((req,res)=>{
       else if(name==='dbmt_erp_logout')data={ok:true};
       else if(name==='dbmt_pda_raw_bootstrap')data={ok:true,canSave,locations:['가공장','물류창고'],products:[product],partners:[{id:'qa-partner',name:'테스트 거래처',tradeType:'매입/매출'},{id:'sales-only',name:'매출 전용',tradeType:'매출'}],rules:[{key:cases[1].ruleKey,label:'사진 검증 국내산',length:26}]};
       else if(name==='dbmt_pda_raw_sources')data={ok:true,rows:[{id:'qa-existing',date:'2026-10-20',lot:'QA-EXISTING',available:100}]};
-      else if(name==='dbmt_pda_raw_lookup'){
+      else if(name==='dbmt_pda_raw_resolve'){
         lookups.push(body.p_code);if(lookupDelay)await new Promise(resolve=>setTimeout(resolve,lookupDelay));
         const source=cases.find(item=>item.code===body.p_code);if(!source)return fail('검증된 원료육 박스 바코드가 아닙니다.');
-        data={ok:true,item:{...source,calculatedWeight:source.weight,registered:false,revision:0,...registered.get(source.id)}};
+        const candidate=(mid,weight,enabled=true)=>({key:mid===130?smKey:`sm2:v1:mt:${mid}:qa`,source:body.p_source,manuId:mid,name:mid===130?'탑미트':'농협안심',shortName:'형식',length:26,start:mid===266?0:17,digits:4,decimals:2,factor:1,rounding:mid===76?1:3,min:.01,max:200,weight,smWeight:weight,enabled,reason:enabled?null:'원본 시작위치 확인 필요'});
+        if(source.ruleKey!=='gs1'&&!body.p_rule&&!registered.has(source.id))data={ok:true,needsRule:true,code:source.code,candidates:[candidate(76,Math.round(source.weight*10)/10),candidate(130,source.weight),candidate(266,null,false)]};
+        else data={ok:true,item:{...source,calculatedWeight:source.weight,registered:false,revision:0,...registered.get(source.id)}};
       }else if(name==='dbmt_pda_raw_commit'){
         commits.push(body);if(denyCommit)return fail('다른 작업자가 처리했습니다. 스캔 목록을 다시 조회해주세요.');
         if(body.p_mode==='inbound'&&!String(body.p_lot||'').trim())return fail('별도 이력번호를 입력해주세요.');
@@ -67,6 +70,15 @@ const server=http.createServer((req,res)=>{
     await page.locator('#product-search').fill('DE123');await page.locator('#product').selectOption(product.id);await page.locator('#partner').selectOption('qa-partner');await page.locator('#unit-price').fill('5000');
     await page.locator('#barcode').fill('0104');await page.locator('#barcode').press('Control+]');assert.equal(await page.locator('#barcode').inputValue(),'0104|');
     const scan=async code=>{await page.locator('#barcode').fill(code);await page.locator('#barcode').press('Enter');};
+    const choose=async()=>{
+      await page.locator('#rule-dialog').waitFor({state:'visible'});
+      assert.equal(await page.locator('#rule-candidates input:checked').count(),0,'Never automatically choose even one matching candidate');
+      assert(await page.locator('#rule-choose').isDisabled());assert(await page.locator('#rule-candidates input[disabled]').count());
+      const before=commits.length;await page.locator('#rule-search').fill('130');assert.equal(await page.locator('#rule-candidates input').count(),1);
+      assert.equal(await page.locator('#rule-candidates input:checked').count(),0);
+      await page.locator('#rule-candidates input').check();assert(await page.locator('#rule-choose').isDisabled());
+      await page.locator('#rule-checked').check();await page.locator('#rule-choose').click();assert.equal(commits.length,before,'Rule selection is not an inventory save');
+    };
     const idle=()=>page.waitForFunction(()=>!document.getElementById('save-detail').textContent.includes('조회 중'));
     const confirm=async()=>{await page.locator('#save').click();assert(await page.locator('#confirm-save').isDisabled());await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();};
     await scan(cases[0].code);await idle();assert.equal(await page.locator('#items li').count(),0,'Manufacturer GS1 LOT must not become a domestic traceability number');
@@ -92,7 +104,7 @@ const server=http.createServer((req,res)=>{
     await scan(cases[0].code);await idle();assert.match(await page.locator('#status').innerText(),/이미 출고/);
     await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#receive-kind').selectOption('bind');
     await page.waitForFunction(()=>document.getElementById('source').options.length===2);await page.locator('#source').selectOption('qa-existing');assert.equal(await page.locator('#lot').inputValue(),'QA-EXISTING');
-    await scan(cases[1].code);await idle();assert.equal(await page.locator('#items li').count(),1);
+    await scan(cases[1].code);await choose();await idle();assert.equal(await page.locator('#items li').count(),1);
     assert.equal(await page.locator('dialog[open]').count(),0,'SM rules must not interrupt scanning');
     await page.locator('#save').click();assert.match(await page.locator('#confirm-title').innerText(),/중량 증가 없음/);
     assert.equal(await page.locator('#confirm-items input').count(),0,'SM weights remain fixed');assert(await page.locator('#confirm-save').isDisabled());
@@ -135,18 +147,31 @@ const server=http.createServer((req,res)=>{
     await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_items[0].labelWeight,35.1);
     await page.locator('#history-open').click();await page.waitForFunction(()=>document.querySelectorAll('#history-list .history-row').length===5);await page.locator('#history-close').click();
     await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#partner').selectOption('qa-partner');
-    await page.locator('#lot').fill('L12610261938001');await scan(cases[5].code);await idle();
+    await page.locator('#lot').fill('L12610261938001');await scan(cases[5].code);await choose();await idle();
     assert.equal(await page.locator('dialog[open]').count(),0);assert.match(await page.locator('#items').innerText(),/17\.07 KG/);assert.match(await page.locator('#items').innerText(),/L12610261938001/);
     await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input').count(),0,'The new domestic rule is fixed KG, not pound conversion');
     await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     assert.equal(commits.at(-1).p_items[0].rule,cases[5].ruleKey);assert.equal(commits.at(-1).p_items[0].labelWeight,17.07);assert.equal(commits.at(-1).p_lot,'L12610261938001');
     const extra={...cases[1],id:'qa-extra',code:'07662300206004601597009457'};cases.push(extra);
-    await scan(extra.code);await idle();await page.locator('#save').click();await page.keyboard.press('Escape');assert(await page.locator('#confirm-dialog').isHidden());assert.equal(await page.locator('#items li').count(),1);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
+    await scan(extra.code);await choose();await idle();await page.locator('#save').click();await page.keyboard.press('Escape');assert(await page.locator('#confirm-dialog').isHidden());assert.equal(await page.locator('#items li').count(),1);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
     await page.locator('#clear-items').click();lookupDelay=80;await scan(extra.code);assert(await page.locator('#save').isDisabled());await idle();lookupDelay=0;
     assert.equal(await page.locator('dialog[open]').count(),0);await page.locator('#clear-items').click();
     await context.setOffline(true);assert(await page.locator('#save').isDisabled());await context.setOffline(false);
+    const tenderloin={...cases[1],id:'qa-tenderloin',code:'07607000109004601114007239',weight:11.14},nextTenderloin={...cases[1],id:'qa-tenderloin-next',code:'07607000109004601114007240',weight:11.14};cases.push(tenderloin,nextTenderloin);
+    await scan(tenderloin.code);await page.locator('#rule-dialog').waitFor({state:'visible'});
+    await page.locator('#rule-source').selectOption('전체');await page.waitForFunction(()=>document.querySelector('#rule-candidates small')?.textContent.includes('전체'));
+    for(const width of [320,390,480,1280]){
+      await page.setViewportSize({width,height:800});const box=await page.locator('#rule-dialog').boundingBox();assert(box.x>=0&&box.x+box.width<=width);
+      assert.equal(await page.locator('#rule-dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false,'Candidate dialog must fit small PDA screens');
+      await page.locator('#rule-dialog').screenshot({path:path.join(artifacts,`sm-formats-${width}.png`)});
+    }
+    await page.setViewportSize({width:480,height:800});await choose();await idle();assert.match(await page.locator('#items').innerText(),/11\.14 KG/);
+    await scan(nextTenderloin.code);await idle();assert.equal(await page.locator('dialog[open]').count(),0,'One selected family must scan subsequent boxes continuously');assert.equal(await page.locator('#items li').count(),2);
+    await page.locator('#clear-items').click();await page.locator('#settings-panel').evaluate(el=>el.open=true);
+    await page.locator('#rule-reset').click();await scan(tenderloin.code);await page.locator('#rule-dialog').waitFor({state:'visible'});
+    assert.equal(await page.locator('#rule-candidates input:checked').count(),0);await page.keyboard.press('Escape');await idle();assert.equal(await page.locator('#items li').count(),0,'Canceling a format selection must not add a box or save anything');
     canSave=false;await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#status').innerText(),/조회만/);
-    await page.locator('#product').selectOption(product.id);await page.locator('#lot').fill('QA-READONLY');await scan(extra.code);
+    await page.locator('#product').selectOption(product.id);await page.locator('#lot').fill('QA-READONLY');await scan(extra.code);await choose();
     await idle();assert.equal(await page.locator('dialog[open]').count(),0);assert(await page.locator('#save').isDisabled());
     for(const width of [320,390,480,1280]){
       await page.setViewportSize({width,height:800});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`No overflow at ${width}px`);

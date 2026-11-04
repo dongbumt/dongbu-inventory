@@ -6,10 +6,10 @@
   <meta name="robots" content="noindex,nofollow">
   <title>동부엠티 ERP · PDA 원료육 입출고</title>
   <link rel="stylesheet" href="styles/pda.css?v=20261013pda1">
-  <link rel="stylesheet" href="styles/pda-kind.css?v=20261026batch1">
+  <link rel="stylesheet" href="styles/pda-kind.css?v=20261105sm1">
   <script src="vendor/gs1-parser/BarcodeParser.min.js?v=9989caa6" defer></script>
   <script src="pda-sound.js?v=20261014sound2" defer></script>
-  <script src="pda-raw.js?v=20261026batch1" defer></script>
+  <script src="pda-raw.js?v=20261105sm1" defer></script>
 </head>
 <body>
   <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><a href="pda.html">제품</a><span aria-current="page">원료육</span></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
@@ -26,7 +26,7 @@
       <details id="settings-panel" open><summary id="settings-summary">작업 설정</summary><div class="settings">
         <label>작업일<input type="date" id="work-date" required></label><label>재고 지점<select id="location" required></select></label>
         <div class="partner-fields" id="partner-fields"><label><span id="partner-label">입고 거래처</span><input type="search" id="partner-search" placeholder="거래처명 검색" autocomplete="off"></label><select id="partner" aria-label="거래처"><option value="">거래처 선택</option></select></div>
-        <label class="raw-wide">판독형식<select id="rule"><option value="">GS1·사진 검증 국내산 자동</option></select></label>
+        <div class="raw-wide raw-format-setting"><label>바코드 구분<select id="rule"><option value="">자동</option><option value="gs1">규격(GS1)</option><option value="sm">비규격</option></select></label><button id="rule-reset" type="button" title="다음 비규격 스캔의 판독형식 다시 선택" aria-label="판독형식 다시 선택">↻</button><span id="rule-meta" class="raw-help"></span></div>
         <div id="inbound-fields" class="raw-wide settings">
           <label>입고 방식<select id="receive-kind"><option value="new">신규 입고</option><option value="bind">기존 재고 연결</option></select></label>
           <label id="price-field">입고 단가(원/KG)<input id="unit-price" type="number" min="0" max="1000000000" step="any" inputmode="decimal" value="0"></label>
@@ -44,6 +44,7 @@
     </section>
   </main>
   <footer id="save-bar" hidden><div><strong id="total">0박스 · 0.00 KG</strong><span id="save-detail"></span></div><button id="save" class="primary" type="button" disabled>입고 확인</button></footer>
+  <dialog id="rule-dialog" aria-labelledby="rule-title"><div class="dialog-heading"><h2 id="rule-title">비규격 중량형식 선택</h2><button id="rule-cancel" type="button" aria-label="형식 선택 취소">×</button></div><div id="rule-code" class="scan-code"></div><div class="raw-rule-filters"><label>규칙 원본<select id="rule-source"><option>동부엠티</option><option>동부축산유통</option><option>전체</option></select></label><label>형식명·ID<input type="search" id="rule-search" autocomplete="off"></label></div><div id="rule-count" class="raw-help" role="status"></div><div id="rule-candidates" role="group" aria-label="중량형식 후보"></div><label class="raw-check"><input id="rule-checked" type="checkbox">선택한 중량이 실물 라벨과 일치</label><div class="dialog-actions"><button id="rule-choose" class="primary" type="button" disabled>형식 적용</button></div></dialog>
   <dialog id="confirm-dialog"><h2 id="confirm-title">원료육 입출고 확인</h2><div id="confirm-summary"></div><ul id="confirm-items"></ul><div id="confirm-error" role="alert" hidden></div><label class="raw-check"><input id="confirm-checked" type="checkbox">전체 라벨과 품목·이력번호·중량 대조 완료</label><div class="dialog-actions"><button id="confirm-cancel" type="button">돌아가기</button><button id="confirm-save" class="primary" type="button" disabled>확정 저장</button></div></dialog>
   <dialog id="history-dialog"><div class="dialog-heading"><h2>원료육 최근 처리이력</h2><button id="history-close" type="button">닫기</button></div><div id="history-list"></div></dialog>
 </body>

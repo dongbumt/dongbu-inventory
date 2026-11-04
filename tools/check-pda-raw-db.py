@@ -6,9 +6,11 @@ import uuid
 from pathlib import Path
 import psycopg
 from psycopg.types.json import Jsonb
+from pda_sm_checks import check_sm
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS = [ROOT / 'supabase/schema-rpc-65-pda-raw-material-movements.sql', ROOT / 'supabase/pda-raw-verified-rules.sql', ROOT / 'supabase/schema-rpc-66-pda-raw-traceability-separation.sql', ROOT / 'supabase/schema-rpc-75-pda-raw-domestic-076076.sql']
+SCHEMAS += [ROOT / 'supabase/schema-rpc-76-pda-raw-sm-format-candidates.sql', ROOT / 'supabase/pda-raw-sm-format-catalog.sql']
 PHOTO_CASES = [
     ('07662300206004601597009456', 15.97),
     ('2606251220400045701526', 15.26),
@@ -93,6 +95,7 @@ def check(conn):
         return rpc('dbmt_pda_raw_commit', auth, req or uuid.uuid4(), mode, location, partner, '2026-10-21', items, pid, lot, source, 5000, 'QA')
 
     reject(lambda: lookup(auth='bad-token'), '로그인')
+    check_sm(conn,rpc,token,product_id,partner,commit,reject)
     bootstrap = rpc('dbmt_pda_raw_bootstrap', token)
     assert bootstrap['canSave'] and any(p['id'] == product_id for p in bootstrap['products'])
     assert not any(p['id'] == inactive['id'] for p in bootstrap['products'])
@@ -200,6 +203,8 @@ def main():
     assert len(separation) == 1 and separation[0].read_text(encoding='utf-8-sig') == SCHEMAS[2].read_text(encoding='utf-8-sig'), 'Traceability migration must match the reviewed function'
     domestic = list((ROOT / 'supabase/migrations').glob('*_pda_raw_domestic_076076.sql'))
     assert len(domestic) == 1 and domestic[0].read_text(encoding='utf-8-sig') == SCHEMAS[3].read_text(encoding='utf-8-sig'), 'Domestic auto-rule migration must match the reviewed parser'
+    sm = list((ROOT / 'supabase/migrations').glob('*_pda_raw_sm_format_candidates.sql'))
+    assert len(sm) == 1 and sm[0].read_text(encoding='utf-8-sig') == '\n\n'.join(file.read_text(encoding='utf-8-sig').rstrip() for file in SCHEMAS[4:])+'\n', 'SM migration must match schema and complete catalog'
     with psycopg.connect('', autocommit=False, sslmode='require', connect_timeout=20, application_name='dbmt_raw_pda_qa') as conn:
         try:
             conn.execute('set local role postgres')
@@ -216,7 +221,7 @@ def main():
             exec(compile(definitions, 'existing_product_tests', 'exec'), namespace)
             namespace['check'](conn)
             for oid, name, digest in before:
-                if apply_schema and name == 'raw_parse':continue
+                if apply_schema and name in ('raw_parse','dbmt_pda_raw_commit'):continue
                 assert conn.execute('select md5(pg_get_functiondef(%s::oid))', (oid,)).fetchone()[0] == digest, 'Only the raw parser may change; product and stock functions must not change'
             print('PASS: existing product receive/ship/return integration and unchanged product functions')
         finally:

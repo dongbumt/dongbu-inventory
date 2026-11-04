@@ -5,7 +5,8 @@
   const SESSION='dbmt_pda_session_token',PENDING='dbmt_pda_raw_pending_batch_';
   const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const kg=value=>Number(value||0).toFixed(2);
-  const state={token:'',user:null,epoch:0,mode:'inbound',products:[],partners:[],sources:[],items:[],queue:[],busy:false,saving:false,pending:null,canSave:false,sourceRequest:0};
+  const state={token:'',user:null,epoch:0,mode:'inbound',products:[],partners:[],sources:[],items:[],queue:[],busy:false,saving:false,pending:null,canSave:false,sourceRequest:0,selection:null,reselect:false};
+  let rulePicker=null;
   const storage={get(key){try{return sessionStorage.getItem(key)||'';}catch(_){return '';}},set(key,value){sessionStorage.setItem(key,value);},remove(key){try{sessionStorage.removeItem(key);}catch(_){}}};
   const today=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));return `${parts.year}-${parts.month}-${parts.day}`;};
   function uuid(){const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const s=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');return s.slice(0,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16)+'-'+s.slice(16,20)+'-'+s.slice(20);}
@@ -23,6 +24,34 @@
   }
   function focusScan(){if(!state.pending&&!state.saving&&!document.querySelector('dialog[open]')&&!$('workspace').hidden)$('barcode').focus({preventScroll:true});}
   function selectedProduct(){return state.products.find(p=>String(p.id)===$('product').value);}
+  function resetRule(){state.selection=null;state.reselect=false;$('rule-meta').textContent='';}
+  function codeFamily(code){const v=String(code).trim().replace(/^\](C0|C1|d2|Q3|I0)/,'');return /^\d+$/.test(v)?`${v.length}:${v.slice(0,6)}`:'';}
+  function resolveParams(code,rule=null,reselect=state.reselect){return {p_token:state.token,p_code:code,p_mode:state.mode,p_product_id:$('product').value||null,p_trader_id:$('receive-kind').value==='bind'&&state.mode==='inbound'?null:$('partner').value||null,p_rule:rule,p_format:$('rule').value||'auto',p_source:$('rule-source').value,p_reselect:reselect};}
+  function renderCandidates(){
+    if(!rulePicker)return;
+    const q=$('rule-search').value.trim().toLowerCase(),rows=rulePicker.rows.filter(row=>!q||[row.manuId,row.name,row.shortName,row.country].join(' ').toLowerCase().includes(q));
+    $('rule-candidates').innerHTML=rows.map(row=>`<label class="raw-rule-option"><input type="radio" name="sm-candidate" value="${esc(row.key)}" ${row.enabled?'':'disabled'}><span>[${esc(row.manuId)}] ${esc(row.name||row.shortName)}</span><strong>${row.enabled?`${esc(Number(row.smWeight))} KG`:'-'}</strong><small>${esc(row.source)} · ${esc(row.length)} / ${esc(row.start)}(${esc(row.digits)}.${esc(row.decimals)}) / ×${esc(row.factor)} / 반올림 ${esc(row.rounding)}<br>허용 ${esc(row.min)}~${esc(row.max)}KG${row.enabled&&Number(row.smWeight)!==Number(row.weight)?` · ERP ${kg(row.weight)}KG`:''}</small>${row.enabled?'':`<small class="raw-rule-error">${esc(row.reason)}</small>`}</label>`).join('')||'<p class="raw-help">해당 형식이 없습니다.</p>';
+    $('rule-count').textContent=`${rows.length}개 형식 · 적용 가능 ${rows.filter(row=>row.enabled).length}개`;
+    $('rule-checked').checked=false;$('rule-choose').disabled=true;
+  }
+  function chooseRule(data){
+    return new Promise(resolve=>{rulePicker={rows:data.candidates||[],code:data.code,resolve,request:0};$('rule-code').textContent=data.code;$('rule-search').value='';renderCandidates();$('rule-dialog').showModal();});
+  }
+  $('rule-search').addEventListener('input',renderCandidates);
+  $('rule-candidates').addEventListener('change',()=>{$('rule-checked').checked=false;$('rule-choose').disabled=true;});
+  $('rule-checked').addEventListener('change',()=>{$('rule-choose').disabled=!$('rule-checked').checked||!$('rule-candidates').querySelector('input:checked');});
+  $('rule-choose').addEventListener('click',()=>{
+    const key=$('rule-candidates').querySelector('input:checked')?.value,picker=rulePicker;
+    if(!picker||!key||!$('rule-checked').checked)return;
+    rulePicker=null;$('rule-dialog').close();picker.resolve(key);
+  });
+  $('rule-cancel').addEventListener('click',()=>$('rule-dialog').close());
+  $('rule-dialog').addEventListener('close',()=>{const picker=rulePicker;rulePicker=null;if(picker){state.queue=[];picker.resolve(null);}});
+  $('rule-source').addEventListener('change',async()=>{
+    const picker=rulePicker;if(!picker)return;const request=++picker.request;picker.rows=[];renderCandidates();$('rule-count').textContent='조회 중';
+    try{const data=await rpc('dbmt_pda_raw_resolve',resolveParams(picker.code,null,true));if(rulePicker!==picker||request!==picker.request)return;picker.rows=data.candidates||[];renderCandidates();}
+    catch(error){if(rulePicker===picker&&request===picker.request)$('rule-count').textContent=error.message;}
+  });
   function renderProducts(){
     const selected=$('product').value,q=$('product-search').value.trim().toLowerCase();
     $('product').innerHTML='<option value="">품목 선택</option>'+state.products.filter(p=>String(p.id)===selected||!q||[p.name,p.productCode,p.brand,p.factoryNo,p.origin].join(' ').toLowerCase().includes(q)).map(p=>`<option value="${esc(p.id)}">${esc([p.productCode,p.name,p.brand,p.factoryNo,p.origin,p.storage,p.packunit].filter(Boolean).join(' · '))}</option>`).join('');
@@ -52,6 +81,7 @@
     for(const el of document.querySelectorAll('.settings input,.settings select,.mode-tabs input'))el.disabled=busy||state.items.length>0;
     for(const id of ['barcode','scan-submit','manual-entry','note'])$(id).disabled=locked;
     $('clear-items').disabled=busy||!state.items.length;$('logout').disabled=state.saving||state.busy;$('inbound-fields').hidden=state.mode!=='inbound';
+    $('rule-reset').disabled=busy||state.mode!=='inbound';
     $('partner-fields').hidden=state.mode==='inbound'&&$('receive-kind').value==='bind';$('partner-label').textContent=state.mode==='outbound'?'출고 거래처':'입고 거래처';
     $('source-field').hidden=$('receive-kind').value!=='bind';$('price-field').hidden=$('receive-kind').value==='bind';
     document.querySelector(`input[name="mode"][value="${state.mode}"]`).checked=true;
@@ -62,7 +92,7 @@
     const data=await rpc('dbmt_pda_raw_bootstrap',{p_token:state.token});if(epoch!==state.epoch)return;
     state.products=data.products||[];state.partners=data.partners||[];state.canSave=data.canSave===true;
     $('location').innerHTML=(data.locations||[]).map(name=>`<option>${esc(name)}</option>`).join('');$('location').value='가공장';
-    $('rule').innerHTML='<option value="">GS1·사진 검증 국내산 자동</option>'+ (data.rules||[]).map(rule=>`<option value="${esc(rule.key)}">${rule.length}자리 · ${esc(rule.label)} [${esc(rule.key)}]</option>`).join('');
+    resetRule();$('rule').value='';
     renderProducts();renderPartners();$('work-date').value=today();$('work-date').max=today();
     $('user-name').textContent=state.user.displayName||state.user.loginId;$('login-form').hidden=true;$('workspace').hidden=false;$('save-bar').hidden=false;$('history-open').hidden=false;$('logout').hidden=false;
     const saved=storage.get(PENDING+state.user.id);
@@ -90,10 +120,12 @@
   for(const link of document.querySelectorAll('.pda-kind-mini a'))link.addEventListener('click',event=>{
     if(state.saving||state.busy||(state.items.length||state.pending)&&!confirm('스캔 목록을 남겨둔 채 화면을 이동할까요? 저장 응답 확인 중인 요청은 같은 계정으로 이 화면에서 재시도해주세요.'))event.preventDefault();
   });
-  for(const radio of document.querySelectorAll('[name="mode"]'))radio.addEventListener('change',event=>{state.mode=event.target.value;renderPartners();render();focusScan();});
+  for(const radio of document.querySelectorAll('[name="mode"]'))radio.addEventListener('change',event=>{state.mode=event.target.value;resetRule();renderPartners();render();focusScan();});
   $('product-search').addEventListener('input',renderProducts);$('partner-search').addEventListener('input',renderPartners);
-  $('product').addEventListener('change',()=>{renderProductMeta();loadSources();});
-  $('receive-kind').addEventListener('change',()=>{render();loadSources();});
+  $('product').addEventListener('change',()=>{resetRule();renderProductMeta();loadSources();});
+  $('partner').addEventListener('change',resetRule);$('rule').addEventListener('change',resetRule);
+  $('rule-reset').addEventListener('click',()=>{resetRule();state.reselect=true;$('rule-meta').textContent='다음 비규격 바코드의 형식 재선택';focusScan();});
+  $('receive-kind').addEventListener('change',()=>{resetRule();render();loadSources();});
   $('location').addEventListener('change',()=>{render();loadSources();});$('work-date').addEventListener('change',render);
   $('source').addEventListener('change',()=>{const src=state.sources.find(row=>row.id===$('source').value);if(src)$('lot').value=src.lot||'';});
   $('lot').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();focusScan();}});
@@ -117,7 +149,13 @@
     try{while(state.queue.length&&epoch===state.epoch){
       const code=state.queue.shift();
       try{
-        const data=await rpc('dbmt_pda_raw_lookup',{p_token:state.token,p_code:code,p_rule:$('rule').value||null});if(epoch!==state.epoch)return;
+        if(state.mode==='inbound'&&!$('lot').value.trim())throw Error('제품 바코드와 별도로 이력번호 바코드를 읽거나 이력번호를 입력해주세요.');
+        const selected=state.selection?.family===codeFamily(code)?state.selection.key:null;
+        let data=await rpc('dbmt_pda_raw_resolve',resolveParams(code,selected));if(epoch!==state.epoch)return;
+        if(data.needsRule){
+          const rule=await chooseRule(data);if(epoch!==state.epoch)return;if(!rule){status('형식 선택을 취소했습니다.');continue;}
+          data=await rpc('dbmt_pda_raw_resolve',resolveParams(code,rule));if(epoch!==state.epoch)return;
+        }
         const item=data.item;if(state.items.some(row=>row.id===item.id))throw Error('이미 목록에 있는 박스입니다.');
         if(state.items.length>=200)throw Error('200박스까지 처리할 수 있습니다. 먼저 저장해주세요.');
         if(state.mode==='outbound'&&!item.registered)throw Error('원료육 입고 또는 기존 재고 연결을 먼저 해주세요.');
@@ -137,6 +175,7 @@
           if($('receive-kind').value==='bind'&&!$('source').value)throw Error('연결할 기존 입고 재고를 선택해주세요.');
         }
         item.labelWeight=Number(item.weight);
+        if(state.mode==='inbound'&&item.ruleKey.startsWith('sm2:v1:')){state.selection={family:codeFamily(item.code),key:item.ruleKey};state.reselect=false;$('rule-meta').textContent=item.rule;}
         if(epoch!==state.epoch)return;state.items.push(item);$('settings-panel').open=false;status(`${item.product} · 이력번호 ${item.lot} · ${kg(item.labelWeight)}KG`,'ok');sound('success');
       }catch(error){if(epoch===state.epoch){status(error.message,'error');sound('error');}}
     }}finally{state.busy=false;render();focusScan();}
