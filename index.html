@@ -28,7 +28,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261105welstory1">
+<link rel="stylesheet" href="styles/main.css?v=20261106expensesort1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -3529,16 +3529,16 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
     </div>
     <div style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <table id="exp-list-table" style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead><tr style="background:#f8f9fa;">
-          <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);">날짜</th>
-          <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);">결제수단</th>
-          <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);">구매처유형</th>
-          <th style="padding:8px;text-align:left;border-bottom:2px solid var(--border);">구매처명</th>
-          <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);">카테고리</th>
-          <th style="padding:8px;text-align:left;border-bottom:2px solid var(--border);">품목/내용</th>
-          <th style="padding:8px;text-align:right;border-bottom:2px solid var(--border);">금액(원)</th>
-          <th style="padding:8px;text-align:left;border-bottom:2px solid var(--border);">비고</th>
+          <th aria-sort="descending" style="padding:8px;text-align:center;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="date" data-label="날짜" onclick="sortExpenses('date')">날짜 <span class="expense-sort-indicator" aria-hidden="true">▼</span></button></th>
+          <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="paytype" data-label="결제수단" onclick="sortExpenses('paytype')">결제수단 <span class="expense-sort-indicator" aria-hidden="true">↕</span></button></th>
+          <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="storetype" data-label="구매처유형" onclick="sortExpenses('storetype')">구매처유형 <span class="expense-sort-indicator" aria-hidden="true">↕</span></button></th>
+          <th style="padding:8px;text-align:left;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="store" data-label="구매처명" onclick="sortExpenses('store')">구매처명 <span class="expense-sort-indicator" aria-hidden="true">↕</span></button></th>
+          <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="category" data-label="카테고리" onclick="sortExpenses('category')">카테고리 <span class="expense-sort-indicator" aria-hidden="true">↕</span></button></th>
+          <th style="padding:8px;text-align:left;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="item" data-label="품목/내용" onclick="sortExpenses('item')">품목/내용 <span class="expense-sort-indicator" aria-hidden="true">↕</span></button></th>
+          <th style="padding:8px;text-align:right;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="amount" data-label="금액" onclick="sortExpenses('amount')">금액(원) <span class="expense-sort-indicator" aria-hidden="true">↕</span></button></th>
+          <th style="padding:8px;text-align:left;border-bottom:2px solid var(--border);"><button type="button" class="expense-sort" data-exp-sort="note" data-label="비고" onclick="sortExpenses('note')">비고 <span class="expense-sort-indicator" aria-hidden="true">↕</span></button></th>
           <th style="padding:8px;text-align:center;border-bottom:2px solid var(--border);">관리</th>
         </tr></thead>
         <tbody id="exp-body"></tbody>
@@ -20046,9 +20046,39 @@ const EXP_PAY_COLORS = {
   '우리카드':'#1a7ab5', '비씨카드':'#8e44ad', '주유카드':'#d35400', '통장입금':'#27ae60', '현금':'#e67e22'
 };
 const EXP_CAT_LIST = ['소모품','포장재','원부자재','식대','차량유지비','사무용품','시설유지보수','위생안전관리','복리후생','접대비','공과금','기타'];
+const EXP_SORT_KEYS = ['date','paytype','storetype','store','category','item','amount','note'];
+const expenseSort = {key:'date',direction:-1};
+const expenseSortCollator = new Intl.Collator('ko-KR',{numeric:true,sensitivity:'base'});
 
 function normalizeExpenseCategory(category){
   return category === '위생용품' ? '위생안전관리' : (category || '');
+}
+
+function sortExpenses(key){
+  if(!EXP_SORT_KEYS.includes(key)) return;
+  expenseSort.direction=expenseSort.key===key ? -expenseSort.direction : 1;
+  expenseSort.key=key;
+  renderExpenses();
+}
+
+function compareExpenseRows(a,b){
+  const key=expenseSort.key;
+  const value=row=>String(key==='category' ? normalizeExpenseCategory(row.category) : row[key]??'').trim();
+  const left=value(a),right=value(b),numeric=key==='amount';
+  const number=text=>Number(text.replace(/,/g,''));
+  const empty=text=>text==='' || (numeric && !Number.isFinite(number(text)));
+  const leftEmpty=empty(left),rightEmpty=empty(right);
+  if(leftEmpty || rightEmpty) return Number(leftEmpty)-Number(rightEmpty);
+  return (numeric ? number(left)-number(right) : expenseSortCollator.compare(left,right))*expenseSort.direction;
+}
+
+function renderExpenseSortHeaders(){
+  document.querySelectorAll('#exp-list-table .expense-sort').forEach(button=>{
+    const active=button.dataset.expSort===expenseSort.key;
+    button.closest('th').setAttribute('aria-sort',active ? (expenseSort.direction===1?'ascending':'descending') : 'none');
+    button.querySelector('.expense-sort-indicator').textContent=active ? (expenseSort.direction===1?'▲':'▼') : '↕';
+    button.title=`${button.dataset.label} ${active && expenseSort.direction===1?'내림차순':'오름차순'} 정렬`;
+  });
 }
 
 function renderExpenseMonthOverview(selectedMonth){
@@ -20094,7 +20124,8 @@ function renderExpenses(){
   const filtered = categoryVal
     ? monthFiltered.filter(e=>normalizeExpenseCategory(e.category)===categoryVal)
     : [...monthFiltered];
-  filtered.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  filtered.sort(compareExpenseRows);
+  renderExpenseSortHeaders();
 
   renderExpenseMonthOverview(monthVal);
 

@@ -632,6 +632,11 @@
   .fs-layout-scale{position:absolute;right:7px;bottom:6px;z-index:20;background:rgba(255,255,255,.92);border:1px solid #bbc2c9;border-radius:5px;padding:4px 6px;color:#5d6771;font-size:9px;font-weight:800;pointer-events:none;}
   .fs-row-table input,.fs-row-table select{padding:6px 8px;font-size:12px;}
   #fs-actual-area[readonly]{background:#eef0f2;color:#4d5761;font-weight:800;cursor:default;}
+  /* ── 지출 목록 정렬 ── */
+  .expense-sort{display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;white-space:nowrap;}
+  .expense-sort:hover{text-decoration:underline;}
+  .expense-sort:focus-visible{outline:2px solid #777;outline-offset:3px;}
+  .expense-sort-indicator{display:inline-block;min-width:10px;font-size:10px;color:#777;text-align:center;}
   /* ── 견적서 작성 ── */
   #p-quotation{min-width:0;width:100%;max-width:100%;overflow:hidden;}
   #p-quotation .card{min-width:0;max-width:100%;}
