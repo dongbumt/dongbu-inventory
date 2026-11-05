@@ -2,10 +2,11 @@
 const ALLOWED_ORIGIN='https://dongbumt.github.io';
 const MAX_DISTANCE=70;
 const CACHE_LIMIT=500;
-// Office-confirmed location. Allow small GPS drift around the selected map point.
+// Office-confirmed names. Each radius includes the site's recorded GPS positions.
 const PLACE_OVERRIDES=[
   {name:'동부축산유통',latitude:37.4809862,longitude:126.6862894,radius:50},
-  {name:'삼진1냉장',latitude:37.40162,longitude:127.2389188,radius:50}
+  {name:'삼진1냉장',latitude:37.40162,longitude:127.2389188,radius:50},
+  {name:'삼성웰스토리 평택센터',latitude:37.11853765,longitude:127.0242801,radius:100}
 ];
 const clean=value=>String(value??'').trim();
 const coord=value=>value===null||value===undefined||value===''?NaN:Number(value);
