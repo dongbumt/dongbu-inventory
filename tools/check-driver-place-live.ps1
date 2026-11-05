@@ -12,7 +12,7 @@ try {
   $previousAction = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'Continue'
-    $connection = & npx.cmd supabase@latest db dump --linked --dry-run 2>&1 | Out-String
+    $connection = & npx.cmd supabase@2.122.1 db dump --linked --dry-run 2>&1 | Out-String
     $cliExit = $LASTEXITCODE
   } finally { $ErrorActionPreference = $previousAction }
   if($cliExit -ne 0){ throw 'Could not resolve the linked Supabase connection.' }

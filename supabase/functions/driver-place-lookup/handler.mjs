@@ -14,7 +14,7 @@ export function distanceMetres(lat1,lon1,lat2,lon2){
   const r=Math.PI/180,dlat=(lat2-lat1)*r,dlon=(lon2-lon1)*r;
   return 6371000*2*Math.asin(Math.sqrt(Math.min(1,Math.sin(dlat/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dlon/2)**2)));
 }
-export function choosePlace(documents,address,latitude,longitude){
+export function choosePlace(documents,address,latitude,longitude,random=Math.random){
   const addresses=new Set([address?.road_address?.address_name,address?.address?.address_name].map(normalizeAddress).filter(Boolean));
   const names=new Map();
   for(const item of documents||[]){
@@ -27,13 +27,14 @@ export function choosePlace(documents,address,latitude,longitude){
     if(!before||before.distance>distance)names.set(name,{name,distance});
   }
   const matches=[...names.values()].sort((a,b)=>a.distance-b.distance);
+  if(!matches.length)return '';
   if(matches.length===1)return matches[0].name;
-  // Multiple businesses in one building must not be attributed to the driver at random.
-  if(matches.length>1&&matches[0].distance<=25&&matches[1].distance-matches[0].distance>=25)return matches[0].name;
-  return '';
+  // The office requested any one business when the same address has multiple matches.
+  // The lookup cache keeps this choice for subsequent requests at this location.
+  return matches[Math.floor(random()*matches.length)].name;
 }
 
-export function createHandler({env,fetcher=fetch,now=Date.now}){
+export function createHandler({env,fetcher=fetch,now=Date.now,random=Math.random}){
   const cache=new Map(),pending=new Map();
   const headers=req=>({
     'Access-Control-Allow-Origin':req.headers.get('origin')||ALLOWED_ORIGIN,
@@ -72,7 +73,7 @@ export function createHandler({env,fetcher=fetch,now=Date.now}){
       let placeName='';
       if(query){
         const places=await kakao('/v2/local/search/keyword.json',{query,x:longitude,y:latitude,radius:100,sort:'distance',size:15},key);
-        placeName=choosePlace(places.documents,address,latitude,longitude);
+        placeName=choosePlace(places.documents,address,latitude,longitude,random);
       }
       const value={placeName};
       if(cache.size>=CACHE_LIMIT)cache.delete(cache.keys().next().value);

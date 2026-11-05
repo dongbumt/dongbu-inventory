@@ -16,8 +16,11 @@ const base={id:a,work_date:'2026-11-05',employee_name:'테스트 기사',start_a
  assert.equal(choosePlace([place],address,37.5,127.1),'가상 물류센터');
  assert.equal(choosePlace([{...place,road_address_name:'경기 광주시 테스트로 11'}],address,37.5,127.1),'','Adjacent address is not the same business');
  assert.equal(choosePlace([{...place,x:'127.11'}],address,37.5,127.1),'','Distant business is excluded');
- assert.equal(choosePlace([place,{...place,place_name:'같은 건물의 다른 업체'}],address,37.5,127.1),'','Ambiguous building is not assigned arbitrarily');
- let calls=[],denied=false,providerStatus=200,coordinates=structuredClone(base),key='qa-map-secret';
+ const otherPlace={...place,place_name:'같은 건물의 다른 업체'};
+ assert.equal(choosePlace([place,otherPlace],address,37.5,127.1,()=>0),place.place_name);
+ assert.equal(choosePlace([place,otherPlace],address,37.5,127.1,()=>0.999999),otherPlace.place_name,'Any business at the same address can be selected');
+ assert.equal(choosePlace([place,{...otherPlace,road_address_name:'경기 광주시 테스트로 11'},{...otherPlace,x:'127.11'}],address,37.5,127.1,()=>0.999999),place.place_name,'Random selection never includes an adjacent address or a distant business');
+ let calls=[],denied=false,providerStatus=200,coordinates=structuredClone(base),key='qa-map-secret',randomCalls=0,clock=0;
  const env=name=>({SUPABASE_URL:'https://qa.test',SUPABASE_ANON_KEY:'qa-public',KAKAO_REST_API_KEY:key}[name]);
  const fetcher=async(url,options)=>{
   calls.push({url:String(url),options});
@@ -28,15 +31,15 @@ const base={id:a,work_date:'2026-11-05',employee_name:'테스트 기사',start_a
   const parsed=new URL(url);assert.equal(parsed.searchParams.get('x'),String(coordinates.start_longitude));
   assert.equal(options.headers.Authorization,'KakaoAK qa-map-secret');
   if(providerStatus!==200)return Response.json({message:'secret '+key},{status:providerStatus});
-  return Response.json(parsed.pathname.includes('coord2address')?{documents:[address]}:{documents:[place]});
+  return Response.json(parsed.pathname.includes('coord2address')?{documents:[address]}:{documents:[place,otherPlace]});
  };
- const handler=createHandler({env,fetcher});
+ const handler=createHandler({env,fetcher,now:()=>clock,random:()=>{randomCalls++;return randomCalls===1?0.999999:0;}});
  const request=(body={},headers={})=>new Request('https://edge.test',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify({sessionToken:'qa-session',weekStart:'2026-11-02',attendanceIds:[a],...body})});
  coordinates.end_at=null;
  let response=await handler(request({latitude:0,longitude:0})),data=await response.json();
- assert.equal(response.status,200);assert.equal(data.items[0].start.placeName,'가상 물류센터');
+ assert.equal(response.status,200);assert.equal(data.items[0].start.placeName,otherPlace.place_name);
  assert.equal(calls.length,3);assert.equal(response.headers.get('Cache-Control'),'no-store');
- await handler(request());assert.equal(calls.length,4,'Cached names still require current ERP authorization');
+ response=await handler(request());assert.equal((await response.json()).items[0].start.placeName,otherPlace.place_name);assert.equal(randomCalls,1,'Cached lookups keep the randomly chosen business');assert.equal(calls.length,4,'Cached names still require current ERP authorization');
  denied=true;response=await handler(request());assert.equal(response.status,403);assert.equal(calls.length,5);denied=false;
  response=await handler(request({attendanceIds:[b]}));assert.deepEqual((await response.json()).items,[]);assert.equal(calls.length,6,'Unknown IDs never become an arbitrary GPS lookup');
  response=await handler(request({}, {Origin:'https://unrelated.test'}));assert.equal(response.status,403);assert.equal(calls.length,6);
@@ -49,6 +52,8 @@ const base={id:a,work_date:'2026-11-05',employee_name:'테스트 기사',start_a
  coordinates={...coordinates,start_accuracy_m:10,start_longitude:127.100001};providerStatus=403;
  response=await handler(request());assert.equal(response.status,503);assert.equal((await response.json()).code,'configuration');
  providerStatus=500;response=await handler(request());data=await response.json();assert(data.partial);assert.equal(data.items[0].start.placeName,'');assert(!JSON.stringify(data).includes(key));
+ providerStatus=200;coordinates={...coordinates,start_longitude:base.start_longitude};clock=86400001;
+ response=await handler(request());assert.equal((await response.json()).items[0].start.placeName,place.place_name);assert.equal(randomCalls,2,'After the location cache expires, a new business may be chosen');
  const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
  try{
   const context=await browser.newContext({viewport:{width:1440,height:600}}),page=await context.newPage(),errors=[],requests=[];
@@ -88,7 +93,7 @@ const base={id:a,work_date:'2026-11-05',employee_name:'테스트 기사',start_a
   assert.equal(await page.locator('[data-driver-place=start]').textContent(),'경기도 광주시');
   await page.evaluate(()=>{driverAdminData.attendance=[];renderDriverAttendance()});assert.match(await page.locator('#da-attendance-body').textContent(),/기록이 없습니다/);
   assert(await page.locator('#da-place-attribution').isHidden());assert.deepEqual(errors,[]);
-  console.log('PASS: authorized-record-only lookup, CORS/session/range validation, private key protection, exact address/distance/ambiguity checks, cache with per-call auth, poor GPS/provider fallback, actual attendance renderer, safe parentheses/XSS handling, stale-session isolation and unchanged payroll/GPS fields.');
+  console.log('PASS: authorized-record-only lookup, CORS/session/range validation, private key protection, exact address/distance checks, random same-address selection with cache reuse/expiry, per-call auth, poor GPS/provider fallback, actual attendance renderer, safe parentheses/XSS handling, stale-session isolation and unchanged payroll/GPS fields.');
   console.log('Artifacts: '+artifacts);
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
