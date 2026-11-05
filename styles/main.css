@@ -640,6 +640,8 @@
   .quote-meta-grid>.form-group{min-width:0;}
   .quote-meta-wide{grid-column:span 2;}
   .quote-meta-full{grid-column:1 / -1;}
+  #p-quotation [hidden]{display:none!important;}
+  .quote-welstory-help{border:1px solid #d1d5db;background:#f7f7f7;color:#4b5563;border-radius:6px;padding:10px 12px;font-size:11px;line-height:1.6;}
   .quote-price-formula{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px;}
   .quote-price-formula>select,.quote-price-formula>input{width:100%;min-width:0;}
   .quote-editor-wrap{width:100%;max-width:100%;max-height:none;overflow:auto;border:1px solid var(--border);}

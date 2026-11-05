@@ -149,8 +149,79 @@ const quotation=fs.readFileSync(path.join(root,'quotation.js'),'utf8');
 
     await page.evaluate(()=>loadQuotation('legacy'));
     assert.equal(await field(0,7).inputValue(),'777','Legacy price is still available after other quotations change');
+    await page.evaluate(()=>{
+      window.qaCanvasText=[];
+      const original=CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText=function(text,...args){window.qaCanvasText.push(String(text));return original.call(this,text,...args);};
+    });
+    await page.locator('#qt-form-type').selectOption('samsung_welstory');
+    assert.equal(await page.locator('#qt-customer').inputValue(),'기존 거래처','Choosing a form preserves the existing customer');
+    assert.equal(await page.locator('#qt-editor-price-head-1').textContent(),'수수료 전 단가');
+    assert(await page.locator('#qt-editor-price-head-2').isHidden());
+    assert(await page.locator('#qt-price-multiplier').isHidden());
+    assert(await field(0,7).isHidden());
+    await field(0,6).fill('10000');
+    await page.evaluate(()=>{window.qaCanvasText=[];setQuotationPreviewType('external');});
+    await page.waitForFunction(()=>window.qaCanvasText.includes('10,526'));
+    let painted=await page.evaluate(()=>window.qaCanvasText);
+    for(const value of ['10,526','11,186','11,001','11,062','용인·오산·평택센터','김해센터','광주센터','왜관센터'])assert(painted.includes(value),value);
+    assert(!painted.includes('10,000'),'The commission-free base price is absent from the external document');
+    assert(!painted.some(value=>value.includes('수수료 전')),'The base-price heading is absent from the external document');
+    assert(!painted.includes('777'),'The legacy second price is not exposed in the Welstory form');
+    await page.evaluate(()=>saveQuotation());
+    saved=await stored();
+    const welstoryId=saved.find(record=>record.id==='legacy').id;
+    let welstory=saved.find(record=>record.id===welstoryId);
+    assert.equal(welstory.formType,'samsung_welstory');
+    assert.deepEqual(welstory.centerFees.map(center=>center.rate),[5,10.6,9.1,9.6]);
+    assert.equal(welstory.rows[0].price1,'10000');
+    assert.equal(welstory.rows[0].price2,'777','The second price is retained for switching back to the standard form');
+    await page.evaluate(records=>APP_DATA_REGISTRY.quotationList.set(JSON.parse(JSON.stringify(records))),saved);
+    await page.evaluate(id=>loadQuotation(id),welstoryId);
+    assert.equal(await page.locator('#qt-form-type').inputValue(),'samsung_welstory','The form survives a server-style JSON reload');
+    await page.evaluate(()=>{window.qaCanvasText=[];setQuotationPreviewType('internal');});
+    painted=await page.evaluate(()=>window.qaCanvasText);
+    assert(painted.some(value=>value.includes('수수료 전 10,000')),'Internal costing still shows the base price');
+    await page.evaluate(id=>duplicateQuotation(id),welstoryId);
+    assert.equal(await page.locator('#qt-form-type').inputValue(),'samsung_welstory','Copy retains the selected form');
+    await field(0,6).fill('20000');
+    await page.evaluate(()=>{window.qaCanvasText=[];setQuotationPreviewType('external');});
+    await page.waitForFunction(()=>window.qaCanvasText.includes('21,053'));
+    assert.equal((await stored()).find(record=>record.id===welstoryId).rows[0].price1,'10000','Copy edits do not alter the saved quotation');
+    await page.locator('#qt-form-type').selectOption('standard');
+    assert.equal(await field(0,7).inputValue(),'777');
+    assert(await field(0,7).isVisible());
+    await page.evaluate(()=>newQuotation());
+    await page.locator('#qt-form-type').selectOption('samsung_welstory');
+    assert.equal(await page.locator('#qt-customer').inputValue(),'삼성웰스토리','A new Welstory quotation fills the empty customer');
+    for(let i=0;i<8;i++){
+      if(i)await page.evaluate(()=>addQuotationRow());
+      await field(i,2).fill(['목전지(작업)','냉장돈등심','삼겹살(작업)','우민찌(지방15%)','부채살(작업)','후지','한우차돌박이','삼겹양지'][i]);
+      await field(i,3).fill('1등급');
+      await field(i,4).fill('미국산');
+      await field(i,6).fill(String(10000+i*1000));
+      await rows.nth(i).locator('td:nth-child(8) input').fill('센터별 동일 스펙');
+      await page.locator('.quote-spec-input').nth(i).fill('3mm 슬라이스 · 5KG 실링포장');
+    }
+    await page.evaluate(()=>{window.qaCanvasText=[];setQuotationPreviewType('external');});
+    await page.waitForFunction(()=>window.qaCanvasText.includes('17,895'));
+    for(const width of [1400,360]){
+      await page.setViewportSize({width,height:1000});
+      const bounds=await page.locator('#qt-form-type').boundingBox();
+      assert(bounds.x>=0 && bounds.x+bounds.width<=width+1,`Form selection fits ${width}px`);
+    }
+    await page.setViewportSize({width:1400,height:1100});
+    const artifacts=path.join(root,'output/playwright/quotation-welstory');
+    fs.mkdirSync(artifacts,{recursive:true});
+    await page.screenshot({path:path.join(artifacts,'editor.png'),fullPage:true});
+    await page.locator('#qt-preview-canvas').screenshot({path:path.join(artifacts,'external-preview.png')});
+    const [download]=await Promise.all([page.waitForEvent('download'),page.evaluate(()=>downloadQuotationImage('external'))]);
+    await download.saveAs(path.join(artifacts,'external-quotation.png'));
+    await page.evaluate(()=>{window.qaCanvasText=[];setQuotationPreviewType('internal');});
+    await page.locator('#qt-preview-canvas').screenshot({path:path.join(artifacts,'internal-preview.png')});
     assert.deepEqual(errors,[]);
-    console.log('PASS: legacy manual prices, multiply/divide switching, all-row recalculation, rounding, save/load/duplicate independence, suggested price, zero divisor and invalid values');
+    console.log('PASS: standard quotation regression; Welstory gross-up for all four commission groups, base-price privacy, internal costing, save/load/copy, eight-row PNG export and mobile form layout.');
+    console.log('Artifacts: '+artifacts);
   }finally{
     await browser.close();
   }

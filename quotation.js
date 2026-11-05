@@ -5,6 +5,12 @@ const QUOTATION_STORAGE_KEY = 'dbmt_quotations';
 const QUOTATION_MAX_ROWS = 8;
 const QUOTATION_CANVAS_WIDTH = 2480;
 const QUOTATION_CANVAS_HEIGHT = 3508;
+const QUOTATION_WELSTORY_CENTERS = [
+  {key:'yongin_osan_pyeongtaek',label:'용인·오산·평택센터',rate:5},
+  {key:'gimhae',label:'김해센터',rate:10.6},
+  {key:'gwangju',label:'광주센터',rate:9.1},
+  {key:'waegwan',label:'왜관센터',rate:9.6}
+];
 const QUOTATION_COMPANY_FALLBACK = {
   name: '주식회사 동부엠티',
   ceo: '이창성',
@@ -69,7 +75,8 @@ function quotationBlankRow(){
 function quotationBlankDraft(){
   return {
     id:'', date:typeof localDateString === 'function' ? localDateString() : new Date().toISOString().slice(0,10),
-    customer:'', recipient:'귀하', subject:'', priceHeader1:'KG단가', priceHeader2:'BOX단가', priceOperator:'*', priceMultiplier:'',
+    customer:'', recipient:'귀하', subject:'', formType:'standard', centerFees:null,
+    priceHeader1:'KG단가', priceHeader2:'BOX단가', priceOperator:'*', priceMultiplier:'',
     managerName:'김상영 본부장', managerPhone:'010-2414-5406',
     note:'상기 견적가는 작성일부터 2주간 유효하며 이후 시세에 따라 변동 될수 있습니다.', rows:[quotationBlankRow()],
     companyProfile:null, createdAt:'', updatedAt:''
@@ -85,6 +92,8 @@ function quotationNormalizeRow(row={}){
 function quotationNormalize(record={}){
   const rows = Array.isArray(record.rows) && record.rows.length ? record.rows : [quotationBlankRow()];
   const normalized={...quotationBlankDraft(), ...record, rows:rows.slice(0,QUOTATION_MAX_ROWS).map(quotationNormalizeRow)};
+  normalized.formType=normalized.formType==='samsung_welstory' ? 'samsung_welstory' : 'standard';
+  if(quotationIsWelstory(normalized)) normalized.centerFees=quotationCenterFees(normalized);
   normalized.priceOperator=normalized.priceOperator==='/' ? '/' : '*';
   quotationApplyMultiplier(normalized);
   return normalized;
@@ -132,7 +141,25 @@ function quotationDisplayedPrice1(row){
   return qNumber(row.price1) || quotationCalc(row).suggestedPrice;
 }
 
+function quotationIsWelstory(record){ return record?.formType==='samsung_welstory'; }
+
+function quotationCenterFees(record){
+  // Keep each saved quotation's commission schedule when later templates change.
+  const saved=Array.isArray(record?.centerFees) ? record.centerFees : [];
+  return QUOTATION_WELSTORY_CENTERS.map(center=>{
+    const prior=saved.find(item=>item?.key===center.key);
+    const rate=Number(prior?.rate);
+    return {...center,rate:prior && String(prior.rate??'').trim()!=='' && Number.isFinite(rate) && rate>=0 && rate<100 ? rate : center.rate};
+  });
+}
+
+function quotationCenterPrices(record,row){
+  const base=quotationDisplayedPrice1(row);
+  return quotationCenterFees(record).map(center=>({...center,price:base ? Math.round(base*100/(100-center.rate)) : 0}));
+}
+
 function quotationApplyMultiplier(record, row){
+  if(quotationIsWelstory(record)) return;
   const multiplier=quotationMultiplier(record);
   if(multiplier===null) return;
   (row ? [row] : record.rows).forEach(item=>{
@@ -155,7 +182,7 @@ function quotationCustomerOptions(){
 
 function quotationSyncMetaInputs(){
   const values = {
-    'qt-date':'date','qt-customer':'customer','qt-recipient':'recipient','qt-subject':'subject',
+    'qt-date':'date','qt-customer':'customer','qt-recipient':'recipient','qt-subject':'subject','qt-form-type':'formType',
     'qt-price-header-1':'priceHeader1','qt-price-header-2':'priceHeader2','qt-price-operator':'priceOperator','qt-price-multiplier':'priceMultiplier','qt-manager':'managerName',
     'qt-manager-phone':'managerPhone','qt-note':'note'
   };
@@ -165,8 +192,16 @@ function quotationSyncMetaInputs(){
   });
   const head1 = document.getElementById('qt-editor-price-head-1');
   const head2 = document.getElementById('qt-editor-price-head-2');
-  if(head1) head1.textContent = quotationDraft?.priceHeader1 || '단가 1';
+  const welstory=quotationIsWelstory(quotationDraft);
+  if(head1) head1.textContent = welstory ? '수수료 전 단가' : quotationDraft?.priceHeader1 || '단가 1';
   if(head2) head2.textContent = quotationDraft?.priceHeader2 || '단가 2';
+  if(head2) head2.hidden=welstory;
+  document.querySelectorAll('#p-quotation .quote-standard-meta').forEach(el=>{el.hidden=welstory;});
+  const help=document.getElementById('qt-welstory-help');
+  if(help){
+    help.hidden=!welstory;
+    help.textContent=welstory ? `센터별 단가 = 수수료 전 단가 ÷ (1 − 수수료율). ${quotationCenterFees(quotationDraft).map(center=>`${center.label} ${center.rate}%`).join(' · ')} · 원 단위 반올림. 외부용에는 수수료 전 단가가 표시되지 않습니다.` : '';
+  }
 }
 
 function quotationInput(row, field, type='text', attrs=''){
@@ -182,6 +217,7 @@ function quotationCategorySelect(row){
 function renderQuotationRows(){
   const body = document.getElementById('qt-row-body');
   if(!body || !quotationDraft) return;
+  const welstory=quotationIsWelstory(quotationDraft);
   body.innerHTML = quotationDraft.rows.map(row=>{
     const calc = quotationCalc(row);
     const marginClass = calc.margin < 0 ? ' quote-calc-negative' : '';
@@ -192,7 +228,7 @@ function renderQuotationRows(){
       <td>${quotationInput(row,'origin','text','placeholder="원산지"')}</td>
       <td>${quotationInput(row,'unit','text','placeholder="KG"')}</td>
       <td>${quotationInput(row,'price1','number','min="0" step="1"')}</td>
-      <td>${quotationInput(row,'price2','number',`min="0" step="1" ${quotationMultiplier(quotationDraft)!==null?'readonly title="계산식에 따라 자동계산"':''}`)}</td>
+      <td${welstory?' hidden':''}>${quotationInput(row,'price2','number',`min="0" step="1" ${quotationMultiplier(quotationDraft)!==null?'readonly title="계산식에 따라 자동계산"':''}`)}</td>
       <td>${quotationInput(row,'note','text','placeholder="비고"')}</td>
       <td>${quotationInput(row,'monthlyUsage','number','min="0" step="0.01"')}</td>
       <td>${quotationInput(row,'targetPrice','number','min="0" step="1"')}</td>
@@ -202,11 +238,11 @@ function renderQuotationRows(){
       <td>${quotationInput(row,'overheadCost','number','min="0" step="1"')}</td>
       <td style="text-align:right;font-weight:700;" id="qt-allin-${row.id}">${qMoney(calc.allInCost)}</td>
       <td>${quotationInput(row,'salePrice','number','min="0" step="1"')}</td>
-      <td style="text-align:center;white-space:nowrap;"><strong id="qt-suggested-${row.id}">${qMoney(calc.suggestedPrice)}</strong><br><button type="button" class="btn btn-secondary btn-sm" onclick="applyQuotationSuggested('${row.id}')" style="padding:3px 7px;margin-top:3px;">단가1 적용</button></td>
+      <td style="text-align:center;white-space:nowrap;"><strong id="qt-suggested-${row.id}">${qMoney(calc.suggestedPrice)}</strong><br><button type="button" class="btn btn-secondary btn-sm" onclick="applyQuotationSuggested('${row.id}')" style="padding:3px 7px;margin-top:3px;">${welstory?'수수료 전 적용':'단가1 적용'}</button></td>
       <td style="text-align:center;"><button type="button" class="btn btn-danger btn-sm" onclick="removeQuotationRow('${row.id}')" title="품목 삭제">×</button></td>
     </tr>
     <tr class="quote-spec-row">
-      <td colspan="8"><div style="display:grid;grid-template-columns:52px 1fr;gap:6px;align-items:center;"><strong>스펙</strong>${quotationInput(row,'spec','text','class="quote-spec-input" placeholder="예) 냉동, 1.3 × 30 × 60MM 세절, 5KG 실링포장"')}</div></td>
+      <td colspan="${welstory?7:8}"><div style="display:grid;grid-template-columns:52px 1fr;gap:6px;align-items:center;"><strong>스펙</strong>${quotationInput(row,'spec','text','class="quote-spec-input" placeholder="예) 냉동, 1.3 × 30 × 60MM 세절, 5KG 실링포장"')}</div></td>
       <td colspan="9"><div class="quote-calc-summary">
         <span>로스반영 <strong id="qt-loss-${row.id}">${qMoney(calc.lossAdjusted)}</strong></span>
         <span>생산원가 <strong id="qt-production-summary-${row.id}">${qMoney(calc.productionCost)}</strong></span>
@@ -239,6 +275,15 @@ function renderQuotationComputedRow(row){
 function quotationMetaChanged(field, value){
   if(!quotationDraft) quotationDraft = quotationBlankDraft();
   quotationDraft[field] = value;
+  if(field === 'formType'){
+    quotationDraft.formType=value==='samsung_welstory' ? 'samsung_welstory' : 'standard';
+    if(quotationIsWelstory(quotationDraft)){
+      quotationDraft.centerFees=quotationCenterFees(quotationDraft);
+      if(!String(quotationDraft.customer||'').trim()) quotationDraft.customer='삼성웰스토리';
+    }else quotationApplyMultiplier(quotationDraft);
+    quotationSyncMetaInputs();
+    renderQuotationRows();
+  }
   if(field === 'priceMultiplier' || field === 'priceOperator'){
     quotationApplyMultiplier(quotationDraft);
     renderQuotationRows();
@@ -320,7 +365,7 @@ function quotationPersist(action, record){
 function saveQuotation(){
   if(!quotationDraft) return;
   const multiplierText=String(quotationDraft.priceMultiplier ?? '').trim();
-  if(document.getElementById('qt-price-multiplier')?.validity.badInput || (multiplierText && quotationMultiplier(quotationDraft)===null)){
+  if(!quotationIsWelstory(quotationDraft) && (document.getElementById('qt-price-multiplier')?.validity.badInput || (multiplierText && quotationMultiplier(quotationDraft)===null))){
     toast('단가 2 계산값은 0보다 큰 숫자로 입력하세요.');
     document.getElementById('qt-price-multiplier')?.focus();
     return;
@@ -412,7 +457,7 @@ function renderQuotationHistory(){
     const productList = productNames.length ? productNames.map(name=>htmlEscape(name)).join(', ') : '-';
     return `<tr>
     <td>${htmlEscape(row.date || '-')}</td><td style="font-weight:700;">${htmlEscape(row.customer || '-')}</td>
-    <td>${htmlEscape(row.subject || '-')}</td><td style="min-width:160px;white-space:nowrap;">${productList}</td>
+    <td>${htmlEscape(row.subject || '-')}${quotationIsWelstory(row)?'<div style="font-size:11px;color:#667085;margin-top:3px;">삼성웰스토리 양식</div>':''}</td><td style="min-width:160px;white-space:nowrap;">${productList}</td>
     <td style="font-size:11px;color:#667085;">${htmlEscape(quotationFormatDateTime(row.updatedAt))}</td>
     <td style="text-align:center;white-space:nowrap;">
       <button class="btn btn-secondary btn-sm" onclick="loadQuotation('${row.id}')">불러오기</button>
@@ -552,20 +597,26 @@ function qPublicColumnWidths(){ return [150,360,180,220,140,260,260,630]; }
 
 function qDrawPublicTable(ctx,record,rows,startY,{compact=false}={}){
   const x0=140;
-  const widths=qPublicColumnWidths();
-  const headers=['구분','품목','등급','원산지','단위',record.priceHeader1||'단가 1',record.priceHeader2||'단가 2','비고'];
-  const headH=compact?82:106;
+  const welstory=quotationIsWelstory(record);
+  const fees=welstory ? quotationCenterFees(record) : [];
+  const widths=welstory ? [110,310,130,160,90,300,230,230,230,410] : qPublicColumnWidths();
+  const headers=welstory
+    ? ['구분','품목','등급','원산지','단위',...fees.map(center=>`${center.label}\n수수료 ${center.rate}%`),'비고']
+    : ['구분','품목','등급','원산지','단위',record.priceHeader1||'단가 1',record.priceHeader2||'단가 2','비고'];
+  const headH=welstory ? (compact?96:120) : (compact?82:106);
   const mainH=compact?76:100;
   const specH=compact?54:72;
   let x=x0;
-  headers.forEach((header,index)=>{ qDrawCell(ctx,{x,y:startY,w:widths[index],h:headH,text:header,size:compact?24:34,weight:700,fill:'#ededed'}); x+=widths[index]; });
+  headers.forEach((header,index)=>{ qDrawCell(ctx,{x,y:startY,w:widths[index],h:headH,text:header,size:welstory?(compact?22:28):(compact?24:34),weight:700,fill:'#ededed',maxLines:welstory?3:2}); x+=widths[index]; });
   let y=startY+headH;
   rows.forEach(row=>{
     const price1=quotationDisplayedPrice1(row);
-    const values=[row.category,row.product,row.grade,row.origin,row.unit,qMoney(price1),qMoney(row.price2),row.note];
+    const values=welstory
+      ? [row.category,row.product,row.grade,row.origin,row.unit,...quotationCenterPrices(record,row).map(center=>qMoney(center.price)),row.note]
+      : [row.category,row.product,row.grade,row.origin,row.unit,qMoney(price1),qMoney(row.price2),row.note];
     x=x0;
     values.forEach((value,index)=>{
-      qDrawCell(ctx,{x,y,w:widths[index],h:mainH,text:value||'',size:compact?22:32,weight:index===1?700:400,align:[5,6].includes(index)?'right':'center',maxLines:2});
+      qDrawCell(ctx,{x,y,w:widths[index],h:mainH,text:value||'',size:welstory?(compact?21:30):(compact?22:32),weight:index===1?700:400,align:index>=5 && index<(welstory?9:7)?'right':'center',maxLines:2});
       x+=widths[index];
     });
     y+=mainH;
@@ -614,19 +665,20 @@ async function qDrawExternalQuotation(ctx,record){
 
 function qDrawInternalQuotation(ctx,record){
   const rows=quotationRowsForOutput(record);
+  const welstory=quotationIsWelstory(record);
   ctx.fillStyle='#fff';ctx.fillRect(0,0,QUOTATION_CANVAS_WIDTH,QUOTATION_CANVAS_HEIGHT);
   qDrawText(ctx,'견적 검토표',QUOTATION_CANVAS_WIDTH/2,130,{size:76,weight:700,align:'center'});
   qDrawText(ctx,'내부용',QUOTATION_CANVAS_WIDTH-150,130,{size:28,weight:700,align:'right',color:'#555'});
   ctx.strokeStyle='#222';ctx.lineWidth=3;ctx.strokeRect(140,220,2200,170);
   qDrawText(ctx,`작성일  ${qKoreanDate(record.date)}`,180,270,{size:28,weight:600});
   qDrawText(ctx,`고객사  ${record.customer||'-'} ${record.recipient||''}`,180,340,{size:32,weight:700,maxWidth:900});
-  qDrawText(ctx,`표시 단가  ${record.priceHeader1||'단가 1'} / ${record.priceHeader2||'단가 2'}`,1210,310,{size:26,maxWidth:1080});
+  qDrawText(ctx,welstory ? '센터별 수수료 포함 단가 · 수수료 전 단가는 내부 산출에 표시' : `표시 단가  ${record.priceHeader1||'단가 1'} / ${record.priceHeader2||'단가 2'}`,1210,310,{size:26,maxWidth:1080});
 
   const publicEnd=qDrawPublicTable(ctx,record,rows,450,{compact:true});
   const tableY=publicEnd+70;
   const x0=140;
   const widths=[380,200,200,210,150,230,200,230,400];
-  const headers=['품목','월 사용량','타겟단가','원물시세','수율','생산원가','판관비','판관비포함','판매가 / 권장견적가'];
+  const headers=['품목','월 사용량','타겟단가','원물시세','수율','생산원가','판관비','판관비포함',welstory?'판매가 / 수수료 전 단가':'판매가 / 권장견적가'];
   let x=x0;
   headers.forEach((header,index)=>{qDrawCell(ctx,{x,y:tableY,w:widths[index],h:94,text:header,size:23,weight:700,fill:'#dedede',maxLines:2});x+=widths[index];});
   let y=tableY+94;
@@ -635,7 +687,7 @@ function qDrawInternalQuotation(ctx,record){
     const values=[
       row.product||'-',`${qAmount(row.monthlyUsage,2)} KG`,qMoney(row.targetPrice),qMoney(row.rawPrice),`${calc.yieldRate.toFixed(1)}%`,
       qMoney(calc.productionCost),qMoney(row.overheadCost),qMoney(calc.allInCost),
-      `판매 ${qMoney(row.salePrice)}\n견적 ${qMoney(qNumber(row.price1)||calc.suggestedPrice)}`
+      `판매 ${qMoney(row.salePrice)}\n${welstory?'수수료 전':'견적'} ${qMoney(qNumber(row.price1)||calc.suggestedPrice)}`
     ];
     x=x0;
     values.forEach((value,index)=>{qDrawCell(ctx,{x,y,w:widths[index],h:108,text:value,size:22,weight:[0,7,8].includes(index)?700:400,align:index===0?'left':'right',maxLines:2,padding:12});x+=widths[index];});

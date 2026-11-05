@@ -28,7 +28,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261103scheduledrag1">
+<link rel="stylesheet" href="styles/main.css?v=20261105welstory1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -3037,13 +3037,15 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="quote-meta-grid">
       <div class="form-group"><label>작성일</label><input type="date" id="qt-date" onchange="quotationMetaChanged('date',this.value)"></div>
       <div class="form-group"><label>고객사</label><input id="qt-customer" list="qt-customer-list" placeholder="거래처 검색 또는 직접 입력" oninput="quotationMetaChanged('customer',this.value)"><datalist id="qt-customer-list"></datalist></div>
+      <div class="form-group"><label for="qt-form-type">외부용 양식</label><select id="qt-form-type" onchange="quotationMetaChanged('formType',this.value)"><option value="standard">기본 양식</option><option value="samsung_welstory">삼성웰스토리</option></select></div>
       <div class="form-group"><label>수신 표기</label><input id="qt-recipient" value="귀하" oninput="quotationMetaChanged('recipient',this.value)"></div>
       <div class="form-group quote-meta-wide"><label>견적 제목</label><input id="qt-subject" placeholder="예) 호주산 설깃 가공품 견적" oninput="quotationMetaChanged('subject',this.value)"></div>
-      <div class="form-group"><label>단가 1 열제목</label><input id="qt-price-header-1" value="KG단가" oninput="quotationMetaChanged('priceHeader1',this.value)"></div>
-      <div class="form-group"><label>단가 2 열제목</label><input id="qt-price-header-2" value="BOX단가" oninput="quotationMetaChanged('priceHeader2',this.value)"></div>
-      <div class="form-group quote-price-formula-group"><label for="qt-price-multiplier">단가 2 계산 (단가 1 기준)</label><div class="quote-price-formula"><select id="qt-price-operator" aria-label="단가 2 계산 방식" onchange="quotationMetaChanged('priceOperator',this.value)"><option value="*">× 곱하기</option><option value="/">÷ 나누기</option></select><input type="number" id="qt-price-multiplier" min="0.01" step="any" placeholder="예) 1.2" oninput="quotationMetaChanged('priceMultiplier',this.value)"></div><small style="display:block;color:#667085;margin-top:4px;">미입력 시 수동 입력 · 단가 1 미입력 시 권장가 기준 · 원 단위 반올림</small></div>
+      <div class="form-group quote-standard-meta"><label>단가 1 열제목</label><input id="qt-price-header-1" value="KG단가" oninput="quotationMetaChanged('priceHeader1',this.value)"></div>
+      <div class="form-group quote-standard-meta"><label>단가 2 열제목</label><input id="qt-price-header-2" value="BOX단가" oninput="quotationMetaChanged('priceHeader2',this.value)"></div>
+      <div class="form-group quote-price-formula-group quote-standard-meta"><label for="qt-price-multiplier">단가 2 계산 (단가 1 기준)</label><div class="quote-price-formula"><select id="qt-price-operator" aria-label="단가 2 계산 방식" onchange="quotationMetaChanged('priceOperator',this.value)"><option value="*">× 곱하기</option><option value="/">÷ 나누기</option></select><input type="number" id="qt-price-multiplier" min="0.01" step="any" placeholder="예) 1.2" oninput="quotationMetaChanged('priceMultiplier',this.value)"></div><small style="display:block;color:#667085;margin-top:4px;">미입력 시 수동 입력 · 단가 1 미입력 시 권장가 기준 · 원 단위 반올림</small></div>
       <div class="form-group"><label>담당자</label><input id="qt-manager" value="김상영 본부장" oninput="quotationMetaChanged('managerName',this.value)"></div>
       <div class="form-group"><label>담당자 연락처</label><input id="qt-manager-phone" value="010-2414-5406" oninput="quotationMetaChanged('managerPhone',this.value)"></div>
+      <div id="qt-welstory-help" class="quote-meta-full quote-welstory-help" hidden></div>
       <div class="form-group quote-meta-full"><label>외부용 비고</label><textarea id="qt-note" rows="2" oninput="quotationMetaChanged('note',this.value)">상기 견적가는 작성일부터 2주간 유효하며 이후 시세에 따라 변동 될수 있습니다.</textarea></div>
     </div>
   </div>
@@ -22179,7 +22181,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 
 </script>
 <script src="company-master.js?v=20260827requiredlogin1"></script>
-<script src="quotation.js?v=20261020note1"></script>
+<script src="quotation.js?v=20261105welstory1"></script>
 <script src="cold-storage-request.js?v=20260827requiredlogin1"></script>
 <script src="meatwatch-lookup.js?v=20260826bulktrace1"></script>
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
