@@ -8,3 +8,7 @@ verify_jwt = false
 
 [functions.livestock-trace-lookup]
 verify_jwt = false
+
+[functions.driver-place-lookup]
+# The function checks the ERP personal session and attendance-view permission.
+verify_jwt = false

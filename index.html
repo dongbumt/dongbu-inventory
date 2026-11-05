@@ -2794,6 +2794,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="tbl-wrap">
       <table><thead><tr><th>근무일</th><th>기사명</th><th>출근시각</th><th>출근위치</th><th>퇴근시각</th><th>퇴근위치</th><th style="text-align:right;">휴게</th><th style="text-align:right;">실제근로</th><th style="text-align:right;">인천가산</th><th style="text-align:right;">인정근로</th><th style="text-align:center;">상태</th><th style="text-align:center;">관리</th></tr></thead><tbody id="da-attendance-body"></tbody></table>
     </div>
+    <div style="font-size:11px;color:#777;margin-top:7px;"><span id="da-place-status" role="status" aria-live="polite"></span> <a id="da-place-attribution" href="https://map.kakao.com/" target="_blank" rel="noopener" style="color:#777;" hidden>상호 정보: 카카오맵</a></div>
   </div>
   <div class="card">
     <div class="card-title"><div class="ct-bar" style="background:#34495e;"></div>위치공유 기록</div>
@@ -6393,7 +6394,7 @@ function driverMapLinkHtml(latitude, longitude){
 function driverAttendanceLocationHtml(row, prefix){
   let label = row[`${prefix}_location_name`] || row[`${prefix}_location_text`] || row[`${prefix}_region`] || '-';
   if(/^GPS\s+-?[0-9]/.test(label)) label=row[`${prefix}_region`]==='인천'?'인천시':'주소 정보 없음';
-  return `${htmlEscape(label)}${driverMapLinkHtml(row[`${prefix}_latitude`], row[`${prefix}_longitude`])}`;
+  return `<span data-driver-place="${prefix}" data-record-id="${htmlEscape(row.id)}" data-address="${htmlEscape(label)}">${htmlEscape(label)}</span>${driverMapLinkHtml(row[`${prefix}_latitude`], row[`${prefix}_longitude`])}`;
 }
 
 function driverEventLabel(){ return '위치공유'; }
@@ -6744,6 +6745,7 @@ function renderDriverAttendance(){
   const body=document.getElementById('da-attendance-body'); if(!body) return;
   if(!driverAdminData.attendance.length){
     body.innerHTML='<tr><td colspan="12" style="text-align:center;padding:20px;color:#888;">선택한 주간의 출퇴근 기록이 없습니다.</td></tr>';
+    void window.DBMTDriverPlaces?.enrich([],document.getElementById('da-week-start')?.value||driverMondayValue());
     return;
   }
   body.innerHTML=driverAdminData.attendance.map(row=>`<tr>
@@ -6757,6 +6759,7 @@ function renderDriverAttendance(){
     <td style="text-align:center;"><span class="badge ${row.end_at?'badge-in':'badge-use'}">${row.end_at?'완료':'근무 중'}</span></td>
     <td style="text-align:center;white-space:nowrap;"><button class="btn btn-secondary btn-sm" onclick="editDriverAttendance(${jsArg(row.id)})">수정</button> <button class="btn btn-sm" style="background:#c0392b;color:#fff;" onclick="deleteDriverAttendance(${jsArg(row.id)})">삭제</button></td>
   </tr>`).join('');
+  void window.DBMTDriverPlaces?.enrich(driverAdminData.attendance,document.getElementById('da-week-start')?.value||driverMondayValue());
 }
 
 function renderDriverEvents(){
@@ -22185,6 +22188,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="stock-report.js?v=20261002count1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
+<script src="driver-place-label.js?v=20261105place1"></script>
 <script src="production-schedule.js?v=20261020workorders1"></script>
 <script src="product-specs.js?v=20261027copy1"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
