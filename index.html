@@ -6388,7 +6388,7 @@ function driverMapLinkHtml(latitude, longitude){
      longitude === null || longitude === undefined || longitude === '') return '';
   if(!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) return '';
   const coords = `${Number(latitude).toFixed(6)},${Number(longitude).toFixed(6)}`;
-  return `<a href="https://www.google.com/maps?q=${encodeURIComponent(coords)}" target="_blank" rel="noopener" style="font-size:11px;margin-left:5px;white-space:nowrap;">지도</a>`;
+  return `<a href="https://map.kakao.com/link/map/${encodeURIComponent('기록 위치')},${coords}" target="_blank" rel="noopener" title="카카오맵에서 위치 보기" style="font-size:11px;margin-left:5px;white-space:nowrap;">지도</a>`;
 }
 
 function driverAttendanceLocationHtml(row, prefix){
