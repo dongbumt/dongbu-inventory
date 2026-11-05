@@ -9,7 +9,12 @@ for(const script of index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new 
 const a='10000000-0000-4000-8000-000000000001',b='10000000-0000-4000-8000-000000000002';
 const base={id:a,work_date:'2026-11-05',employee_name:'테스트 기사',start_at:'2026-11-04T22:49:00Z',start_latitude:37.5,start_longitude:127.1,start_accuracy_m:10,start_location_text:'경기도 광주시',start_location_name:'경기도 광주시',end_at:'2026-11-05T08:00:00Z',end_latitude:37.6,end_longitude:127.2,end_accuracy_m:10,end_location_text:'경기도 평택시',break_minutes:60,actual_minutes:480,recognized_minutes:480,bonus_minutes:0,status:'completed',updated_at:'2026-11-05T08:00:00Z'};
 (async()=>{
- const {createHandler,choosePlace,normalizeAddress}=await import(pathToFileURL(path.join(root,'supabase/functions/driver-place-lookup/handler.mjs')));
+ const {createHandler,choosePlace,normalizeAddress,fixedPlaceName}=await import(pathToFileURL(path.join(root,'supabase/functions/driver-place-lookup/handler.mjs')));
+ const office={latitude:37.4809862,longitude:126.6862894};
+ assert.equal(fixedPlaceName(office.latitude,office.longitude),'동부축산유통');
+ assert.equal(fixedPlaceName(office.latitude+40/111195,office.longitude),'동부축산유통','Small GPS drift stays inside the office location');
+ assert.equal(fixedPlaceName(office.latitude+70/111195,office.longitude),'','Nearby premises outside the office radius keep normal lookup');
+ assert.equal(fixedPlaceName(37.5,127.1),'','Other places are not renamed');
  const address={road_address:{address_name:'경기도 광주시 테스트로 10'},address:{address_name:'경기 광주시 테스트동 100'}};
  const place={place_name:'가상 물류센터',road_address_name:'경기 광주시 테스트로 10',address_name:'',x:'127.1',y:'37.5'};
  assert.equal(normalizeAddress(address.road_address.address_name),normalizeAddress(place.road_address_name));
@@ -54,6 +59,9 @@ const base={id:a,work_date:'2026-11-05',employee_name:'테스트 기사',start_a
  providerStatus=500;response=await handler(request());data=await response.json();assert(data.partial);assert.equal(data.items[0].start.placeName,'');assert(!JSON.stringify(data).includes(key));
  providerStatus=200;coordinates={...coordinates,start_longitude:base.start_longitude};clock=86400001;
  response=await handler(request());assert.equal((await response.json()).items[0].start.placeName,place.place_name);assert.equal(randomCalls,2,'After the location cache expires, a new business may be chosen');
+ coordinates={...coordinates,start_latitude:office.latitude,start_longitude:office.longitude,start_accuracy_m:200};providerStatus=403;before=calls.length;
+ response=await handler(request());assert.equal(response.status,200);assert.equal((await response.json()).items[0].start.placeName,'동부축산유통');assert.equal(calls.length,before+1,'The fixed office name takes precedence without querying Kakao');
+ denied=true;response=await handler(request());assert.equal(response.status,403,'Fixed office locations still require attendance-view permission');denied=false;
  const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
  try{
   const context=await browser.newContext({viewport:{width:1440,height:600}}),page=await context.newPage(),errors=[],requests=[];
@@ -93,7 +101,7 @@ const base={id:a,work_date:'2026-11-05',employee_name:'테스트 기사',start_a
   assert.equal(await page.locator('[data-driver-place=start]').textContent(),'경기도 광주시');
   await page.evaluate(()=>{driverAdminData.attendance=[];renderDriverAttendance()});assert.match(await page.locator('#da-attendance-body').textContent(),/기록이 없습니다/);
   assert(await page.locator('#da-place-attribution').isHidden());assert.deepEqual(errors,[]);
-  console.log('PASS: authorized-record-only lookup, CORS/session/range validation, private key protection, exact address/distance checks, random same-address selection with cache reuse/expiry, per-call auth, poor GPS/provider fallback, actual attendance renderer, safe parentheses/XSS handling, stale-session isolation and unchanged payroll/GPS fields.');
+  console.log('PASS: authorized-record-only lookup, CORS/session/range validation, private key protection, exact address/distance checks, fixed office name within 50 metres, random same-address selection with cache reuse/expiry, per-call auth, poor GPS/provider fallback, actual attendance renderer, safe parentheses/XSS handling, stale-session isolation and unchanged payroll/GPS fields.');
   console.log('Artifacts: '+artifacts);
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
