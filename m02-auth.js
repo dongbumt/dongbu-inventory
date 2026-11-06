@@ -296,6 +296,7 @@
   function getSessionToken(){ return isPersonal() ? sessionToken() : ''; }
 
   function notifyPermissionSurfaces(){
+    if(window.DBMTProductCatalog) window.DBMTProductCatalog.applyPermissions();
     if(window.DBMTExpenseStores) window.DBMTExpenseStores.applyPermissions();
     if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
     if(window.DBMTProductionSchedule) window.DBMTProductionSchedule.applyPermissions();

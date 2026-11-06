@@ -3761,6 +3761,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div style="width:100%;">
       <div class="card">
         <div class="card-title"><div class="ct-bar" style="background:#e67e22;"></div>📋 등록 품목 목록</div>
+        <div id="lp-sync-status" role="status" style="font-size:11px;color:#777;margin-bottom:8px;"></div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
           <input id="lp-search" placeholder="🔍 제품코드·제품명·브랜드·공장넘버·원산지 검색" oninput="renderLabelProducts()" style="flex:1;font-size:13px;padding:7px 10px;">
           <select id="lp-status-filter" aria-label="품목 사용 여부 필터" onchange="renderLabelProducts()" style="width:auto;flex:0 0 150px;"><option value="">사용 여부 전체</option><option value="true">사용</option><option value="false">사용안함</option></select>
@@ -7614,6 +7615,7 @@ function setTxnProductPickerKind(kind){
 function openTxnProductPicker(initialQuery, targetInput=null){
   const modal = document.getElementById('txn-product-picker-modal');
   if(!modal) return;
+  void window.DBMTProductCatalog?.refresh();
   txnProductPickerTargetInput = targetInput;
   txnProductPickerReturnFocus = document.activeElement;
   const pickerContext = targetInput?.dataset?.pickerContext || '';
@@ -8086,6 +8088,7 @@ function handleTxnStockInputKeydown(event){
 function openTxnStockPicker(initialQuery, targetInput=null){
   const modal = document.getElementById('txn-stock-picker-modal');
   if(!modal) return;
+  void window.DBMTProductCatalog?.refresh();
   txnStockPickerTargetInput = targetInput;
   txnStockPickerReturnFocus = targetInput || document.activeElement;
   const allSearch = document.getElementById('tsp-search-all');
@@ -15855,6 +15858,7 @@ function applySupabasePayload(data){
     // The row sync response owns both work orders and their edit versions.
     // A delayed full-ERP recovery must not replace just half of that snapshot.
     if(k==='workOrders' && window.DBMTWorkOrders?.isReady()) return;
+    if(k==='labelProducts' && window.DBMTProductCatalog?.isReady()) return;
     if(app[k] !== undefined){
       r.set(app[k]);
       cacheAppDataValue(k, r, app[k]);
@@ -15935,6 +15939,7 @@ window.startAuthenticatedErp = function(){
     localStorage.removeItem('dbmt_gs_skip');
     const data = await supabaseInit();
     if(window.DBMTWorkOrders) await DBMTWorkOrders.start();
+    if(window.DBMTProductCatalog) void DBMTProductCatalog.start();
     document.body.classList.remove('erp-auth-locked');
     document.getElementById('gs-setup')?.classList.add('hidden');
     document.getElementById('gs-overlay')?.classList.add('hidden');
@@ -15949,6 +15954,7 @@ window.startAuthenticatedErp = function(){
 
 window.lockErpForLogin = function(reload=false){
   if(window.DBMTWorkOrders) DBMTWorkOrders.stop();
+  if(window.DBMTProductCatalog) DBMTProductCatalog.stop();
   document.body.classList.add('erp-auth-locked');
   clearSupabaseSessionPassword();
   if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
@@ -21575,18 +21581,19 @@ function labelProductSortHeader(key, label, extraStyle=''){
   return `<th onclick="sortLabelProductsBy('${key}')" style="padding:6px;cursor:pointer;user-select:none;${extraStyle}">${label}${labelProductSortMark(key)}</th>`;
 }
 
-function renderLabelProducts(){
+function renderLabelProducts({preserveDraft=false}={}){
   const wrap = document.getElementById('lp-list-wrap');
   if(!wrap) return;
-  if(!renderLabelProducts._migrated){
+  if(!preserveDraft && !renderLabelProducts._migrated){
     renderLabelProducts._migrated = true;
     migrateLabelProducts();
   }
-  autoFillLabelProductShelfDaysIfBlank();
-  refreshLabelProductNationalPartSelect();
-  // 라벨출력 탭 제품선택 드롭다운도 갱신
-  refreshLabelProductSelect();
-  refreshTxnManagedProductControls();
+  if(!preserveDraft){
+    autoFillLabelProductShelfDaysIfBlank();
+    refreshLabelProductNationalPartSelect();
+    refreshLabelProductSelect();
+    refreshTxnManagedProductControls();
+  }
   const countEl = document.getElementById('lp-search-count');
   if(!labelProducts.length){
     wrap.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">등록된 품목이 없습니다.</div>';
@@ -21822,6 +21829,7 @@ function applyLabelProductServerResult(result){
     saveDataChangeLogsLocal();
   }
   resetDataChangeAppDataBaseline();
+  window.DBMTProductCatalog?.changedLocally();
 }
 
 async function saveLabelProduct(){
@@ -21887,10 +21895,12 @@ async function saveLabelProduct(){
     return;
   }
   const saveButton = document.getElementById('lp-save-btn');
+  const finishCatalogWrite=window.DBMTProductCatalog?.beginWrite();
   try{
     const token = personalServerWriteToken('label_products', editId ? 'update' : 'create');
     if(saveButton) saveButton.disabled = true;
     const result = await sbRpc('dbmt_erp_save_label_product', {p_token:token,p_record:prod});
+    if(token!==DBMTAuth.getSessionToken()) return;
     applyLabelProductServerResult(result);
     resetLabelProductForm();
     renderLabelProducts();
@@ -21899,6 +21909,7 @@ async function saveLabelProduct(){
     console.error('품목 저장 실패:', err);
     alert(err?.message || '품목 저장에 실패했습니다.');
   }finally{
+    finishCatalogWrite?.();
     if(saveButton) saveButton.disabled = false;
   }
 }
@@ -21997,12 +22008,14 @@ async function deleteLabelProduct(idx){
     return;
   }
   if(!confirm(`"${product.name || ''}" 품목을 삭제하시겠습니까?\n\n기존 거래내역과 생산일보 기록은 그대로 유지됩니다.`)) return;
+  const finishCatalogWrite=window.DBMTProductCatalog?.beginWrite();
   try{
     const result = await sbRpc('dbmt_erp_delete_label_product', {
       p_token:token,
       p_product_id:String(product.id || ''),
       p_business_registration_no:String(entered || '')
     });
+    if(token!==DBMTAuth.getSessionToken()) return;
     applyLabelProductServerResult(result);
     if(String(document.getElementById('lp-edit-id')?.value || '') === String(product.id || '')) resetLabelProductForm();
     renderLabelProducts();
@@ -22010,6 +22023,8 @@ async function deleteLabelProduct(idx){
   }catch(err){
     console.error('품목 삭제 실패:', err);
     alert(err?.message || '품목 삭제에 실패했습니다.');
+  }finally{
+    finishCatalogWrite?.();
   }
 }
 
@@ -22228,11 +22243,12 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261017split1"></script>
 <script src="work-orders-sync.js?v=20261020manual1"></script>
+<script src="product-catalog-sync.js?v=20261106catalog1"></script>
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="manual-label.js?v=20261023ingredients1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
-<script src="m02-auth.js?v=20261104login1"></script>
+<script src="m02-auth.js?v=20261106catalog1"></script>
 </body>
 </html>
