@@ -214,7 +214,7 @@ async function testTransactionFlows(page, artifacts) {
     'getTMoveFromLocation', 'getTMoveToLocation', 'getEditingTransaction', 'stockOptionFromTransaction',
     'bulkOutboundIdentityKey', 'bulkOutboundKeyFromValues', 'bulkOutboundStockOptions', 'sameBulkOutboundStockOption',
     'outboundStockOptionsForEdit', 'availableStockForEdit', 'availableBoxesForEdit', 'ensureOutProductOption', 'bulkOutboundStockLabel',
-    'selectTxnStock', 'addTransaction', 'addBulkOutboundRow', 'addBulkOutboundRows', 'clearBulkOutbound',
+    'parseTransactionUnitPrice', 'selectTxnStock', 'addTransaction', 'addBulkOutboundRow', 'addBulkOutboundRows', 'clearBulkOutbound',
     'selectBulkOutboundStock', 'refreshBulkOutboundPrice', 'updateBulkOutboundAmount', 'saveBulkOutbound',
     'openStockAdjust', 'closeStockAdjust', 'calcStockAdjustDiff', 'saveStockAdjust',
     'openStockBoxBaseline', 'closeStockBoxBaseline', 'saveStockBoxBaseline'

@@ -32,7 +32,7 @@ var traderInfoMap=${JSON.stringify(traders)}, prices=${JSON.stringify(prices)}, 
 function autoFillTxnPrice(){} function toast(message){notices.push(message)}
 ${['htmlEscape','priceKey','priceProductKey','samePriceText','normalizeOriginName','originKey','sameOriginText','findPriceRow','getPrice','parseAppNumber',
   'addBulkInboundRow','addBulkInboundRows','addBulkOutboundRow','addBulkOutboundRows','removeBulkOutboundRow','clearBulkOutbound',
-  'refreshBulkOutboundPrice','updateBulkOutboundAmount','applyBulkInboundTrader','applyBulkOutboundTrader'].map(source).join('\n')}
+  'parseTransactionUnitPrice','refreshBulkOutboundPrice','updateBulkOutboundAmount','applyBulkInboundTrader','applyBulkOutboundTrader'].map(source).join('\n')}
 ${section('let txnTraderSearchRows =', 'async function updateTxnPrice(')}
 ${section('let bulkTraderSearchRows =', 'function addBulkInboundRow(')}
 document.getElementById('t-type').value='출고';

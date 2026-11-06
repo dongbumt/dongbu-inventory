@@ -30,6 +30,7 @@ assert.equal(group(rawBoxes).length,1);assert.equal(group(rawBoxes)[0].weight,24
 assert.equal(group([...boxes,...rawBoxes]).length,2,'Raw and product boxes never merge even if request IDs match');
 console.log('PASS: exact weight/box/amount totals, identity boundaries, manual/receipt isolation, original row preservation and per-box rounding');
 const names=['localDateString','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','setTransactionListIdle','prepareTransactionList','markTransactionSearchPending','markTransactionKeywordSearchPending','validateTransactionDateRange','runTransactionSearch','runTransactionExactDateSearch','runTransactionAllSearch','exportTransactionsCSV','printFilteredTransactions'];
+names.push('parseTransactionUnitPrice');
 const functions=names.map(name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,`Missing ${name}`);return match[0];}).join('\n');
 const template=index.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
 const server=http.createServer((req,res)=>{

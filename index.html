@@ -839,7 +839,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="form-group"><label>중량(KG)</label><input type="number" id="t-weight" placeholder="0.00" step="0.01" oninput="autoFillTxnPrice()"></div>
       <div class="form-group">
         <label>단가 (원/KG)</label>
-        <input type="number" id="t-price" placeholder="자동입력" step="1" style="background:#fffbe6;" oninput="this.dataset.autofilled='0'; updateTxnAmtPreview()">
+        <input type="number" id="t-price" placeholder="자동입력" min="0" step="1" style="background:#fffbe6;" oninput="this.dataset.autofilled='0'; updateTxnAmtPreview()">
       </div>
       <div class="form-group">
         <label>금액 (자동계산)</label>
@@ -8934,6 +8934,13 @@ async function updateTxnPrice(id, newPriceStr){
   const byId = new Map(userTransactions.map(row=>[String(row.id),row]));
   const targets = ids.map(rowId=>byId.get(rowId));
   if(targets.some(row=>!row)) return;
+  if(targets.some(row=>row.type==='출고')){
+    const price=parseTransactionUnitPrice({value:newPriceStr});
+    if(price===null || Number.isNaN(price)){
+      toast(price===null?'출고 단가를 입력하세요. 무상 출고는 0을 입력하세요.':'출고 단가는 0 이상의 숫자로 입력하세요.');
+      renderTransactions();return;
+    }
+  }
   if(ids.some(rowId=>transactionPricePendingIds.has(rowId))){toast('단가 저장 중입니다. 잠시 후 다시 변경해주세요.');renderTransactions();return;}
   if(targets.some(txn=>txn.stockRowId && txn._prodId)){ toast('생산일보에서 생성된 재고의 단가는 해당 생산일보에서 수정해주세요.'); renderTransactions(); return; }
   if(targets.some(txn=>txn.type === '재고이동')){
@@ -8992,6 +8999,9 @@ function autoFillTxnPrice(){
     updateTxnAmtPreview();
     return;
   }
+  if(document.getElementById('t-type')?.value==='출고' && priceEl.dataset.autofilled==='0' && priceEl.value.trim()!==''){
+    updateTxnAmtPreview();return;
+  }
   const match = findPriceRow(product, origin, trader);
   const p = match ? (parseFloat(match.price)||0) : 0;
   if(p){
@@ -9006,11 +9016,18 @@ function autoFillTxnPrice(){
   }
   updateTxnAmtPreview();
 }
+function parseTransactionUnitPrice(input){
+  if(input?.validity?.badInput)return NaN;
+  const text=String(input?.value ?? '').trim();
+  if(text==='')return null;
+  const price=Number(text);
+  return Number.isFinite(price) && price>=0 ? price : NaN;
+}
 function updateTxnAmtPreview(){
-  const price  = parseFloat(document.getElementById('t-price')?.value)  || 0;
+  const price = parseTransactionUnitPrice(document.getElementById('t-price'));
   const weight = parseFloat(document.getElementById('t-weight')?.value) || 0;
   const el = document.getElementById('t-amount-preview');
-  if(el) el.value = (price && weight) ? Math.round(price * weight).toLocaleString('ko-KR') + ' 원' : '';
+  if(el) el.value = (price!==null && Number.isFinite(price) && weight>0) ? Math.round(price * weight).toLocaleString('ko-KR') + ' 원' : '';
 }
 
 
@@ -9070,12 +9087,12 @@ async function addTransaction(){
   }
   const managedProduct = type === '입고' ? managedRows[0] : null;
   const autoPriceEl = document.getElementById('t-price');
-  const tablePrice = getPrice(product,origin,trader);
-  let price = parseFloat(autoPriceEl?.value) || tablePrice;
-  if(type==='출고' && !price){
-    alert('단가표에서 해당 품목/거래처 단가를 찾지 못했습니다.\n단가표를 확인하거나 단가를 직접 입력해주세요.');
+  const enteredPrice=parseTransactionUnitPrice(autoPriceEl);
+  if(type==='출고' && (enteredPrice===null || Number.isNaN(enteredPrice))){
+    alert(enteredPrice===null?'출고 단가를 입력해주세요. 무상 출고는 0을 입력하세요.':'출고 단가는 0 이상의 숫자로 입력해주세요.');
     return;
   }
+  let price = type==='출고' ? enteredPrice : (parseFloat(autoPriceEl?.value) || getPrice(product,origin,trader));
   const editTxn = getEditingTransaction();
   const previousBoxes = parseOptionalBoxCount(editTxn?.boxCount);
   if(type === '입고' && editTxn?.type === '입고' && editTxn.stockRowId && boxCount !== null && previousBoxes !== null && !Number.isNaN(previousBoxes)){
@@ -9988,7 +10005,7 @@ function addBulkOutboundRow(){
     <td><div class="txn-trader-search-wrap bulk-trader-search-wrap"><input class="bulk-out-trader" placeholder="거래처 검색" autocomplete="off" aria-autocomplete="list" aria-expanded="false" oninput="onBulkTraderSearch(this,true)" onfocus="onBulkTraderSearch(this,false)" onblur="hideBulkTraderResults(this)" onkeydown="handleBulkTraderSearchKeydown(event,this)" style="width:100%;font-size:12px;padding:5px 6px;"><div class="txn-trader-results bulk-trader-results" role="listbox" style="display:none;"></div></div></td>
     <td><input class="bulk-out-box-count" type="number" min="0" step="1" inputmode="numeric" placeholder="미기록" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td><input class="bulk-out-weight" type="number" step="0.01" placeholder="0.00" oninput="updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
-    <td><input class="bulk-out-price-input" type="number" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
+    <td><input class="bulk-out-price-input" type="number" min="0" step="1" placeholder="자동" oninput="this.dataset.manual='1';this.dataset.autofilled='0';updateBulkOutboundAmount(this.closest('tr'))" style="width:100%;font-size:12px;padding:5px 6px;text-align:right;"></td>
     <td class="bulk-out-amount-cell" style="font-size:11px;color:#555;text-align:right;">-</td>
     <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="removeBulkOutboundRow(this)" style="padding:2px 6px;font-size:11px;">✕</button></td>
   `;
@@ -10038,10 +10055,10 @@ function refreshBulkOutboundPrice(tr){
 function updateBulkOutboundAmount(tr){
   if(!tr) return;
   const weight = parseAppNumber(tr.querySelector('.bulk-out-weight')?.value);
-  const price = parseAppNumber(tr.querySelector('.bulk-out-price-input')?.value);
+  const price = parseTransactionUnitPrice(tr.querySelector('.bulk-out-price-input'));
   const stock = parseAppNumber(tr.querySelector('.bulk-out-stock')?.value);
   const amountEl = tr.querySelector('.bulk-out-amount-cell');
-  if(amountEl) amountEl.textContent = (weight && price) ? Math.round(weight * price).toLocaleString('ko-KR') : '-';
+  if(amountEl) amountEl.textContent = (weight>0 && price!==null && Number.isFinite(price)) ? Math.round(weight * price).toLocaleString('ko-KR') : '-';
   const weightEl = tr.querySelector('.bulk-out-weight');
   if(weightEl){
     const over = stock > 0 && weight > stock + 0.01;
@@ -10090,9 +10107,9 @@ async function saveBulkOutbound(){
     if(!stockInfo){ errorMsg = `${idx+1}번째 행: 현재 재고에서 선택한 항목을 찾을 수 없습니다. 다시 선택하세요.`; return; }
     if(weight <= 0){ errorMsg = `${idx+1}번째 행: 출고중량을 입력하세요.`; return; }
     if(Number.isNaN(boxCount)){ errorMsg = `${idx+1}번째 행: 박스수는 0 이상의 정수로 입력하세요.`; return; }
-    let price = parseAppNumber(tr.querySelector('.bulk-out-price-input')?.value);
-    if(!price) price = getPrice(stockInfo.product, stockInfo.origin, trader) || 0;
-    if(!price){ errorMsg = `${idx+1}번째 행: 단가를 찾지 못했습니다. 단가를 직접 입력하세요.`; return; }
+    const price = parseTransactionUnitPrice(tr.querySelector('.bulk-out-price-input'));
+    if(price===null){ errorMsg = `${idx+1}번째 행: 출고 단가를 입력하세요. 무상 출고는 0을 입력하세요.`; return; }
+    if(Number.isNaN(price)){ errorMsg = `${idx+1}번째 행: 출고 단가는 0 이상의 숫자로 입력하세요.`; return; }
     requested[key] = (requested[key] || 0) + weight;
     if(boxCount !== null) requestedBoxes[key] = (requestedBoxes[key] || 0) + boxCount;
     staged.push({
@@ -10374,7 +10391,7 @@ function renderTransactions(){
                     border:1px solid #ddd;border-radius:4px;background:#fffff8;">`)
         : (price?price.toLocaleString():'-')}
     </td>
-    <td style="text-align:right" id="txn-amt-${domId}">${pendingCost?'미확정':amount?Math.round(amount).toLocaleString():'-'}</td>
+    <td style="text-align:right" id="txn-amt-${domId}">${pendingCost?'미확정':(amount || (t.type==='출고' && t.price!=='' && t.price!=null))?Math.round(amount).toLocaleString():'-'}</td>
     <td>${note}</td>
     <td style="white-space:nowrap">
       ${isPdaSummary ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
@@ -10496,7 +10513,8 @@ function loadTxnToForm(id){
   document.getElementById('t-proddate').value=t.proddate||'';
   document.getElementById('t-weight').value  =t.weight||'';
   document.getElementById('t-box-count').value =parseOptionalBoxCount(t.boxCount) ?? '';
-  document.getElementById('t-price').value   =t.price||'';
+  document.getElementById('t-price').value   =t.price ?? '';
+  document.getElementById('t-price').dataset.autofilled='0';
   document.getElementById('t-note').value    =t.note||'';
   if(typeof restoreMeatwatchLookupFromTransaction === 'function') restoreMeatwatchLookupFromTransaction(t);
   updateTxnAmtPreview();
