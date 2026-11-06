@@ -59,6 +59,7 @@ let quotationPreviewType = 'external';
 let quotationPreviewTimer = null;
 let quotationPreviewSerial = 0;
 let quotationSealPromise = null;
+let quotationDragRowId = '';
 
 function quotationId(prefix='qt'){
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
@@ -214,15 +215,99 @@ function quotationCategorySelect(row){
   return `<select onchange="quotationRowChanged('${row.id}','category',this.value)">${options.map(value=>`<option value="${value}"${row.category===value?' selected':''}>${value}</option>`).join('')}</select>`;
 }
 
+function clearQuotationRowDrag(){
+  quotationDragRowId='';
+  document.querySelectorAll('#qt-row-body .quote-dragging,#qt-row-body .quote-drop-before,#qt-row-body .quote-drop-after').forEach(row=>row.classList.remove('quote-dragging','quote-drop-before','quote-drop-after'));
+}
+
+function moveQuotationRow(id,index,focusMove){
+  const rows=quotationDraft?.rows;
+  const from=rows?.findIndex(row=>row.id===id) ?? -1;
+  if(from<0 || !Number.isInteger(index) || index<0 || index>=rows.length || from===index)return;
+  const wrap=document.querySelector('#p-quotation .quote-editor-wrap');
+  const scrollLeft=wrap?.scrollLeft || 0;
+  const [row]=rows.splice(from,1);
+  rows.splice(index,0,row);
+  renderQuotationRows();
+  if(wrap)wrap.scrollLeft=scrollLeft;
+  if(focusMove){
+    const moved=Array.from(document.querySelectorAll('#qt-row-body tr[data-quote-row]')).find(node=>node.dataset.quoteRow===id);
+    const button=moved?.querySelector(`[data-quote-move="${focusMove}"]:not(:disabled)`) || moved?.querySelector('[data-quote-drag]');
+    button?.focus({preventScroll:true});
+  }
+  scheduleQuotationPreview();
+}
+
+function bindQuotationRowMoves(body){
+  if(body.dataset.reorderBound)return;
+  body.dataset.reorderBound='true';
+  const groupAt=event=>event.target.closest('tr[data-quote-row],tr[data-quote-detail]');
+  const rowId=node=>node?.dataset.quoteRow || node?.dataset.quoteDetail;
+  const dropPosition=(event,id)=>{
+    const main=Array.from(body.querySelectorAll('tr[data-quote-row]')).find(row=>row.dataset.quoteRow===id);
+    if(!main)return false;
+    const top=main.getBoundingClientRect().top,bottom=main.nextElementSibling.getBoundingClientRect().bottom;
+    return event.clientY>(top+bottom)/2;
+  };
+  body.addEventListener('click',event=>{
+    const button=event.target.closest('[data-quote-move]');
+    if(!button || button.disabled)return;
+    const id=button.closest('[data-quote-row]').dataset.quoteRow;
+    const delta=Number(button.dataset.quoteMove);
+    moveQuotationRow(id,quotationDraft.rows.findIndex(row=>row.id===id)+delta,String(delta));
+  });
+  body.addEventListener('dragstart',event=>{
+    const grip=event.target.closest('[data-quote-drag]');
+    if(!grip || !event.dataTransfer)return;
+    quotationDragRowId=grip.dataset.quoteDrag;
+    event.dataTransfer.effectAllowed='move';
+    event.dataTransfer.setData('text/plain',quotationDragRowId);
+    const row=grip.closest('tr');
+    row.classList.add('quote-dragging');row.nextElementSibling.classList.add('quote-dragging');
+  });
+  body.addEventListener('dragover',event=>{
+    if(!quotationDragRowId)return;
+    const target=groupAt(event),id=rowId(target);
+    if(!id)return;
+    event.preventDefault();event.dataTransfer.dropEffect='move';
+    body.querySelectorAll('.quote-drop-before,.quote-drop-after').forEach(row=>row.classList.remove('quote-drop-before','quote-drop-after'));
+    if(id===quotationDragRowId)return;
+    const main=target.dataset.quoteRow?target:target.previousElementSibling;
+    if(dropPosition(event,id))main.nextElementSibling.classList.add('quote-drop-after');
+    else main.classList.add('quote-drop-before');
+  });
+  body.addEventListener('drop',event=>{
+    if(!quotationDragRowId)return;
+    event.preventDefault();
+    const id=rowId(groupAt(event)),source=quotationDragRowId;
+    const from=quotationDraft.rows.findIndex(row=>row.id===source);
+    const target=quotationDraft.rows.findIndex(row=>row.id===id);
+    let index=target+(target>=0 && dropPosition(event,id)?1:0);
+    if(from<index)index--;
+    clearQuotationRowDrag();
+    if(target>=0)moveQuotationRow(source,index);
+  });
+  body.addEventListener('dragend',clearQuotationRowDrag);
+  body.addEventListener('dragleave',event=>{
+    if(!body.contains(event.relatedTarget))body.querySelectorAll('.quote-drop-before,.quote-drop-after').forEach(row=>row.classList.remove('quote-drop-before','quote-drop-after'));
+  });
+}
+
 function renderQuotationRows(){
   const body = document.getElementById('qt-row-body');
   if(!body || !quotationDraft) return;
+  clearQuotationRowDrag();
+  bindQuotationRowMoves(body);
   const welstory=quotationIsWelstory(quotationDraft);
-  body.innerHTML = quotationDraft.rows.map(row=>{
+  body.innerHTML = quotationDraft.rows.map((row,index)=>{
     const calc = quotationCalc(row);
     const marginClass = calc.margin < 0 ? ' quote-calc-negative' : '';
     return `<tr data-quote-row="${row.id}">
-      <td>${quotationCategorySelect(row)}</td>
+      <td class="quote-order-cell"><div class="quote-row-tools">
+        <button type="button" class="quote-row-grip" draggable="true" data-quote-drag="${htmlEscape(row.id)}" aria-label="${index+1}번 품목 드래그로 순서 이동" title="드래그해서 품목 순서 이동">⠿ ${index+1}</button>
+        <button type="button" data-quote-move="-1" aria-label="${index+1}번 품목 위로 이동" title="위로 이동"${index===0?' disabled':''}>↑</button>
+        <button type="button" data-quote-move="1" aria-label="${index+1}번 품목 아래로 이동" title="아래로 이동"${index===quotationDraft.rows.length-1?' disabled':''}>↓</button>
+      </div>${quotationCategorySelect(row)}</td>
       <td>${quotationInput(row,'product','text','placeholder="품목명"')}</td>
       <td>${quotationInput(row,'grade','text','placeholder="등급"')}</td>
       <td>${quotationInput(row,'origin','text','placeholder="원산지"')}</td>
@@ -241,7 +326,7 @@ function renderQuotationRows(){
       <td style="text-align:center;white-space:nowrap;"><strong id="qt-suggested-${row.id}">${qMoney(calc.suggestedPrice)}</strong><br><button type="button" class="btn btn-secondary btn-sm" onclick="applyQuotationSuggested('${row.id}')" style="padding:3px 7px;margin-top:3px;">${welstory?'수수료 전 적용':'단가1 적용'}</button></td>
       <td style="text-align:center;"><button type="button" class="btn btn-danger btn-sm" onclick="removeQuotationRow('${row.id}')" title="품목 삭제">×</button></td>
     </tr>
-    <tr class="quote-spec-row">
+    <tr class="quote-spec-row" data-quote-detail="${htmlEscape(row.id)}">
       <td colspan="${welstory?7:8}"><div style="display:grid;grid-template-columns:52px 1fr;gap:6px;align-items:center;"><strong>스펙</strong>${quotationInput(row,'spec','text','class="quote-spec-input" placeholder="예) 냉동, 1.3 × 30 × 60MM 세절, 5KG 실링포장"')}</div></td>
       <td colspan="9"><div class="quote-calc-summary">
         <span>로스반영 <strong id="qt-loss-${row.id}">${qMoney(calc.lossAdjusted)}</strong></span>

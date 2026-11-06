@@ -60,6 +60,7 @@ const quotation=fs.readFileSync(path.join(root,'quotation.js'),'utf8');
     const rows=page.locator('#qt-row-body tr[data-quote-row]');
     const field=(index,column)=>rows.nth(index).locator(`td:nth-child(${column}) input`);
     const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dbmt_quotations')));
+    assert.equal(await page.locator('[data-quote-move]:disabled').count(),2,'A single row cannot move above or below itself');
 
     await page.evaluate(()=>loadQuotation('legacy'));
     assert.equal(await page.locator('#qt-price-operator').inputValue(),'*','Older quotations use multiplication');
@@ -219,8 +220,63 @@ const quotation=fs.readFileSync(path.join(root,'quotation.js'),'utf8');
     await download.saveAs(path.join(artifacts,'external-quotation.png'));
     await page.evaluate(()=>{window.qaCanvasText=[];setQuotationPreviewType('internal');});
     await page.locator('#qt-preview-canvas').screenshot({path:path.join(artifacts,'internal-preview.png')});
+
+    // Reordering must keep every price, spec and costing input with its stable row ID.
+    await page.setViewportSize({width:1400,height:1700});
+    const order=()=>rows.evaluateAll(nodes=>nodes.map(row=>row.dataset.quoteRow));
+    const values=()=>rows.evaluateAll(nodes=>Object.fromEntries(nodes.map(row=>[row.dataset.quoteRow,{
+      main:Array.from(row.querySelectorAll('input,select'),input=>input.value),
+      spec:row.nextElementSibling.querySelector('input').value,
+      costing:row.nextElementSibling.querySelector('.quote-calc-summary').textContent
+    }])));
+    const originalOrder=await order(),originalValues=await values();
+    const rowById=id=>page.locator(`tr[data-quote-row="${id}"]`);
+    await page.locator('.quote-editor-wrap').evaluate(node=>{node.scrollLeft=360;});
+    await rowById(originalOrder[0]).locator('[data-quote-move="1"]').click();
+    assert.deepEqual(await order(),[originalOrder[1],originalOrder[0],...originalOrder.slice(2)]);
+    assert.equal(await page.locator('.quote-editor-wrap').evaluate(node=>node.scrollLeft),360,'Arrow controls preserve horizontal scroll');
+    await rowById(originalOrder[0]).locator('[data-quote-move="-1"]').press('Enter');
+    assert.deepEqual(await order(),originalOrder,'Keyboard movement follows the same row after re-render');
+    assert.equal(await rowById(originalOrder[0]).locator('[data-quote-move="-1"]').isDisabled(),true);
+    assert.equal(await rowById(originalOrder[7]).locator('[data-quote-move="1"]').isDisabled(),true);
+    await page.locator('.quote-editor-wrap').evaluate(node=>{node.scrollLeft=0;});
+    await rowById(originalOrder[0]).locator('[data-quote-drag]').dragTo(rowById(originalOrder[7]).locator('[data-quote-drag]'));
+    let expectedOrder=[...originalOrder.slice(1,7),originalOrder[0],originalOrder[7]];
+    assert.deepEqual(await order(),expectedOrder,'Dragging moves a whole item to before the target group');
+    const detail=page.locator(`tr[data-quote-detail="${originalOrder[7]}"] td`).first();
+    const detailBounds=await detail.boundingBox();
+    await rowById(originalOrder[1]).locator('[data-quote-drag]').dragTo(detail,{targetPosition:{x:35,y:detailBounds.height-2}});
+    expectedOrder=[...originalOrder.slice(2,7),originalOrder[0],originalOrder[7],originalOrder[1]];
+    assert.deepEqual(await order(),expectedOrder,'Dropping below a spec line inserts after the whole target group');
+    assert.deepEqual(await values(),originalValues,'All item values and internal calculations move together');
+    assert.equal(await page.locator('.quote-dragging,.quote-drop-before,.quote-drop-after').count(),0,'Drop styling is cleared');
+    assert.equal(await field(0,2).evaluate(input=>input.draggable),false,'Typing fields are not drag handles');
+    await page.evaluate(()=>saveQuotation());
+    const reordered=(await stored())[0],reorderedId=reordered.id;
+    assert.deepEqual(reordered.rows.map(row=>row.id),expectedOrder,'Save retains the chosen order');
+    await page.evaluate(records=>APP_DATA_REGISTRY.quotationList.set(JSON.parse(JSON.stringify(records))),await stored());
+    await page.evaluate(id=>loadQuotation(id),reorderedId);
+    assert.deepEqual(await order(),expectedOrder,'Order survives a server-style reload');
+    assert.deepEqual(await values(),originalValues);
+    await page.evaluate(id=>duplicateQuotation(id),reorderedId);
+    assert.deepEqual(await rows.locator('td:nth-child(2) input').evaluateAll(inputs=>inputs.map(input=>input.value)),reordered.rows.map(row=>row.product),'Copy retains product order with fresh row IDs');
+    await page.evaluate(id=>loadQuotation(id),reorderedId);
+    const names=reordered.rows.map(row=>row.product);
+    for(const form of ['samsung_welstory','standard']){
+      await page.locator('#qt-form-type').selectOption(form);
+      for(const preview of ['external','internal']){
+        await page.evaluate(type=>{window.qaCanvasText=[];setQuotationPreviewType(type);},preview);
+        await page.waitForFunction(expected=>window.qaCanvasText.includes(expected),names.at(-1));
+        const paintedOrder=await page.evaluate(expected=>qaCanvasText.filter(value=>expected.includes(value)),names);
+        assert.deepEqual(paintedOrder.slice(0,8),names,form+' '+preview+' renders the chosen order');
+      }
+    }
+    await page.locator('#qt-price-multiplier').fill('1.05');
+    await field(0,6).fill('20000');
+    assert.equal(await field(0,7).inputValue(),'21000','Automatic prices still update the correct moved row');
+    await page.screenshot({path:path.join(artifacts,'reordered-editor.png'),fullPage:true});
     assert.deepEqual(errors,[]);
-    console.log('PASS: standard quotation regression; Welstory gross-up for all four commission groups, base-price privacy, internal costing, save/load/copy, eight-row PNG export and mobile form layout.');
+    console.log('PASS: arrow/keyboard and real drag reordering, complete row/spec/cost association, boundary buttons and horizontal scroll, save/server-style reload/copy, standard/Welstory external/internal output order; existing formula, center gross-up and export regressions.');
     console.log('Artifacts: '+artifacts);
   }finally{
     await browser.close();
