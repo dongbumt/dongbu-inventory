@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<script src="stock-ledger.js?v=20261017date1"></script>
-<script src="pda-transaction-summary.js?v=20261021raw1"></script>
+<script src="stock-ledger.js?v=20261106cost1"></script>
+<script src="pda-transaction-summary.js?v=20261106cost1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="label-lots.js?v=20261029lots1"></script>
@@ -6111,6 +6111,12 @@ async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId)
     userTransactions.push(...result.transactionRows);
     transactions = [...EXCEL_TRANSACTIONS,...userTransactions];
   }
+  if(Array.isArray(result.costLinkedTransactions)){
+    const settled = new Map(result.costLinkedTransactions.map(row=>[String(row.id),row]));
+    userTransactions = userTransactions.map(row=>settled.get(String(row.id)) || row);
+    transactions = [...EXCEL_TRANSACTIONS,...userTransactions];
+    invalidateStockMap();
+  }
   gsShowSync('✅ Supabase 생산일보 저장 완료');
   return result;
 }
@@ -10337,8 +10343,9 @@ function renderTransactions(){
     const isStockAdjust = t.type === '재고조정';
     const isStockMove = t.type === '재고이동';
     const isBoxBaseline = t.type === '박스기준';
+    const pendingCost = t._productionCostStatus==='pending' && t.type==='입고';
     const date = htmlEscape(t.date);
-    const type = htmlEscape(t.type);
+    const type = htmlEscape(t._pdaProvisional && t.type==='출고' ? '가출고' : t.type);
     const trader = htmlEscape(t.trader || '-');
     const product = htmlEscape(t.product || '-');
     const origin = htmlEscape(t.origin || '-');
@@ -10347,7 +10354,7 @@ function renderTransactions(){
       ? `${htmlEscape(normalizeStockLocation(t.fromLocation || t.stockLocation))} → ${htmlEscape(normalizeStockLocation(t.toLocation || ''))}`
       : htmlEscape(getTxnStockLocation(t));
     const lot = htmlEscape(t.lot || '-');
-    const note = htmlEscape(t.note || '-');
+    const note = htmlEscape(t.note || '-') + (t._productionCostStatus==='pending' ? ' <small style="color:#666;white-space:nowrap;">원가 미확정</small>' : '');
     const weight = Number(t.weight || 0);
     const price = Number(t.price || 0);
     const amount = Number(t.amount || 0);
@@ -10360,14 +10367,14 @@ function renderTransactions(){
     <td style="text-align:right">${weight.toFixed(2)}</td>
     <td style="text-align:right">${isBoxBaseline ? `${boxCountDisplay(t.boxCountAfter)} <small>기준</small>` : boxCountDisplay(t.boxCount)}</td>
     <td style="text-align:right;padding:2px 4px;">
-      ${t._isUser
+      ${pendingCost ? '미확정' : t._isUser
         ? ((isStockAdjust || isStockMove || isBoxBaseline) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
              onchange="updateTxnPrice(${jsArg(t.id)}, this.value)" ${isPdaSummary?`title="${t._pdaSummaryRows.length}박스 단가 일괄 수정" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''}`:''}
              style="width:80px;text-align:right;font-size:12px;padding:2px 4px;
                     border:1px solid #ddd;border-radius:4px;background:#fffff8;">`)
         : (price?price.toLocaleString():'-')}
     </td>
-    <td style="text-align:right" id="txn-amt-${domId}">${amount?Math.round(amount).toLocaleString():'-'}</td>
+    <td style="text-align:right" id="txn-amt-${domId}">${pendingCost?'미확정':amount?Math.round(amount).toLocaleString():'-'}</td>
     <td>${note}</td>
     <td style="white-space:nowrap">
       ${isPdaSummary ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
@@ -10672,8 +10679,9 @@ function validateProductionStockRowChanges(previous, next){
       if(linkedOrders.some(order=>parseAppNumber(order.inputWeight) > parseAppNumber(replacement.qty)+0.01))
         return `${label}: 작업지시의 투입중량보다 생산량을 줄일 수 없습니다. 작업지시를 먼저 정리해주세요.`;
     }
-    if(productionOutputStockIdentity(output, previous) !== productionOutputStockIdentity(replacement, next))
-      return `${label}: 연결된 재고 내역이 있어 품목·규격·원산지·이력번호·생산일·단가는 변경할 수 없습니다. 비고는 수정할 수 있습니다.`;
+    const identityReplacement = output.stockRowId && output.stockRowId===replacement.stockRowId ? {...replacement,price:output.price} : replacement;
+    if(productionOutputStockIdentity(output, previous) !== productionOutputStockIdentity(identityReplacement, next))
+      return `${label}: 연결된 재고 내역이 있어 품목·규격·원산지·이력번호·생산일은 변경할 수 없습니다. 비고는 수정할 수 있습니다.`;
   }
   return '';
 }

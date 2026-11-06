@@ -251,6 +251,7 @@ function calculate(transactions, options={}){
     });
 
   stockTxns.forEach(({t})=>{
+    if(t._pdaProvisional === true) return;
     const lot = String(t.lot||'');
     const product = String(t.product||'').trim();
     if(!product) return;

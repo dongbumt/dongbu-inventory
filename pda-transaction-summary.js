@@ -1,7 +1,7 @@
 /* Display-only aggregation. Original box transactions remain the stock ledger. */
 (function(global){
   'use strict';
-  const fields=['date','type','traderId','trader','product','labelProductId','packunit','lot','origin','storage','brand','factoryNo','grade','note'];
+  const fields=['date','type','traderId','trader','product','labelProductId','packunit','lot','origin','storage','brand','factoryNo','grade','note','_productionCostStatus'];
   const number=value=>Number.isFinite(Number(value))?Number(value):0;
   function identity(row){
     if(row._pdaRequestId&&row._pdaLabelId)return ['product',row._pdaRequestId];

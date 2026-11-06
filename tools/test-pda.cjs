@@ -103,6 +103,12 @@ const server=http.createServer((req,res)=>{
       assert(item.y+item.height<=footer.y,'First scanned item must be visible above the save bar');
       assert(await page.locator('.brand img').evaluate(img=>img.complete&&img.naturalWidth>0));
     }
+    await page.locator('#clear-items').click();await page.locator('[name=mode][value=outbound]').check();
+    current={...fixture,productionPending:true,productionCost:null,costStatus:'pending'};await scan();
+    assert.match(await page.locator('#items').textContent(),/가출고 · 원가 미확정/);await page.locator('#save').click();
+    assert.match(await page.locator('#confirm-items').textContent(),/가출고 · 원가 미확정/);
+    await page.locator('#confirm-dialog').screenshot({path:path.join(artifacts,'provisional-confirm.png')});
+    await page.locator('#confirm-cancel').click();await page.locator('#clear-items').click();current={...fixture};
     await page.locator('#logout').click();canSave=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});
     assert.match(await page.locator('#status').textContent(),/PDA 입출고 등록 권한/);
     await scan();assert(await page.locator('#save').isDisabled());

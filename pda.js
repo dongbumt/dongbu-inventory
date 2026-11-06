@@ -8,7 +8,7 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const kg=value=>Number(value||0).toFixed(2);
   const today=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));return `${parts.year}-${parts.month}-${parts.day}`;};
-  const action=item=>state.mode==='outbound'?'출고':item.state==='shipped'?'반입':'생산입고 확인';
+  const action=item=>state.mode==='outbound'?(item.productionPending?'가출고 · 원가 미확정':'출고'):item.state==='shipped'?(item.productionPending?'반입 · 원가 미확정':'반입'):(item.productionPending?'생산완료 전 입고 확인':'생산입고 확인');
   const storage={get(key){try{return sessionStorage.getItem(key)||'';}catch(_){return '';}},set(key,value){try{sessionStorage.setItem(key,value);}catch(_){throw Error('임시 저장을 사용할 수 없습니다. 브라우저 저장 권한을 확인해주세요.');}},remove(key){try{sessionStorage.removeItem(key);}catch(_){}}};
   function status(message,kind=''){ $('status').textContent=message;$('status').className=kind; }
   function uuid(){const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const s=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');return s.slice(0,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16)+'-'+s.slice(16,20)+'-'+s.slice(20);}

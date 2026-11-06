@@ -56,6 +56,15 @@ function row(ctx, id, location = '가공장', asOf = '') {
   return found[0];
 }
 function testLogic() {
+  const provisional = harness([
+    {...consume('pending-original',10),_pdaProvisional:true,stockUnitPrice:null},
+    {...trackedInbound('pending-return',5,0),_pdaProvisional:true}
+  ]);
+  assert.equal(buckets(provisional).length,0,'Uncompleted labels are physical pending movements, not negative or free stock');
+  provisional.userTransactions=[incoming('actual-production',20,''),consume('actual-production',10),trackedInbound('pending-return',5,5000)];
+  provisional.invalidateStockMap();
+  assert.equal(row(provisional,'actual-production').stock,10);
+  assert.equal(row(provisional,'pending-return').stock,5);
   const boxLedger = harness([
     {...trackedInbound('boxes-A', 100, 5000), boxCount:10},
     {...trackedInbound('legacy-B', 30, 5000)},
@@ -335,6 +344,7 @@ async function testProductionGuards(page) {
       safeReduction: validateProductionStockRowChanges(previous, next({qty: 90})),
       unsafeReduction: validateProductionStockRowChanges(previous, next({qty: 5})),
       noteEdit: validateProductionStockRowChanges(previous, next({note: '거래처 수정'})),
+      costEdit: validateProductionStockRowChanges(previous, next({price: 7500})),
       identityEdit: validateProductionStockRowChanges(previous, next({lot: 'CHANGED-LOT'})),
       deleteRow: validateProductionStockRowChanges(previous, {...previous, outputs: []}),
       duplicateId: validateProductionStockRowChanges(null, {...previous, outputs: [previous.outputs[0], previous.outputs[0]]})
@@ -345,6 +355,7 @@ async function testProductionGuards(page) {
   assert.equal(results.safeReduction, '', '100 produced / 10 issued may be corrected to 90 produced');
   assert.match(results.unsafeReduction, /줄일 수 없습니다/);
   assert.equal(results.noteEdit, '');
+  assert.equal(results.costEdit, '', 'Permanent stock links permit server-managed cost corrections without changing identity');
   assert.match(results.identityEdit, /변경할 수 없습니다/);
   assert.match(results.deleteRow, /삭제할 수 없습니다/);
   assert.match(results.duplicateId, /두 행/);
@@ -561,6 +572,18 @@ async function main() {
   for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) new vm.Script(match[1]);
   testLogic();
   testPublicStockPresentation();
+  const ctx={console};vm.createContext(ctx);
+  vm.runInContext(`
+    let userProdEntries=[],userTransactions=[{id:'sale',stockUnitPrice:null,_productionCostStatus:'pending'}],transactions=[],EXCEL_TRANSACTIONS=[];
+    const personalServerWriteToken=()=>'',normalizeRowsForUpsert=x=>x,assertPersonalServerResult=()=>{},gsShowSync=()=>{},invalidateStockMap=()=>{};
+    const sbRpc=async()=>({ok:true,entry:{id:'prod'},transactionRows:[{id:'produced',_prodId:'prod'}],costLinkedTransactions:[{id:'sale',stockUnitPrice:6000,_productionCostStatus:'final'},{id:'not-loaded',stockUnitPrice:6000}]});
+    ${source('supabaseSaveProductionRows')}
+    async function verify(){await supabaseSaveProductionRows({id:'prod'},[],null);return userTransactions;}
+  `,ctx);
+  const settled=JSON.parse(JSON.stringify(await ctx.verify()));
+  assert.equal(settled.find(row=>row.id==='sale').stockUnitPrice,6000);
+  assert.equal(settled.find(row=>row.id==='sale')._productionCostStatus,'final');
+  assert.equal(settled.length,2,'Settling visible rows must not import unrelated historical sales into the current query');
   if (process.argv.includes('--browser')) await testBrowser();
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
