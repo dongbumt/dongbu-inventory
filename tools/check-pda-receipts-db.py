@@ -8,7 +8,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / 'supabase/migrations/20261110072455_pda_raw_grouped_receipts.sql'
+MIGRATION = ROOT / 'supabase/migrations/20261110073257_pda_raw_grouped_receipts.sql'
 
 
 def check(conn):
