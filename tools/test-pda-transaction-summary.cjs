@@ -31,6 +31,7 @@ assert.equal(group([...boxes,...rawBoxes]).length,2,'Raw and product boxes never
 console.log('PASS: exact weight/box/amount totals, identity boundaries, manual/receipt isolation, original row preservation and per-box rounding');
 const names=['localDateString','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','setTransactionListIdle','prepareTransactionList','markTransactionSearchPending','markTransactionKeywordSearchPending','validateTransactionDateRange','runTransactionSearch','runTransactionExactDateSearch','runTransactionAllSearch','exportTransactionsCSV','printFilteredTransactions'];
 names.push('parseTransactionUnitPrice');
+names.push('deleteTransaction');
 const functions=names.map(name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,`Missing ${name}`);return match[0];}).join('\n');
 const template=index.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
 const server=http.createServer((req,res)=>{
@@ -55,14 +56,15 @@ const server=http.createServer((req,res)=>{
       window.startAuthenticatedErp=async()=>{document.body.classList.remove('erp-auth-locked');};
       window.showPage=(id)=>{document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.getElementById(id)?.classList.add('active');};
       window.toast=message=>__toasts.push(message);
-      window.saveTransactionRows=async(rows,deleted,old,options)=>{if(__fail)throw Error('QA atomic save failed');if(rows.some(row=>row._pdaSummaryRows||String(row.id).startsWith('pda-summary:')))throw Error('Must only save original boxes');__saves.push({rows:structuredClone(rows),options});};
+      window.saveTransactionRows=async(rows,deleted,old,options)=>{if(__fail)throw Error('QA atomic save failed');if(rows.some(row=>row._pdaSummaryRows||String(row.id).startsWith('pda-summary:')))throw Error('Must only save original boxes');__saves.push({rows:structuredClone(rows),deleted,options});};
+      window.safeLocalStorageSet=(key,value)=>localStorage.setItem(key,value);
       window.invalidateStockMap=()=>{};window.updateOutProductList=()=>{};window.loadTxnToForm=id=>{window.__editId=id;};
       window.parseAppNumber=value=>Number(value)||0;window.downloadCSV=(rows,name)=>{window.__csv={rows,name};};
       window.openA4ListPrint=(title,filters,count,table)=>{window.__print={title,filters,count,table};};
     });
     page.on('pageerror',error=>errors.push(error.message));await page.goto(base+'fixture.html');
     for(const file of ['pda-transaction-summary.js','label-layout.js'])await page.addScriptTag({url:assets+file});
-    await page.addScriptTag({content:`var userTransactions=[],transactions=[],EXCEL_TRANSACTIONS=[],transactionListQueryActive=false,pdaTransactionDetailIds=[],today='2026-10-20',STOCK_LOCATION_DEFAULT='가공장';const transactionPricePendingIds=new Set();\n${functions}`});
+    await page.addScriptTag({content:`var userTransactions=[],transactions=[],EXCEL_TRANSACTIONS=[],transactionListQueryActive=false,pdaTransactionDetailIds=[],today='2026-10-20',STOCK_LOCATION_DEFAULT='가공장',SUPABASE_ENABLED_KEY='qa_enabled';const transactionPricePendingIds=new Set();\n${functions}`});
     await page.addScriptTag({url:assets+'m02-auth.js'});await page.waitForFunction(()=>DBMTAuth.isPersonal());
     await page.evaluate(rows=>{userTransactions=structuredClone(rows);transactions=[...userTransactions];showPage('p-transactions');prepareTransactionList();},boxes);
     assert.equal(await page.locator('#t-search-date').inputValue(),'2026-10-20');
@@ -129,6 +131,27 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator('#t-body tr').count(),2,'Explicit range survives menu reentry');
     await page.evaluate(()=>{transactions=[];renderTransactions();});
     assert.match(await page.locator('#t-body').textContent(),/조회 결과가 없습니다/);assert.equal(await page.locator('#t-count').textContent(),'(0건)');
-    assert.deepEqual(errors,[]);console.log('PASS: today on first open, preserved date/range/all/keyword searches and empty results; product/raw aggregation, barcode details, atomic price/rollback, print/CSV, permissions and narrow dialog');console.log('Artifacts: '+artifacts);
+    const receipt={...rawBoxes[0],id:'qa_raw_receipt',type:'입고',_pdaAction:'receive',weight:240,boxCount:20,price:4400,amount:1056000,
+      _pdaRawBoxes:rawBoxes.map(row=>({id:row.id,barcode:row._pdaCode,weight:12}))};
+    await page.evaluate(async row=>{
+      __session.permissions=[{menuCode:'transactions',canView:true,canUpdate:true,canDelete:true}];await DBMTAuth.initializeSession(true);
+      userTransactions=[row];transactions=[row];renderTransactions();localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
+    },receipt);
+    assert.equal(await page.locator('#t-body tr').count(),1);assert.equal(await page.locator('#t-body tr td').nth(7).textContent(),'20');
+    await page.locator('#t-body').getByRole('button',{name:'박스별',exact:true}).click();
+    assert.equal(await page.locator('#txn-pda-detail-body tr').count(),20);assert.match(await page.locator('#txn-pda-detail-title').textContent(),/입고/);
+    assert.equal(await page.locator('#txn-pda-detail-body input').count(),0,'Package detail is read-only; receipt price is edited on the main row');
+    assert.match(await page.locator('#txn-pda-detail-summary').textContent(),/20박스.*240\.00/);
+    await page.locator('#txn-pda-detail-dialog').screenshot({path:path.join(artifacts,'receipt-boxes.png')});
+    await page.getByRole('button',{name:'박스별 내역 닫기'}).click();
+    page.on('dialog',dialog=>dialog.accept());
+    await page.evaluate(()=>{__fail=true;});await page.locator('#t-body').getByRole('button',{name:'삭제',exact:true}).click();
+    assert.equal(await page.evaluate(()=>userTransactions.length),1,'A rejected receipt deletion must remain visible');
+    await page.evaluate(()=>{__fail=false;});const beforeDelete=await page.evaluate(()=>__saves.length);
+    await page.locator('#t-body').getByRole('button',{name:'삭제',exact:true}).click();
+    await page.waitForFunction(()=>userTransactions.length===0);
+    assert.equal(await page.evaluate(()=>__saves.length),beforeDelete+1);assert.deepEqual(await page.evaluate(()=>__saves.at(-1).deleted),[receipt.id]);
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('dbmt_user_transactions'))),[]);
+    assert.deepEqual(errors,[]);console.log('PASS: today/date/range/all/keyword queries; product/raw outbound totals; 20-box raw receipt details; atomic price/delete success/failure, print/CSV, permissions and narrow dialog');console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

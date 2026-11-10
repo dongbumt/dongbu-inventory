@@ -56,7 +56,7 @@ const server=http.createServer((req,res)=>{
             const source=cases.find(item=>item.code===scan.barcode),pack=registered.get(source.id);
             const lot=body.p_mode==='outbound'?pack.lot:body.p_lot.trim();
             registered.set(source.id,{registered:true,revision:(pack?.revision||0)+1,state:body.p_mode==='outbound'?'shipped':'in_stock',location:body.p_location,product:product.name,productId:product.id,lot,weight:scan.labelWeight,origin:product.origin});
-            return {id:source.id,product:product.name,lot,weight:scan.labelWeight,action:body.p_mode==='outbound'?'ship':body.p_source_id?'bind':'receive'};
+            return {id:source.id,product:product.name,lot,weight:scan.labelWeight,transactionId:'qa_tx_'+body.p_request_id+'_'+source.id,action:body.p_mode==='outbound'?'ship':body.p_source_id?'bind':'receive'};
           }),savedAt:new Date().toISOString()};saved.set(body.p_request_id,{body,result});
         }
         if(loseResponse){loseResponse=false;return route.abort();}data=saved.get(body.p_request_id).result;
@@ -170,6 +170,14 @@ const server=http.createServer((req,res)=>{
     await page.locator('#clear-items').click();await page.locator('#settings-panel').evaluate(el=>el.open=true);
     await page.locator('#rule-reset').click();await scan(tenderloin.code);await page.locator('#rule-dialog').waitFor({state:'visible'});
     assert.equal(await page.locator('#rule-candidates input:checked').count(),0);await page.keyboard.press('Escape');await idle();assert.equal(await page.locator('#items li').count(),0,'Canceling a format selection must not add a box or save anything');
+    await scan(extra.code);await choose();await idle();loseResponse=true;await confirm();
+    await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
+    const cancelledResult=saved.get(commits.at(-1).p_request_id).result;
+    cancelledResult.cancelledTransactionIds=[cancelledResult.items[0].transactionId];registered.delete(extra.id);
+    await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.match(await page.locator('#status').innerText(),/ERP에서.*입고가 삭제/,'An old retry must not announce a cancelled receipt as successful');
+    await page.locator('#history-open').click();await page.waitForFunction(()=>document.getElementById('history-list').textContent.includes('입고 삭제 내역 있음'));
+    assert.match(await page.locator('#history-list').textContent(),/삭제됨/);await page.locator('#history-close').click();
     canSave=false;await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#status').innerText(),/조회만/);
     await page.locator('#product').selectOption(product.id);await page.locator('#lot').fill('QA-READONLY');await scan(extra.code);await choose();
     await idle();assert.equal(await page.locator('dialog[open]').count(),0);assert(await page.locator('#save').isDisabled());

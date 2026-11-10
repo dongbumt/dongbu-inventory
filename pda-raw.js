@@ -227,7 +227,10 @@
     try{
       const result=await rpc('dbmt_pda_raw_commit',{...state.pending,p_token:state.token});
       if(result.requestId!==state.pending.p_request_id||result.count!==state.items.length)throw Error('저장 응답을 확인할 수 없습니다.');
-      storage.remove(PENDING+state.user.id);state.pending=null;state.items=[];$('settings-panel').open=true;status(`${result.count}박스 · ${kg(result.weight)}KG 처리 완료`,'ok');sound('success');await loadSources();
+      storage.remove(PENDING+state.user.id);state.pending=null;state.items=[];$('settings-panel').open=true;
+      if(result.cancelledTransactionIds?.length){status('ERP에서 일부 또는 전체 입고가 삭제된 요청입니다. 처리이력을 확인한 후 다시 스캔해주세요.','error');sound('error');}
+      else{status(`${result.count}박스 · ${kg(result.weight)}KG 처리 완료`,'ok');sound('success');}
+      await loadSources();
     }catch(error){
       if(error.definite&&!error.session){storage.remove(PENDING+state.user.id);state.pending=null;}
       status(`${error.message}${state.pending?'\n같은 요청 재시도로 결과를 확인해주세요.':''}`,'error');sound('error');
@@ -235,7 +238,7 @@
   }
   $('history-open').addEventListener('click',async()=>{
     $('history-dialog').showModal();$('history-list').textContent='조회 중';
-    try{const data=await rpc('dbmt_pda_raw_history',{p_token:state.token});$('history-list').innerHTML=(data.rows||[]).map(row=>`<details class="history-row"><summary>${esc(row.request.date)} · ${row.request.mode==='outbound'?'출고':row.request.sourceId?'기존 재고 연결':'입고'} · ${row.result.count}박스 · ${kg(row.result.weight)}KG</summary><small>${esc(row.id)} · ${esc(row.request.location)}</small><ul>${(row.result.items||[]).map(item=>`<li>${esc(item.product)} · LOT ${esc(item.lot)} · ${kg(item.weight)}KG</li>`).join('')}</ul></details>`).join('')||'처리이력이 없습니다.';}
+    try{const data=await rpc('dbmt_pda_raw_history',{p_token:state.token});$('history-list').innerHTML=(data.rows||[]).map(row=>`<details class="history-row"><summary>${esc(row.request.date)} · ${row.request.mode==='outbound'?'출고':row.request.sourceId?'기존 재고 연결':'입고'} · ${row.result.count}박스 · ${kg(row.result.weight)}KG${row.result.cancelledTransactionIds?.length?' · 입고 삭제 내역 있음':''}</summary><small>${esc(row.id)} · ${esc(row.request.location)}</small><ul>${(row.result.items||[]).map(item=>`<li>${esc(item.product)} · LOT ${esc(item.lot)} · ${kg(item.weight)}KG${row.result.cancelledTransactionIds?.includes(item.transactionId)?' · 삭제됨':''}</li>`).join('')}</ul></details>`).join('')||'처리이력이 없습니다.';}
     catch(error){$('history-list').textContent=error.message;}
   });
   $('history-close').addEventListener('click',()=>$('history-dialog').close());
