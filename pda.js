@@ -127,11 +127,12 @@
   });
   $('save').addEventListener('click',()=>{
     if(state.pending){savePending();return;}
+    if(state.saving||state.scanning||state.scans.length||!state.canSave||!state.items.length||!navigator.onLine)return;
     if(state.mode==='outbound'&&!$('partner').value){status('출고 거래처를 선택해주세요.','error');$('partner').focus();return;}
     if(!$('work-date').value){status('작업일을 선택해주세요.','error');return;}
-    $('confirm-title').textContent=state.mode==='outbound'?'출고 확정':'입고·반입 확정';
-    const received=state.items.filter(item=>action(item)==='생산입고 확인').length,returned=state.items.filter(item=>action(item)==='반입').length;
-    $('confirm-summary').textContent=`${$('work-date').value} · ${$('location').value}\n${$('total').textContent}`+(state.mode==='outbound'?`\n${$('partner').selectedOptions[0]?.textContent||''}`:`\n생산입고 확인 ${received}개 · 반입 ${returned}개`);
+    if(state.mode==='inbound'){startSave();return;}
+    $('confirm-title').textContent='출고 확정';
+    $('confirm-summary').textContent=`${$('work-date').value} · ${$('location').value}\n${$('total').textContent}\n${$('partner').selectedOptions[0]?.textContent||''}`;
     $('confirm-items').innerHTML=state.items.map(item=>`<li>${esc(item.product)} · ${kg(item.weight)} KG · ${action(item)}<br>${esc(item.code)}</li>`).join('');
     $('confirm-dialog').showModal();
   });
@@ -139,12 +140,16 @@
   $('confirm-save').addEventListener('click',()=>{
     if(state.saving||state.pending)return;
     $('confirm-dialog').close();
+    startSave();
+  });
+  function startSave(){
+    if(state.saving||state.pending||state.scanning||state.scans.length||!state.canSave||!state.items.length||!navigator.onLine)return;
     state.pending={p_request_id:uuid(),p_mode:state.mode,p_location:$('location').value,p_trader_id:state.mode==='outbound'?$('partner').value:null,
       p_date:$('work-date').value,p_items:state.items.map(item=>({barcode:item.code,revision:item.revision})),p_note:$('note').value};
     try{pendingStore();savePending();}catch(error){state.pending=null;status(error.message,'error');render();}
-  });
+  }
   async function savePending(){
-    if(state.saving||!state.pending)return;state.saving=true;render();
+    if(state.saving||!state.pending||!state.canSave||!navigator.onLine)return;state.saving=true;render();
     try{
       pendingStore();const result=await rpc('dbmt_pda_commit',{p_token:state.token,...state.pending});
       state.pending=null;pendingStore();state.items=[];

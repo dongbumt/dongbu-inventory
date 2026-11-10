@@ -25,7 +25,7 @@ const server=http.createServer((req,res)=>{
     ];
     const smKey='sm2:v1:mt:130:qa';for(const item of cases.filter(item=>item.ruleKey!=='gs1')){item.ruleKey=smKey;item.rule='SM [130] 탑미트 / 동부엠티';}
     const registered=new Map(),saved=new Map(),calls=[],commits=[],lookups=[],errors=[],blocked=[];
-    let canSave=true,loseResponse=false,denyCommit=false,lookupDelay=0;
+    let canSave=true,loseResponse=false,denyCommit=false,lookupDelay=0,commitDelay=0;
     page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
     await context.route('**/*',async route=>{
       const request=route.request(),target=new URL(request.url());
@@ -50,6 +50,7 @@ const server=http.createServer((req,res)=>{
         else data={ok:true,item:{...source,calculatedWeight:source.weight,registered:false,revision:0,...registered.get(source.id)}};
       }else if(name==='dbmt_pda_raw_commit'){
         commits.push(body);if(denyCommit)return fail('다른 작업자가 처리했습니다. 스캔 목록을 다시 조회해주세요.');
+        if(commitDelay)await new Promise(resolve=>setTimeout(resolve,commitDelay));
         if(body.p_mode==='inbound'&&!String(body.p_lot||'').trim())return fail('별도 이력번호를 입력해주세요.');
         if(!saved.has(body.p_request_id)){
           const result={ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:body.p_items.reduce((sum,item)=>sum+item.labelWeight,0),items:body.p_items.map(scan=>{
@@ -80,7 +81,11 @@ const server=http.createServer((req,res)=>{
       await page.locator('#rule-checked').check();await page.locator('#rule-choose').click();assert.equal(commits.length,before,'Rule selection is not an inventory save');
     };
     const idle=()=>page.waitForFunction(()=>!document.getElementById('save-detail').textContent.includes('조회 중'));
-    const confirm=async()=>{await page.locator('#save').click();assert(await page.locator('#confirm-save').isDisabled());await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();};
+    const confirm=async()=>{
+      const inbound=await page.locator('[name="mode"][value="inbound"]').isChecked();await page.locator('#save').click();
+      if(inbound){assert(await page.locator('#confirm-dialog').isHidden(),'Inbound must save without a second confirmation');return;}
+      assert(await page.locator('#confirm-dialog').isVisible());assert(await page.locator('#confirm-save').isDisabled());await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();
+    };
     await scan(cases[0].code);await idle();assert.equal(await page.locator('#items li').count(),0,'Manufacturer GS1 LOT must not become a domestic traceability number');
     assert.match(await page.locator('#status').innerText(),/별도로 이력번호/);assert.equal(await page.locator('#lot').inputValue(),'');assert(await page.locator('#save').isDisabled());assert.equal(commits.length,0);
     await page.locator('#lot').fill('   ');await scan(cases[1].code);await idle();assert.equal(await page.locator('#items li').count(),0,'Domestic weight barcodes also require a separate traceability number');
@@ -107,54 +112,48 @@ const server=http.createServer((req,res)=>{
     await page.waitForFunction(()=>document.getElementById('source').options.length===2);await page.locator('#source').selectOption('qa-existing');assert.equal(await page.locator('#lot').inputValue(),'QA-EXISTING');
     await scan(cases[1].code);await choose();await idle();assert.equal(await page.locator('#items li').count(),1);
     assert.equal(await page.locator('dialog[open]').count(),0,'SM rules must not interrupt scanning');
-    await page.locator('#save').click();assert.match(await page.locator('#confirm-title').innerText(),/중량 증가 없음/);
-    assert.equal(await page.locator('#confirm-items input').count(),0,'SM weights remain fixed');assert(await page.locator('#confirm-save').isDisabled());
-    await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     assert.equal(commits.at(-1).p_source_id,'qa-existing');assert.equal(commits.at(-1).p_items[0].labelWeight,15.97);
     await page.locator('#receive-kind').selectOption('new');await page.locator('#partner').selectOption('qa-partner');
     const beforeLb=commits.length;lookupDelay=80;
     for(const item of cases.slice(2,5)){await scan(item.code);assert.equal(await page.locator('dialog[open]').count(),0,'Pound boxes, including the reported photo, must scan continuously');}
     await idle();lookupDelay=0;assert.equal(await page.locator('#items li').count(),3);assert.equal(commits.length,beforeLb);
     assert.match(await page.locator('#total').innerText(),/3박스 · 79\.75 KG/);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
-    await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input[data-weight]').count(),3);assert(await page.locator('#confirm-save').isDisabled());
-    assert.deepEqual(await page.locator('#confirm-items .scan-code').allTextContents(),cases.slice(2,5).map(item=>item.code),'Keep each barcode visible for physical label comparison');
-    const weight=page.locator('#confirm-items input[data-weight="0"]');
-    await weight.fill('35.10');assert.match(await page.locator('#confirm-summary').innerText(),/79\.74 KG/);
-    await page.locator('#confirm-cancel').click();assert.equal(commits.length,beforeLb);assert.match(await page.locator('#items').innerText(),/35\.11 KG/,'Cancel discards unconfirmed weight edits');
-    assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));await page.locator('#save').click();
-    for(const invalid of ['', '0', '1001', '35.101', '35.14']){
-      await weight.fill(invalid);await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();
-      assert(await page.locator('#confirm-dialog').isVisible());assert(await page.locator('#confirm-error').isVisible());assert.equal(commits.length,beforeLb,'Invalid rounding must never save');
-    }
-    await weight.fill('35.10');assert(await page.locator('#confirm-save').isDisabled());assert.equal(await page.locator('#confirm-checked').isChecked(),false);
-    await page.locator('#confirm-checked').check();await page.locator('#confirm-items input[data-weight="1"]').fill('22.31');
-    assert.equal(await page.locator('#confirm-checked').isChecked(),false,'Editing after review requires confirmation again');assert(await page.locator('#confirm-save').isDisabled());
-    await page.locator('#confirm-items input[data-weight="1"]').fill('22.32');assert.match(await page.locator('#confirm-summary').innerText(),/79\.74 KG/);
+    assert.deepEqual(await page.locator('#items .scan-code').allTextContents(),cases.slice(2,5).map(item=>item.code),'Original scans remain visible before the save button is pressed');
+    const workDate=await page.locator('#work-date').inputValue();await page.evaluate(()=>document.getElementById('work-date').value='');
+    await page.locator('#save').click();assert.equal(commits.length,beforeLb);assert.match(await page.locator('#status').textContent(),/작업일/);
+    await page.evaluate(value=>document.getElementById('work-date').value=value,workDate);
     for(const width of [320,390,480,1280]){
-      await page.setViewportSize({width,height:800});const bounds=await page.locator('#confirm-dialog').boundingBox();
-      assert(bounds.x>=0&&bounds.x+bounds.width<=width);assert(await page.locator('#confirm-items input').evaluateAll(inputs=>inputs.every(input=>input.getBoundingClientRect().right<=document.getElementById('confirm-dialog').getBoundingClientRect().right)));
-      await page.locator('#confirm-dialog').screenshot({path:path.join(artifacts,`batch-confirm-${width}.png`)});
+      await page.setViewportSize({width,height:800});assert.equal(await page.locator('dialog[open]').count(),0);
+      const button=await page.locator('#save').boundingBox();assert(button.x>=0&&button.x+button.width<=width&&button.y+button.height<=800);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await page.screenshot({path:path.join(artifacts,`direct-receipt-${width}.png`),fullPage:true});
     }
-    await page.setViewportSize({width:480,height:800});loseResponse=true;await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();
+    await page.setViewportSize({width:480,height:800});loseResponse=true;commitDelay=100;
+    await page.evaluate(()=>{const button=document.getElementById('save');button.click();button.dispatchEvent(new Event('click'));});
     await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');const lbRequest=commits.at(-1);
-    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#items').innerText(),/35\.10 KG/);
+    commitDelay=0;assert.equal(commits.length,beforeLb+1,'Two taps during a save must send only one request');
+    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#items').innerText(),/35\.11 KG/);
     assert.equal(await page.locator('dialog[open]').count(),0);await page.locator('#save').click();
     await page.waitForFunction(()=>document.getElementById('items').children.length===0);
-    assert.equal(commits.at(-1).p_request_id,lbRequest.p_request_id);assert.deepEqual(commits.at(-1).p_items,lbRequest.p_items,'Reviewed rounding must survive lost responses and retries unchanged');
-    assert.equal(commits.at(-1).p_items.length,3);assert.equal(commits.at(-1).p_items[0].labelWeight,35.1);assert(commits.at(-1).p_items.every(item=>item.checked===true));
+    assert.equal(commits.at(-1).p_request_id,lbRequest.p_request_id);assert.deepEqual(commits.at(-1).p_items,lbRequest.p_items,'Original calculated weights must survive lost responses and retries unchanged');
+    assert.equal(commits.at(-1).p_items.length,3);assert.equal(commits.at(-1).p_items[0].labelWeight,35.11);assert(commits.at(-1).p_items.every(item=>item.checked===true));
     await page.locator('[name="mode"][value="outbound"]').check();await page.locator('#partner').selectOption('qa-partner');await scan(cases[2].code);await idle();
-    assert.equal(await page.locator('dialog[open]').count(),0);assert.match(await page.locator('#items').innerText(),/35\.10 KG/);
+    assert.equal(await page.locator('dialog[open]').count(),0);assert.match(await page.locator('#items').innerText(),/35\.11 KG/);
     await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input').count(),0,'Outbound uses saved label weight, never editable or recalculated');
-    await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_items[0].labelWeight,35.1);
+    await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_items[0].labelWeight,35.11);
     await page.locator('#history-open').click();await page.waitForFunction(()=>document.querySelectorAll('#history-list .history-row').length===5);await page.locator('#history-close').click();
     await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#partner').selectOption('qa-partner');
     await page.locator('#lot').fill('L12610261938001');await scan(cases[5].code);await choose();await idle();
     assert.equal(await page.locator('dialog[open]').count(),0);assert.match(await page.locator('#items').innerText(),/17\.07 KG/);assert.match(await page.locator('#items').innerText(),/L12610261938001/);
-    await page.locator('#save').click();assert.equal(await page.locator('#confirm-items input').count(),0,'The new domestic rule is fixed KG, not pound conversion');
-    await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     assert.equal(commits.at(-1).p_items[0].rule,cases[5].ruleKey);assert.equal(commits.at(-1).p_items[0].labelWeight,17.07);assert.equal(commits.at(-1).p_lot,'L12610261938001');
     const extra={...cases[1],id:'qa-extra',code:'07662300206004601597009457'};cases.push(extra);
-    await scan(extra.code);await choose();await idle();await page.locator('#save').click();await page.keyboard.press('Escape');assert(await page.locator('#confirm-dialog').isHidden());assert.equal(await page.locator('#items li').count(),1);await page.waitForFunction(()=>document.activeElement===document.getElementById('barcode'));
+    await scan(extra.code);await choose();await idle();assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('dialog[open]').count(),0);
+    const beforeStorageError=commits.length;
+    await page.evaluate(()=>{window.__originalStorageSet=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key.startsWith('dbmt_pda_raw_pending_batch_'))throw Error('QA storage disabled');return __originalStorageSet.call(this,key,value);};});
+    await page.locator('#save').click();assert.match(await page.locator('#status').textContent(),/임시 저장/);assert.equal(commits.length,beforeStorageError);assert.equal(await page.locator('#items li').count(),1);
+    await page.evaluate(()=>{Storage.prototype.setItem=__originalStorageSet;delete window.__originalStorageSet;});
     await page.locator('#clear-items').click();lookupDelay=80;await scan(extra.code);assert(await page.locator('#save').isDisabled());await idle();lookupDelay=0;
     assert.equal(await page.locator('dialog[open]').count(),0);await page.locator('#clear-items').click();
     await context.setOffline(true);assert(await page.locator('#save').isDisabled());await context.setOffline(false);
@@ -182,6 +181,7 @@ const server=http.createServer((req,res)=>{
     canSave=false;await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#status').innerText(),/조회만/);
     await page.locator('#product').selectOption(product.id);await page.locator('#lot').fill('QA-READONLY');await scan(extra.code);await choose();
     await idle();assert.equal(await page.locator('dialog[open]').count(),0);assert(await page.locator('#save').isDisabled());
+    const beforeReadonlySave=commits.length;await page.evaluate(()=>document.getElementById('save').dispatchEvent(new Event('click')));assert.equal(commits.length,beforeReadonlySave);
     for(const width of [320,390,480,1280]){
       await page.setViewportSize({width,height:800});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`No overflow at ${width}px`);
       await page.screenshot({path:path.join(artifacts,`raw-${width}.png`),fullPage:true});
@@ -190,7 +190,7 @@ const server=http.createServer((req,res)=>{
     const stored=await page.evaluate(()=>({...sessionStorage}));assert.deepEqual(Object.keys(stored),['dbmt_pda_session_token'],'Never persist a draft or business data outside pending retries');
     await page.locator('#logout').click();assert(await page.locator('#workspace').isHidden());
     assert.deepEqual(errors,[]);assert.deepEqual(blocked,[]);assert(calls.every(name=>name.startsWith('dbmt_pda_raw_')||['dbmt_erp_login','dbmt_erp_session','dbmt_erp_logout'].includes(name)),'Raw screen never calls product commit');
-    console.log('PASS: uninterrupted SM/LB/photo scans, single batch confirmation, reviewed rounding limits and live totals, cancel/edit/recheck and immutable outbound weights, separate domestic traceability, no writes before confirmation, GS1 parser, product isolation, trade-type filters, existing-stock binding, duplicate/error/stale guards, lost-response reload/retry, readonly/offline, history and 320/390/480/1280px');
+    console.log('PASS: one-click GS1/SM/LB/new/bound receipt without a dialog, original calculated weights, double-submit/storage failure guards, retained outbound confirmation, separate traceability, no writes while scanning, duplicate/stale guards, lost-response reload/retry, readonly/offline, cancellation history and 320/390/480/1280px');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

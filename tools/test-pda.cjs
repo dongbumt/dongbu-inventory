@@ -17,7 +17,7 @@ const server=http.createServer((req,res)=>{
     const context=await browser.newContext({viewport:{width:320,height:533},isMobile:true,hasTouch:true});
     const user={id:'qa-user',displayName:'테스트',loginId:'qa'};
     const fixture={labelId:'qa-label',code:'DB2610131200-ABC120',product:'돈등심(치즈돈까스용 10mm 슬라이스)',weight:5,lot:'L12610134894005',origin:'국내산',storage:'냉동',packunit:'5KG',mfgdate:'2026-10-13',expdate:'2027-10-12',registered:false,state:'in_stock',revision:0,location:'가공장'};
-    let current={...fixture},commits=[],lookups=[],failAfterSave=false,canSave=true,canView=true,lookupDelay=0,denyCommit=false,expireCommit=false;
+    let current={...fixture},commits=[],lookups=[],failAfterSave=false,canSave=true,canView=true,lookupDelay=0,commitDelay=0,denyCommit=false,expireCommit=false;
     const saved=new Map(),errors=[];
     const result=body=>({ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:5*body.p_items.length,received:body.p_mode==='inbound'&&current.state!=='shipped'?body.p_items.length:0,returned:body.p_mode==='inbound'&&current.state==='shipped'?body.p_items.length:0,shipped:body.p_mode==='outbound'?body.p_items.length:0,negativeStock:body.p_mode==='outbound'?[{product:fixture.product,lot:fixture.lot,weight:-3}]:[],items:body.p_items.map(item=>({...fixture,code:item.barcode,action:body.p_mode==='outbound'?'ship':current.state==='shipped'?'return':'receive'})),savedAt:new Date().toISOString()});
     await context.route('https://**/*',async route=>{
@@ -41,6 +41,7 @@ const server=http.createServer((req,res)=>{
         data={ok:true,item:{...current,...(body.p_code.endsWith('1')?{labelId:'qa-label-2',code:'DB2610131200-ABC121'}:{})}};
       }else if(name==='dbmt_pda_commit'){
         commits.push(body);
+        if(commitDelay)await new Promise(resolve=>setTimeout(resolve,commitDelay));
         if(expireCommit){await route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({code:'28000',message:'로그인이 만료되었습니다.'})});return;}
         if(denyCommit){await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({code:'P0001',message:'다른 작업자가 처리한 라벨입니다.'})});return;}
         if(!saved.has(body.p_request_id)){saved.set(body.p_request_id,result(body));current={...current,registered:true,state:body.p_mode==='outbound'?'shipped':'in_stock',revision:current.revision+1,location:body.p_location};}
@@ -73,8 +74,8 @@ const server=http.createServer((req,res)=>{
     lookupDelay=100;await page.locator('#barcode').fill('A0');await page.locator('#barcode').press('Enter');await page.locator('#barcode').fill('A1');await page.locator('#barcode').press('Enter');await page.waitForFunction(()=>document.getElementById('item-count').textContent==='2');lookupDelay=0;
     assert.deepEqual((await sounds()).slice(-2),['success','success'],'Each queued lookup reports its own accepted result');
     assert.equal(commits.length,0);await page.locator('#clear-items').click();await scan();
-    await page.locator('#save').click();assert(await page.locator('#confirm-dialog').isVisible());assert.equal(commits.length,0);await page.locator('#confirm-cancel').click();assert.equal(commits.length,0);
-    await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));
+    commitDelay=100;await page.evaluate(()=>{const button=document.getElementById('save');button.click();button.dispatchEvent(new Event('click'));});
+    assert(await page.locator('#confirm-dialog').isHidden());await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));commitDelay=0;
     assert.equal(commits.length,1);assert.equal(saved.size,1);assert.equal(await page.locator('#items li').count(),0);
     await page.locator('[name=mode][value=outbound]').check();await page.locator('#partner').selectOption('qa-partner');await scan();
     await page.screenshot({path:path.join(artifacts,'pm351-outbound.png'),fullPage:true});
@@ -87,10 +88,10 @@ const server=http.createServer((req,res)=>{
     assert.equal(commits.at(-1).p_request_id,requestId);assert.equal(saved.size,2,'Lost response/reload/retry must not duplicate the saved batch');
     assert.match(await page.locator('#status').textContent(),/마이너스 재고.*\n.*-3\.00/s);assert.equal(await page.locator('#status').getAttribute('class'),'warning');
     await page.locator('[name=mode][value=inbound]').check();await page.locator('#location').selectOption('물류창고');await scan();assert.match(await page.locator('#items').textContent(),/반입/);
-    await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));assert.equal(saved.size,3);
+    await page.locator('#save').click();assert(await page.locator('#confirm-dialog').isHidden());await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));assert.equal(saved.size,3);
     await scan();assert.equal(await page.locator('#items li').count(),0);assert.match(await page.locator('#status').textContent(),/이미 입고 확인/);
     current={...fixture};await page.locator('#settings-summary').click();await page.locator('#location').selectOption('가공장');await scan();denyCommit=true;
-    await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장되지'));
+    await page.locator('#save').click();assert(await page.locator('#confirm-dialog').isHidden());await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장되지'));
     assert(await page.locator('#barcode').isEnabled());assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('#save').textContent(),'입고 확인');denyCommit=false;
     await page.locator('#clear-items').click();await page.locator('#manual-entry').check();assert.equal(await page.locator('#barcode').getAttribute('inputmode'),'text');
     await page.locator('#history-open').click();await page.locator('#history-list details').nth(2).waitFor();assert.equal(await page.locator('#history-list details').count(),3);await page.locator('#history-close').click();
@@ -113,10 +114,11 @@ const server=http.createServer((req,res)=>{
     await page.locator('#logout').click();canSave=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});
     assert.match(await page.locator('#status').textContent(),/PDA 입출고 등록 권한/);
     await scan();assert(await page.locator('#save').isDisabled());
+    const readonlyCount=commits.length;await page.evaluate(()=>document.getElementById('save').dispatchEvent(new Event('click')));assert.equal(commits.length,readonlyCount,'Readonly direct submission must not write');
     await page.locator('#logout').click();canView=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('조회·등록 권한'));
     assert(await page.locator('#workspace').isHidden(),'Direct URL/login must not show the PDA workspace without view permission');
     assert.deepEqual(errors,[]);
-    console.log('PASS: success/error scan sounds, keyboard scans, rapid scanning queue, LOT rejection, duplicate/removal, no save before confirmation, receive/ship/return, retry after reload, stale-state error, permission/offline guards, history, responsive 320/480/390/1280px');
+    console.log('PASS: one-click receipt/return without a dialog, double-submit guard, retained outbound confirmation, success/error scan sounds, keyboard queue, LOT/duplicate rejection, no write while scanning, retry after reload, stale-state error, readonly/offline guards, history and responsive 320/480/390/1280px');
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
