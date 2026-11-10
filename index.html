@@ -11177,12 +11177,32 @@ function selectProdOutProduct(id, productIdx){
 }
 
 
+function productionOutputMetadata(registered, previous, stockRowId, name, packunit, productId){
+  const metadata={
+    product:registered.name || name, productId:registered.id || productId, labelProductId:registered.id || productId,
+    productCode:registered.productCode || '',brand:registered.brand || '',factoryNo:registered.factoryNo || '',
+    nationalPartCode:registered.nationalPartCode || '',nationalPartName:nationalPartNameForCode(registered.nationalPartCode),
+    taxType:normalizeLabelProductTaxType(registered.taxType),grade:registered.grade || '',packunit:labelProductPackUnitText(registered)
+  };
+  const saved=previous?._labelCompletion && stockRowId
+    ? previous.outputs?.find(row=>String(row.stockRowId || '')===String(stockRowId)) : null;
+  const savedProductId=String(saved?.productId || saved?.labelProductId || '');
+  if(!saved || (savedProductId && savedProductId!==String(registered.id || productId || '')) ||
+    String(saved.product || '').trim()!==String(name || '').trim() || String(saved.packunit || '').trim()!==String(packunit || '').trim())return metadata;
+  // Keep the printed product snapshot when correcting inputs, rather than today's catalog.
+  Object.keys(metadata).forEach(key=>{metadata[key]=saved[key] ?? '';});
+  metadata.taxType=normalizeLabelProductTaxType(saved.taxType);
+  metadata.stockLocation=saved.stockLocation || STOCK_LOCATION_DEFAULT;
+  return metadata;
+}
+
 async function saveProdEntry(){
   if(productionWritePending) return;
   const date = document.getElementById('prod-date').value;
   const jobNo = document.getElementById('prod-job-no').value.trim() || '1';
   const jobNote = document.getElementById('prod-note')?.value.trim() || '';
   const jobType = document.getElementById('prod-job-type')?.value || '생산';
+  const previousEntry = userProdEntries.find(e=>String(e.id)===String(_editProdId)) || null;
   if(!date){alert('작업일을 입력해주세요.');return;}
 
   // 투입 수집
@@ -11240,18 +11260,9 @@ async function saveProdEntry(){
       const samsung = productionRowSamsungSnapshot(document.getElementById(`prod-out-${id}`));
       const outOrigin = document.getElementById(`prod-out-origin-${id}`)?.value.trim() || inputOrigin;
       rawOutputs.push({
+        ...productionOutputMetadata(registered,previousEntry,stockRowId,product,packunit,productId),
         proddate: document.getElementById(`prod-out-proddate-${id}`)?.value || '',
-        product: registered.name || product,
-        productId: registered.id || productId,
-        labelProductId: registered.id || productId,
-        productCode: registered.productCode || '',
-        brand: registered.brand || '',
-        factoryNo: registered.factoryNo || '',
-        nationalPartCode: registered.nationalPartCode || '',
-        nationalPartName: nationalPartNameForCode(registered.nationalPartCode),
-        taxType: normalizeLabelProductTaxType(registered.taxType),
-        grade: registered.grade || '',
-        packunit: labelProductPackUnitText(registered), lot, qty, boxCount, manualPrice, origin: outOrigin, stockRowId, note,
+        lot, qty, boxCount, manualPrice, origin: outOrigin, stockRowId, note,
         ...(samsung ? {samsung} : {})
       });
     }
@@ -11279,6 +11290,7 @@ async function saveProdEntry(){
       nationalPartCode:o.nationalPartCode, nationalPartName:o.nationalPartName,
       taxType:o.taxType,
       grade:o.grade || '',
+      ...(o.stockLocation ? {stockLocation:o.stockLocation} : {}),
       // Amounts are shown and saved as whole won: round a weight × unit-price
       // result instead of always rounding it upward.
       packunit:o.packunit, lot:o.lot, qty:o.qty, boxCount:o.boxCount, price, amount:Math.round(price*o.qty), origin:o.origin,
@@ -11305,7 +11317,6 @@ async function saveProdEntry(){
   };
   const completion = userProdEntries.find(e=>String(e.id)===String(editingProdId))?._labelCompletion;
   if(completion) entry._labelCompletion = {...completion};
-  const previousEntry = userProdEntries.find(e=>String(e.id)===String(editingProdId)) || null;
   const rowError = validateProductionStockRowChanges(previousEntry, entry) || validateProductionStockInputs(inputs, previousEntry, outputs);
   if(rowError){ alert(rowError); return; }
   if(!confirmProductionLabelLotCorrections(previousEntry, entry)) return;
@@ -11524,7 +11535,7 @@ function openEditProdEntry(id){
     const pid=document.getElementById(`prod-out-product-id-${n}`);
     if(p)p.value=out.product||'';
     if(pk)pk.value=out.packunit||'';
-    if(pid)pid.value=out.productId||'';
+    if(pid)pid.value=out.productId||out.labelProductId||'';
     const pd=document.getElementById(`prod-out-proddate-${n}`);
     if(pd)pd.value=out.proddate||out.stockProddate||'';
     if(o){o.value=out.origin||'';o.removeAttribute('readonly');}

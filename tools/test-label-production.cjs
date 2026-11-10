@@ -117,7 +117,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
         const entry=JSON.parse(JSON.stringify(body.p_entry));
         return {ok:true,entry,transactionRows:body.p_transaction_rows};
       };
-      ${['htmlEscape','parseOptionalBoxCount','productionStockNote','productionLegacySamsung','productionRowSamsungSnapshot','productionLegacySamsungTxnFields','productionOutputStockIdentity','validateProductionStockRowChanges','validateProductionStockInputs','selectProdInputStock','setProdInputStockIdentityReadOnly'].map(source).join('\n')}
+      ${['htmlEscape','parseOptionalBoxCount','productionStockNote','productionLegacySamsung','productionRowSamsungSnapshot','productionLegacySamsungTxnFields','productionOutputStockIdentity','productionLabelLotCorrections','confirmProductionLabelLotCorrections','validateProductionStockRowChanges','validateProductionStockInputs','selectProdInputStock','setProdInputStockIdentityReadOnly'].map(source).join('\n')}
       ${block('let prodInputRowCount = 0;','function getStockOptions(){')}
       ${block('function addProdInputRow(){','function selectProdInputStock(')}
       ${block('function addProdOutputRow(','function labelProductPackUnitText(')}
@@ -129,7 +129,20 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     `});
     assert(await erp.locator('#prod-label-notice').isVisible());
     assert.match(await erp.locator('#prod-label-notice').textContent(),/라벨 분할된 생산품의 품목·중량·박스수는 직접 변경할 수 없습니다/);
-    assert.match(await erp.locator('#prod-label-notice').textContent(),/기존 라벨 출력이력은 유지/);
+    assert.match(await erp.locator('#prod-label-notice').textContent(),/이미 인쇄된 라벨과 재출력 내용은 유지/);
+    const snapshot=structuredClone(entry);
+    Object.assign(snapshot.outputs[0],{stockRowId:'qa-snapshot-a',grade:'CH',packunit:'5KG',brand:'출력 당시 브랜드',factoryNo:'QA-01',productCode:'QA-ORIGINAL',stockLocation:'가공장'});
+    snapshot.outputs.push({...snapshot.outputs[0],stockRowId:'qa-snapshot-b',qty:5,boxCount:1,note:'분할 생산품'});
+    await erp.evaluate(record=>{userProdEntries=[record];openEditProdEntry(record.id);},snapshot);
+    await erp.locator('#prod-in-qty-1').fill('90');
+    await erp.evaluate(()=>saveProdEntry());await erp.waitForFunction(()=>modalIds.length===1);
+    const inputCorrection=await erp.evaluate(()=>requests.at(-1).body);
+    assert.equal(inputCorrection.p_entry.inputs[0].qty,90);
+    for(let i=0;i<2;i++){
+      const output=inputCorrection.p_entry.outputs[i],original=snapshot.outputs[i];
+      for(const key of ['stockRowId','grade','packunit','brand','factoryNo','productCode','stockLocation','qty','boxCount'])assert.equal(output[key],original[key],key+' must retain the printed snapshot while inputs change');
+    }
+    await erp.evaluate(record=>{userProdEntries=[record];userTransactions=[];transactions=[];requests=[];modalIds=[];openEditProdEntry(record.id);},entry);
     assert.equal(await erp.locator('#prod-out-box-count-1').inputValue(),'2','Automatically counted outer boxes load into the ordinary production editor');
     for(const id of ['prod-date','prod-job-no','prod-note','prod-job-type','prod-in-product-1','prod-in-qty-1','prod-in-price-1','prod-out-product-1','prod-out-qty-1','prod-out-price-1','prod-output-add-btn']) assert(await erp.locator('#'+id).isEnabled(),id);
     assert.equal(await erp.locator('#prod-input-rows button:disabled,#prod-output-rows button:disabled').count(),0);
