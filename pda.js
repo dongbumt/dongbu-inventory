@@ -148,7 +148,8 @@
     try{
       pendingStore();const result=await rpc('dbmt_pda_commit',{p_token:state.token,...state.pending});
       state.pending=null;pendingStore();state.items=[];
-      status(`저장 완료 · ${result.count}개 / ${kg(result.weight)} KG\n생산입고 확인 ${result.received}개 · 반입 ${result.returned}개 · 출고 ${result.shipped}개`,'ok');
+      const negative=(result.negativeStock||[]).map(row=>`${row.product} · LOT ${row.lot||'-'} · ${kg(row.weight)}KG`).join('\n');
+      status(`저장 완료 · ${result.count}개 / ${kg(result.weight)} KG\n생산입고 확인 ${result.received}개 · 반입 ${result.returned}개 · 출고 ${result.shipped}개${negative?'\n마이너스 재고\n'+negative:''}`,negative?'warning':'ok');
     }catch(error){
       if(error.definite&&!error.session&&error.code!=='42501'){state.pending=null;pendingStore();status(`저장되지 않았습니다. ${error.message}`,'error');}
       else status(`${error.message}\n저장 여부가 불확실합니다. 같은 요청 재시도로 결과를 확인해주세요.`,'error');

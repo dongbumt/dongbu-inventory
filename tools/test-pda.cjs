@@ -19,7 +19,7 @@ const server=http.createServer((req,res)=>{
     const fixture={labelId:'qa-label',code:'DB2610131200-ABC120',product:'돈등심(치즈돈까스용 10mm 슬라이스)',weight:5,lot:'L12610134894005',origin:'국내산',storage:'냉동',packunit:'5KG',mfgdate:'2026-10-13',expdate:'2027-10-12',registered:false,state:'in_stock',revision:0,location:'가공장'};
     let current={...fixture},commits=[],lookups=[],failAfterSave=false,canSave=true,canView=true,lookupDelay=0,denyCommit=false,expireCommit=false;
     const saved=new Map(),errors=[];
-    const result=body=>({ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:5*body.p_items.length,received:body.p_mode==='inbound'&&current.state!=='shipped'?body.p_items.length:0,returned:body.p_mode==='inbound'&&current.state==='shipped'?body.p_items.length:0,shipped:body.p_mode==='outbound'?body.p_items.length:0,items:body.p_items.map(item=>({...fixture,code:item.barcode,action:body.p_mode==='outbound'?'ship':current.state==='shipped'?'return':'receive'})),savedAt:new Date().toISOString()});
+    const result=body=>({ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:5*body.p_items.length,received:body.p_mode==='inbound'&&current.state!=='shipped'?body.p_items.length:0,returned:body.p_mode==='inbound'&&current.state==='shipped'?body.p_items.length:0,shipped:body.p_mode==='outbound'?body.p_items.length:0,negativeStock:body.p_mode==='outbound'?[{product:fixture.product,lot:fixture.lot,weight:-3}]:[],items:body.p_items.map(item=>({...fixture,code:item.barcode,action:body.p_mode==='outbound'?'ship':current.state==='shipped'?'return':'receive'})),savedAt:new Date().toISOString()});
     await context.route('https://**/*',async route=>{
       const url=new URL(route.request().url());
       if(route.request().method()==='GET'){
@@ -85,6 +85,7 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator('#save').textContent(),'같은 요청 재시도');assert(await page.locator('#barcode').isDisabled());expireCommit=false;
     await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));
     assert.equal(commits.at(-1).p_request_id,requestId);assert.equal(saved.size,2,'Lost response/reload/retry must not duplicate the saved batch');
+    assert.match(await page.locator('#status').textContent(),/마이너스 재고.*\n.*-3\.00/s);assert.equal(await page.locator('#status').getAttribute('class'),'warning');
     await page.locator('[name=mode][value=inbound]').check();await page.locator('#location').selectOption('물류창고');await scan();assert.match(await page.locator('#items').textContent(),/반입/);
     await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));assert.equal(saved.size,3);
     await scan();assert.equal(await page.locator('#items li').count(),0);assert.match(await page.locator('#status').textContent(),/이미 입고 확인/);

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / 'supabase/migrations/20261110073257_pda_raw_grouped_receipts.sql'
 
 
-def check(conn):
+def check(conn, extra_check=None):
     def rpc(name, *args):
         with conn.transaction():
             conn.execute('set local role anon')
@@ -75,6 +75,9 @@ def check(conn):
     reject(lambda: commit('inbound', codes[:1]), '중복 입고')
     reject(lambda: conn.execute("update public.transactions set weight=1 where id=%s", (tx,)), '변경할 수 없습니다')
     print('PASS: 20 barcodes -> one 341.40KG/20-box source and receipt, original scans/events preserved, idempotent retry and duplicate/edit guards')
+    if extra_check:
+        with conn.transaction(force_rollback=True):
+            extra_check(conn,locals())
 
     # Different receipt dates, costs, batches and LOTs retain separate sources.
     other = commit('inbound', codes[20:22], lot='QA-OTHER', price=5000)

@@ -176,8 +176,10 @@ def check(conn):
     item1 = scan(1)
     with conn.transaction(force_rollback=True):
         conn.execute("insert into public.transactions(id,date,type,product,lot,weight,stock_location,raw) values(%s,'2026-10-13','출고',%s,'QA-LOT',8,'가공장',%s)", (uid('manual_out'), snapshot['product'], Jsonb(dict(stockRowId=stock))))
-        reject(lambda: commit('outbound', [item1]), '재고가 부족')
-        assert balance() == 2
+        negative = commit('outbound', [item1])
+        assert negative['shipped'] == 1 and balance() == -3
+        assert negative['negativeStock'][0]['weight'] == -3, 'Physical PDA shipments may exceed book stock'
+        conn.execute('select pda_private.check_product_balances(%s)', (production,))
     reject(lambda: commit('outbound', [item1, dict(barcode=logs[2]['code'], revision=99)]), '다른 작업자')
     assert lookup(1)['revision'] == 0 and balance() == 10, 'Partial batches must roll back'
     reject(lambda: commit('outbound', [item1], request), '다른 내용')

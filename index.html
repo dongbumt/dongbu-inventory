@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<script src="stock-ledger.js?v=20261106cost1"></script>
+<script src="stock-ledger.js?v=20261110correct1"></script>
 <script src="pda-transaction-summary.js?v=20261106cost1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
@@ -6071,6 +6071,12 @@ async function supabaseSaveTransactionRows(rows, deletedIds, options={}){
     p_token:token, p_rows:upsertRows, p_delete_ids:deleteIds
   });
   assertPersonalServerResult(result, '거래내역을 저장할 권한이 없습니다.');
+  if(Array.isArray(result.updatedRawReceipts)&&result.updatedRawReceipts.length){
+    const corrected=new Map(result.updatedRawReceipts.map(row=>[String(row.id),row]));
+    userTransactions=userTransactions.map(row=>corrected.get(String(row.id))||row);
+    transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+    invalidateStockMap();
+  }
   gsShowSync('✅ Supabase 거래내역 저장 완료');
   return result;
 }
@@ -7821,6 +7827,7 @@ function handleTxnProductPickerKeydown(event){
 }
 
 function handleManagedProductInputKeydown(event){
+  if(event.currentTarget?.readOnly)return;
   if(event.key === 'Enter' || event.key === 'F4' || (event.altKey && event.key === 'ArrowDown')){
     event.preventDefault();
     openTxnProductPicker(event.currentTarget?.value || '');
@@ -8979,6 +8986,8 @@ async function updateTxnPrice(id, newPriceStr){
   toast('단가 수정 완료 — 거래명세서에 즉시 반영됩니다.', 2500);
 }
 function autoFillTxnPrice(){
+  const receipt=typeof _editTxnId!=='undefined'&&_editTxnId?userTransactions.find(row=>String(row.id)===String(_editTxnId)):null;
+  if(receipt?.type==='입고'&&receipt?._pdaRawRequestId&&receipt?._pdaAction==='receive'){updateTxnAmtPreview();return;}
   const product = getTProduct();
   const origin  = getTOrigin();
   const trader  = document.getElementById('t-trader')?.value.trim() || '';
@@ -9053,6 +9062,9 @@ function totalRecordedBoxes(rows){
 async function addTransaction(){
   const linkedProductionTxn = _editTxnId ? userTransactions.find(txn=>String(txn.id)===String(_editTxnId)) : null;
   if(linkedProductionTxn?.stockRowId && linkedProductionTxn?._prodId){ alert('생산일보에서 생성된 재고입니다. 해당 생산일보에서 수정해주세요.'); return; }
+  if(linkedProductionTxn?.type==='입고'&&linkedProductionTxn?._pdaRawRequestId&&linkedProductionTxn?._pdaAction==='receive'){
+    return savePdaRawReceiptFromForm(linkedProductionTxn);
+  }
   const date=document.getElementById('t-date').value;
   const type=document.getElementById('t-type').value;
   const product=getTProduct();
@@ -9277,7 +9289,49 @@ function showTransactionSaveStatus(message, isError=false){
   }
 }
 
+async function savePdaRawReceiptFromForm(receipt){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('PDA 입고 수정은 서버에 연결한 상태에서만 가능합니다.');return;}
+  if(transactionPricePendingIds.has(String(receipt.id))){toast('입고 저장 중입니다. 잠시 후 다시 수정해주세요.');return;}
+  const weightInput=document.getElementById('t-weight'),price=parseTransactionUnitPrice(document.getElementById('t-price'));
+  const weight=Number(weightInput.value),trader=document.getElementById('t-trader').value.trim();
+  if(weightInput.validity.badInput||!Number.isFinite(weight)||weight<=0||Math.abs(weight*100-Math.round(weight*100))>0.000001){
+    alert('입고 중량은 0 초과 숫자로 소수 둘째 자리까지 입력해주세요.');return;
+  }
+  if(price===null||!Number.isFinite(price)||price<0){alert('입고 단가는 0 이상의 숫자로 입력해주세요.');return;}
+  if(!trader){alert('입고처를 선택해주세요.');return;}
+  if(weight!==Number(receipt.weight)&&!confirm(`입고 합계중량을 ${Number(receipt.weight).toFixed(2)}KG에서 ${weight.toFixed(2)}KG로 정정할까요?\n장부 재고에 반영되며 박스별 스캔 중량은 원문 그대로 보존됩니다.`))return;
+  const row={...receipt,trader,weight,price,amount:Math.round(weight*price),note:document.getElementById('t-note').value.trim()};
+  const button=document.getElementById('t-add-btn');
+  transactionPricePendingIds.add(String(receipt.id));if(button)button.disabled=true;
+  try{
+    await saveTransactionRows(row,null,null,{action:'수정'});
+    clearTransactionForm({resetType:true});renderTransactions();updateOutProductList();
+    showTransactionSaveStatus(`입고 수정 완료 — ${receipt.product} · ${weight.toFixed(2)}KG · ${price.toLocaleString()}원/KG`);
+    toast('PDA 입고 수정 완료');
+  }catch(error){
+    showTransactionSaveStatus(`거래내역 저장 실패 — ${String(error?.message||error)}`,true);
+    toast(String(error?.message||error));
+  }finally{transactionPricePendingIds.delete(String(receipt.id));if(button)button.disabled=false;}
+}
+
+function setPdaRawReceiptEditControls(locked){
+  const selectors=['#t-date','#t-type','#t-product-input','#t-product-managed','#t-product-managed-wrap button',
+    '#t-origin-managed','#t-storage-managed','#t-lot','#t-proddate','#t-box-count','#t-stock-location'];
+  for(const selector of selectors){
+    const el=document.querySelector(selector);if(!el)continue;
+    if(locked){
+      if(el.dataset.pdaRawLock!==undefined)continue;
+      el.dataset.pdaRawLock=JSON.stringify({disabled:el.disabled,readOnly:el.readOnly});
+      if(el.tagName==='SELECT'||el.tagName==='BUTTON')el.disabled=true;else el.readOnly=true;
+    }else if(el.dataset.pdaRawLock!==undefined){
+      const previous=JSON.parse(el.dataset.pdaRawLock);el.disabled=previous.disabled;if(previous.readOnly!==undefined)el.readOnly=previous.readOnly;
+      delete el.dataset.pdaRawLock;
+    }
+  }
+}
+
 function clearTransactionForm(options={}){
+  if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
   const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
   showTransactionSaveStatus('');
   ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-box-count','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at','t-livestock-species','t-livestock-trace-type','t-livestock-slaughter-date','t-livestock-slaughter-end-date','t-livestock-slaughter-houses','t-livestock-grades','t-livestock-inspection-results','t-livestock-process-date','t-livestock-process-end-date','t-livestock-process-companies','t-livestock-queried-at'].forEach(id=>{
@@ -10434,7 +10488,8 @@ function renderPdaTransactionDetails(){
   if(!first){closePdaTransactionDetails();return;}
   document.getElementById('txn-pda-detail-title').textContent=first.type==='입고'?'박스별 입고 내역':'박스별 출고 내역';
   if(first.type==='입고'&&Array.isArray(first._pdaRawBoxes)){
-    summary.textContent=`${first.date} · ${first.trader||''} · ${first.product||''} · ${first.lot||''} / ${first.boxCount}박스 · ${Number(first.weight).toFixed(2)} KG · ${Math.round(Number(first.amount||0)).toLocaleString()}원`;
+    summary.textContent=`${first.date} · ${first.trader||''} · ${first.product||''} · ${first.lot||''} / ${first.boxCount}박스 · 장부 ${Number(first.weight).toFixed(2)} KG · ${Math.round(Number(first.amount||0)).toLocaleString()}원`+
+      (Number(first._pdaRawWeightDelta)?` · 스캔 합계 ${Number(first._pdaRawScannedWeight).toFixed(2)} KG · 정정 ${Number(first._pdaRawWeightDelta).toFixed(2)} KG`:'');
     body.innerHTML=first._pdaRawBoxes.map(box=>`<tr><td style="font-family:monospace;max-width:280px;overflow-wrap:anywhere;">${htmlEscape(String(box.barcode||'').replaceAll(String.fromCharCode(29),'|'))}</td>
       <td style="text-align:right;">${Number(box.weight).toFixed(2)}</td><td style="text-align:right;">${Number(first.price||0).toLocaleString()}</td>
       <td style="text-align:right;">${Math.round(Number(box.weight)*Number(first.price||0)).toLocaleString()}</td><td>${htmlEscape(first.note||'-')}</td><td>-</td></tr>`).join('');
@@ -10479,6 +10534,7 @@ function saveEditTxn(){ return addTransaction(); }
 function loadTxnToForm(id){
   const t=userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
+  if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
   if(t.stockRowId && t._prodId){ openEditProdEntry(t._prodId); return; }
   _editTxnId=id;
   showTransactionSaveStatus('');
@@ -10532,6 +10588,8 @@ function loadTxnToForm(id){
   document.getElementById('t-note').value    =t.note||'';
   if(typeof restoreMeatwatchLookupFromTransaction === 'function') restoreMeatwatchLookupFromTransaction(t);
   updateTxnAmtPreview();
+
+  if(t.type==='입고'&&t._pdaRawRequestId&&t._pdaAction==='receive'&&typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(true);
 
   // 수정 모드 UI
   const banner=document.getElementById('t-edit-banner');
@@ -12183,8 +12241,8 @@ function renderStock(){
   // 통계 (전체 기준)
   const {count:totalItems, totalWeight:totalStockQty, totalAmount:totalStockAmount} = DBMTStockLedger.summarize(rows);
   const inStock   =allRows.filter(s=>s.stock>0.01).length;
-  const outStock  =allRows.filter(s=>s.stock>=-0.01&&s.stock<=0.01).length;
-  const minusStock=allRows.filter(s=>s.stock<-0.01).length;
+  const outStock  =allRows.filter(s=>s.stock>=-0.005&&s.stock<=0.01).length;
+  const minusStock=allRows.filter(s=>s.stock<-0.005).length;
   const statsEl=document.getElementById('stock-stats');
   if(statsEl) statsEl.innerHTML=`
     <div class="stat"><div class="stat-label">조회 품목</div><div class="stat-val">${totalItems}</div></div>
@@ -12203,7 +12261,7 @@ function renderStock(){
   b.innerHTML=rows.map(s=>{
     const stk=s.stock;
     const stockAmount = Math.round((Number(s.stock)||0) * (Number(s.price)||0));
-    const isMinus=stk<-0.01;
+    const isMinus=stk<-0.005;
     const cls  =isMinus?'stock-ng':stk>0.01?'stock-ok':'stock-ng';
     const label=isMinus?'⚠마이너스':stk>0.01?'정상':'소진';
     const stkStyle=isMinus?'text-align:right;font-weight:700;color:#e74c3c':'text-align:right;font-weight:700';

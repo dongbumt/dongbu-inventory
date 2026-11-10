@@ -229,7 +229,10 @@
       if(result.requestId!==state.pending.p_request_id||result.count!==state.items.length)throw Error('저장 응답을 확인할 수 없습니다.');
       storage.remove(PENDING+state.user.id);state.pending=null;state.items=[];$('settings-panel').open=true;
       if(result.cancelledTransactionIds?.length){status('ERP에서 일부 또는 전체 입고가 삭제된 요청입니다. 처리이력을 확인한 후 다시 스캔해주세요.','error');sound('error');}
-      else{status(`${result.count}박스 · ${kg(result.weight)}KG 처리 완료`,'ok');sound('success');}
+      else{
+        const negative=(result.negativeStock||[]).map(row=>`${row.product} · LOT ${row.lot||'-'} · ${kg(row.weight)}KG`).join('\n');
+        status(`${result.count}박스 · ${kg(result.weight)}KG 처리 완료${negative?'\n마이너스 재고\n'+negative:''}`,negative?'warning':'ok');sound('success');
+      }
       await loadSources();
     }catch(error){
       if(error.definite&&!error.session){storage.remove(PENDING+state.user.id);state.pending=null;}

@@ -434,13 +434,13 @@ function calculate(transactions, options={}){
 }
 
 function rows(map){
-  return Object.values(map).map(row=>({...row, stock:Math.abs(row.stock)<0.01 ? 0 : row.stock}));
+  return Object.values(map).map(row=>({...row, stock:Math.abs(row.stock)<0.005 ? 0 : row.stock}));
 }
 function filterRows(items, {status='재고', query='', location=''}={}){
   const q = String(query).trim().toLowerCase();
   return items.filter(row=>{
-    if(status==='재고' && !(row.stock>0.01 || row.stock<-0.01)) return false;
-    if(status==='소진' && !(row.stock>=-0.01 && row.stock<=0.01)) return false;
+    if(status==='재고' && !(row.stock>0.01 || row.stock<-0.005)) return false;
+    if(status==='소진' && !(row.stock>=-0.005 && row.stock<=0.01)) return false;
     if(location && stockLocationKey(row.stockLocation)!==stockLocationKey(location)) return false;
     return !q || (row.stockLocation+row.product+(row.brand||'')+(row.grade||'')+(row.packunit||'')+row.lot+(row.proddate||'')+row.origin+String(row.price||'')+(row.stockNote||'')+(row.stockRowId||'')).toLowerCase().includes(q);
   });

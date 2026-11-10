@@ -1,3 +1,4 @@
+param([ValidateSet('check-pda-receipts-db.py','check-pda-corrections-db.py')][string]$TestScript='check-pda-receipts-db.py')
 $ErrorActionPreference='Stop'
 $names=@('PGHOST','PGPORT','PGUSER','PGPASSWORD','PGDATABASE')
 $previous=@{}
@@ -14,7 +15,7 @@ try {
     if(-not $match.Success){throw 'Missing connection field.'}
     [Environment]::SetEnvironmentVariable($name,$match.Groups[1].Value)
   }
-  & python -u (Join-Path $PSScriptRoot 'check-pda-receipts-db.py')
+  & python -u (Join-Path $PSScriptRoot $TestScript)
   if($LASTEXITCODE -ne 0){throw 'Receipt tests failed; all changes rolled back.'}
 }finally{
   foreach($name in $names){[Environment]::SetEnvironmentVariable($name,$previous[$name])}

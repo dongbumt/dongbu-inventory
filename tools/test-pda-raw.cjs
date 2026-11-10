@@ -57,7 +57,7 @@ const server=http.createServer((req,res)=>{
             const lot=body.p_mode==='outbound'?pack.lot:body.p_lot.trim();
             registered.set(source.id,{registered:true,revision:(pack?.revision||0)+1,state:body.p_mode==='outbound'?'shipped':'in_stock',location:body.p_location,product:product.name,productId:product.id,lot,weight:scan.labelWeight,origin:product.origin});
             return {id:source.id,product:product.name,lot,weight:scan.labelWeight,transactionId:'qa_tx_'+body.p_request_id+'_'+source.id,action:body.p_mode==='outbound'?'ship':body.p_source_id?'bind':'receive'};
-          }),savedAt:new Date().toISOString()};saved.set(body.p_request_id,{body,result});
+          }),negativeStock:body.p_mode==='outbound'?[{product:product.name,lot:registered.get(cases.find(item=>item.code===body.p_items[0].barcode).id)?.lot,weight:-1.4}]:[],savedAt:new Date().toISOString()};saved.set(body.p_request_id,{body,result});
         }
         if(loseResponse){loseResponse=false;return route.abort();}data=saved.get(body.p_request_id).result;
       }else if(name==='dbmt_pda_raw_history')data={ok:true,rows:[...saved].map(([id,value])=>({id,created_at:value.result.savedAt,request:{mode:value.body.p_mode,date:value.body.p_date,location:value.body.p_location,sourceId:value.body.p_source_id},result:value.result}))};
@@ -101,6 +101,7 @@ const server=http.createServer((req,res)=>{
     assert.match(await page.locator('#items').innerText(),new RegExp('이력번호 '+traceability),'Outbound retrieves the saved domestic traceability number');
     denyCommit=true;await confirm();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('다른 작업자'));assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('#save').innerText(),'출고 확인');
     denyCommit=false;await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.match(await page.locator('#status').textContent(),/마이너스 재고.*\n.*-1\.40/s);assert.equal(await page.locator('#status').getAttribute('class'),'warning');
     await scan(cases[0].code);await idle();assert.match(await page.locator('#status').innerText(),/이미 출고/);
     await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#receive-kind').selectOption('bind');
     await page.waitForFunction(()=>document.getElementById('source').options.length===2);await page.locator('#source').selectOption('qa-existing');assert.equal(await page.locator('#lot').inputValue(),'QA-EXISTING');
@@ -153,7 +154,7 @@ const server=http.createServer((req,res)=>{
     await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     assert.equal(commits.at(-1).p_items[0].rule,cases[5].ruleKey);assert.equal(commits.at(-1).p_items[0].labelWeight,17.07);assert.equal(commits.at(-1).p_lot,'L12610261938001');
     const extra={...cases[1],id:'qa-extra',code:'07662300206004601597009457'};cases.push(extra);
-    await scan(extra.code);await choose();await idle();await page.locator('#save').click();await page.keyboard.press('Escape');assert(await page.locator('#confirm-dialog').isHidden());assert.equal(await page.locator('#items li').count(),1);assert(await page.locator('#barcode').evaluate(el=>el===document.activeElement));
+    await scan(extra.code);await choose();await idle();await page.locator('#save').click();await page.keyboard.press('Escape');assert(await page.locator('#confirm-dialog').isHidden());assert.equal(await page.locator('#items li').count(),1);await page.waitForFunction(()=>document.activeElement===document.getElementById('barcode'));
     await page.locator('#clear-items').click();lookupDelay=80;await scan(extra.code);assert(await page.locator('#save').isDisabled());await idle();lookupDelay=0;
     assert.equal(await page.locator('dialog[open]').count(),0);await page.locator('#clear-items').click();
     await context.setOffline(true);assert(await page.locator('#save').isDisabled());await context.setOffline(false);
