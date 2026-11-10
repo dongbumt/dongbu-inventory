@@ -131,6 +131,10 @@
   .btn-secondary{background:#fff;color:#666;border:1px solid var(--border);}
   .btn-secondary:hover{background:#f0f0f0;}
   .btn-sm{padding:5px 11px;font-size:12px;border-radius:6px;}
+  .btn.inventory-refresh-btn{width:30px;height:30px;padding:6px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;}
+  .inventory-refresh-btn img{width:16px;height:16px;}
+  .inventory-refresh-btn[aria-busy="true"] img{animation:spin .8s linear infinite;}
+  @media(prefers-reduced-motion:reduce){.inventory-refresh-btn[aria-busy="true"] img{animation:none;}}
   .btn-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
   .btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none;}
 

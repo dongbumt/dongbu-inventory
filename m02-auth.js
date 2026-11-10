@@ -76,6 +76,8 @@
     loadTxnToForm:['transactions','update'],
     updateTxnPrice:['transactions','update'],
     openPdaTransactionDetails:['transactions','view','uiOnly'],
+    refreshTransactionList:['transactions','view'],
+    refreshInventoryStock:['stock','view'],
     deleteTransaction:['transactions','delete'],
 
     loadTraceIntegrationPreview:['trace_integration','view'],

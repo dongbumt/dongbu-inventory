@@ -28,7 +28,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261106quoteorder1">
+<link rel="stylesheet" href="styles/main.css?v=20261111refresh1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -1008,6 +1008,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="card-title" style="margin:0;">
         <div class="ct-bar" style="background:var(--blue);"></div>
         거래 목록 <span id="t-count" style="font-size:12px;font-weight:400;color:#888;"></span>
+        <button id="txn-refresh-btn" type="button" class="btn btn-secondary inventory-refresh-btn" onclick="refreshTransactionList()" title="거래내역 새로고침: 서버의 최신 자료 불러오기" aria-label="거래내역 새로고침" aria-busy="false"><img src="vendor/lucide/refresh-cw.svg" alt="" aria-hidden="true"></button>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;max-width:100%;">
         <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
@@ -1338,6 +1339,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="card-title" style="margin:0;">
         <div class="ct-bar" style="background:var(--green);"></div>
         전체 재고현황
+        <button id="stock-refresh-btn" type="button" class="btn btn-secondary inventory-refresh-btn" onclick="refreshInventoryStock()" title="재고현황 새로고침: 서버의 최신 자료 불러오기" aria-label="재고현황 새로고침" aria-busy="false"><img src="vendor/lucide/refresh-cw.svg" alt="" aria-hidden="true"></button>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <label for="stock-as-of-date" style="font-size:12px;white-space:nowrap;">기준일</label>
@@ -6082,19 +6084,22 @@ async function supabaseSaveTransactionRows(rows, deletedIds, options={}){
 }
 
 async function saveTransactionRows(rows, deletedIds, deletedRows, options={}){
-  markLocalCoreChanged();
-  if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
-    try{
-      await supabaseSaveTransactionRows(rows, deletedIds, options);
-    }catch(err){
-      console.error('Supabase transaction save error:', err);
-      await refreshProtectedCoreAfterFailure();
-      throw err;
+  transactionWritePending+=1;
+  try{
+    markLocalCoreChanged();
+    if(localStorage.getItem(SUPABASE_ENABLED_KEY) === '1'){
+      try{
+        await supabaseSaveTransactionRows(rows, deletedIds, options);
+      }catch(err){
+        console.error('Supabase transaction save error:', err);
+        await refreshProtectedCoreAfterFailure();
+        throw err;
+      }
     }
-  }
-  recordTransactionChange(rows, deletedIds, deletedRows, options);
-  safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
-  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') save();
+    recordTransactionChange(rows, deletedIds, deletedRows, options);
+    safeLocalStorageSet('dbmt_user_transactions', JSON.stringify(userTransactions), true);
+    if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') save();
+  }finally{transactionWritePending-=1;}
 }
 
 async function supabaseSaveProductionRows(entry, transactionRows, deletedProdId){
@@ -8537,9 +8542,63 @@ function invalidateStockMap(){
 }
 
 let localCoreRevision = 0;
+let transactionWritePending = 0;
+let inventoryRefreshPromise = null;
 function markLocalCoreChanged(){
   localCoreRevision += 1;
   invalidateStockMap();
+}
+
+function inventoryRefreshBlocked(){
+  if(transactionWritePending||productionWritePending||labelProductionRefreshPromise)return '저장 또는 자료 조회 중입니다. 완료 후 새로고침해주세요.';
+  if(_editTxnId||_editProdId)return '수정 중인 내용이 있습니다. 저장하거나 초기화한 뒤 새로고침해주세요.';
+  if(['stock-adjust-modal','stock-box-baseline-modal'].some(id=>{
+    const el=document.getElementById(id);return el&&!el.classList.contains('hidden');
+  }))return '재고 정리 창을 닫은 뒤 새로고침해주세요.';
+  return '';
+}
+
+function refreshTransactionList(){
+  return refreshInventoryData('transactions');
+}
+function refreshInventoryStock(){
+  return refreshInventoryData('stock');
+}
+
+async function refreshInventoryData(menu){
+  if(!['transactions','stock'].includes(menu))return;
+  if(typeof DBMTAuth!=='object'||!DBMTAuth.isPersonal()||!DBMTAuth.can(menu,'view')){toast('해당 메뉴의 조회 권한이 없습니다.');return;}
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('서버에 연결한 상태에서 새로고침해주세요.');return;}
+  if(inventoryRefreshPromise)return inventoryRefreshPromise;
+  const blocked=inventoryRefreshBlocked();if(blocked){toast(blocked);return;}
+  const token=DBMTAuth.getSessionToken(),revision=localCoreRevision;
+  const buttons=['txn-refresh-btn','stock-refresh-btn'].map(id=>document.getElementById(id)).filter(Boolean);
+  buttons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
+  inventoryRefreshPromise=(async()=>{
+    try{
+      const data=await sbRpc('dbmt_erp_get_inventory_snapshot',{p_token:token,p_menu:menu});
+      assertPersonalServerResult(data,'최신 자료를 불러오지 못했습니다.');
+      if(!DBMTAuth.isPersonal()||DBMTAuth.getSessionToken()!==token||!DBMTAuth.can(menu,'view'))return;
+      if(localCoreRevision!==revision||inventoryRefreshBlocked()){
+        toast('불러오는 동안 변경한 내용을 유지했습니다. 저장 완료 후 다시 새로고침해주세요.');return;
+      }
+      if(!Array.isArray(data.transactions)||(data.prod!==null&&!Array.isArray(data.prod)))throw new Error('서버 자료 형식을 확인할 수 없습니다.');
+      userTransactions=data.transactions.map(row=>({...row,date:String(row.date||'').replace(/\//g,'-')}));
+      transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+      if(Array.isArray(data.prod))userProdEntries=data.prod;
+      markLocalCoreChanged();
+      safeLocalStorageSet('dbmt_user_transactions',JSON.stringify(userTransactions),true);
+      if(Array.isArray(data.prod))safeLocalStorageSet('dbmt_user_prod',JSON.stringify(userProdEntries),true);
+      if(activePageId()==='p-transactions'){
+        transactionListQueryActive=true;renderTransactions();
+      }else if(activePageId()==='p-stock'){
+        stockSearchActivated=true;renderStock();
+      }
+      toast('서버의 최신 거래·재고 자료를 불러왔습니다.');
+    }catch(error){toast(`새로고침 실패: ${String(error?.message||error)}`);}
+    finally{buttons.forEach(button=>{button.disabled=false;button.setAttribute('aria-busy','false');});inventoryRefreshPromise=null;}
+  })();
+  return inventoryRefreshPromise;
 }
 
 // 거래일 기준의 날짜만 사용한다. 생산일/등록 시각은 재고의 발생일이 아니다.
@@ -22359,6 +22418,6 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="manual-label.js?v=20261023ingredients1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
-<script src="m02-auth.js?v=20261106catalog1"></script>
+<script src="m02-auth.js?v=20261111refresh1"></script>
 </body>
 </html>

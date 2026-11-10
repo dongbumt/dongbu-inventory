@@ -1,4 +1,4 @@
-param([ValidateSet('check-pda-receipts-db.py','check-pda-corrections-db.py')][string]$TestScript='check-pda-receipts-db.py')
+param([ValidateSet('check-pda-receipts-db.py','check-pda-corrections-db.py','check-inventory-refresh-db.py')][string]$TestScript='check-pda-receipts-db.py')
 $ErrorActionPreference='Stop'
 $names=@('PGHOST','PGPORT','PGUSER','PGPASSWORD','PGDATABASE')
 $previous=@{}
