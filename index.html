@@ -11305,6 +11305,7 @@ function productionOutputMetadata(registered, previous, stockRowId, name, packun
   Object.keys(metadata).forEach(key=>{metadata[key]=saved[key] ?? '';});
   metadata.taxType=normalizeLabelProductTaxType(saved.taxType);
   metadata.stockLocation=saved.stockLocation || STOCK_LOCATION_DEFAULT;
+  metadata._printedOutputSnapshot=saved;
   return metadata;
 }
 
@@ -11394,6 +11395,11 @@ async function saveProdEntry(){
 
   const outputs = rawOutputs.map(o=>{
     const price = o.manualPrice > 0 ? o.manualPrice : autoUnitPrice;
+    if(o._printedOutputSnapshot){
+      return {...o._printedOutputSnapshot,proddate:o.proddate,lot:o.lot,qty:o.qty,boxCount:o.boxCount,
+        price,amount:Math.round(price*o.qty),origin:o.origin,stockRowId:o.stockRowId,note:o.note,
+        ...(o.samsung ? {samsung:o.samsung} : {})};
+    }
     return {
       product:o.product, productId:o.productId, labelProductId:o.labelProductId,
       proddate:o.proddate,

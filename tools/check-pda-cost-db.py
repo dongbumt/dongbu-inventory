@@ -23,9 +23,13 @@ def check(conn):
         conn.execute("insert into public.erp_role_permissions(role_id,menu_code,can_view,can_create,can_update,can_delete) values(%s,%s,true,true,true,true)",(role,menu))
     conn.execute("insert into public.erp_user_sessions(token_hash,user_id,expires_at) values(encode(extensions.digest(%s,'sha256'),'hex'),%s,now()+interval '1 hour')",(token,user))
     conn.execute("insert into public.business_partners(id,code,name,trade_type) values(%s,%s,%s,'매출')",(partner,'QC'+suffix.upper(),uid('partner')))
+    raw_source=uid('raw_stock')
+    raw_row=dict(id=uid('raw_receipt'),date='2026-11-05',type='입고',product=uid('raw'),origin='국내산',lot='RAW',weight=1000,
+                 price=1000,amount=1000000,stockRowId=raw_source,stockLocation='가공장',_isUser=True)
+    conn.execute("insert into public.transactions(id,date,type,product,origin,lot,weight,price,amount,stock_location,raw) values(%s,'2026-11-05','입고',%s,'국내산','RAW',1000,1000,1000000,'가공장',%s)",(raw_row['id'],raw_row['product'],Jsonb(raw_row)))
     order=dict(id=uid('order'),date='2026-11-05',product=uid('product'),labelProductId=uid('product_id'),inputWeight=100,weight=5,
                lot='QA-LOT',origin='국내산',packunit='5KG',grade='',mfgdate='2026-11-05',expdate='2027-11-04',temptype='냉동',
-               sourceStock=dict(key=uid('raw'),product=uid('raw'),price=1000,stock=100,origin='국내산',lot='RAW'))
+               sourceStock=dict(key=uid('raw'),stockRowId=raw_source,stockLocation='가공장',product=uid('raw'),price=1000,stock=1000,origin='국내산',lot='RAW'))
     product=dict(id=order['labelProductId'],name=order['product'],packunit='5KG',taxType='면세')
     logs=[dict(id=uid('label'+str(i)),code='DB2611051200-'+('C0ST0'+str(i)),workOrderId=order['id'],labelWeight=5,status='active',workOrderSnapshot=order) for i in range(4)]
     for key,value in [('workOrders',[order]),('labelProducts',[product]),('labelPrintLogs',logs)]:
@@ -80,6 +84,24 @@ def check(conn):
     assert conn.execute('select price,amount from public.transactions where id=%s',(return_id,)).fetchone()==(5000,25000)
     before_sales={r[0]:(r[1],r[2]) for r in sales}
     entry=conn.execute('select raw from public.production_entries where id=%s',(pid,)).fetchone()[0]
+    with conn.transaction(force_rollback=True):
+        malformed=copy.deepcopy(entry);malformed['note']='QA note only'
+        malformed['outputs'][0].pop('samsung',None)
+        malformed['outputs'][0]['stockLocation']='가공장'
+        reject(lambda:rpc('dbmt_erp_save_production',token,malformed,[],pid),'생산품목')
+        before_packages=conn.execute('select to_jsonb(p) from public.pda_packages p where production_id=%s order by label_id',(pid,)).fetchall()
+        before_postings=conn.execute('select id,weight,price,amount,stock_unit_price,raw from public.transactions where product=%s order by id',(order['product'],)).fetchall()
+        noted=copy.deepcopy(entry);noted['note']='QA note only';noted['outputs'][0]['note']='QA output note'
+        # Submit canonical production postings too, as the real ERP editor does.
+        postings=[r[0] for r in conn.execute('select raw from public.transactions where prod_id=%s and deleted_at is null order by id',(pid,)).fetchall()]
+        assert rpc('dbmt_erp_save_production',token,noted,postings,pid)['ok']
+        actual=conn.execute('select raw from public.production_entries where id=%s',(pid,)).fetchone()[0]
+        assert actual['note']=='QA note only' and actual['outputs'][0]['note']=='QA output note'
+        assert conn.execute('select to_jsonb(p) from public.pda_packages p where production_id=%s order by label_id',(pid,)).fetchall()==before_packages
+        after_postings=conn.execute('select id,weight,price,amount,stock_unit_price,raw from public.transactions where product=%s order by id',(order['product'],)).fetchall()
+        sales_before_note=[r for r in before_postings if r[0] in before_sales]
+        assert [r for r in after_postings if r[0] in {s[0] for s in sales_before_note}]==sales_before_note
+        print('PASS: exact production/output note edits after provisional shipment settlement preserve printed null/absent metadata, original package states, sales and costs; reconstructed metadata remains guarded')
     updated=copy.deepcopy(entry);updated['outputs'][0]['price']=6000;updated['outputs'][0]['amount']=120000
     saved=rpc('dbmt_erp_save_production',token,updated,[],pid);assert saved['ok']
     assert saved['costLinkedTransactions'] and all(row['productionCost']==6000 for row in saved['costLinkedTransactions'])
@@ -98,9 +120,17 @@ def check(conn):
     with conn.transaction(force_rollback=True):
         corrected=copy.deepcopy(updated);corrected['inputs'][0]['qty']=90;corrected['inputs'][0]['price']=1600
         corrected['outputs'][0]['price']=7200
+        corrected['note']='QA input/cost/note correction'
         assert rpc('dbmt_erp_save_production',token,corrected,[],pid)['ok'], 'Corrected raw input quantities/prices may establish the final product cost'
+        assert conn.execute("select pda_private.balance(%s,'가공장')",(raw_source,)).fetchone()[0]==910
         assert lookup()['productionCost']==7200
         assert conn.execute('select price,amount,stock_unit_price from public.transactions where id=%s',(sales[0][0],)).fetchone()==(9000,45000,7200)
+    with conn.transaction(force_rollback=True):
+        increased=copy.deepcopy(updated);increased['inputs'][0]['qty']=110;increased['inputs'][0]['amount']=110000
+        assert rpc('dbmt_erp_save_production',token,increased,[],pid)['ok']
+        assert conn.execute("select pda_private.balance(%s,'가공장')",(raw_source,)).fetchone()[0]==890
+    excessive=copy.deepcopy(updated);excessive['inputs'][0]['qty']=1001
+    reject(lambda:rpc('dbmt_erp_save_production',token,excessive,[],pid),'투입중량')
     with conn.transaction(force_rollback=True):
         corrected=copy.deepcopy(updated);corrected['outputs'][0]['price']=0
         assert rpc('dbmt_erp_save_production',token,corrected,[],pid)['ok']
@@ -109,6 +139,8 @@ def check(conn):
     assert conn.execute("select pda_private.balance(%s,'물류창고')",(return_source,)).fetchone()[0]==0
     altered=copy.deepcopy(updated);altered['outputs'][0]['qty']=1
     reject(lambda:rpc('dbmt_erp_save_production',token,altered,[],pid),'중량')
+    altered=copy.deepcopy(updated);altered['outputs'][0]['boxCount']=1
+    reject(lambda:rpc('dbmt_erp_save_production',token,altered,[],pid),'박스수')
     reject(lambda:rpc('dbmt_erp_save_production',token,None,[],pid),'연결')
     with conn.transaction(force_rollback=True):
         conn.execute("update public.erp_role_permissions set can_update=false where role_id=%s and menu_code='production'",(role,))

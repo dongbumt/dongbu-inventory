@@ -445,6 +445,44 @@ async function testProductionDefaultList(page) {
   console.log('PASS: production list opens with today automatically, preserves explicit date/all/keyword queries, normalizes historical dates and shows an empty-result message');
 }
 
+async function testCompletedPdaProductionNotes(page) {
+  const printed = {...common, stockRowId:'qa-note-stock', qty:40, boxCount:2, amount:240000, note:'', samsung:null,
+    productCode:'PRINTED', brand:'printed brand', factoryNo:'printed factory', nationalPartCode:'430430', nationalPartName:'사태', taxType:'면세', grade:'',
+    archivedField:{version:1}};
+  delete printed.stockLocation;
+  delete printed.stockProddate;
+  await page.evaluate(({printed,common})=>{
+    window.noteSavedState={entries:userProdEntries,txns:userTransactions};
+    const raw={product:'가상 원료육',origin:'국내산',lot:'QA-INPUT',packunit:'',proddate:'2026-09-12',stockLocation:'가공장',stockRowId:'qa-note-raw',stockUnitPrice:1000,price:1000,stockNote:'',sourceStockKey:'row|qa-note-raw|가공장'};
+    const entry={id:'qa-completed-pda-note',date:'2026/09/13',job_no:'9',job_type:'생산',note:'수정 전',inputs:[{...raw,qty:50,boxCount:2,amount:50000,samsung:null}],
+      _labelCompletion:{workOrderId:'qa-note-order'},outputs:[printed]};
+    userProdEntries=[entry];
+    userTransactions=[{...common,id:'qa-note-produced',stockRowId:printed.stockRowId,date:'2026-09-13',type:'생산입고',weight:40,boxCount:2,_prodId:entry.id},
+      {...raw,id:'qa-note-raw-receipt',date:'2026-09-12',type:'입고',weight:100,boxCount:4},
+      {...raw,id:'qa-note-raw-use',date:'2026-09-13',type:'사용',weight:50,boxCount:2,_prodId:entry.id},
+      {...common,id:'qa-note-pda-sale',stockRowId:printed.stockRowId,date:'2026-09-13',type:'출고',weight:5,boxCount:1,
+        _pdaRequestId:'qa-note-batch',_pdaLabelId:'qa-note-label',_productionCostStatus:'final',stockUnitPrice:6000}];
+    invalidateStockMap();openEditProdEntry(entry.id);
+  },{printed,common});
+  await page.locator('#prod-note').fill('비고만 수정');
+  const before=await page.evaluate(()=>saveCalls.length);
+  await page.evaluate(()=>saveProdEntry());
+  assert.equal(await page.evaluate(()=>saveCalls.length),before+1);
+  const saved=await page.evaluate(()=>saveCalls.at(-1).entry);
+  assert.equal(saved.note,'비고만 수정');
+  assert.deepEqual(saved.outputs[0],printed,'Note-only edits must preserve the exact issued output snapshot, including null, absent and archived fields');
+  assert.equal(await page.evaluate(()=>userTransactions.find(row=>row.id==='qa-note-pda-sale').stockUnitPrice),6000);
+  await page.evaluate(()=>openEditProdEntry('qa-completed-pda-note'));
+  await page.locator('#prod-in-qty-1').fill('45');await page.locator('#prod-out-price-1').fill('7000');await page.locator('#prod-note').fill('투입·단가·비고 정정');
+  await page.evaluate(()=>saveProdEntry());
+  const corrected=await page.evaluate(()=>saveCalls.at(-1).entry);
+  assert.equal(corrected.inputs[0].qty,45);assert.equal(corrected.outputs[0].price,7000);assert.equal(corrected.outputs[0].qty,40);assert.equal(corrected.outputs[0].boxCount,2);
+  assert.deepEqual(corrected.outputs[0],{...printed,price:7000,amount:280000});
+  assert.equal(await page.evaluate(()=>Object.values(getStockMap()).find(row=>row.stockRowId==='qa-note-raw').stock),55);
+  await page.evaluate(()=>{userProdEntries=noteSavedState.entries;userTransactions=noteSavedState.txns;invalidateStockMap();});
+  console.log('PASS: completed PDA production note/input-quantity/unit-cost edits preserve exact printed metadata/null/absent/archived fields, fixed output kg/boxes and raw stock');
+}
+
 async function testBrowser() {
   const {chromium} = require('playwright');
   const executablePath = process.env.CHROME_PATH || [chromium.executablePath(), 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'].find(candidate => fs.existsSync(candidate));
@@ -560,6 +598,7 @@ async function testBrowser() {
     assert.deepEqual(legacySaved.outputs[0].samsung, legacyMeta, 'Removing Samsung controls must preserve historical metadata');
     await testProductionGuards(page);
     await testProductionLabelLotCorrections(page);
+    await testCompletedPdaProductionNotes(page);
     await testTransactionFlows(page, artifacts);
     await testProductionDefaultList(page);
     assert.deepEqual(errors, []);
