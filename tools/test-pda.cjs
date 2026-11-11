@@ -19,7 +19,7 @@ const server=http.createServer((req,res)=>{
     const fixture={labelId:'qa-label',code:'DB2610131200-ABC120',product:'돈등심(치즈돈까스용 10mm 슬라이스)',weight:5,lot:'L12610134894005',origin:'국내산',storage:'냉동',packunit:'5KG',mfgdate:'2026-10-13',expdate:'2027-10-12',registered:false,state:'in_stock',revision:0,location:'가공장'};
     let current={...fixture},commits=[],lookups=[],failAfterSave=false,canSave=true,canView=true,lookupDelay=0,commitDelay=0,denyCommit=false,expireCommit=false;
     const saved=new Map(),errors=[];
-    const result=body=>({ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:5*body.p_items.length,received:body.p_mode==='inbound'&&current.state!=='shipped'?body.p_items.length:0,returned:body.p_mode==='inbound'&&current.state==='shipped'?body.p_items.length:0,shipped:body.p_mode==='outbound'?body.p_items.length:0,negativeStock:body.p_mode==='outbound'?[{product:fixture.product,lot:fixture.lot,weight:-3}]:[],items:body.p_items.map(item=>({...fixture,code:item.barcode,action:body.p_mode==='outbound'?'ship':current.state==='shipped'?'return':'receive'})),savedAt:new Date().toISOString()});
+    const result=body=>({ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:5*body.p_items.length,received:body.p_mode==='inbound'&&current.state!=='shipped'?body.p_items.length:0,returned:body.p_mode==='inbound'&&current.state==='shipped'?body.p_items.length:0,shipped:body.p_mode==='outbound'?body.p_items.length:0,negativeStock:body.p_mode==='outbound'?[{product:fixture.product,lot:fixture.lot,weight:-3}]:[],items:body.p_items.map(item=>({...fixture,transactionId:'qa-tx-'+body.p_request_id+'-'+item.barcode,code:item.barcode,action:body.p_mode==='outbound'?'ship':current.state==='shipped'?'return':'receive'})),savedAt:new Date().toISOString()});
     await context.route('https://**/*',async route=>{
       const url=new URL(route.request().url());
       if(route.request().method()==='GET'){
@@ -111,6 +111,13 @@ const server=http.createServer((req,res)=>{
     assert.match(await page.locator('#confirm-items').textContent(),/가출고 · 원가 미확정/);
     await page.locator('#confirm-dialog').screenshot({path:path.join(artifacts,'provisional-confirm.png')});
     await page.locator('#confirm-cancel').click();await page.locator('#clear-items').click();current={...fixture};
+    await scan();failAfterSave=true;await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
+    const cancelledRequest=commits.at(-1).p_request_id,cancelledResult=saved.get(cancelledRequest),savedCount=saved.size;
+    cancelledResult.cancelledTransactionIds=[cancelledResult.items[0].transactionId];current={...fixture,registered:true,revision:current.revision+1};
+    await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('출고가 취소된 요청'));
+    assert.equal(saved.size,savedCount);assert.equal(await page.locator('#items li').count(),0);assert.equal(await page.locator('#save').textContent(),'출고 확인');
+    await page.locator('#history-open').click();await page.waitForFunction(()=>document.getElementById('history-list').textContent.includes('출고 취소 1개'));assert.match(await page.locator('#history-list li').last().textContent(),/출고 취소/);
+    await page.locator('#history-dialog').screenshot({path:path.join(artifacts,'cancelled-history.png')});await page.locator('#history-close').click();current={...fixture};
     await page.locator('#logout').click();canSave=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});
     assert.match(await page.locator('#status').textContent(),/PDA 입출고 등록 권한/);
     await scan();assert(await page.locator('#save').isDisabled());

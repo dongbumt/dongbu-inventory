@@ -154,7 +154,8 @@
       pendingStore();const result=await rpc('dbmt_pda_commit',{p_token:state.token,...state.pending});
       state.pending=null;pendingStore();state.items=[];
       const negative=(result.negativeStock||[]).map(row=>`${row.product} · LOT ${row.lot||'-'} · ${kg(row.weight)}KG`).join('\n');
-      status(`저장 완료 · ${result.count}개 / ${kg(result.weight)} KG\n생산입고 확인 ${result.received}개 · 반입 ${result.returned}개 · 출고 ${result.shipped}개${negative?'\n마이너스 재고\n'+negative:''}`,negative?'warning':'ok');
+      if(result.cancelledTransactionIds?.length)status('ERP에서 일부 또는 전체 출고가 취소된 요청입니다. 처리이력을 확인한 후 다시 스캔해주세요.','warning');
+      else status(`저장 완료 · ${result.count}개 / ${kg(result.weight)} KG\n생산입고 확인 ${result.received}개 · 반입 ${result.returned}개 · 출고 ${result.shipped}개${negative?'\n마이너스 재고\n'+negative:''}`,negative?'warning':'ok');
     }catch(error){
       if(error.definite&&!error.session&&error.code!=='42501'){state.pending=null;pendingStore();status(`저장되지 않았습니다. ${error.message}`,'error');}
       else status(`${error.message}\n저장 여부가 불확실합니다. 같은 요청 재시도로 결과를 확인해주세요.`,'error');
@@ -164,7 +165,7 @@
     $('history-list').textContent='조회 중';$('history-dialog').showModal();
     try{
       const data=await rpc('dbmt_pda_history',{p_token:state.token});
-      $('history-list').innerHTML=data.rows.map(row=>`<details class="history-row"><summary>${esc(new Date(row.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))} · ${row.request.mode==='outbound'?'출고':'입고·반입'}<br>${esc(row.request.location)} · ${row.result.count}개 / ${kg(row.result.weight)} KG</summary><small>${esc(row.id)}<br>${esc(row.request.note)}</small><ul>${row.result.items.map(item=>`<li>${esc(item.product)} · ${kg(item.weight)} KG<br>${esc(item.code)} · ${item.action==='ship'?'출고':item.action==='return'?'반입':'생산입고 확인'}</li>`).join('')}</ul></details>`).join('')||'처리이력이 없습니다.';
+      $('history-list').innerHTML=data.rows.map(row=>`<details class="history-row"><summary>${esc(new Date(row.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))} · ${row.request.mode==='outbound'?'출고':'입고·반입'}<br>${esc(row.request.location)} · ${row.result.count}개 / ${kg(row.result.weight)} KG${row.result.cancelledTransactionIds?.length?` · 출고 취소 ${row.result.cancelledTransactionIds.length}개`:''}</summary><small>${esc(row.id)}<br>${esc(row.request.note)}</small><ul>${row.result.items.map(item=>`<li>${esc(item.product)} · ${kg(item.weight)} KG<br>${esc(item.code)} · ${row.result.cancelledTransactionIds?.includes(item.transactionId)?'출고 취소':item.action==='ship'?'출고':item.action==='return'?'반입':'생산입고 확인'}</li>`).join('')}</ul></details>`).join('')||'처리이력이 없습니다.';
     }catch(error){$('history-list').textContent=error.message;}
   });
   $('history-close').addEventListener('click',()=>{$('history-dialog').close();focusScan();});

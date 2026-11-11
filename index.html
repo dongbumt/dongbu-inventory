@@ -10539,7 +10539,7 @@ function renderTransactions(){
     <td style="text-align:right" id="txn-amt-${domId}">${pendingCost?'미확정':(amount || (t.type==='출고' && t.price!=='' && t.price!=null))?Math.round(amount).toLocaleString():'-'}</td>
     <td>${note}</td>
     <td style="white-space:nowrap">
-      ${Array.isArray(t._pdaRawBoxes) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${isPdaSummary ? `${t._pdaLabelId?`<button class="btn btn-sm btn-primary" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button> `:''}<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
+      ${Array.isArray(t._pdaRawBoxes) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${isPdaSummary ? `${t._pdaLabelId?`<button class="btn btn-sm btn-primary" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button> `:''}<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
          ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
     </td>
@@ -10592,27 +10592,40 @@ function renderPdaTransactionDetails(){
   body.innerHTML=rows.map(row=>`<tr><td style="font-family:monospace;max-width:280px;overflow-wrap:anywhere;">${htmlEscape(row._pdaRawPackageId?String(row._pdaCode||'').replaceAll(String.fromCharCode(29),'|'):DBMTLabelLayout.encodePrintCode(row._pdaCode||''))}</td>
     <td style="text-align:right;">${Number(row.weight||0).toFixed(2)}</td><td style="text-align:right;"><input type="number" aria-label="박스 단가" value="${Number(row.price||0)}" onchange="updateTxnPrice(${jsArg(row.id)},this.value)" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''} style="width:80px;text-align:right;"></td>
     <td style="text-align:right;" id="txn-pda-detail-amt-${String(row.id).replace(/[^a-zA-Z0-9_-]/g,'_')}">${Math.round(Number(row.amount||0)).toLocaleString()}</td><td>${htmlEscape(row.note||'-')}</td>
-    <td><button type="button" class="btn btn-secondary btn-sm" onclick="closePdaTransactionDetails();loadTxnToForm(${jsArg(row.id)})">수정</button></td></tr>`).join('');
+    <td><button type="button" class="btn btn-secondary btn-sm" onclick="closePdaTransactionDetails();loadTxnToForm(${jsArg(row.id)})">수정</button>${row._pdaLabelId?` <button type="button" class="btn btn-danger btn-sm" onclick="deleteTransaction(${jsArg(row.id)})">삭제</button>`:''}</td></tr>`).join('');
 }
 async function deleteTransaction(id){
-  const linked = userTransactions.find(txn=>String(txn.id)===String(id));
+  const summary=String(id).startsWith('pda-summary:')?findPdaTransactionSummary(id):null;
+  if(String(id).startsWith('pda-summary:')&&!summary){toast('삭제할 합계 행을 다시 조회해주세요.');return;}
+  const linked = summary||userTransactions.find(txn=>String(txn.id)===String(id));
   if(linked?.stockRowId && linked?._prodId){ toast('생산일보에서 생성된 재고입니다. 해당 생산일보에서 삭제해주세요.'); return; }
+  const productShipment=linked?.type==='출고'&&linked?._pdaRequestId&&linked?._pdaLabelId;
+  if(summary&&!productShipment){toast('이 PDA 합계의 삭제는 지원하지 않습니다.');return;}
+  const deletedRows=summary?summary._pdaSummaryRows:(linked?[linked]:[]),ids=deletedRows.length?deletedRows.map(row=>String(row.id)):[String(id)];
+  if(ids.some(rowId=>transactionPricePendingIds.has(rowId))){toast('해당 거래내역을 저장 중입니다. 잠시 후 다시 삭제해주세요.');return;}
   const rawReceipt=linked?.type==='입고'&&linked?._pdaRawRequestId&&linked?._pdaAction==='receive';
-  if(rawReceipt&&localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('PDA 입고 삭제는 서버에 연결한 상태에서만 가능합니다.');return;}
-  if(!confirm(rawReceipt?`${linked.product} · 이력번호 ${linked.lot}\n${boxCountDisplay(linked.boxCount)}박스 · ${Number(linked.weight).toFixed(2)}KG 입고를 삭제할까요?\n사용하지 않은 입고만 삭제되며 해당 바코드는 다시 입고할 수 있습니다.`:'삭제하시겠습니까?'))return;
-  const deletedTxn = userTransactions.find(t=>String(t.id)===String(id));
+  if((rawReceipt||productShipment)&&localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('PDA 입출고 삭제는 서버에 연결한 상태에서만 가능합니다.');return;}
+  if(productShipment&&!DBMTAuth.can('transactions','delete')){toast('거래내역 삭제 권한이 없습니다.');return;}
+  const message=productShipment?`${linked.date} · ${linked.trader}\n${linked.product} · 이력번호 ${linked.lot}\n${ids.length}박스 · ${Number(linked.weight).toFixed(2)}KG 출고를 삭제할까요?\n출고를 취소하고 재고와 바코드 상태를 복구합니다. 후속 처리가 있는 박스가 포함되면 삭제하지 않습니다.`
+    :rawReceipt?`${linked.product} · 이력번호 ${linked.lot}\n${boxCountDisplay(linked.boxCount)}박스 · ${Number(linked.weight).toFixed(2)}KG 입고를 삭제할까요?\n사용하지 않은 입고만 삭제되며 해당 바코드는 다시 입고할 수 있습니다.`:'삭제하시겠습니까?';
+  if(!confirm(message))return;
+  ids.forEach(rowId=>transactionPricePendingIds.add(rowId));
   try{
-    await saveTransactionRows([], [id], deletedTxn ? [deletedTxn] : []);
+    await saveTransactionRows([], ids, deletedRows);
   }catch(err){
     toast(String(err?.message || err || '거래내역 삭제에 실패했습니다.'));
     return;
-  }
-  userTransactions=userTransactions.filter(t=>String(t.id)!==String(id));
+  }finally{ids.forEach(rowId=>transactionPricePendingIds.delete(rowId));}
+  userTransactions=userTransactions.filter(t=>!ids.includes(String(t.id)));
   transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
   safeLocalStorageSet('dbmt_user_transactions',JSON.stringify(userTransactions),true);
   invalidateStockMap();
+  if((typeof _editTxnId!=='undefined'&&ids.includes(String(_editTxnId)))
+    ||(typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.some(row=>ids.includes(String(row.id)))))clearTransactionForm();
   if(rawReceipt)toast('입고와 바코드 연결을 취소했습니다.');
+  if(productShipment)toast(`${ids.length}박스 출고를 삭제하고 재고와 바코드 상태를 복구했습니다.`);
   renderTransactions();
+  if(typeof renderPdaTransactionDetails==='function')renderPdaTransactionDetails();
 }
 
 // ── 거래내역 수정 모달 ──
