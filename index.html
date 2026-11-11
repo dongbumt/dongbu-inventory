@@ -21208,10 +21208,25 @@ function workOrderStockBoxes(stock){
   return Number.isNaN(boxes)?null:boxes;
 }
 
+function workOrderStockBrand(stock){
+  const saved=String(stock?.brand || '').trim();
+  if(saved)return saved;
+  let current=null;
+  if(stock?.stockRowId && typeof getStockMap==='function'){
+    const matches=Object.values(getStockMap()).filter(row=>String(row.stockRowId || '')===String(stock.stockRowId) &&
+      stockLocationKey(row.stockLocation || '')===stockLocationKey(stock.stockLocation || ''));
+    if(matches.length===1)current=matches[0];
+  }
+  if(!current && stock?.key)current=findWorkOrderStock(stock.key);
+  return txnStockPickerProductMeta(current || stock).brand;
+}
+
 function workOrderStockLabel(s){
   if(!s) return '';
+  const brand=workOrderStockBrand(s);
   const parts = [
     s.product || '',
+    brand ? `브랜드 ${brand}` : '',
     s.packunit ? s.packunit : '',
     s.stockLocation ? s.stockLocation : '',
     s.lot ? `LOT ${s.lot}` : 'LOT 없음',
