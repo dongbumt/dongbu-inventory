@@ -23,6 +23,9 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
    const inbound=(product,lot,date='2026-10-26',trader='가상 매입처')=>({type:'입고',product,lot,date,trader,origin:'미국산'});
    var traderInfoMap={'가상 매입처':{email:'fixture@example.invalid'},'팩스 거래처':{fax:'02-1234-5678'},'모두 거래처':{email:'both@example.invalid',fax:'031-123-4567',faxAlt:'031-123-4568'},'미등록 거래처':{email:'  ',fax:' ',faxAlt:''},'팩스2 거래처':{faxAlt:'032-123-4567'}};
    var userTransactions=[inbound('이전 발송 품목','L-001'),inbound('팩스 품목','L-002','2026-10-26','팩스 거래처'),inbound('두 채널 품목','L-003','2026-10-26','모두 거래처'),inbound('실패 품목','L-004','2026-10-26','미등록 거래처'),inbound('미발송 품목','L-005','2026-10-26','팩스2 거래처'),inbound('이력 없는 품목','','2026-10-25'),inbound('이력 없는 품목','','2026-10-24'),inbound('이전 발송 품목 중복','L-001','2026-10-25')];
+   var labelProducts=[{id:'brand-saved',brand:'변경된 등록 브랜드'},{id:'brand-fallback',brand:'등록 브랜드(긴 이름 줄바꿈 확인)'}];
+   Object.assign(userTransactions[0],{brand:'입고 당시 브랜드 <A>',labelProductId:'brand-saved'});
+   userTransactions[1].labelProductId='brand-fallback';
    const receipt=(id,status='sent',created_at='2026-10-26T02:00:00Z',provider_status='')=>({id,created_at,status,provider_status});
    const identity=lot=>({lot});
    var summaries=[{identity:identity('l 001'),channel:'email',latest:receipt('12','failed'),success:receipt('11','sent','2026-09-01T02:00:00Z')},
@@ -39,11 +42,17 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
     if(name==='dbmt_erp_get_document_request_log_detail')return {ok:true,log:{id:args.p_id,channel:'email',status:'sent',subject:'가상 요청',documents:[],content_snapshot:{html:'<p>가상 보낸 내용</p>'}}};
     throw Error('Unexpected RPC: '+name);
    }
-   ${['htmlEscape','jsArg','getTraderInfo','normalizeDocLot','getDocKey','getLegacyDocKey','getDocKeys','isDocChecked','isImported','getRequiredDoc','updateDocumentRequestButtons','formatDocumentRequestDate','documentRequestLogLots','renderDocumentRequestLogs','renderDocumentRequestContact','documentRequestDeliveryKey','renderDocumentRequestDelivery','loadDocumentRequestDelivery','loadDocumentRequestLogs','refreshDocChecksFromSupabase','renderDocCheck'].map(source).join('\n')}
+   ${['htmlEscape','jsArg','getTraderInfo','normalizeDocLot','getDocKey','getLegacyDocKey','getDocKeys','isDocChecked','isImported','getRequiredDoc','updateDocumentRequestButtons','formatDocumentRequestDate','documentRequestLogLots','renderDocumentRequestLogs','renderDocumentRequestContact','documentRequestBrand','documentRequestDeliveryKey','renderDocumentRequestDelivery','loadDocumentRequestDelivery','loadDocumentRequestLogs','refreshDocChecksFromSupabase','renderDocCheck'].map(source).join('\n')}
    document.getElementById('doc-filter').value='전체';renderDocCheck();
   `});
   await page.addScriptTag({content:fs.readFileSync(path.join(root,'document-request-detail.js'),'utf8')});
-  assert.equal(await page.locator('#doc-tbody').evaluate(el=>el.closest('table').querySelectorAll('thead th').length),10);
+  assert.equal(await page.locator('#doc-tbody').evaluate(el=>el.closest('table').querySelectorAll('thead th').length),11);
+  assert.equal(await page.locator('#doc-tbody').evaluate(el=>el.closest('table').querySelectorAll('thead th')[3].textContent),'브랜드');
+  const brand=name=>page.locator('#doc-tbody tr').filter({has:page.locator('td:nth-child(3)',{hasText:name})}).first().locator('.doc-brand-cell');
+  assert.equal(await brand('이전 발송 품목').textContent(),'입고 당시 브랜드 <A>','Saved inbound brand takes precedence over changed catalog data');
+  assert.equal(await brand('이전 발송 품목').locator('*').count(),0,'Brand values are escaped');
+  assert.equal(await brand('팩스 품목').textContent(),'등록 브랜드(긴 이름 줄바꿈 확인)','Legacy inbound uses the exact registered product ID');
+  assert.equal(await brand('미발송 품목').textContent(),'-','Missing brands remain visibly blank without guessing');
   assert.match(await page.locator('#doc-tbody').textContent(),/로그인 확인/);
   await page.evaluate(()=>Promise.all([loadDocumentRequestLogs(true),refreshDocChecksFromSupabase(true)]));
   assert(!(await page.evaluate(()=>requests)).some(r=>r.name==='dbmt_erp_get_all'),'Receipt refresh must not download the full ERP payload');
@@ -83,7 +92,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
   assert.equal(await page.locator('#doc-tbody tr').count(),3,'Partial trader-name search includes every matching checklist item');
   await page.locator('#doc-search').fill('모두 거래처');
   await page.locator('#doc-filter').selectOption('미수령');
-  assert.equal(await page.locator('#doc-tbody td').getAttribute('colspan'),'10','Trader search respects the receipt filter');
+  assert.equal(await page.locator('#doc-tbody td').getAttribute('colspan'),'11','Trader search respects the receipt filter');
   await page.locator('#doc-filter').selectOption('수령완료');
   assert.match(await page.locator('#doc-tbody').textContent(),/두 채널 품목/);
   await page.locator('#doc-filter').selectOption('전체');
@@ -91,7 +100,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
   assert.equal(await page.locator('#doc-tbody tr').count(),1,'LOT search remains case-insensitive');
   assert.match(await page.locator('#doc-tbody').textContent(),/팩스 품목/);
   assert.equal(await page.evaluate(()=>requests.length),callsBeforeSearch,'Keyword search adds no server requests');
-  await page.locator('#doc-search').fill('not-a-product');assert.equal(await page.locator('#doc-tbody td').getAttribute('colspan'),'10');
+  await page.locator('#doc-search').fill('not-a-product');assert.equal(await page.locator('#doc-tbody td').getAttribute('colspan'),'11');
   await page.locator('#doc-search').fill('');
   await page.evaluate(()=>{summaryFail=true;});await page.evaluate(()=>loadDocumentRequestLogs(true));
   assert.match(await cell('미발송 품목').textContent(),/조회 실패/);assert.doesNotMatch(await cell('미발송 품목').textContent(),/미발송/);

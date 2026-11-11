@@ -28,7 +28,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261111stockactions1">
+<link rel="stylesheet" href="styles/main.css?v=20261111docbrand1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -2226,6 +2226,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
               </th>
               <th>입고일</th>
               <th>품목명</th>
+              <th class="doc-brand-cell">브랜드</th>
               <th>원산지</th>
               <th>이력번호</th>
               <th>거래처</th>
@@ -2236,7 +2237,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             </tr>
           </thead>
           <tbody id="doc-tbody">
-            <tr><td colspan="10" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
+            <tr><td colspan="11" style="text-align:center;padding:20px;color:#888">데이터 로딩 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -17180,7 +17181,7 @@ function renderDocCheck(){
   const tbody = document.getElementById('doc-tbody');
   if(!tbody) return;
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
+    tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>';
     updateDocumentRequestButtons();
     return;
   }
@@ -17204,6 +17205,7 @@ function renderDocCheck(){
       </td>
       <td style="font-size:11px;color:#888">${htmlEscape(r.date||'-')}</td>
       <td><strong>${htmlEscape(r.product||'-')}</strong></td>
+      <td class="doc-brand-cell">${htmlEscape(documentRequestBrand(r)||'-')}</td>
       <td>${htmlEscape(r.origin||'-')}</td>
       <td style="font-family:monospace;font-size:11px">${htmlEscape(r.lot||'-')}</td>
       <td>${htmlEscape(r.trader||'-')}</td>
