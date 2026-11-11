@@ -39,11 +39,17 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     // The link test must not run the real ERP or contact its backend.
     await context.route('**/index.html',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>ERP link fixture</title><p>ERP</p>'}));
     await context.addInitScript(()=>{
-      window.__prints=[];window.__portOptions=null;window.__portRequests=0;window.__portClosed=0;
+      window.__prints=[];window.__portOptions=null;window.__portRequests=0;window.__portClosed=0;window.__portReaders=0;
       window.print=()=>{if(parent!==window){parent.__prints.push({count:document.querySelectorAll('.print-label').length,text:document.querySelector('#label-print-pages').textContent,innerCount:document.querySelectorAll('.dbmt-inner-label').length,barcodeCount:document.querySelectorAll('[data-barcode-kind]').length,outerRegions:document.querySelectorAll('.dl-top-code,.dl-side-strip').length});setTimeout(()=>dispatchEvent(new Event('afterprint')),0);}};
-      const port={readable:null,async open(options){window.__portOptions=options;this.readable=new ReadableStream({start(controller){window.__serialController=controller;}});},async close(){window.__portClosed++;}};
+      const renew=()=>{
+        port.readable=new ReadableStream({start(controller){window.__serialController=controller;}});
+        const getReader=port.readable.getReader.bind(port.readable);
+        port.readable.getReader=(...args)=>{window.__portReaders++;return getReader(...args);};
+      };
+      const port={readable:null,async open(options){window.__portOptions=options;renew();},async close(){window.__portClosed++;this.readable=null;}};
       Object.defineProperty(navigator,'serial',{configurable:true,value:{async requestPort(){window.__portRequests++;return port;}}});
       window.__send=text=>window.__serialController.enqueue(new TextEncoder().encode(text));
+      window.__serialFault=(name,fatal=false)=>{const previous=window.__serialController;if(fatal)port.readable=null;else renew();previous.error(new DOMException('QA device: '+name,name));};
     });
     page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
     await page.goto(base+'/label-print.html');await page.locator('#app-password').fill('0000');await page.locator('#connect-btn').click();await page.waitForFunction(()=>!state.loading&&state.workOrders.length);
@@ -99,12 +105,34 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     assert.equal(page.url(),originalUrl,'ERP must not replace the connected label screen');assert.deepEqual(await labelState(),beforeErp,'Keep work, weights, logs and serial connection when opening ERP');
     await erpPage.close();await page.bringToFront();console.log('PASS: ERP opens separately without navigating/reloading the label page or disconnecting the scale.');
     await page.locator('[data-kind=outer][data-mode=scale]').click();assert(await page.locator('#print-btn').isDisabled());
+    await page.evaluate(()=>__send('ST,+00007.00 kg\r\n'));await page.waitForFunction(()=>!document.getElementById('print-btn').disabled);
+    const printsBeforeRecovery=await page.evaluate(()=>__prints.length),savesBeforeRecovery=saves;
+    await page.evaluate(()=>__serialFault('ParityError'));await page.locator('#scale-open').click();
+    assert.match(await page.locator('#scale-state').textContent(),/수신 복구/);
+    assert.match(await page.locator('#scale-dialog-status').textContent(),/ParityError.*2400.*7E1/);
+    assert.equal(await page.locator('#scale-value').textContent(),'—');assert(await page.locator('#print-btn').isDisabled());
+    assert(await page.locator('#scale-connect').isDisabled());assert(await page.locator('#scale-disconnect').isEnabled());
+    await page.locator('#scale-dialog').screenshot({path:path.join(dir,'scale-recovering.png')});await page.locator('[data-close=scale-dialog]').click();
     await page.evaluate(()=>__send('ST,+00002.'));assert(await page.locator('#print-btn').isDisabled());await page.evaluate(()=>__send('48 kg\r\n'));await page.waitForFunction(()=>!document.getElementById('print-btn').disabled);
+    assert.equal(await page.evaluate(()=>__portRequests),1,'Read recovery must not prompt or reopen the port');assert.equal(await page.evaluate(()=>__portClosed),0);
+    assert.equal(await page.evaluate(()=>__prints.length),printsBeforeRecovery);assert.equal(saves,savesBeforeRecovery,'Recovery must never auto-print or save a label');
     assert.equal(await page.evaluate(()=>DBMTLabelTouch.copies('outer')),1);await page.locator('#print-btn').click();await wait();assert.equal(await production(),'27.48 kg');assert.equal(logs.at(-1).labelWeight,2.48);
     for(const line of ['US,+00003.00 kg\r\n','ST,+00000.00 kg\r\n','ST,-00001.00 kg\r\n','bad frame\r\n']){await page.evaluate(line=>__send(line),line);await page.waitForFunction(()=>document.getElementById('print-btn').disabled);}
     await page.evaluate(()=>__send('ST,+00004.20 kg\r\n'));await page.waitForFunction(()=>!document.getElementById('print-btn').disabled);
     await page.waitForFunction(()=>document.getElementById('print-btn').disabled,{},{timeout:5000});assert.equal(await page.locator('#scale-value').textContent(),'—','Stale weight cleared');
     await page.locator('#scale-open').click();await page.locator('#scale-disconnect').click();await page.waitForFunction(()=>__portClosed===1);await page.locator('[data-close=scale-dialog]').click();
+    await page.locator('#scale-open').click();await page.locator('#scale-connect').click();
+    for(let i=0;i<3;i++){
+      const readers=await page.evaluate(()=>__portReaders);await page.evaluate(()=>__serialFault('FramingError'));
+      await page.waitForFunction(previous=>__portReaders>previous,readers);assert(await page.locator('#print-btn').isDisabled());
+    }
+    await page.evaluate(()=>__serialFault('FramingError'));await page.waitForFunction(()=>__portClosed===2);
+    assert.match(await page.locator('#scale-dialog-status').textContent(),/10초 내 4회.*수신 오류 반복.*FramingError.*QA device/);
+    assert.equal(await page.locator('#scale-value').textContent(),'—');assert(await page.locator('#print-btn').isDisabled());
+    assert(await page.locator('#scale-connect').isEnabled());assert(await page.locator('#scale-disconnect').isDisabled());
+    assert.equal(await page.evaluate(()=>__portRequests),2);await page.locator('#scale-dialog').screenshot({path:path.join(dir,'scale-error-detail.png')});
+    await page.locator('[data-close=scale-dialog]').click();
+    await layout(1280);await layout(1024);await page.setViewportSize({width:1280,height:1024});
     await page.locator('[data-kind=outer][data-mode=fixed]').click();assert.equal(await page.evaluate(()=>DBMTLabelTouch.weight('outer')),5);await edit('outer','copies',1);
     fail=true;const before=await page.evaluate(()=>__prints.length);await page.locator('#print-btn').click();await wait();assert.equal(await page.evaluate(()=>__prints.length),before);assert.equal(logs.length,6);assert.match(await page.locator('#status').textContent(),/출력 저장 실패/);fail=false;
     await page.locator('#complete-production-btn').click();await wait();assert.equal(completeIds.length,6);assert(await page.locator('#print-btn').isDisabled());assert(await page.locator('#inner-print-btn').isEnabled());

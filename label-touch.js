@@ -88,9 +88,9 @@
     byId('scale-value').textContent=live.value===null?'—':live.value.toFixed(2);
     byId('scale-state').textContent=live.message;
     byId('scale-state').classList.toggle('not-ready',!live.ready);
-    byId('scale-connect').disabled=live.connecting||live.connected||state.loading;
-    byId('scale-disconnect').disabled=!live.connected||state.loading;
-    byId('scale-dialog-status').textContent=live.message;
+    byId('scale-connect').disabled=live.connecting||(live.portOpen??live.connected)||live.disconnecting||state.loading;
+    byId('scale-disconnect').disabled=!(live.portOpen??live.connected)||live.disconnecting||state.loading;
+    byId('scale-dialog-status').textContent=live.detail||live.message;
     for(const kind of ['inner','outer']){
       const set=s[kind],w=weight(kind),weightOmitted=isWeightOmitted(kind),n=copies(kind),locked=state.loading||!row||!orderLogsReady()||!!row._carryoverTo||(kind==='outer'&&!!completionFor(row.id));
       byId(`${kind}-weight-btn`).innerHTML=weightOmitted?'<strong>미표기</strong><small>중량 없음</small>':`<strong>${w?w.toFixed(2):'—'}</strong><small>kg</small>`;
