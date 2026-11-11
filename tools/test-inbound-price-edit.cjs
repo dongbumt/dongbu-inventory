@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-const source = html.match(/function parseOptionalBoxCount\([^]*?\n\}/)[0] + '\n' + html.match(/async function addTransaction\([^]*?\n\}/)[0];
+const source = ['parseOptionalBoxCount','parseTransactionUnitPrice','addTransaction'].map(name=>html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'))[0]).join('\n');
 
 async function run(stockRowId, fail = false, boxCount = '') {
   const original = {id:'qa-inbound', type:'입고', date:'2026-09-21', product:'QA 이겹살',

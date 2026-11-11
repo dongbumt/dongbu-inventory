@@ -6073,8 +6073,9 @@ async function supabaseSaveTransactionRows(rows, deletedIds, options={}){
     p_token:token, p_rows:upsertRows, p_delete_ids:deleteIds
   });
   assertPersonalServerResult(result, '거래내역을 저장할 권한이 없습니다.');
-  if(Array.isArray(result.updatedRawReceipts)&&result.updatedRawReceipts.length){
-    const corrected=new Map(result.updatedRawReceipts.map(row=>[String(row.id),row]));
+  const correctedRows=[...(result.updatedRawReceipts||[]),...(result.updatedPdaShipments||[])];
+  if(correctedRows.length){
+    const corrected=new Map(correctedRows.map(row=>[String(row.id),row]));
     userTransactions=userTransactions.map(row=>corrected.get(String(row.id))||row);
     transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
     invalidateStockMap();
@@ -9045,6 +9046,7 @@ async function updateTxnPrice(id, newPriceStr){
   toast('단가 수정 완료 — 거래명세서에 즉시 반영됩니다.', 2500);
 }
 function autoFillTxnPrice(){
+  if(typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.length){updateTxnAmtPreview();return;}
   const receipt=typeof _editTxnId!=='undefined'&&_editTxnId?userTransactions.find(row=>String(row.id)===String(_editTxnId)):null;
   if(receipt?.type==='입고'&&receipt?._pdaRawRequestId&&receipt?._pdaAction==='receive'){updateTxnAmtPreview();return;}
   const product = getTProduct();
@@ -9094,8 +9096,10 @@ function parseTransactionUnitPrice(input){
 function updateTxnAmtPreview(){
   const price = parseTransactionUnitPrice(document.getElementById('t-price'));
   const weight = parseFloat(document.getElementById('t-weight')?.value) || 0;
+  const amount=typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.length
+    ? pdaShipmentEditRows.reduce((sum,row)=>sum+Math.round(price*Number(row.weight)),0) : Math.round(price*weight);
   const el = document.getElementById('t-amount-preview');
-  if(el) el.value = (price!==null && Number.isFinite(price) && weight>0) ? Math.round(price * weight).toLocaleString('ko-KR') + ' 원' : '';
+  if(el) el.value = (price!==null && Number.isFinite(price) && weight>0) ? amount.toLocaleString('ko-KR') + ' 원' : '';
 }
 
 
@@ -9119,6 +9123,7 @@ function totalRecordedBoxes(rows){
 }
 
 async function addTransaction(){
+  if(typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.length)return savePdaShipmentFromForm();
   const linkedProductionTxn = _editTxnId ? userTransactions.find(txn=>String(txn.id)===String(_editTxnId)) : null;
   if(linkedProductionTxn?.stockRowId && linkedProductionTxn?._prodId){ alert('생산일보에서 생성된 재고입니다. 해당 생산일보에서 수정해주세요.'); return; }
   if(linkedProductionTxn?.type==='입고'&&linkedProductionTxn?._pdaRawRequestId&&linkedProductionTxn?._pdaAction==='receive'){
@@ -9373,15 +9378,41 @@ async function savePdaRawReceiptFromForm(receipt){
   }finally{transactionPricePendingIds.delete(String(receipt.id));if(button)button.disabled=false;}
 }
 
-function setPdaRawReceiptEditControls(locked){
+async function savePdaShipmentFromForm(){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('PDA 출고 수정은 서버에 연결한 상태에서만 가능합니다.');return;}
+  if(!DBMTAuth.can('transactions','update')){toast('거래내역 수정 권한이 없습니다.');return;}
+  const snapshots=pdaShipmentEditRows,ids=snapshots.map(row=>String(row.id));
+  if(!ids.length||ids.some(id=>transactionPricePendingIds.has(id))){toast('출고 저장 중입니다. 잠시 후 다시 수정해주세요.');return;}
+  const trader=document.getElementById('t-trader').value.trim(),price=parseTransactionUnitPrice(document.getElementById('t-price'));
+  if(!trader){alert('거래처를 선택해주세요.');return;}
+  if(price===null||!Number.isFinite(price)||price<0){alert('출고 단가는 0 이상의 숫자로 입력해주세요.');return;}
+  const note=document.getElementById('t-note').value.trim();
+  const rows=snapshots.map(row=>({...row,trader,price,amount:Math.round(price*Number(row.weight)),note}));
+  const button=document.getElementById('t-add-btn');
+  ids.forEach(id=>transactionPricePendingIds.add(id));if(button)button.disabled=true;
+  try{
+    await saveTransactionRows(rows,null,null,{action:'수정'});
+    clearTransactionForm({resetType:true});renderTransactions();renderPdaTransactionDetails();
+    showTransactionSaveStatus(`PDA 출고 수정 완료 — ${snapshots[0].product} · ${ids.length}박스 · ${trader} · ${price.toLocaleString()}원/KG`);
+    toast('PDA 출고 수정 완료');
+  }catch(error){
+    showTransactionSaveStatus(`거래내역 저장 실패 — ${String(error?.message||error)}`,true);
+    toast(String(error?.message||error));
+  }finally{ids.forEach(id=>transactionPricePendingIds.delete(id));if(button)button.disabled=false;}
+}
+
+function setPdaRawReceiptEditControls(locked,shipment=false){
   const selectors=['#t-date','#t-type','#t-product-input','#t-product-managed','#t-product-managed-wrap button',
-    '#t-origin-managed','#t-storage-managed','#t-lot','#t-proddate','#t-box-count','#t-stock-location'];
+    '#t-origin-managed','#t-storage-managed','#t-lot','#t-proddate','#t-box-count','#t-stock-location',
+    '#t-product-select','#t-stock-search','#t-stock-search-wrap button','#t-weight'];
   for(const selector of selectors){
     const el=document.querySelector(selector);if(!el)continue;
     if(locked){
+      if(selector==='#t-weight'&&!shipment)continue;
       if(el.dataset.pdaRawLock!==undefined)continue;
       el.dataset.pdaRawLock=JSON.stringify({disabled:el.disabled,readOnly:el.readOnly});
       if(el.tagName==='SELECT'||el.tagName==='BUTTON')el.disabled=true;else el.readOnly=true;
+      if(shipment&&selector==='#t-stock-search')el.disabled=true;
     }else if(el.dataset.pdaRawLock!==undefined){
       const previous=JSON.parse(el.dataset.pdaRawLock);el.disabled=previous.disabled;if(previous.readOnly!==undefined)el.readOnly=previous.readOnly;
       delete el.dataset.pdaRawLock;
@@ -9391,6 +9422,7 @@ function setPdaRawReceiptEditControls(locked){
 
 function clearTransactionForm(options={}){
   if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
+  pdaShipmentEditRows=[];
   const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
   showTransactionSaveStatus('');
   ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-box-count','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at','t-livestock-species','t-livestock-trace-type','t-livestock-slaughter-date','t-livestock-slaughter-end-date','t-livestock-slaughter-houses','t-livestock-grades','t-livestock-inspection-results','t-livestock-process-date','t-livestock-process-end-date','t-livestock-process-companies','t-livestock-queried-at'].forEach(id=>{
@@ -10507,7 +10539,7 @@ function renderTransactions(){
     <td style="text-align:right" id="txn-amt-${domId}">${pendingCost?'미확정':(amount || (t.type==='출고' && t.price!=='' && t.price!=null))?Math.round(amount).toLocaleString():'-'}</td>
     <td>${note}</td>
     <td style="white-space:nowrap">
-      ${Array.isArray(t._pdaRawBoxes) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${isPdaSummary ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
+      ${Array.isArray(t._pdaRawBoxes) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${isPdaSummary ? `${t._pdaLabelId?`<button class="btn btn-sm btn-primary" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button> `:''}<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
          ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
     </td>
@@ -10585,15 +10617,19 @@ async function deleteTransaction(id){
 
 // ── 거래내역 수정 모달 ──
 let _editTxnId=null;
+let pdaShipmentEditRows=[];
 // 구 모달 함수 (호환성 유지용, 실제로는 loadTxnToForm 사용)
 function openEditTxnModal(id){ loadTxnToForm(id); }
 function closeEditTxnModal(){ clearTransactionForm(); }
 function saveEditTxn(){ return addTransaction(); }
 
 function loadTxnToForm(id){
-  const t=userTransactions.find(x=>String(x.id)===String(id));
+  const t=(String(id).startsWith('pda-summary:')?findPdaTransactionSummary(id):null)||userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
+  if(t._pdaSummaryRows&&!t._pdaLabelId)return;
   if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
+  pdaShipmentEditRows=t.type==='출고'&&t._pdaRequestId&&t._pdaLabelId
+    ? (t._pdaSummaryRows||[t]).map(row=>({...row})) : [];
   if(t.stockRowId && t._prodId){ openEditProdEntry(t._prodId); return; }
   _editTxnId=id;
   showTransactionSaveStatus('');
@@ -10649,6 +10685,10 @@ function loadTxnToForm(id){
   updateTxnAmtPreview();
 
   if(t.type==='입고'&&t._pdaRawRequestId&&t._pdaAction==='receive'&&typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(true);
+  if(pdaShipmentEditRows.length){
+    setPdaRawReceiptEditControls(true,true);
+    document.getElementById('lot-match-area').style.display='none';
+  }
 
   // 수정 모드 UI
   const banner=document.getElementById('t-edit-banner');
