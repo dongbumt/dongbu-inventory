@@ -73,7 +73,7 @@
   }
   function render(){
     const locked=state.saving||!!state.pending,busy=locked||state.busy||state.queue.length>0;
-    $('items').innerHTML=state.items.map((item,index)=>`<li><div class="scan-product">${esc(item.product)}</div><strong class="scan-weight">${kg(item.labelWeight)} KG</strong><div class="scan-meta">이력번호 ${esc(item.lot)} · ${esc(item.origin||'')}<br>${esc(item.rule)}${item.labelWeight!==item.calculatedWeight?` · 계산 ${kg(item.calculatedWeight)}KG / 라벨 대조`:''}</div><div class="scan-code">${esc(item.code.replaceAll(String.fromCharCode(29),'|'))}</div><button class="scan-remove" type="button" data-remove="${index}" aria-label="목록에서 제외" ${busy?'disabled':''}>×</button></li>`).join('');
+    $('items').innerHTML=state.items.map((item,index)=>`<li><div class="scan-product">${esc(item.product)}</div><strong class="scan-weight">${kg(item.labelWeight)} KG</strong><div class="scan-meta">이력번호 ${esc(item.lot)} · ${esc(item.origin||'')}<br>${esc(item.rule)}${item.labelWeight!==item.calculatedWeight?` · 계산 ${kg(item.calculatedWeight)}KG / 라벨 대조`:''}${item.state==='used'?'<br>생산 사용 자동연결 · 출고 허용, 부족분은 마이너스 재고 반영':''}</div><div class="scan-code">${esc(item.code.replaceAll(String.fromCharCode(29),'|'))}</div><button class="scan-remove" type="button" data-remove="${index}" aria-label="목록에서 제외" ${busy?'disabled':''}>×</button></li>`).join('');
     $('item-count').textContent=state.items.length;$('total').textContent=`${state.items.length}박스 · ${kg(state.items.reduce((sum,item)=>sum+item.labelWeight,0))} KG`;
     $('save-detail').textContent=state.pending?'저장 응답 확인 필요':state.busy?'바코드 조회 중':'';
     $('save').textContent=state.saving?'저장 확인 중':state.pending?'같은 요청 재시도':state.mode==='outbound'?'출고 확인':$('receive-kind').value==='bind'?'재고 연결 확인':'입고 확인';
@@ -145,7 +145,7 @@
         const item=data.item;if(state.items.some(row=>row.id===item.id))throw Error('이미 목록에 있는 박스입니다.');
         if(state.items.length>=200)throw Error('200박스까지 처리할 수 있습니다. 먼저 저장해주세요.');
         if(state.mode==='outbound'&&!item.registered)throw Error('원료육 입고 또는 기존 재고 연결을 먼저 해주세요.');
-        if(state.mode==='outbound'&&item.state!=='in_stock')throw Error('이미 출고된 원료육 박스입니다.');
+        if(state.mode==='outbound'&&!['in_stock','used'].includes(item.state))throw Error('이미 출고된 원료육 박스입니다.');
         if(state.mode==='inbound'&&item.registered)throw Error('이미 등록한 원료육 바코드입니다. 중복 입고하지 않습니다.');
         if(item.registered&&item.location!==$('location').value)throw Error(`현재 재고 지점은 ${item.location}입니다.`);
         if(item.ruleKey==='gs1'){

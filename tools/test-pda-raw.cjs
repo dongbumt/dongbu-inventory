@@ -108,6 +108,14 @@ const server=http.createServer((req,res)=>{
     denyCommit=false;await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     assert.match(await page.locator('#status').textContent(),/마이너스 재고.*\n.*-1\.40/s);assert.equal(await page.locator('#status').getAttribute('class'),'warning');
     await scan(cases[0].code);await idle();assert.match(await page.locator('#status').innerText(),/이미 출고/);
+    const shipped=registered.get(cases[0].id),beforeUsedScan=commits.length;
+    registered.set(cases[0].id,{...shipped,state:'used',revision:shipped.revision+1});
+    await scan(cases[0].code);await idle();assert.match(await page.locator('#items').innerText(),/생산 사용 자동연결.*출고 허용/s);assert.equal(await page.locator('#items li').count(),1);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:path.join(artifacts,'used-box-outbound.png'),fullPage:true});
+    await page.getByRole('button',{name:'목록에서 제외',exact:true}).click();
+    if(!(await page.locator('#settings-panel').evaluate(el=>el.open)))await page.locator('#settings-summary').click();
+    await page.locator('[name="mode"][value="inbound"]').check();await scan(cases[0].code);await idle();assert.match(await page.locator('#status').innerText(),/중복 입고/);
+    assert.equal(await page.locator('#items li').count(),0);assert.equal(commits.length,beforeUsedScan,'A used box can be queued for shipment but never sent while scanning or received twice');registered.set(cases[0].id,shipped);
     await page.locator('[name="mode"][value="inbound"]').check();await page.locator('#receive-kind').selectOption('bind');
     await page.waitForFunction(()=>document.getElementById('source').options.length===2);await page.locator('#source').selectOption('qa-existing');assert.equal(await page.locator('#lot').inputValue(),'QA-EXISTING');
     await scan(cases[1].code);await choose();await idle();assert.equal(await page.locator('#items li').count(),1);
