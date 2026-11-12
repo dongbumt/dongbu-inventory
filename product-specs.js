@@ -71,13 +71,14 @@
   }
   function printDocument(rows){
     const columns=[
-      ['trader','거래처',9.5],['distribution','유통',11.5],['material','원재료',9.5],['origin','원산지',7],
-      ['cutting_spec','세절스펙',11],['inner_packaging_spec','내포장 스펙',11.5],
-      ['outer_packaging_spec','외포장 스펙',12],['price_kg','단가(KG)',8.5],['price_box','단가(BOX)',10],['note','비고',9.5]
+      ['trader','거래처',12],['distribution','유통',13],['material','원재료',12],['origin','원산지',9],
+      ['cutting_spec','세절스펙',14],['inner_packaging_spec','내포장 스펙',13],
+      ['outer_packaging_spec','외포장 스펙',14],['note','비고',13]
     ];
     const search=el('search').value.trim();
-    const sortLabel=columns.find(([key])=>key===state.sortKey)[1];
-    const cell=(row,key)=>key.startsWith('price_')?money(row[key]):key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
+    const sortColumn=columns.find(([key])=>key===state.sortKey);
+    const sortLabel=sortColumn?`${sortColumn[1]} ${state.sortDirection===1?'오름차순':'내림차순'}`:'화면 목록 순서';
+    const cell=(row,key)=>key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
     return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>제품스펙 목록 - 동부엠티 ERP</title>
       <style>
         @page{size:A4 portrait;margin:10mm;}
@@ -92,15 +93,14 @@
         th,td{padding:2mm 1mm;border:0.2mm solid #bbb;text-align:left;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere;}
         th{background:#eee;font-weight:700;}
         tr{break-inside:avoid;page-break-inside:avoid;}
-        .price{text-align:right;}
         @media screen{body{max-width:190mm;margin:10mm auto;padding:0 2mm;}}
       </style></head><body>
       <header><h1>제품스펙 목록<span class="company">동부엠티 ERP</span></h1>
-        <p class="conditions">검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)} ${state.sortDirection===1?'오름차순':'내림차순'} · 단가: 원/KG, 원/BOX</p>
+        <p class="conditions">검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
       </header>
       <table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
         <thead><tr>${columns.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map(row=>`<tr>${columns.map(([key])=>`<td${key.startsWith('price_')?' class="price"':''}>${esc(cell(row,key))}</td>`).join('')}</tr>`).join('')}</tbody>
+        <tbody>${rows.map(row=>`<tr>${columns.map(([key])=>`<td>${esc(cell(row,key))}</td>`).join('')}</tr>`).join('')}</tbody>
       </table></body></html>`;
   }
   function printList(){

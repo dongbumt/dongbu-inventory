@@ -64,9 +64,12 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.equal(await popup.locator('tbody tr').count(),3);
     assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['검색업체1','검색업체2','검색업체10']);
     assert.match(await popup.locator('header').textContent(),/삼성 목전지 미국 · 3건/);
-    assert.match(await popup.locator('header').textContent(),/단가\(KG\) 내림차순/);
-    assert.equal(await popup.locator('tbody tr').nth(1).locator('td').nth(7).textContent(),'0');
-    assert.equal(await popup.locator('tbody tr').nth(2).locator('td').nth(7).textContent(),'—');
+    assert.match(await popup.locator('header').textContent(),/정렬: 화면 목록 순서/);
+    assert.deepEqual(await popup.locator('thead th').allTextContents(),['거래처','유통','원재료','원산지','세절스펙','내포장 스펙','외포장 스펙','비고']);
+    assert.equal(await popup.locator('tbody tr').evaluateAll(rows=>rows.every(row=>row.cells.length===8)),true);
+    assert.doesNotMatch(await popup.locator('body').textContent(),/단가|12,000|67,000/,'Neither price column nor price-unit guide is printed');
+    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(7).textContent(),'0','Screen prices remain available');
+    assert.equal(await page.locator('#spec-rows tr[data-id="b"] td').nth(7).textContent(),'—');
     assert.match(await popup.locator('tbody').textContent(),/기존 포장스펙/);
     assert.equal(await popup.locator('img,script,button,input,select').count(),0,'No injected HTML, editor or management buttons');
     assert.ok(!(await popup.locator('body').textContent()).includes('출력제외업체'));
@@ -111,6 +114,6 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     }
     await page.screenshot({path:path.join(output,'list.png'),fullPage:false});
     assert.deepEqual(errors,[]);
-    console.log('PASS: filtered/sorted snapshot, A4 portrait PDFs, wrapping, legacy/zero/null values, permissions/session/loading guards and popup failure. QA: '+output);
+    console.log('PASS: price-free filtered/sorted print, unchanged screen prices, A4 portrait PDFs, wrapping, legacy values, permissions/session/loading guards and popup failure. QA: '+output);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
