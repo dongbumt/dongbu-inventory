@@ -147,6 +147,29 @@
     position:sticky;top:0;z-index:10;}
   td{padding:9px 12px;border-bottom:1px solid #f0f0f0;
     color:var(--text);vertical-align:middle;}
+  #t-table{table-layout:fixed;font-size:11.5px;}
+  #t-table th,#t-table td{padding:7px 4px;overflow-wrap:anywhere;}
+  #t-table .txn-col-date{width:74px;white-space:nowrap;font-size:11px;}
+  #t-table .txn-col-type{width:58px;}
+  #t-table .txn-col-trader{width:9%;}
+  #t-table .txn-col-product{width:11%;}
+  #t-table .txn-col-brand{width:8%;}
+  #t-table .txn-col-origin{width:8%;}
+  #t-table .txn-col-product>span,#t-table .txn-col-origin>span{display:inline-block;white-space:nowrap;}
+  #t-table .txn-col-lot{width:104px;font-family:var(--font-mono);font-size:10.5px;}
+  #t-table .txn-col-boxes{width:42px;text-align:right;}
+  #t-table .txn-col-weight{width:64px;text-align:right;}
+  #t-table .txn-col-price{width:66px;text-align:right;}
+  #t-table .txn-col-amount{width:78px;text-align:right;}
+  #t-table .txn-col-manage{width:84px;white-space:nowrap;}
+  #t-table.txn-list-has-details .txn-col-manage{width:126px;}
+  #t-table.txn-list-has-details .txn-col-trader{width:8%;}
+  #t-table.txn-list-has-details .txn-col-product{width:9%;}
+  #t-table.txn-list-has-details .txn-col-brand,#t-table.txn-list-has-details .txn-col-origin{width:6.5%;}
+  #t-table .badge{padding:2px 5px;white-space:normal;}
+  #t-table .txn-list-price-input{width:100%;min-width:0;max-width:66px;text-align:right;font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;background:#fffff8;}
+  #t-table .txn-list-actions{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;}
+  #t-table .txn-list-actions .btn{flex:none;min-height:22px;padding:3px 6px;font-size:10.5px;line-height:1.2;border-radius:5px;}
   #wo-list-wrap table{table-layout:fixed;}
   #wo-list-wrap th,#wo-list-wrap td{padding:8px 6px;overflow-wrap:anywhere;}
   #wo-list-wrap th:nth-child(1){width:27%;}

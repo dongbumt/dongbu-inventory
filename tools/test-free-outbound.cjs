@@ -59,7 +59,7 @@ const source=name=>{const match=html.match(new RegExp('(?:async )?function '+nam
     await page.evaluate(()=>addTransaction());
     assert.deepEqual(await page.evaluate(()=>[saved[0][0].price,saved[0][0].amount,saved[0][0].stockUnitPrice]),[0,0,5000]);
     assert.deepEqual(await page.evaluate(()=>{const stock=Object.values(getStockMap())[0];return [stock.stock,stock.stockBoxes,stock.price];}),[14,3,5000]);
-    assert.equal(await page.locator('#t-body tr').last().locator('td').nth(9).textContent(),'0','The saved sales amount is shown as zero');
+    assert.equal(await page.locator('#t-body tr').last().locator('.txn-col-amount').textContent(),'0','The saved sales amount is shown as zero');
     const id=await page.evaluate(()=>saved[0][0].id);
     await page.evaluate(id=>loadTxnToForm(id),id);
     assert.equal(await page.locator('#t-price').inputValue(),'0','Editing a zero-price sale retains zero');

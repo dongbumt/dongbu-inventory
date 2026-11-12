@@ -28,7 +28,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261111docbrand1">
+<link rel="stylesheet" href="styles/main.css?v=20261112txncolumns1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -1045,10 +1045,10 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="tbl-wrap">
       <table id="t-table">
         <thead><tr>
-          <th style="min-width:92px;white-space:nowrap;">날짜</th><th style="min-width:76px;white-space:nowrap;">구분</th><th>거래처</th><th>품목명</th><th>원산지</th>
-          <th>이력번호</th><th style="text-align:right">중량(KG)</th><th style="text-align:right">박스수</th>
-          <th style="text-align:right">단가</th><th style="text-align:right">금액</th>
-          <th>비고</th><th>관리</th>
+          <th class="txn-col-date">날짜</th><th class="txn-col-type">구분</th><th class="txn-col-trader">거래처</th><th class="txn-col-product">품목명</th><th class="txn-col-brand">브랜드</th><th class="txn-col-origin">원산지</th>
+          <th class="txn-col-lot">이력번호</th><th class="txn-col-boxes">박스수</th><th class="txn-col-weight">중량(KG)</th>
+          <th class="txn-col-price">단가</th><th class="txn-col-amount">금액</th>
+          <th class="txn-col-note">비고</th><th class="txn-col-manage">관리</th>
         </tr></thead>
         <tbody id="t-body"></tbody>
       </table>
@@ -10495,11 +10495,14 @@ function renderTransactions(){
   const rows = transactionDisplayRows(filtered);
   const pdaBoxes = filtered.filter(DBMTPdaTransactionSummary.isOutboundBox).length;
   document.getElementById('t-count').textContent=`(${rows.length}건${pdaBoxes ? ` · PDA ${pdaBoxes}박스` : ''})`;
+  document.getElementById('t-table')?.classList.toggle('txn-list-has-details',rows.some(t=>Array.isArray(t._pdaRawBoxes)||t._pdaSummaryRows));
   const b=document.getElementById('t-body');
   if(!rows.length){
-    b.innerHTML='<tr><td colspan="12" style="text-align:center;color:#888;padding:24px;">조회 결과가 없습니다.</td></tr>';
+    b.innerHTML='<tr><td colspan="13" style="text-align:center;color:#888;padding:24px;">조회 결과가 없습니다.</td></tr>';
     return;
   }
+  const productBrands=new Map((typeof labelProducts!=='undefined'&&Array.isArray(labelProducts)?labelProducts:[])
+    .filter(p=>p.id).map(p=>[String(p.id),String(p.brand||'').trim()]));
   b.innerHTML=rows.map(t=>{
     const isPdaSummary = Boolean(t._pdaSummaryRows);
     const domId = String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -10511,6 +10514,7 @@ function renderTransactions(){
     const type = htmlEscape(t._pdaProvisional && t.type==='출고' ? '가출고' : t.type);
     const trader = htmlEscape(t.trader || '-');
     const product = htmlEscape(t.product || '-');
+    const brand = htmlEscape(String(t.brand||'').trim()||productBrands.get(String(t.labelProductId||t.productId||''))||'-');
     const origin = htmlEscape(t.origin || '-');
     const storage = htmlEscape(t.storage || '');
     const location = t.type === '재고이동'
@@ -10523,27 +10527,26 @@ function renderTransactions(){
     const amount = Number(t.amount || 0);
     const badgeClass = t.type==='입고'||t.type==='생산입고' ? 'in' : t.type==='사용' ? 'use' : (isStockAdjust || isBoxBaseline) ? 'adjust' : 'out';
     return `<tr>
-    <td style="min-width:92px;white-space:nowrap;">${date}</td>
-    <td style="min-width:76px;white-space:nowrap;"><span class="badge badge-${badgeClass}" style="white-space:nowrap;${t.type==='생산입고'?'opacity:0.8;font-size:9px;':''}">${type}</span></td>
-    <td>${trader}</td><td>${product}${t.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(t.packunit)}</span>`:''}</td><td>${origin}${storage?` <span style="font-size:10px;color:#2980b9;border:1px solid #d6eaf8;border-radius:4px;padding:1px 5px;">${storage}</span>`:''}${location?` <span style="font-size:10px;color:#6c3483;border:1px solid #eadcf8;border-radius:4px;padding:1px 5px;">${location}</span>`:''}</td>
-    <td style="font-family:monospace;font-size:11px">${lot}</td>
-    <td style="text-align:right">${weight.toFixed(2)}</td>
-    <td style="text-align:right">${isBoxBaseline ? `${boxCountDisplay(t.boxCountAfter)} <small>기준</small>` : boxCountDisplay(t.boxCount)}</td>
-    <td style="text-align:right;padding:2px 4px;">
+    <td class="txn-col-date">${date}</td>
+    <td class="txn-col-type"><span class="badge badge-${badgeClass}" style="${t.type==='생산입고'?'opacity:0.8;font-size:9px;':''}">${type}</span></td>
+    <td class="txn-col-trader">${trader}</td><td class="txn-col-product">${product}${t.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(t.packunit)}</span>`:''}</td><td class="txn-col-brand">${brand}</td><td class="txn-col-origin">${origin}${storage?` <span style="font-size:10px;color:#2980b9;border:1px solid #d6eaf8;border-radius:4px;padding:1px 5px;">${storage}</span>`:''}${location?` <span style="font-size:10px;color:#6c3483;border:1px solid #eadcf8;border-radius:4px;padding:1px 5px;">${location}</span>`:''}</td>
+    <td class="txn-col-lot">${lot}</td>
+    <td class="txn-col-boxes">${isBoxBaseline ? `${boxCountDisplay(t.boxCountAfter)} <small>기준</small>` : boxCountDisplay(t.boxCount)}</td>
+    <td class="txn-col-weight">${weight.toFixed(2)}</td>
+    <td class="txn-col-price">
       ${pendingCost ? '미확정' : t._isUser
         ? ((isStockAdjust || isStockMove || isBoxBaseline) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
              onchange="updateTxnPrice(${jsArg(t.id)}, this.value)" ${isPdaSummary?`title="${t._pdaSummaryRows.length}박스 단가 일괄 수정" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''}`:''}
-             style="width:80px;text-align:right;font-size:12px;padding:2px 4px;
-                    border:1px solid #ddd;border-radius:4px;background:#fffff8;">`)
+             class="txn-list-price-input">`)
         : (price?price.toLocaleString():'-')}
     </td>
-    <td style="text-align:right" id="txn-amt-${domId}">${pendingCost?'미확정':(amount || (t.type==='출고' && t.price!=='' && t.price!=null))?Math.round(amount).toLocaleString():'-'}</td>
-    <td>${note}</td>
-    <td style="white-space:nowrap">
+    <td class="txn-col-amount" id="txn-amt-${domId}">${pendingCost?'미확정':(amount || (t.type==='출고' && t.price!=='' && t.price!=null))?Math.round(amount).toLocaleString():'-'}</td>
+    <td class="txn-col-note">${note}</td>
+    <td class="txn-col-manage"><span class="txn-list-actions">
       ${Array.isArray(t._pdaRawBoxes) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${isPdaSummary ? `${t._pdaLabelId?`<button class="btn btn-sm btn-primary" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button> `:''}<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
-         ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;margin-right:3px;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
+         ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
-    </td>
+    </span></td>
   </tr>`;
   }).join('');
 }

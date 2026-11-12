@@ -72,7 +72,7 @@ const server=http.createServer((req,res)=>{
     assert.match(await page.locator('#t-count').textContent(),/1건.*20박스/);
     await page.locator('#p-transactions').getByRole('button',{name:'특정일 조회',exact:true}).click();
     assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-count').textContent(),/1건.*20박스/);
-    const cells=await page.locator('#t-body tr').first().locator('td').allTextContents();assert.equal(cells[6],'240.00');assert.equal(cells[7],'20');assert.equal(cells[9],'1,800,000');
+    const row=page.locator('#t-body tr').first();assert.equal(await row.locator('.txn-col-weight').textContent(),'240.00');assert.equal(await row.locator('.txn-col-boxes').textContent(),'20');assert.equal(await row.locator('.txn-col-amount').textContent(),'1,800,000');
     assert.equal(await page.evaluate(()=>userTransactions.length),20);assert.equal(await page.evaluate(()=>__saves.length),0);
     await page.locator('#t-table').screenshot({path:path.join(artifacts,'summary.png')});
     await page.locator('#t-body').getByRole('button',{name:'박스별',exact:true}).click();
@@ -84,7 +84,7 @@ const server=http.createServer((req,res)=>{
     assert(saved.rows.every(row=>row.weight===12&&row.boxCount===1&&row._pdaRequestId==='qa-batch'));assert.equal(new Set(saved.rows.map(row=>row._pdaLabelId)).size,20);
     const originalById=new Map(boxes.map(row=>[row.id,row]));
     saved.rows.forEach(row=>{for(const field of ['stockRowId','stockUnitPrice','proddate','expdate','stockProddate'])assert.equal(row[field],originalById.get(row.id)[field],`Group price change preserves ${field}`);});
-    assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-body tr td').nth(9).textContent(),/1,920,000/);
+    assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-body .txn-col-amount').textContent(),/1,920,000/);
     await page.evaluate(()=>{__fail=true;});await price.fill('9000');await price.press('Tab');await page.waitForFunction(()=>__toasts.includes('QA atomic save failed'));
     assert.equal(await price.inputValue(),'8000');assert.equal(await page.evaluate(()=>userTransactions.filter(row=>row.price===8000).length),20);await page.evaluate(()=>{__fail=false;});
     await page.locator('#t-body').getByRole('button',{name:'박스별',exact:true}).click();const one=page.locator('#txn-pda-detail-body input').first();await one.fill('8100');await one.press('Tab');await page.waitForFunction(()=>__saves.length===2);
@@ -137,7 +137,7 @@ const server=http.createServer((req,res)=>{
       __session.permissions=[{menuCode:'transactions',canView:true,canUpdate:true,canDelete:true}];await DBMTAuth.initializeSession(true);
       userTransactions=[row];transactions=[row];renderTransactions();localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
     },receipt);
-    assert.equal(await page.locator('#t-body tr').count(),1);assert.equal(await page.locator('#t-body tr td').nth(7).textContent(),'20');
+    assert.equal(await page.locator('#t-body tr').count(),1);assert.equal(await page.locator('#t-body .txn-col-boxes').textContent(),'20');
     await page.locator('#t-body').getByRole('button',{name:'박스별',exact:true}).click();
     assert.equal(await page.locator('#txn-pda-detail-body tr').count(),20);assert.match(await page.locator('#txn-pda-detail-title').textContent(),/입고/);
     assert.equal(await page.locator('#txn-pda-detail-body input').count(),0,'Package detail is read-only; receipt price is edited on the main row');
