@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
 <script src="stock-ledger.js?v=20261110correct1"></script>
+<script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261106cost1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
@@ -33,6 +34,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261027copy1">
+<link rel="stylesheet" href="styles/ledgers.css?v=20261112ledger1">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261017split1">
 <link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
 <link rel="stylesheet" href="styles/expense-stores.css?v=20261013store1">
@@ -405,6 +407,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <button type="button" class="nav-group-title" onclick="toggleNavGroup(this)" aria-expanded="false">거래·재고</button>
     <div class="nav-group-items">
       <div class="nav-tab" onclick="showPage('p-transactions',this)" id="nav-transactions">📋 거래내역</div>
+      <div class="nav-tab" onclick="showPage('p-customer-ledger',this)" id="nav-customer-ledger">📒 거래처원장</div>
+      <div class="nav-tab" onclick="showPage('p-product-ledger',this)" id="nav-product-ledger">📑 상품원장</div>
       <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">📊 재고현황</div>
       <div class="nav-tab" onclick="window.open('pda.html?v=20261021raw1','_blank');" id="nav-pda">📲 PDA 입출고</div>
       <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">🧾 거래명세서</div>
@@ -527,6 +531,37 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     </form>
     <div id="ps-message" class="ps-message" role="status" aria-live="polite"></div>
     <div class="ps-calendar-wrap"><div id="ps-calendar" class="ps-calendar" aria-label="생산일정 달력"></div></div>
+  </div>
+</div>
+
+<div class="tab-panel" id="p-customer-ledger">
+  <div class="card ledger-page" data-ledger="customer">
+    <div class="section-header"><div class="card-title"><div class="ct-bar"></div>거래처원장</div><div class="ledger-actions"><button type="button" class="btn btn-secondary btn-sm" data-ledger-action="query">새로고침</button><button type="button" class="btn btn-secondary btn-sm" data-ledger-action="print" disabled>🖨 인쇄</button></div></div>
+    <div class="ledger-filters">
+      <label class="ledger-entity-field">거래처<div class="ledger-combobox"><input id="cl-entity" autocomplete="off" placeholder="거래처명·코드 검색" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cl-suggestions"><input id="cl-entity-id" type="hidden"><div class="ledger-suggestions" id="cl-suggestions" hidden></div></div></label>
+      <label>시작일<input id="cl-from" type="date"></label><label>종료일<input id="cl-to" type="date"></label><button type="button" class="btn btn-primary btn-sm" data-ledger-action="query">조회</button>
+    </div>
+    <div class="ledger-options"><fieldset><legend>거래구분</legend><label><input type="radio" name="cl-mode" value="전체" checked>전체</label><label><input type="radio" name="cl-mode" value="매입">매입</label><label><input type="radio" name="cl-mode" value="매출">매출</label></fieldset><label><input id="cl-ascending" type="checkbox" checked>발생순</label></div>
+    <div id="cl-info" class="ledger-info">등록된 거래처를 선택해주세요.</div>
+    <div id="cl-table" class="ledger-table-wrap"></div><div id="cl-totals" class="ledger-totals"></div>
+    <div id="cl-detail" class="ledger-detail"></div><div id="cl-message" class="ledger-message" role="status" aria-live="polite"></div>
+    <details id="cl-finance" class="ledger-finance"><summary>기초잔액·수금·지급 등록</summary>
+      <div class="ledger-finance-section"><strong>기초잔액</strong><span class="ledger-help">기초일자 시작 시점의 확인된 잔액을 등록하세요. 해당 일자의 거래부터 더합니다.</span>
+        <div class="ledger-finance-fields"><label>기초일자<input id="cl-opening-date" type="date"></label><label>받을 잔액(원)<input id="cl-opening-ar" type="number" min="0" step="1" placeholder="확인 후 입력"></label><label>줄 잔액(원)<input id="cl-opening-ap" type="number" min="0" step="1" placeholder="확인 후 입력"></label><button type="button" class="btn btn-secondary btn-sm" data-ledger-action="save-account">기초잔액 저장</button></div>
+      </div>
+      <div class="ledger-finance-section"><strong id="cl-entry-title">수금·지급 등록</strong>
+        <div class="ledger-finance-fields"><label>처리일<input id="cl-entry-date" type="date"></label><label>구분<select id="cl-entry-kind"><option value="receipt">수금</option><option value="payment">지급</option></select></label><label>금액(원)<input id="cl-entry-amount" type="number" min="1" step="1"></label><label class="ledger-entry-note">비고<input id="cl-entry-note" maxlength="500" autocomplete="off"></label><button type="button" class="btn btn-primary btn-sm" data-ledger-action="save-entry">수금·지급 저장</button><button type="button" class="btn btn-secondary btn-sm" data-ledger-action="reset-finance">입력 초기화</button></div>
+      </div>
+    </details>
+  </div>
+</div>
+<div class="tab-panel" id="p-product-ledger">
+  <div class="card ledger-page" data-ledger="product">
+    <div class="section-header"><div class="card-title"><div class="ct-bar"></div>상품원장</div><div class="ledger-actions"><button type="button" class="btn btn-secondary btn-sm" data-ledger-action="query">새로고침</button><button type="button" class="btn btn-secondary btn-sm" data-ledger-action="print" disabled>🖨 인쇄</button></div></div>
+    <div class="ledger-filters"><label class="ledger-entity-field">상품<div class="ledger-combobox"><input id="pl-entity" autocomplete="off" placeholder="상품명·브랜드·코드 검색" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="pl-suggestions"><input id="pl-entity-id" type="hidden"><div class="ledger-suggestions" id="pl-suggestions" hidden></div></div></label><label class="ledger-lot-field">이력번호<select id="pl-lot"><option value="">전체</option></select></label></div>
+    <div class="ledger-filters"><label>시작일<input id="pl-from" type="date"></label><label>종료일<input id="pl-to" type="date"></label><button type="button" class="btn btn-primary btn-sm" data-ledger-action="query">조회</button><label class="ledger-order"><input id="pl-ascending" type="checkbox" checked>발생순</label></div>
+    <div id="pl-info" class="ledger-info">등록된 상품을 선택해주세요.</div><div id="pl-table" class="ledger-table-wrap"></div><div id="pl-totals" class="ledger-totals"></div>
+    <div id="pl-detail" class="ledger-detail"></div><div id="pl-message" class="ledger-message" role="status" aria-live="polite"></div>
   </div>
 </div>
 
@@ -5275,6 +5310,12 @@ function renderPageById(id, reason='menu'){
         break;
       case 'p-product-specs':
         asyncTask = DBMTProductSpecs.init();
+        break;
+      case 'p-customer-ledger':
+        asyncTask = DBMTLedgers.init('customer', reason);
+        break;
+      case 'p-product-ledger':
+        asyncTask = DBMTLedgers.init('product', reason);
         break;
       case 'p-company-master':
         if(typeof initCompanyMasterPage === 'function') asyncTask = initCompanyMasterPage();
@@ -22497,6 +22538,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="manual-label.js?v=20261023ingredients1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
-<script src="m02-auth.js?v=20261111refresh1"></script>
+<script src="ledgers.js?v=20261112ledger1"></script>
+<script src="m02-auth.js?v=20261112ledger1"></script>
 </body>
 </html>

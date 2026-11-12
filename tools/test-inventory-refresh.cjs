@@ -62,7 +62,7 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(()=>refreshInventoryStock());
     await page.waitForFunction(()=>inventoryRefreshPromise===null);
     assert.equal(await page.evaluate(()=>calls.length),1);assert.deepEqual(await page.evaluate(()=>calls[0]),{p_token:'qa-session',p_menu:'transactions'});
-    assert.equal(await page.locator('#t-count').textContent(),'(1건)');assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-body').textContent(),/목전지/);assert.equal(await page.locator('#t-body td').nth(6).textContent(),'349.89');
+    assert.equal(await page.locator('#t-count').textContent(),'(1건)');assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-body').textContent(),/목전지/);assert.equal(await page.locator('#t-body .txn-col-weight').textContent(),'349.89');
     for(const [id,value] of [['t-search-date','2026-11-11'],['t-search-product','목전지'],['t-search-lot','903024600808'],['t-weight','123.45'],['t-note','저장하지 않은 새 입력'],['t-product-managed','새 품목']])assert.equal(await page.locator('#'+id).inputValue(),value);
     assert.equal(await page.evaluate(()=>userProdEntries[0].id),'qa-new-prod');assert.equal(await button.getAttribute('aria-busy'),'false');
     await page.locator('#p-transactions .section-header').last().screenshot({path:path.join(artifacts,'transaction-refresh.png')});

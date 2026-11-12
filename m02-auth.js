@@ -14,6 +14,8 @@
     'nav-labelproducts':'label_products',
     'nav-traders':'traders',
     'nav-transactions':'transactions',
+    'nav-customer-ledger':'customer_ledger',
+    'nav-product-ledger':'product_ledger',
     'nav-pda':'pda',
     'nav-production':'production',
     'nav-production-schedule':'production_schedule',
@@ -200,6 +202,8 @@
   });
 
   const SELECTOR_POLICIES = Object.freeze([
+    ['#p-customer-ledger [data-ledger-choose],#p-customer-ledger .ledger-row-button','customer_ledger','view'],
+    ['#p-product-ledger [data-ledger-choose],#p-product-ledger .ledger-row-button','product_ledger','view'],
     ['#doc-request-email-btn','document_check','apiSend'],
     ['#doc-request-fax-btn','document_check','apiSend'],
     ['#doc-request-send-btn','document_check','apiSend'],
@@ -298,6 +302,7 @@
   function getSessionToken(){ return isPersonal() ? sessionToken() : ''; }
 
   function notifyPermissionSurfaces(){
+    if(window.DBMTLedgers) window.DBMTLedgers.applyPermissions();
     if(window.DBMTProductCatalog) window.DBMTProductCatalog.applyPermissions();
     if(window.DBMTExpenseStores) window.DBMTExpenseStores.applyPermissions();
     if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
