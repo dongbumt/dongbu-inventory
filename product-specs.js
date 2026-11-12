@@ -30,6 +30,7 @@
     el('editor-title').textContent=state.editing?'제품스펙 수정':'제품스펙 등록';
     el('save').textContent=state.saving?'저장 중…':state.editing?'수정 저장':'+ 스펙 등록';
     el('editor').querySelectorAll('input,select,button').forEach(node=>{node.disabled=state.saving||state.loading||!can(action);});
+    syncPrintControl();
   }
   function reset(){
     if(state.saving)return;
@@ -65,8 +66,69 @@
     state.sortDirection=state.sortKey===key?-state.sortDirection:1;
     state.sortKey=key;render();
   }
+  function syncPrintControl(count=filteredRows().length){
+    el('print').disabled=state.loading||state.saving||!can('view')||!count;
+  }
+  function printDocument(rows){
+    const columns=[
+      ['trader','거래처',9.5],['distribution','유통',11.5],['material','원재료',9.5],['origin','원산지',7],
+      ['cutting_spec','세절스펙',11],['inner_packaging_spec','내포장 스펙',11.5],
+      ['outer_packaging_spec','외포장 스펙',12],['price_kg','단가(KG)',8.5],['price_box','단가(BOX)',10],['note','비고',9.5]
+    ];
+    const search=el('search').value.trim();
+    const sortLabel=columns.find(([key])=>key===state.sortKey)[1];
+    const cell=(row,key)=>key.startsWith('price_')?money(row[key]):key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
+    return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>제품스펙 목록 - 동부엠티 ERP</title>
+      <style>
+        @page{size:A4 portrait;margin:10mm;}
+        *{box-sizing:border-box;}
+        body{margin:0;color:#222;background:#fff;font-family:"Malgun Gothic","맑은 고딕",sans-serif;font-size:9pt;}
+        header{margin-bottom:4mm;}
+        h1{margin:0 0 2mm;font-size:16pt;}
+        .company{float:right;font-size:9pt;font-weight:400;color:#555;}
+        .conditions{margin:0;line-height:1.6;overflow-wrap:anywhere;}
+        table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:9pt;line-height:1.45;}
+        thead{display:table-header-group;}
+        th,td{padding:2mm 1mm;border:0.2mm solid #bbb;text-align:left;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere;}
+        th{background:#eee;font-weight:700;}
+        tr{break-inside:avoid;page-break-inside:avoid;}
+        .price{text-align:right;}
+        @media screen{body{max-width:190mm;margin:10mm auto;padding:0 2mm;}}
+      </style></head><body>
+      <header><h1>제품스펙 목록<span class="company">동부엠티 ERP</span></h1>
+        <p class="conditions">검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)} ${state.sortDirection===1?'오름차순':'내림차순'} · 단가: 원/KG, 원/BOX</p>
+      </header>
+      <table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
+        <thead><tr>${columns.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(row=>`<tr>${columns.map(([key])=>`<td${key.startsWith('price_')?' class="price"':''}>${esc(cell(row,key))}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table></body></html>`;
+  }
+  function printList(){
+    const token=window.DBMTAuth?.getSessionToken()||'';
+    if(!can('view')||token!==state.token){
+      applyPermissions();message('제품스펙을 다시 조회한 후 인쇄해주세요.',true);return;
+    }
+    if(state.loading||state.saving)return;
+    const rows=filteredRows();
+    if(!rows.length){message('인쇄할 제품스펙이 없습니다.',true);return;}
+    const html=printDocument(rows);
+    const popup=window.open('','_blank','width=820,height=900');
+    if(!popup){message('인쇄 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.',true);return;}
+    popup.opener=null;
+    popup.document.open();popup.document.write(html);popup.document.close();
+    popup.requestAnimationFrame(()=>popup.requestAnimationFrame(async()=>{
+      try{
+        if(popup.document.fonts)await popup.document.fonts.ready;
+        if(popup.closed)return;
+        if(token!==DBMTAuth.getSessionToken()||!can('view')){popup.close();return;}
+        popup.document.documentElement.dataset.printReady='true';
+        popup.focus();popup.print();
+      }catch(error){message('인쇄 창을 확인한 후 다시 인쇄해주세요.',true);}
+    }));
+  }
   function render(){
     const rows=filteredRows();
+    syncPrintControl(rows.length);
     document.querySelectorAll('.spec-sort').forEach(button=>{
       const active=button.dataset.sort===state.sortKey;
       button.closest('th').setAttribute('aria-sort',active?(state.sortDirection===1?'ascending':'descending'):'none');
@@ -178,5 +240,5 @@
     if(button)sortBy(button.dataset.sort);
   });
   el('distribution-choice').addEventListener('change',changeDistribution);
-  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,clearFilters(){el('search').value='';render();}};
+  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,print:printList,clearFilters(){el('search').value='';render();}};
 })();

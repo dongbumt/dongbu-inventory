@@ -33,7 +33,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261027copy1">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261112print1">
 <link rel="stylesheet" href="styles/ledgers.css?v=20261112ledger1">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261017split1">
 <link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
@@ -591,7 +591,10 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#666;"></div>제품스펙 목록 <span id="spec-count" class="spec-count"></span></div>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.clearFilters()">검색 초기화</button>
+      <div class="spec-list-actions">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.clearFilters()">검색 초기화</button>
+        <button type="button" id="spec-print" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.print()" disabled>🖨 인쇄 (A4 세로)</button>
+      </div>
     </div>
     <div class="spec-search">
       <div class="form-group"><label for="spec-search">검색</label><input id="spec-search" type="search" autocomplete="off" placeholder="거래처 · 유통 · 원재료 · 원산지 검색"></div>
@@ -22527,7 +22530,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="driver-place-label.js?v=20261105place1"></script>
 <script src="production-schedule.js?v=20261020workorders1"></script>
-<script src="product-specs.js?v=20261106buttons1"></script>
+<script src="product-specs.js?v=20261112print1"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261017split1"></script>

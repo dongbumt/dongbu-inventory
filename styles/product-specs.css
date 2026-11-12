@@ -12,6 +12,7 @@
 .spec-message.error{color:#9b2727;}
 .spec-search{max-width:560px;margin-bottom:12px;}
 .spec-count{font-size:12px;font-weight:400;color:#666;}
+.spec-list-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .spec-table-wrap{width:100%;overflow-x:auto;}
 .spec-table{width:100%;min-width:1040px;table-layout:fixed;border-collapse:collapse;font-size:12px;}
 .spec-table th{background:#f4f5f6;color:#555;text-align:left;font-weight:700;white-space:nowrap;}
