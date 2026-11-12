@@ -670,6 +670,14 @@
   /* ── 견적서 작성 ── */
   #p-quotation{min-width:0;width:100%;max-width:100%;overflow:hidden;}
   #p-quotation .card{min-width:0;max-width:100%;}
+  .quote-history-table{table-layout:fixed;min-width:900px;}
+  .quote-history-table th,.quote-history-table td{padding:9px 10px;overflow-wrap:anywhere;}
+  .quote-history-table th:nth-child(1){width:94px;}
+  .quote-history-table td:nth-child(1){white-space:nowrap;}
+  .quote-history-table th:nth-child(2){width:110px;}
+  .quote-history-table th:nth-child(4){width:35%;}
+  .quote-history-table th:nth-child(5){width:100px;}
+  .quote-history-table th:nth-child(6){width:200px;}
   .quote-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .quote-meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
   .quote-meta-grid>.form-group{min-width:0;}
