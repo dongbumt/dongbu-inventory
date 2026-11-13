@@ -14,6 +14,7 @@ const names = ['parseAppNumber', 'htmlEscape', 'jsArg', 'parseOptionalBoxCount',
   'getSubMaterialStockRows', 'getSubMaterialLotStockRows', 'getFilteredSubMaterialLotStockRows',
   'getFilteredSubMaterialStockRows', 'clearSubMaterialStockFilters', 'renderSubMaterialStock', 'renderSubMaterials',
   'applySubMaterialStockResponse', 'refreshSubMaterialStockSnapshot', 'setSubMaterialCountBusy', 'renderSubMaterialCountForm',
+  'subMaterialLotMatchesItem','getSubMaterialItemCountLots','subMaterialItemCountSnapshot','subMaterialCountTarget','subMaterialItemCountPlan','renderSubMaterialCountHistory',
   'openSubMaterialCount', 'closeSubMaterialCount', 'updateSubMaterialCountPreview', 'addSubMaterialCount',
   'deleteSubMaterialCount', 'deleteSubMaterialLot', 'exportSubMaterialsCSV', 'printSubMaterialCountSheet',
   'asArray','subMaterialUsageProductionEntry','subMaterialProductionSummary','subMaterialUsageWorkDate',
@@ -129,7 +130,7 @@ function harness(){
   const elements = {};
   for(const id of ['sm-stock-view','sm-stock-search','sm-stock-status','sm-stock-count',
     'sm-stock-lot-wrap','sm-stock-item-wrap','sm-stock-lot-note','sm-stock-lot-body','sm-stock-body',
-    'sm-filter-month','sm-stock-month-label','sm-count-lot-id','sm-count-system-qty','sm-count-system-display',
+    'sm-filter-month','sm-stock-month-label','sm-count-lot-id','sm-count-item-id','sm-count-expected-lots','sm-count-system-qty','sm-count-system-display',
     'sm-count-date','sm-count-qty','sm-count-unit','sm-count-manager','sm-count-note','sm-count-target',
     'sm-count-difference','sm-count-history','sm-count-modal','sm-count-title','sm-count-save-btn']){
     elements[id] = {value:'', style:{}, innerHTML:'', textContent:'', validity:{}, focus(){}, querySelectorAll(){return [];}, classList:{add(){},remove(){}}};
@@ -337,7 +338,7 @@ async function testBrowser(){
     assert.equal((await bagRow.locator('td').allTextContents())[6],'950');
     assert.equal((await bagRow.locator('td').allTextContents())[7],'850');
     assert.equal(await bagRow.getByRole('button',{name:'기존 실사삭제'}).count(),1);
-    assert.match(await page.locator('#sm-stock-lot-note').innerText(),/임의로 배분하지/);
+    assert.match(await page.locator('#sm-stock-lot-note').innerText(),/가장 오래된 입고 LOT부터/);
     await page.locator('#sm-stock-search').fill('진공');
     assert.equal(await page.locator('#sm-stock-body tr').count(),1);
     await page.locator('#sm-stock-search').fill('');
