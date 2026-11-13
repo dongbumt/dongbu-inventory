@@ -42,8 +42,9 @@ const entry={id:'saved',date:'2026/10/16',job_no:'1',job_type:'생산',note:'연
     await page.evaluate(()=>openSubMaterialUsageModal('saved'));
     const reference=page.locator('#sm-usage-production-details');
     assert.match(await reference.innerText(),/연장 작업 · 거래처 포장 확인/);
-    assert.match(await reference.innerText(),/329.85 KG/);assert.match(await reference.innerText(),/326.46 KG/);
-    assert.match(await reference.innerText(),/16 박스/);assert.match(await reference.innerText(),/박스 미기록/);
+    assert.deepEqual(await reference.locator('.sm-usage-production-heading h5').allTextContents(),['생산 품목']);
+    assert.doesNotMatch(await reference.innerText(),/투입 품목|투입량|가상 이겹살|329.85 KG|연장 재작업/);
+    assert.match(await reference.innerText(),/326.46 KG/);assert.match(await reference.innerText(),/16 박스/);
     assert.match(await reference.innerText(),/포장 5KG/);assert.match(await reference.innerText(),/917024600073/);
     assert.match(await reference.innerText(),/연장 포장 · 거래처 A/);
     assert.equal(await reference.locator('input,select,textarea,button').count(),0,'Production reference is read-only');
@@ -65,9 +66,9 @@ const entry={id:'saved',date:'2026/10/16',job_no:'1',job_type:'생산',note:'연
     assert.equal(await page.evaluate(()=>JSON.stringify(userProdEntries)),original,'Saving materials cannot change production');
     // A different job must not retain the previously displayed production details.
     await page.evaluate(()=>{userProdEntries.push({id:'empty',date:'2026/10/16',job_no:'2',inputs:[],outputs:[],note:''});return openSubMaterialUsageModal('empty')});
-    assert.doesNotMatch(await reference.innerText(),/가상 삼겹살/);assert.equal(await reference.locator('.sm-usage-production-empty').count(),2);
+    assert.doesNotMatch(await reference.innerText(),/가상 삼겹살/);assert.equal(await reference.locator('.sm-usage-production-empty').count(),1);
     // Escape all saved values, even in old imported production records.
-    await page.evaluate(()=>{const item={product:'<img src=x onerror=alert(1)>',qty:1,note:'<script>bad</script>',lot:'<&>',origin:'<&>'};document.getElementById('sm-usage-production-details').innerHTML=buildSubMaterialProductionReference({inputs:[item],outputs:[],note:'<img src=x>'})});
+    await page.evaluate(()=>{const item={product:'<img src=x onerror=alert(1)>',qty:1,note:'<script>bad</script>',lot:'<&>',origin:'<&>'};document.getElementById('sm-usage-production-details').innerHTML=buildSubMaterialProductionReference({inputs:[],outputs:[item],note:'<img src=x>'})});
     assert.equal(await reference.locator('img,script').count(),0);
     // Large jobs and many usage rows scroll within their own panes; actions stay visible.
     await page.evaluate(()=>{userProdEntries[0].inputs=Array.from({length:18},()=>({...userProdEntries[0].inputs[0]}));userProdEntries[0].outputs=Array.from({length:18},()=>({...userProdEntries[0].outputs[0]}));return openSubMaterialUsageModal('saved')});

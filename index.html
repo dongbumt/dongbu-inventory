@@ -13558,7 +13558,6 @@ function buildSubMaterialProductionReference(entry){
   };
   const note = getProdEntryNote(entry);
   return `${note ? `<div class="sm-usage-production-job-note"><strong>작업 비고</strong> ${htmlEscape(note)}</div>` : ''}
-    ${section(entry.inputs,'투입 품목','투입량')}
     ${section(entry.outputs,'생산 품목','생산량')}`;
 }
 
