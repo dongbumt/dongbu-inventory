@@ -5,11 +5,18 @@
   const SESSION='dbmt_pda_session_token',PENDING='dbmt_pda_raw_pending_batch_';
   const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const kg=value=>Number(value||0).toFixed(2);
-  const state={token:'',user:null,epoch:0,mode:'inbound',products:[],partners:[],sources:[],items:[],queue:[],busy:false,saving:false,pending:null,canSave:false,sourceRequest:0,selection:null,reselect:false};
+  const state={token:'',user:null,epoch:0,mode:'inbound',products:[],partners:[],sources:[],items:[],queue:[],busy:false,saving:false,pending:null,canSave:false,sourceRequest:0,selection:null,reselect:false,lastManual:[],history:[]};
   let rulePicker=null;
   const storage={get(key){try{return sessionStorage.getItem(key)||'';}catch(_){return '';}},set(key,value){sessionStorage.setItem(key,value);},remove(key){try{sessionStorage.removeItem(key);}catch(_){}}};
   const today=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));return `${parts.year}-${parts.month}-${parts.day}`;};
   function uuid(){const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const s=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');return s.slice(0,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16)+'-'+s.slice(16,20)+'-'+s.slice(20);}
+  function manualCode(){return 'DR1'+[...crypto.getRandomValues(new Uint8Array(26))].map(b=>b%10).join('');}
+  function manualKg(value,unit){
+    const text=String(value).trim();if(!/^(\d+(\.\d{0,6})?|\.\d{1,6})$/.test(text)||!['KG','LB'].includes(unit))return null;
+    const [whole,decimal='']=text.split('.'),micro=BigInt(whole||'0')*1000000n+BigInt(decimal.padEnd(6,'0'));
+    const factor=unit==='LB'?45359237n:100000000n,denominator=100000000000000n;
+    return Number((micro*factor*100n+denominator/2n)/denominator)/100;
+  }
   function status(message,kind=''){ $('status').textContent=message;$('status').className=kind; }
   function sound(kind){window.DBMTPdaSound?.play(kind);}
   async function rpc(name,params){
@@ -24,6 +31,47 @@
   }
   function focusScan(){if(!state.pending&&!state.saving&&!document.querySelector('dialog[open]')&&!$('workspace').hidden)$('barcode').focus({preventScroll:true});}
   function selectedProduct(){return state.products.find(p=>String(p.id)===$('product').value);}
+  function manualInput(){const unit=document.querySelector('[name="manual-unit"]:checked').value,value=$('damaged-weight').value;return {unit,value,weight:manualKg(value,unit)};}
+  function renderManualWeight(){const entry=manualInput();$('damaged-weight-label').textContent=entry.unit==='LB'?'박스 중량(lb)':'박스 중량(KG)';$('damaged-kg').textContent=`${kg(entry.weight)} KG`;$('damaged-error').textContent='';}
+  $('damaged-open').addEventListener('click',()=>{
+    if(!state.canSave||state.mode!=='inbound'||state.busy||state.queue.length||state.saving||state.pending||!navigator.onLine)return;
+    if(!selectedProduct()||!$('lot').value.trim()||($('receive-kind').value==='bind'?!$('source').value:!$('partner').value)){
+      $('settings-panel').open=true;status('입고 품목·거래처(또는 연결 재고)·이력번호를 먼저 선택해주세요.','error');return;
+    }
+    $('damaged-meta').textContent=`${selectedProduct().name} · 이력번호 ${$('lot').value.trim()}`;
+    $('damaged-weight').value='';renderManualWeight();$('damaged-dialog').showModal();$('damaged-weight').focus();
+  });
+  $('damaged-weight').addEventListener('input',renderManualWeight);
+  for(const radio of document.querySelectorAll('[name="manual-unit"]'))radio.addEventListener('change',renderManualWeight);
+  $('damaged-close').addEventListener('click',()=>$('damaged-dialog').close());
+  $('damaged-dialog').addEventListener('close',focusScan);
+  $('damaged-form').addEventListener('submit',event=>{
+    event.preventDefault();
+    if(!$('damaged-dialog').open||!state.canSave||state.mode!=='inbound'||state.busy||state.queue.length||state.saving||state.pending||!navigator.onLine)return;
+    const entry=manualInput(),product=selectedProduct();
+    if(!product||!$('lot').value.trim()){ $('damaged-error').textContent='입고 품목·이력번호를 확인해주세요.';return; }
+    if(entry.weight===null||entry.weight<=0||entry.weight>1000||Number(entry.value)>10000){$('damaged-error').textContent='박스 중량은 환산 후 0 초과~1,000KG, 소수점 6자리 이내로 입력해주세요.';return;}
+    if(state.items.length>=200){$('damaged-error').textContent='200박스까지 처리할 수 있습니다. 먼저 저장해주세요.';return;}
+    const code=manualCode();state.items.push({id:'manual:'+code,code,rule:'바코드 훼손 수기입고',ruleKey:'manual:v1',revision:0,
+      product:product.name,origin:product.origin,lot:$('lot').value.trim(),weight:entry.weight,labelWeight:entry.weight,calculatedWeight:entry.weight,
+      manualWeight:Number(entry.value),manualUnit:entry.unit});
+    $('settings-panel').open=false;render();$('damaged-dialog').close();status(`${product.name} · 수기입고 ${entry.value} ${entry.unit==='LB'?'lb':'KG'} · ${kg(entry.weight)}KG`,'ok');sound('success');
+  });
+  function printableManual(row){return (row.result.items||[]).filter(item=>item.entryKind==='manual'&&['receive','bind'].includes(item.action)&&!(row.result.cancelledTransactionIds||[]).includes(item.transactionId));}
+  function showManualLabels(items){
+    $('manual-label-list').innerHTML=items.map(item=>`<section class="raw-manual-label"><strong>${esc(item.product)} · ${kg(item.weight)} KG</strong><small>이력번호 ${esc(item.lot)}</small><small>수기입고 · ${esc(item.manualWeight)} ${item.manualUnit==='LB'?'lb':'KG'}</small><svg data-code="${esc(item.barcode)}" role="img" aria-label="${esc(item.barcode)}"></svg></section>`).join('');
+    for(const svg of $('manual-label-list').querySelectorAll('svg'))JsBarcode(svg,svg.dataset.code,{format:'CODE128',width:2,height:72,fontSize:16,margin:20,displayValue:true});
+    $('manual-labels-dialog').showModal();
+  }
+  $('manual-labels-open').addEventListener('click',()=>showManualLabels(state.lastManual));
+  $('manual-labels-close').addEventListener('click',()=>$('manual-labels-dialog').close());
+  $('manual-labels-dialog').addEventListener('close',focusScan);
+  $('manual-labels-print').addEventListener('click',()=>{
+    if(!$('manual-label-list').children.length)return;
+    const popup=window.open('','_blank');if(!popup){status('인쇄창 팝업을 허용해주세요.','error');return;}
+    popup.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>원료육 수기입고 바코드</title><style>@page{size:80mm 50mm;margin:0}*{box-sizing:border-box}body{margin:0;color:#000;background:#fff;font:12px "Malgun Gothic",Arial,sans-serif}.raw-manual-label{width:80mm;height:50mm;padding:4mm;break-after:page;overflow-wrap:anywhere}.raw-manual-label:last-child{break-after:auto}strong,small{display:block}strong{font-size:14px}small{font-size:11px}svg{display:block;width:72mm;height:auto;max-height:24mm;margin-top:2mm}</style></head><body>'+$('manual-label-list').innerHTML+'</body></html>');
+    popup.document.close();popup.document.fonts.ready.then(()=>{if(!popup.closed){popup.focus();popup.print();}});
+  });
   function resetRule(){state.selection=null;state.reselect=false;$('rule-meta').textContent='';}
   function codeFamily(code){const v=String(code).trim().replace(/^\](C0|C1|d2|Q3|I0)/,'');return /^\d+$/.test(v)?`${v.length}:${v.slice(0,6)}`:'';}
   function resolveParams(code,rule=null,reselect=state.reselect){return {p_token:state.token,p_code:code,p_mode:state.mode,p_product_id:$('product').value||null,p_trader_id:$('receive-kind').value==='bind'&&state.mode==='inbound'?null:$('partner').value||null,p_rule:rule,p_format:$('rule').value||'auto',p_source:$('rule-source').value,p_reselect:reselect};}
@@ -73,13 +121,15 @@
   }
   function render(){
     const locked=state.saving||!!state.pending,busy=locked||state.busy||state.queue.length>0;
-    $('items').innerHTML=state.items.map((item,index)=>`<li><div class="scan-product">${esc(item.product)}</div><strong class="scan-weight">${kg(item.labelWeight)} KG</strong><div class="scan-meta">이력번호 ${esc(item.lot)} · ${esc(item.origin||'')}<br>${esc(item.rule)}${item.labelWeight!==item.calculatedWeight?` · 계산 ${kg(item.calculatedWeight)}KG / 라벨 대조`:''}${item.state==='used'?'<br>생산 사용 자동연결 · 출고 허용, 부족분은 마이너스 재고 반영':''}</div><div class="scan-code">${esc(item.code.replaceAll(String.fromCharCode(29),'|'))}</div><button class="scan-remove" type="button" data-remove="${index}" aria-label="목록에서 제외" ${busy?'disabled':''}>×</button></li>`).join('');
+    $('items').innerHTML=state.items.map((item,index)=>`<li><div class="scan-product">${esc(item.product)}</div><strong class="scan-weight">${kg(item.labelWeight)} KG</strong><div class="scan-meta">이력번호 ${esc(item.lot)} · ${esc(item.origin||'')}<br>${esc(item.rule)}${item.ruleKey==='manual:v1'?` · 입력 ${esc(item.manualWeight)} ${item.manualUnit==='LB'?'lb':'KG'}`:''}${item.labelWeight!==item.calculatedWeight?` · 계산 ${kg(item.calculatedWeight)}KG / 라벨 대조`:''}${item.state==='used'?'<br>생산 사용 자동연결 · 출고 허용, 부족분은 마이너스 재고 반영':''}</div><div class="scan-code">${esc(item.code.replaceAll(String.fromCharCode(29),'|'))}</div><button class="scan-remove" type="button" data-remove="${index}" aria-label="목록에서 제외" ${busy?'disabled':''}>×</button></li>`).join('');
     $('item-count').textContent=state.items.length;$('total').textContent=`${state.items.length}박스 · ${kg(state.items.reduce((sum,item)=>sum+item.labelWeight,0))} KG`;
     $('save-detail').textContent=state.pending?'저장 응답 확인 필요':state.busy?'바코드 조회 중':'';
     $('save').textContent=state.saving?'저장 확인 중':state.pending?'같은 요청 재시도':state.mode==='outbound'?'출고 확인':$('receive-kind').value==='bind'?'재고 연결 확인':'입고 확인';
     $('save').disabled=!state.canSave||state.saving||(!state.pending&&(busy||!state.items.length))||!navigator.onLine;
     for(const el of document.querySelectorAll('.settings input,.settings select,.mode-tabs input'))el.disabled=busy||state.items.length>0;
     for(const id of ['barcode','scan-submit','manual-entry','note'])$(id).disabled=locked;
+    $('damaged-open').hidden=state.mode!=='inbound';$('damaged-open').disabled=!state.canSave||busy||!navigator.onLine;
+    $('manual-labels-open').hidden=!state.lastManual.length;
     $('clear-items').disabled=busy||!state.items.length;$('logout').disabled=state.saving||state.busy;$('inbound-fields').hidden=state.mode!=='inbound';
     $('rule-reset').disabled=busy||state.mode!=='inbound';
     $('partner-fields').hidden=state.mode==='inbound'&&$('receive-kind').value==='bind';$('partner-label').textContent=state.mode==='outbound'?'출고 거래처':'입고 거래처';
@@ -88,6 +138,7 @@
     $('settings-summary').textContent=[$('work-date').value,$('location').value,state.mode==='outbound'?'원료육 출고':$('receive-kind').value==='bind'?'기존 재고 연결':'신규 원료육 입고'].filter(Boolean).join(' · ');
   }
   async function openWorkspace(session){
+    if(state.user?.id!==session.user.id){state.lastManual=[];state.history=[];$('manual-label-list').replaceChildren();$('history-list').replaceChildren();}
     const epoch=++state.epoch;state.user=session.user;state.token=storage.get(SESSION);
     const data=await rpc('dbmt_pda_raw_bootstrap',{p_token:state.token});if(epoch!==state.epoch)return;
     state.products=data.products||[];state.partners=data.partners||[];state.canSave=data.canSave===true;
@@ -113,7 +164,7 @@
   });
   $('logout').addEventListener('click',async()=>{
     if((state.pending||state.items.length)&&!confirm('저장 여부가 불명확한 요청은 같은 계정의 처리이력에서 확인해주세요. 로그아웃할까요?'))return;
-    const token=state.token;state.epoch++;state.token='';state.user=null;state.items=[];state.queue=[];state.pending=null;
+    const token=state.token;state.epoch++;state.token='';state.user=null;state.items=[];state.queue=[];state.pending=null;state.lastManual=[];state.history=[];$('manual-label-list').replaceChildren();$('history-list').replaceChildren();
     storage.remove(SESSION);$('workspace').hidden=true;$('save-bar').hidden=true;$('login-form').hidden=false;$('history-open').hidden=true;$('logout').hidden=true;status('');
     rpc('dbmt_erp_logout',{p_token:token}).catch(()=>{});
   });
@@ -205,7 +256,8 @@
       status('스캔 중량을 다시 조회해주세요.','error');return;
     }
     state.pending={p_token:state.token,p_request_id:uuid(),p_mode:state.mode,p_location:$('location').value,p_trader_id:$('partner').value||null,p_date:$('work-date').value,
-      p_items:state.items.map(item=>({barcode:item.code,revision:item.revision,rule:item.ruleKey,labelWeight:item.labelWeight,checked:true})),
+      p_items:state.items.map(item=>({barcode:item.code,revision:item.revision,rule:item.ruleKey,labelWeight:item.labelWeight,checked:true,
+        ...(state.mode==='inbound'&&item.ruleKey==='manual:v1'?{manualWeight:item.manualWeight,manualUnit:item.manualUnit}:{})})),
       p_product_id:state.mode==='inbound'?$('product').value:null,p_lot:state.mode==='inbound'?$('lot').value.trim():'',
       p_source_id:state.mode==='inbound'&&$('receive-kind').value==='bind'?$('source').value:null,p_price:Number($('unit-price').value)||0,p_note:$('note').value};
     try{const body={...state.pending};delete body.p_token;storage.set(PENDING+state.user.id,JSON.stringify({userId:state.user.id,body,items:state.items}));savePending();}
@@ -219,6 +271,7 @@
       storage.remove(PENDING+state.user.id);state.pending=null;state.items=[];$('settings-panel').open=true;
       if(result.cancelledTransactionIds?.length){status('ERP에서 일부 또는 전체 입고가 삭제된 요청입니다. 처리이력을 확인한 후 다시 스캔해주세요.','error');sound('error');}
       else{
+        if(state.mode==='inbound')state.lastManual=printableManual({result});
         const negative=(result.negativeStock||[]).map(row=>`${row.product} · LOT ${row.lot||'-'} · ${kg(row.weight)}KG`).join('\n');
         status(`${result.count}박스 · ${kg(result.weight)}KG 처리 완료${negative?'\n마이너스 재고\n'+negative:''}`,negative?'warning':'ok');sound('success');
       }
@@ -229,11 +282,15 @@
     }finally{state.saving=false;render();focusScan();}
   }
   $('history-open').addEventListener('click',async()=>{
+    const epoch=state.epoch;
     $('history-dialog').showModal();$('history-list').textContent='조회 중';
-    try{const data=await rpc('dbmt_pda_raw_history',{p_token:state.token});$('history-list').innerHTML=(data.rows||[]).map(row=>`<details class="history-row"><summary>${esc(row.request.date)} · ${row.request.mode==='outbound'?'출고':row.request.sourceId?'기존 재고 연결':'입고'} · ${row.result.count}박스 · ${kg(row.result.weight)}KG${row.result.cancelledTransactionIds?.length?' · 입고 삭제 내역 있음':''}</summary><small>${esc(row.id)} · ${esc(row.request.location)}</small><ul>${(row.result.items||[]).map(item=>`<li>${esc(item.product)} · LOT ${esc(item.lot)} · ${kg(item.weight)}KG${row.result.cancelledTransactionIds?.includes(item.transactionId)?' · 삭제됨':''}</li>`).join('')}</ul></details>`).join('')||'처리이력이 없습니다.';}
-    catch(error){$('history-list').textContent=error.message;}
+    try{
+      const data=await rpc('dbmt_pda_raw_history',{p_token:state.token});if(epoch!==state.epoch)return;
+      state.history=data.rows||[];$('history-list').innerHTML=state.history.map((row,index)=>`<details class="history-row"><summary>${esc(row.request.date)} · ${row.request.mode==='outbound'?'출고':row.request.sourceId?'기존 재고 연결':'입고'} · ${row.result.count}박스 · ${kg(row.result.weight)}KG${row.result.cancelledTransactionIds?.length?' · 입고 삭제 내역 있음':''}</summary><small>${esc(row.id)} · ${esc(row.request.location)}</small><ul>${(row.result.items||[]).map(item=>`<li>${esc(item.product)} · LOT ${esc(item.lot)} · ${kg(item.weight)}KG${item.entryKind==='manual'?` · 수기입고 ${esc(item.manualWeight)} ${item.manualUnit==='LB'?'lb':'KG'}`:''}${row.result.cancelledTransactionIds?.includes(item.transactionId)?' · 삭제됨':''}</li>`).join('')}</ul>${printableManual(row).length?`<button type="button" data-manual-history="${index}">수기입고 바코드</button>`:''}</details>`).join('')||'처리이력이 없습니다.';
+    }catch(error){if(epoch===state.epoch)$('history-list').textContent=error.message;}
   });
   $('history-close').addEventListener('click',()=>$('history-dialog').close());
+  $('history-list').addEventListener('click',event=>{const button=event.target.closest('[data-manual-history]');if(button)showManualLabels(printableManual(state.history[Number(button.dataset.manualHistory)]));});
   window.addEventListener('online',render);window.addEventListener('offline',()=>{status('인터넷 연결이 끊겼습니다. 저장 응답 확인이 필요한 요청은 연결 후 같은 요청으로 재시도해주세요.','error');render();});
   const token=storage.get(SESSION);
   if(token){state.token=token;rpc('dbmt_erp_session',{p_token:token}).then(session=>{if(!session.user)throw Error('다시 로그인해주세요.');return openWorkspace(session);}).catch(error=>{status(error.message,'error');});}

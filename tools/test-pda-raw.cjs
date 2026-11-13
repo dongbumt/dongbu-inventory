@@ -54,10 +54,16 @@ const server=http.createServer((req,res)=>{
         if(body.p_mode==='inbound'&&!String(body.p_lot||'').trim())return fail('별도 이력번호를 입력해주세요.');
         if(!saved.has(body.p_request_id)){
           const result={ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:body.p_items.reduce((sum,item)=>sum+item.labelWeight,0),items:body.p_items.map(scan=>{
-            const source=cases.find(item=>item.code===scan.barcode),pack=registered.get(source.id);
+            let source=cases.find(item=>item.code===scan.barcode);
+            if(!source&&scan.rule==='manual:v1'){
+              source={id:'qa-manual-'+scan.barcode,code:scan.barcode,ruleKey:'manual:v1',rule:'바코드 훼손 수기입고',weight:scan.labelWeight,
+                calculatedWeight:scan.labelWeight,manualWeight:scan.manualWeight,manualUnit:scan.manualUnit};cases.push(source);
+            }
+            const pack=registered.get(source.id);
             const lot=body.p_mode==='outbound'?pack.lot:body.p_lot.trim();
             registered.set(source.id,{registered:true,revision:(pack?.revision||0)+1,state:body.p_mode==='outbound'?'shipped':'in_stock',location:body.p_location,product:product.name,productId:product.id,lot,weight:scan.labelWeight,origin:product.origin});
-            return {id:source.id,product:product.name,lot,weight:scan.labelWeight,transactionId:'qa_tx_'+body.p_request_id+'_'+source.id,action:body.p_mode==='outbound'?'ship':body.p_source_id?'bind':'receive'};
+            return {id:source.id,product:product.name,lot,weight:scan.labelWeight,transactionId:'qa_tx_'+body.p_request_id+'_'+source.id,action:body.p_mode==='outbound'?'ship':body.p_source_id?'bind':'receive',
+              ...(source.ruleKey==='manual:v1'?{entryKind:'manual',barcode:source.code,manualWeight:source.manualWeight,manualUnit:source.manualUnit}:{})};
           }),negativeStock:body.p_mode==='outbound'?[{product:product.name,lot:registered.get(cases.find(item=>item.code===body.p_items[0].barcode).id)?.lot,weight:-1.4}]:[],savedAt:new Date().toISOString()};saved.set(body.p_request_id,{body,result});
         }
         if(loseResponse){loseResponse=false;return route.abort();}data=saved.get(body.p_request_id).result;
@@ -186,7 +192,58 @@ const server=http.createServer((req,res)=>{
     assert.match(await page.locator('#status').innerText(),/ERP에서.*입고가 삭제/,'An old retry must not announce a cancelled receipt as successful');
     await page.locator('#history-open').click();await page.waitForFunction(()=>document.getElementById('history-list').textContent.includes('입고 삭제 내역 있음'));
     assert.match(await page.locator('#history-list').textContent(),/삭제됨/);await page.locator('#history-close').click();
+    await page.locator('#settings-panel').evaluate(el=>el.open=true);await page.locator('#lot').fill('QA-MIXED');await page.locator('#partner').selectOption('qa-partner');
+    const beforeManual=commits.length;
+    await page.locator('#damaged-open').click();assert.equal(await page.locator('[name="manual-unit"]:checked').inputValue(),'KG');
+    assert.equal(await page.locator('#damaged-dialog textarea').count(),0,'No reason field or extra required acknowledgement');
+    await page.locator('#damaged-weight').fill('1.005');assert.equal(await page.locator('#damaged-kg').innerText(),'1.01 KG');
+    await page.locator('#damaged-add').click();assert.equal(await page.locator('#items li').count(),1);assert.equal(commits.length,beforeManual,'Manual add is not an inventory write');
+    await page.locator('#damaged-open').click();await page.locator('[name="manual-unit"][value="LB"]').check();await page.locator('#damaged-weight').fill('49.2');
+    assert.equal(await page.locator('#damaged-kg').innerText(),'22.32 KG');
+    await page.locator('#damaged-weight').fill('1');assert.equal(await page.locator('#damaged-kg').innerText(),'0.45 KG');
+    await page.locator('#damaged-weight').fill('1.01');assert.equal(await page.locator('#damaged-kg').innerText(),'0.46 KG');
+    await page.locator('#damaged-weight').fill('49.2');
+    for(const width of [320,390,480,1280]){
+      await page.setViewportSize({width,height:800});const box=await page.locator('#damaged-dialog').boundingBox();assert(box.x>=0&&box.x+box.width<=width);
+      assert.equal(await page.locator('#damaged-dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+      await page.locator('#damaged-dialog').screenshot({path:path.join(artifacts,`manual-pound-${width}.png`)});
+    }
+    await page.locator('#damaged-weight').fill('0.001');await page.locator('#damaged-add').click();assert.match(await page.locator('#damaged-error').innerText(),/0 초과/);
+    await page.locator('#damaged-weight').fill('49.2');await page.locator('#damaged-add').click();assert.equal(await page.locator('#items li').count(),2);
+    const mixed={...cases[0],id:'qa-mixed-scan',code:cases[0].code+'0'};cases.push(mixed);await scan(mixed.code);await idle();
+    assert.equal(await page.locator('#items li').count(),3);assert.match(await page.locator('#total').innerText(),/3박스 · 40\.59 KG/);
+    assert(await page.locator('#manual-labels-open').isHidden(),'Never print uncommitted internal labels');
+    loseResponse=true;await confirm();await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
+    assert(await page.locator('#damaged-open').isDisabled());const manualRequest=commits.at(-1);
+    assert.match(manualRequest.p_items[0].barcode,/^DR1\d{26}$/);assert.notEqual(manualRequest.p_items[0].barcode,manualRequest.p_items[1].barcode);
+    assert.equal(manualRequest.p_items[1].manualWeight,49.2);assert.equal(manualRequest.p_items[1].manualUnit,'LB');assert.equal(manualRequest.p_items[1].labelWeight,22.32);
+    assert(!('manualUnit' in manualRequest.p_items[2]),'Normal scans retain the original payload');
+    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#items').innerText(),/49\.2 lb/);
+    await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.equal(commits.length,beforeManual+2);assert.deepEqual(commits.at(-1).p_items,manualRequest.p_items);
+    await page.locator('#manual-labels-open').click();assert.equal(await page.locator('#manual-label-list svg').count(),2);
+    assert(await page.locator('#manual-label-list svg rect').count()>20,'Actual Code128 bars must render');
+    for(const width of [320,390,480,1280]){
+      await page.setViewportSize({width,height:800});assert.equal(await page.locator('#manual-labels-dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+      await page.locator('#manual-labels-dialog').screenshot({path:path.join(artifacts,`manual-labels-${width}.png`)});
+    }
+    await context.addInitScript(()=>window.print=()=>window.__printed=true);
+    const popupPromise=context.waitForEvent('page');await page.locator('#manual-labels-print').click();const popup=await popupPromise;
+    await popup.waitForFunction(()=>window.__printed===true);assert.equal(await popup.locator('svg').count(),2);
+    await popup.emulateMedia({media:'print'});await popup.pdf({path:path.join(artifacts,'manual-labels.pdf'),preferCSSPageSize:true});await popup.close();
+    assert.equal(commits.length,beforeManual+2,'Printing must not create stock or new identifiers');
+    await page.locator('#manual-labels-close').click();await page.locator('#history-open').click();
+    await page.getByRole('button',{name:'수기입고 바코드',exact:true}).last().waitFor({state:'attached'});
+    const historyEntry=page.locator('#history-list details').filter({has:page.locator('[data-manual-history]')}).last();await historyEntry.locator('summary').click();
+    await historyEntry.getByRole('button',{name:'수기입고 바코드',exact:true}).click();assert.equal(await page.locator('#manual-label-list svg').first().getAttribute('data-code'),manualRequest.p_items[0].barcode);
+    await page.locator('#manual-labels-close').click();await page.locator('#history-close').click();
+    await page.locator('[name="mode"][value="outbound"]').check();assert(await page.locator('#damaged-open').isHidden());
+    await page.locator('#partner').selectOption('qa-partner');await scan(manualRequest.p_items[1].barcode);await idle();assert.match(await page.locator('#items').innerText(),/22\.32 KG/);
+    await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_mode,'outbound');
+    assert(!('manualUnit' in commits.at(-1).p_items[0]),'Outbound uses the registered weight, never another manual receipt');
+    console.log('PASS: mixed manual/scanned one-click receipt, KG/LB exact rounding, no reason entry, pending reload/retry, committed label printing/history, internal barcode outbound and PDA/mobile/desktop layout');
     canSave=false;await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#status').innerText(),/조회만/);
+    assert(await page.locator('#damaged-open').isDisabled());
     await page.locator('#product').selectOption(product.id);await page.locator('#lot').fill('QA-READONLY');await scan(extra.code);await choose();
     await idle();assert.equal(await page.locator('dialog[open]').count(),0);assert(await page.locator('#save').isDisabled());
     const beforeReadonlySave=commits.length;await page.evaluate(()=>document.getElementById('save').dispatchEvent(new Event('click')));assert.equal(commits.length,beforeReadonlySave);

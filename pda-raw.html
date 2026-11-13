@@ -6,10 +6,11 @@
   <meta name="robots" content="noindex,nofollow">
   <title>동부엠티 ERP · PDA 원료육 입출고</title>
   <link rel="stylesheet" href="styles/pda.css?v=20261110correct1">
-  <link rel="stylesheet" href="styles/pda-kind.css?v=20261105sm1">
+  <link rel="stylesheet" href="styles/pda-kind.css?v=20261113manual1">
   <script src="vendor/gs1-parser/BarcodeParser.min.js?v=9989caa6" defer></script>
   <script src="pda-sound.js?v=20261014sound2" defer></script>
-  <script src="pda-raw.js?v=20261112production1" defer></script>
+  <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1" defer></script>
+  <script src="pda-raw.js?v=20261113manual1" defer></script>
 </head>
 <body>
   <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><a href="pda.html">제품</a><span aria-current="page">원료육</span></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
@@ -37,7 +38,8 @@
           <label class="raw-wide">이력번호<input id="lot" maxlength="100" autocomplete="off" placeholder="별도 이력번호 바코드 스캔 또는 직접 입력"></label>
         </div>
       </div></details>
-      <form id="scan-form" class="scan-form"><label for="barcode">원료육 박스 바코드</label><div class="scan-input"><input id="barcode" name="barcode" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="300"><button id="scan-submit" class="primary" type="submit">조회</button></div><label class="manual-toggle"><input id="manual-entry" type="checkbox">수기입력</label></form>
+      <form id="scan-form" class="scan-form"><label for="barcode">원료육 박스 바코드</label><div class="scan-input"><input id="barcode" name="barcode" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="300"><button id="scan-submit" class="primary" type="submit">조회</button></div><div class="raw-scan-actions"><button id="damaged-open" type="button">바코드 훼손 수기입고</button><label class="manual-toggle"><input id="manual-entry" type="checkbox">번호 직접입력</label></div></form>
+      <button id="manual-labels-open" class="raw-label-button" type="button" hidden>수기입고 바코드</button>
       <div class="queue-heading"><h2>스캔 목록 <span id="item-count">0</span></h2><button id="clear-items" type="button">비우기</button></div>
       <ol id="items" class="scan-list"></ol>
       <label class="note-field">비고<input id="note" maxlength="500" autocomplete="off"></label>
@@ -47,5 +49,7 @@
   <dialog id="rule-dialog" aria-labelledby="rule-title"><div class="dialog-heading"><h2 id="rule-title">비규격 중량형식 선택</h2><button id="rule-cancel" type="button" aria-label="형식 선택 취소">×</button></div><div id="rule-code" class="scan-code"></div><div class="raw-rule-filters"><label>규칙 원본<select id="rule-source"><option>동부엠티</option><option>동부축산유통</option><option>전체</option></select></label><label>형식명·ID<input type="search" id="rule-search" autocomplete="off"></label></div><div id="rule-count" class="raw-help" role="status"></div><div id="rule-candidates" role="group" aria-label="중량형식 후보"></div><label class="raw-check"><input id="rule-checked" type="checkbox">선택한 중량이 실물 라벨과 일치</label><div class="dialog-actions"><button id="rule-choose" class="primary" type="button" disabled>형식 적용</button></div></dialog>
   <dialog id="confirm-dialog"><h2 id="confirm-title">원료육 입출고 확인</h2><div id="confirm-summary"></div><ul id="confirm-items"></ul><div id="confirm-error" role="alert" hidden></div><label class="raw-check"><input id="confirm-checked" type="checkbox">전체 라벨과 품목·이력번호·중량 대조 완료</label><div class="dialog-actions"><button id="confirm-cancel" type="button">돌아가기</button><button id="confirm-save" class="primary" type="button" disabled>확정 저장</button></div></dialog>
   <dialog id="history-dialog"><div class="dialog-heading"><h2>원료육 최근 처리이력</h2><button id="history-close" type="button">닫기</button></div><div id="history-list"></div></dialog>
+  <dialog id="damaged-dialog" aria-labelledby="damaged-title"><div class="dialog-heading"><h2 id="damaged-title">바코드 훼손 수기입고</h2><button id="damaged-close" type="button" aria-label="수기입고 닫기">×</button></div><div id="damaged-meta" class="raw-product-meta"></div><form id="damaged-form"><fieldset class="raw-unit-tabs"><legend class="sr-only">입력 중량 단위</legend><label><input type="radio" name="manual-unit" value="KG" checked><span>KG</span></label><label><input type="radio" name="manual-unit" value="LB"><span>파운드(lb)</span></label></fieldset><label for="damaged-weight" id="damaged-weight-label">박스 중량(KG)</label><input id="damaged-weight" type="number" min="0.000001" max="10000" step="any" inputmode="decimal" autocomplete="off" required><output id="damaged-kg" for="damaged-weight" aria-live="polite">0.00 KG</output><div id="damaged-error" role="alert"></div><div class="dialog-actions"><button id="damaged-add" class="primary" type="submit">박스 추가</button></div></form></dialog>
+  <dialog id="manual-labels-dialog" aria-labelledby="manual-labels-title"><div class="dialog-heading"><h2 id="manual-labels-title">수기입고 바코드</h2><button id="manual-labels-close" type="button">닫기</button></div><div id="manual-label-list"></div><div class="dialog-actions"><button id="manual-labels-print" class="primary" type="button">인쇄</button></div></dialog>
 </body>
 </html>
