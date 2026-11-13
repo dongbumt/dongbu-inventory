@@ -169,7 +169,7 @@
     const ingredients=escape(parts.base).replace(/(돼지고기|소고기)\s*/g,'<span class="dl-meat">$1</span> ');
     const notice=d.crossNotice||d.crossFacilityNotice||'';
     return `<div class="dbmt-label-body${textUnits(d.ingredients)>18?' dl-long-ingredients':''}">
-      <div class="dl-row dl-top-code"><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code)||'미발급'}</div></div></div>
+      <div class="dl-row dl-top-code"><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code.replace(/^(\d+)(\d{6})$/,'$1 $2'))||'미발급'}</div></div></div>
       <div class="dl-split-body"><div class="dl-main-fields">
         <div class="dl-row dl-product-row"><span class="dl-key">제품명:</span><strong class="dl-product-name" style="font-size:${productFont}pt;">${escape(product)}</strong></div>
         <div class="dl-row dl-grade-row"><div class="dl-grade-cell"><span class="dl-key">성별및등급:</span><span class="dl-grade-value">${escape(d.grade)}</span></div><div class="dl-grade-cell"><span class="dl-key">원산지:</span><strong class="dl-origin-value" style="font-size:${originFont(d.origin)}pt;">${escape(d.origin)}</strong></div></div>

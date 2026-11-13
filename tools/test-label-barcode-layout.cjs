@@ -48,7 +48,10 @@ const server=http.createServer((req,res)=>{
       assert(Math.abs(bounds.x-2*96/25.4)<0.1,'Left inset must be 2 mm');
       assert(Math.abs(bounds.width-(size==='7x10'?66:96)*96/25.4)<0.1,'Retain content width and right 2 mm clearance');
       assert.equal(await print.locator('.dl-top-code .dl-code-caption').count(),0,'Remove the top caption, not the barcode/number');
-      assert.equal(await print.locator('.dl-top-code .dl-code-number').textContent(),doc.barcode);
+      const printedNumber=await print.locator('.dl-top-code .dl-code-number').textContent();
+      assert.equal(printedNumber,doc.barcode.slice(0,-6)+' '+doc.barcode.slice(-6),'Separate the final six display digits with exactly one space');
+      assert.equal(printedNumber.replace(' ',''),doc.barcode,'Display spacing must never change the encoded identity');
+      assert.equal(await print.locator('.dl-trace-code .dl-code-number').textContent(),doc.lot,'Traceability number stays unchanged');
       const dateLine=await print.locator('.dl-date-row').evaluate(row=>{
         const key=row.querySelector('span'),value=row.querySelector('strong'),a=key.getBoundingClientRect(),b=value.getBoundingClientRect();
         const range=document.createRange();range.selectNodeContents(value);
