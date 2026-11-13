@@ -64,7 +64,7 @@
     el('product').textContent=state.data?.product || state.data?.row?.product || '생산품 라벨을 불러오는 중…';
     const row=state.data?.row;
     el('context').textContent=row?`${row.origin||''}${row.lot?' · LOT '+row.lot:''} · 전체 ${kg(sum(labels()))} / ${labels().length} 박스`:'';
-    el('labels').innerHTML=labels().length?labels().map(row=>`<tr data-label-row="${esc(row.id)}"><td><input type="checkbox" data-label-id="${esc(row.id)}" aria-label="${esc(row.code)} 라벨 선택"></td><td><code>${esc(row.code)}</code></td><td>${esc(dateText(row.printedAt))}</td><td>${kg(row.weight)}</td></tr>`).join(''):`<tr><td colspan="4" class="label-split-empty">${state.loading?'출력 라벨을 불러오는 중입니다.':'분할할 수 있는 라벨이 없습니다.'}</td></tr>`;
+    el('labels').innerHTML=labels().length?labels().map(row=>`<tr data-label-row="${esc(row.id)}"><td><input type="checkbox" data-label-id="${esc(row.id)}" aria-label="${esc(row.code)} 라벨 선택"></td><td><code>${esc(row.code)}</code>${row.pdaState?`<small class="label-split-pda-state">${row.pdaState==='shipped'?'출고':'재고'}</small>`:''}</td><td>${esc(dateText(row.printedAt))}</td><td>${kg(row.weight)}</td></tr>`).join(''):`<tr><td colspan="4" class="label-split-empty">${state.loading?'출력 라벨을 불러오는 중입니다.':'분할할 수 있는 라벨이 없습니다.'}</td></tr>`;
     el('batches').innerHTML=[...batches()].map(([id,rows])=>`<button type="button" class="btn btn-secondary btn-sm" data-batch-id="${esc(id)}" title="이 출력 묶음 전체 선택 또는 해제">${esc(dateText(rows[0].printedAt))} · ${rows.length}박스</button>`).join('');
     syncControls();
   }
@@ -115,11 +115,15 @@
     if(pending){state.data=pending.data;state.selected=new Set(pending.selected);state.attempt=pending.attempt;message('이전에 요청한 분할의 저장 결과를 확인해주세요.',true);render();return;}
     await refresh();
   }
-  function applyEntry(entry,rows,cancelled=false){
+  function applyEntry(entry,rows,cancelled=false,linked=[]){
     if(!Array.isArray(rows) || !cancelled && !entry)return false;
     const id=cancelled?state.productionId:String(entry.id);
     userProdEntries=userProdEntries.filter(row=>String(row.id)!==id).concat(cancelled?[]:entry);
     userTransactions=userTransactions.filter(row=>String(row._prodId)!==id).concat(cancelled?[]:rows);
+    if(Array.isArray(linked) && linked.length){
+      const moved=new Map(linked.map(row=>[String(row.id),row]));
+      userTransactions=userTransactions.filter(row=>!moved.has(String(row.id))).concat([...moved.values()]);
+    }
     transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
     markLocalCoreChanged();
     safeLocalStorageSet('dbmt_user_prod',JSON.stringify(userProdEntries),true);
@@ -164,7 +168,7 @@
       if(typeof result?.ok!=='boolean')throw new Error('서버에서 저장 결과를 확인할 수 있는 응답을 받지 못했습니다.');
       if(!result?.ok){const error=new Error(result?.message||'라벨 분할을 저장하지 못했습니다.');error.code='REJECTED';throw error;}
       unresolved.delete(attemptKey());state.attempt=null;state.saved=true;state.cancelled=Boolean(result.cancelled);
-      applyEntry(result.entry,result.transactionRows,state.cancelled);
+      applyEntry(result.entry,result.transactionRows,state.cancelled,result.linkedTransactions);
       state.saving=false;await reloadAfterSave();
     }catch(error){
       if(!current(generation,session))return;

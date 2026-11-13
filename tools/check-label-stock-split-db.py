@@ -16,6 +16,7 @@ from psycopg.types.json import Jsonb
 
 
 def fixture_tests(conn, verify_lot_correction=False):
+    pda_regroup = conn.execute("select to_regclass('label_stock_private.pda_split_context') is not null").fetchone()[0]
     suffix = uuid.uuid4().hex[:12]
     uid = lambda kind: 'qa_split_' + suffix + '_' + kind
     pin = '0927'  # Rollback-contained fictional PIN, never an operator credential.
@@ -143,8 +144,12 @@ def fixture_tests(conn, verify_lot_correction=False):
             reject(lambda: split([logs[0]['id']], version=initial['version']))
     with conn.transaction(force_rollback=True):
         pda('inbound', [scan()])
-        assert not get()['canSplit']
-        reject(lambda: split([logs[0]['id']], version=initial['version']), 'PDA')
+        if pda_regroup:
+            assert get()['canSplit']
+            assert split([logs[0]['id']])['ok']
+        else:
+            assert not get()['canSplit']
+            reject(lambda: split([logs[0]['id']], version=initial['version']), 'PDA')
 
     # Note changes remain editable and invalidate a previously loaded version.
     changed = copy.deepcopy(before)
@@ -267,7 +272,7 @@ def fixture_tests(conn, verify_lot_correction=False):
             shipment = pda('outbound', [scan(0)])
             raw = conn.execute('select raw from public.transactions where id=%s', (shipment['items'][0]['transactionId'],)).fetchone()[0]
             assert raw['lot'] == 'QA-CORRECTED' and raw['stockRowId'] == first and raw['boxCount'] == 1
-            reject(lambda: save_lot(corrected(current, row_id=remaining, new_lot='PDA-BLOCKED')), 'PDA')
+            reject(lambda: save_lot(corrected(current, row_id=remaining, new_lot='PDA-BLOCKED')), '' if pda_regroup else 'PDA')
             returned = pda('inbound', [scan(0)])
             raw = conn.execute('select raw from public.transactions where id=%s', (returned['items'][0]['transactionId'],)).fetchone()[0]
             assert raw['lot'] == 'QA-CORRECTED' and lookup(0)['lot'] == 'QA-CORRECTED'
@@ -285,15 +290,22 @@ def fixture_tests(conn, verify_lot_correction=False):
         assert conn.execute('select pda_private.balance(%s,\'가공장\')', (first,)).fetchone()[0] == 20
         assert conn.execute('select pda_private.balance(%s,\'가공장\')', (remaining,)).fetchone()[0] == 60
         assert lookup(1)['stockRowId'] == first and lookup(2)['stockRowId'] == remaining
-        assert not get(remaining)['canSplit'], 'Any PDA registration in the journal protects all its groups'
-        reject(lambda: split([logs[2]['id']], source_id=remaining), 'PDA')
+        if pda_regroup:
+            assert get(remaining)['canSplit'], 'PDA registration in another output must not block this group'
+            with conn.transaction(force_rollback=True):
+                assert split([logs[2]['id']], source_id=remaining)['ok']
+                assert lookup(0)['stockRowId'] == first
+        else:
+            assert not get(remaining)['canSplit']
+            reject(lambda: split([logs[2]['id']], source_id=remaining), 'PDA')
         assert pda('inbound', [scan(0)])['returned'] == 1
         assert lookup(0)['stockRowId'] not in [first, remaining], 'PDA return keeps its separate receipt source'
         edited = copy.deepcopy(after)
         edited['outputs'][0]['note'] = 'PDA 출고 이후 비고 수정'
-        # Existing PDA workflow blocks journal replacement after package processing,
-        # including its transient soft-delete on a note-only save. Keep that guard.
-        reject(lambda: rpc('dbmt_erp_save_production', token, edited, [], pid), 'PDA')
+        if pda_regroup:
+            assert rpc('dbmt_erp_save_production', token, edited, [], pid)['ok']
+        else:
+            reject(lambda: rpc('dbmt_erp_save_production', token, edited, [], pid), 'PDA')
 
     # Office edits can label groups in the existing note column, never manually reallocate barcodes.
     edited = copy.deepcopy(after)

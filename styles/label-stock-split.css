@@ -25,6 +25,7 @@
 .label-split-table th:last-child,.label-split-table td:last-child{text-align:right;white-space:nowrap;}
 .label-split-table tr.is-selected{background:#f0f2f5;}
 .label-split-table code{font-size:12px;overflow-wrap:anywhere;}
+.label-split-pda-state{display:inline-block;margin-left:8px;font-size:11px;color:#626a73;white-space:nowrap;}
 .label-split-table tr{cursor:pointer;}
 .label-split-empty{text-align:center!important;padding:26px!important;color:#6c7682;}
 .label-split-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:none;}

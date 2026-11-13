@@ -10,11 +10,11 @@ assert.match(html,/label-stock-split\.js\?v=/,'The production screen must load t
 assert.ok(/DBMTLabelStockSplit\.buttonHtml\(e,\s*out\)/.test(html),'Each saved label-produced output needs its own split button');
 const fixture={ok:true,productionId:'fixture-production',stockRowId:'fixture-stock',version:'version1',canSplit:true,reason:'',
   product:'가상 목전지(작업)',row:{product:'가상 목전지(작업)',stockRowId:'fixture-stock',origin:'미국산',lot:'QA-LOT',qty:100,boxCount:5,price:5000,amount:500000},
-  labels:Array.from({length:5},(_,i)=>({id:'label'+i,code:'DB2610171200-ABC12'+i,weight:20,printedAt:'2026-10-17T03:0'+(i<2?'0':'1')+':00Z',batchId:i<2?'batchA':'batchB'})),totalWeight:100,boxCount:5};
+  labels:Array.from({length:5},(_,i)=>({id:'label'+i,code:'DB2610171200-ABC12'+i,weight:20,pdaState:i===0?'shipped':i===1?'in_stock':null,printedAt:'2026-10-17T03:0'+(i<2?'0':'1')+':00Z',batchId:i<2?'batchA':'batchB'})),totalWeight:100,boxCount:5};
 const entry={id:'fixture-production',date:'2026/10/17',job_no:'1',note:'원본 메모',_labelCompletion:{workOrderId:'fixture-work-order'},
   inputs:[{product:'가상 목전지 원료',qty:100,price:5000}],outputs:[fixture.row]};
 const setup=`
-var fixtureData=${JSON.stringify(fixture)},serverEntry=${JSON.stringify(entry)},serverRows=[],userProdEntries=[${JSON.stringify(entry)}],userTransactions=[{id:'original-posting',_prodId:'fixture-production',weight:100,stockRowId:'fixture-stock'}];
+var fixtureData=${JSON.stringify(fixture)},serverEntry=${JSON.stringify(entry)},serverRows=[],userProdEntries=[${JSON.stringify(entry)}],userTransactions=[{id:'original-posting',_prodId:'fixture-production',weight:100,stockRowId:'fixture-stock'},{id:'pda-shipment',weight:20,type:'출고',stockRowId:'fixture-stock',price:8000,amount:160000}];
 var EXCEL_TRANSACTIONS=[{id:'legacy-untouched',weight:1}],transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
 var productionWritePending=0,_editProdId=null,localCoreRevision=0,rendered=0,renderedTransactions=0,renderedStock=0,messages=[],writes=[];
 var sessionToken='fixture-token',permission=true,loadPlan=[],savePlan=[],reloadPlan=[],pending=[],rpcCalls=[],requestResults={};
@@ -33,7 +33,7 @@ function splitResult(body){
   const remaining={...fixtureData.row,qty:rest.reduce((n,r)=>n+r.weight,0),boxCount:rest.length};remaining.amount=remaining.qty*remaining.price;
   serverEntry={...serverEntry,outputs:[remaining,first]};
   serverRows=serverEntry.outputs.map((row,i)=>({...row,id:'posting-'+i,type:'생산입고',weight:row.qty,_prodId:serverEntry.id}));
-  const result={ok:true,productionId:serverEntry.id,remainingStockRowId:remaining.stockRowId,splitStockRowId:first.stockRowId,entry:serverEntry,transactionRows:serverRows};
+  const result={ok:true,productionId:serverEntry.id,remainingStockRowId:remaining.stockRowId,splitStockRowId:first.stockRowId,entry:serverEntry,transactionRows:serverRows,linkedTransactions:[{id:'pda-shipment',weight:20,type:'출고',stockRowId:'new-stock',price:8000,amount:160000}]};
   requestResults[body.p_request_id]=structuredClone(result);return structuredClone(result);
 }
 async function sbRpc(name,body){
@@ -71,6 +71,7 @@ async function sbRpc(name,body){
     const splitCalls=()=>page.evaluate(()=>rpcCalls.filter(call=>call.name==='dbmt_erp_split_label_stock'));
 
     await reset();await open();
+    assert.equal(await page.locator('.label-split-pda-state').allTextContents().then(v=>v.join(',')),'출고,재고');
     assert.equal(await page.locator('#label-split-save').isDisabled(),true);
     assert.equal(await page.locator('#label-split-remaining-weight').innerText(),'100.00 KG');
     assert.equal(await page.locator('#label-split-remaining-boxes').innerText(),'5 박스');
@@ -91,6 +92,9 @@ async function sbRpc(name,body){
     assert.deepEqual(saved.entry.outputs.map(row=>[row.qty,row.boxCount]),[[60,3],[40,2]]);
     assert.equal(saved.entry.inputs[0].qty,100);assert.equal(saved.transactions.filter(row=>row._prodId==='fixture-production').length,2);
     assert.ok(saved.transactions.some(row=>row.id==='legacy-untouched'));assert.ok(!saved.transactions.some(row=>row.id==='original-posting'));
+    assert.equal(saved.transactions.find(row=>row.id==='pda-shipment').stockRowId,'new-stock');
+    assert.equal(saved.transactions.filter(row=>row.id==='pda-shipment').length,1,'Relink, never duplicate an existing shipment');
+    assert.equal(saved.transactions.find(row=>row.id==='pda-shipment').amount,160000);
     assert.equal(saved.productionWritePending,0);assert.ok(saved.rendered&&saved.renderedTransactions&&saved.renderedStock);
     assert.equal((await splitCalls()).length,1);
 
@@ -112,8 +116,8 @@ async function sbRpc(name,body){
     await page.waitForFunction(()=>document.getElementById('label-split-save').textContent.includes('다시 시도'));
     await page.evaluate(()=>{savePlan.push({result:{ok:true,alreadySaved:true,cancelled:true,productionId:'fixture-production',entry:null,transactionRows:[]}});reloadPlan.push({result:{ok:true,productionIds:['fixture-production'],entries:[],transactions:[]}})});
     await page.locator('#label-split-save').click();await page.waitForFunction(()=>!document.getElementById('label-split-dialog').open);
-    assert.equal(await page.evaluate(()=>userProdEntries.length),0);assert.equal(await page.evaluate(()=>userTransactions.length),0);
-    assert.equal(await page.evaluate(()=>transactions.length),1,'Unrelated legacy transactions remain');
+    assert.equal(await page.evaluate(()=>userProdEntries.length),0);assert.equal(await page.evaluate(()=>userTransactions.length),1);
+    assert.equal(await page.evaluate(()=>transactions.length),2,'Unrelated legacy and PDA transactions remain');
     assert.match(await page.evaluate(()=>messages.at(-1)),/취소/);assert.equal((await splitCalls()).length,2);
 
     // A malformed response cannot prove rejection: retain the request ID for safe replay.
