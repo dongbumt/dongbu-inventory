@@ -247,6 +247,7 @@ function calculate(transactions, options={}){
       const ad = cutoff ? a.date : String(a.t.date||'').replace(/\//g,'-');
       const bd = cutoff ? b.date : String(b.t.date||'').replace(/\//g,'-');
       const d = ad.localeCompare(bd);
+      if(!d && Boolean(a.t._labelWeightSplitId)!==Boolean(b.t._labelWeightSplitId))return a.t._labelWeightSplitId?-1:1;
       return d || (a.idx - b.idx);
     });
 

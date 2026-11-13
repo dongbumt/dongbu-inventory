@@ -173,6 +173,20 @@ async function testLogic(){
   const deficit = harness();
   deficit.userTransactions=[{...base,date:'2026-09-01',type:'출고',weight:5,stockUnitPrice:5000}];
   assert.equal(sum(deficit.getStockMap('2026-09-01')), -5, 'negative stock is retained');
+  const repack=harness();
+  const repackBase={...made,stockRowId:'qa_repack_source',proddate:'2026-09-01'};
+  repack.userTransactions=[
+    {...repackBase,date:'2026-09-01',type:'생산입고',weight:20,boxCount:1},
+    {...repackBase,date:'2026-09-02',type:'출고',weight:20,boxCount:4,stockUnitPrice:6000,price:8000},
+    {...repackBase,date:'2026-09-02',type:'재고조정',weight:0,boxCount:1,_labelWeightSplitId:'qa_first'},
+    {...repackBase,date:'2026-09-02',type:'재고조정',weight:0,boxCount:2,_labelWeightSplitId:'qa_second'}
+  ];
+  assert.equal(bucket(repack.getStockMap('2026-09-01'),made.product).stockBoxes,1);
+  assert.equal(bucket(repack.getStockMap('2026-09-02'),made.product).stockBoxes,0,'Same-day repack box deltas apply before child shipments, even if RPC rows arrive out of order');
+  assert.equal(sum(repack.getStockMap('2026-09-02')),0);
+  repack.userTransactions.splice(1,1);repack.invalidateStockMap();
+  assert.equal(bucket(repack.getStockMap(),made.product).stockBoxes,4);
+  assert.equal(sum(repack.getStockMap()),20,'Repacking must not add KG');
   console.log('PASS: cutoff, inclusive dates, production, transfers, adjustments, cost/LOT buckets, cache isolation, filters, permissions, CSV, stale guards');
 }
 

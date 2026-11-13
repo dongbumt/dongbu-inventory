@@ -306,6 +306,7 @@
     if(window.DBMTProductCatalog) window.DBMTProductCatalog.applyPermissions();
     if(window.DBMTExpenseStores) window.DBMTExpenseStores.applyPermissions();
     if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
+    if(window.DBMTLabelWeightSplit) window.DBMTLabelWeightSplit.applyPermissions();
     if(window.DBMTProductionSchedule) window.DBMTProductionSchedule.applyPermissions();
     if(window.DBMTManualLabel) window.DBMTManualLabel.applyPermissions();
     if(window.DBMTDocumentRequestDetail) window.DBMTDocumentRequestDetail.applyPermissions();

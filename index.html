@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<script src="stock-ledger.js?v=20261110correct1"></script>
+<script src="stock-ledger.js?v=20261113split1"></script>
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261106cost1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
@@ -3942,6 +3942,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
      라벨 출력
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-label">
+  <div class="label-weight-toolbar"><button id="label-weight-open" type="button" class="btn btn-secondary label-weight-launch"><img src="vendor/lucide/scissors.svg" alt="">중량분할</button></div>
   <div class="manual-label-grid">
     <div class="card">
       <div class="card-title"><div class="ct-bar" style="background:#646c74;"></div>🏷️ 라벨 내용 입력</div>
@@ -22539,9 +22540,11 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="manual-label.js?v=20261023ingredients1"></script>
+<link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
+<script src="label-weight-split.js?v=20261113split1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
 <script src="ledgers.js?v=20261112ledger1"></script>
-<script src="m02-auth.js?v=20261112ledger1"></script>
+<script src="m02-auth.js?v=20261113split1"></script>
 </body>
 </html>
