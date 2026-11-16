@@ -6,9 +6,9 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
   const money=value=>value===null || value===undefined?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:2});
-  const fields=['trader','distribution','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','monthly_usage','price_kg','price_box','note'];
+  const fields=['trader','distribution','material','brand','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','monthly_usage','price_kg','price_box','note'];
   const collator=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
-  const inputs={trader:'trader',distribution:'distribution',material:'material',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',monthly_usage:'monthly-usage',price_kg:'price-kg',price_box:'price-box',note:'note'};
+  const inputs={trader:'trader',distribution:'distribution',material:'material',brand:'brand',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',monthly_usage:'monthly-usage',price_kg:'price-kg',price_box:'price-box',note:'note'};
   const catalog=()=>typeof labelProducts==='undefined'?[]:labelProducts;
   const usageValue=value=>value===null||value===undefined||String(value).trim()===''?null:Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null;
   const usageText=value=>usageValue(value)===null?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:6});
@@ -22,6 +22,7 @@
     const p=catalog().find(p=>String(p.id)===String(id));
     if(!p||p.isActive===false||!['제품','원료육'].includes(String(p.kind||'').trim())){message('품목관리에 등록된 사용 가능한 제품 또는 원료육을 선택해주세요.',true);return false;}
     el('material-product-id').value=String(p.id);el('material').value=p.name||'';
+    el('brand').value=p.brand||'';
     el('origin').value=typeof normalizeOriginName==='function'?normalizeOriginName(p.origin):p.origin||'';
     syncMaterialHint();message('');return true;
   }
@@ -141,7 +142,7 @@
     return state.rows.filter(row=>{
       if(state.traderSelection!==null&&!state.traderSelection.has(String(row.trader??'').trim()))return false;
       if(distribution&&String(row.distribution??'').trim()!==distribution)return false;
-      const values=[row.trader,row.distribution,row.material,row.origin].map(normalize);
+      const values=[row.trader,row.distribution,row.material,row.brand,row.origin].map(normalize);
       return terms.every(term=>values.some(value=>value.includes(term)));
     }).sort((a,b)=>compareRows(a,b)||collator.compare(a.trader??'',b.trader??'')||collator.compare(a.material??'',b.material??'')||collator.compare(a.id,b.id));
   }
@@ -165,9 +166,9 @@
   }
   function printDocument(rows,mode='details'){
     const columns=[
-      ['trader','거래처',11],['distribution','유통',12],['material','원재료',11],['origin','원산지',8],
-      ['cutting_spec','세절스펙',12],['inner_packaging_spec','내포장 스펙',12],
-      ['outer_packaging_spec','외포장 스펙',12],['monthly_usage','월사용량(KG)',10],['note','비고',12]
+      ['trader','거래처',14],['material','원재료',13],['brand','브랜드',10],['origin','원산지',9],
+      ['cutting_spec','세절스펙',14],['inner_packaging_spec','내포장 스펙',14],
+      ['outer_packaging_spec','외포장 스펙',14],['monthly_usage','월사용량(KG)',12]
     ];
     const search=el('search').value.trim();
     const sortColumn=columns.find(([key])=>key===state.sortKey);
@@ -237,12 +238,12 @@
     });
     el('count').textContent=`${rows.length.toLocaleString('ko-KR')}건 / 전체 ${state.rows.length.toLocaleString('ko-KR')}건`;
     el('rows').innerHTML=rows.length?rows.map(row=>`<tr data-id="${esc(row.id)}">
-      <td>${esc(row.trader)}</td><td>${esc(row.distribution)}</td><td>${esc(row.material)}</td><td>${esc(row.origin)}</td>
+      <td>${esc(row.trader)}</td><td>${esc(row.distribution)}</td><td>${esc(row.material)}</td><td>${esc(row.brand)}</td><td>${esc(row.origin)}</td>
       <td>${esc(row.cutting_spec)}</td><td>${esc(row.inner_packaging_spec??row.packaging_spec)}</td><td>${esc(row.outer_packaging_spec)}</td>
       <td class="spec-qty">${usageText(row.monthly_usage)}</td>
       <td class="spec-money">${money(row.price_kg)}</td><td class="spec-money">${money(row.price_box)}</td><td>${esc(row.note)}</td>
       <td>${can('update')?`<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${esc(row.id)}">수정</button>`:''}${can('create')?`<button type="button" class="btn btn-secondary btn-sm" data-action="copy" data-id="${esc(row.id)}">복사</button>`:''}${can('delete')?`<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(row.id)}">삭제</button>`:''}</td>
-    </tr>`).join(''):`<tr><td colspan="12" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
+    </tr>`).join(''):`<tr><td colspan="13" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
   }
   async function load(){
     if(state.saving)return;

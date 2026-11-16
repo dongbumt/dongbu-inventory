@@ -41,9 +41,9 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'product-specs.js'),'utf8')});
     const base={distribution:'삼성웰스토리',origin:'미국산',cutting_spec:'15×30×40mm 슬라이스',inner_packaging_spec:'1KG 진공포장',outer_packaging_spec:'1KG×10PAC/BOX',price_kg:6700,price_box:67000,note:'납품 요청사항'};
     const rows=[
-      {...base,id:'a',trader:'검색업체2',material:'목전지',price_kg:0,inner_packaging_spec:null,packaging_spec:'기존 포장스펙'},
+      {...base,id:'a',trader:'검색업체2',material:'목전지',brand:'브랜드A',price_kg:0,inner_packaging_spec:null,packaging_spec:'기존 포장스펙'},
       {...base,id:'b',trader:'검색업체10',material:'목전지',price_kg:null,price_box:null},
-      {...base,id:'c',trader:'검색업체1',material:'목전지',price_kg:12000,note:'<img src=x onerror=alert(1)> & "비고"'},
+      {...base,id:'c',trader:'검색업체1',material:'목전지',brand:'<브랜드 & "명칭">',price_kg:12000,note:'<img src=x onerror=alert(1)> & "비고"'},
       {...base,id:'hidden',trader:'출력제외업체',material:'부채살',distribution:'동원홈푸드',origin:'국내산'}
     ];
     await page.evaluate(data=>{qaRows=data;return DBMTProductSpecs.init();},rows);
@@ -65,11 +65,15 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['검색업체1','검색업체2','검색업체10']);
     assert.match(await popup.locator('header').textContent(),/삼성 목전지 미국 · 3건/);
     assert.match(await popup.locator('header').textContent(),/정렬: 화면 목록 순서/);
-    assert.deepEqual(await popup.locator('thead th').allTextContents(),['거래처','유통','원재료','원산지','세절스펙','내포장 스펙','외포장 스펙','월사용량(KG)','비고']);
-    assert.equal(await popup.locator('tbody tr').evaluateAll(rows=>rows.every(row=>row.cells.length===9)),true);
+    assert.deepEqual(await popup.locator('thead th').allTextContents(),['거래처','원재료','브랜드','원산지','세절스펙','내포장 스펙','외포장 스펙','월사용량(KG)']);
+    assert.equal(await popup.locator('tbody tr').evaluateAll(rows=>rows.every(row=>row.cells.length===8)),true);
+    assert.deepEqual(await popup.locator('tbody tr td:nth-child(3)').allTextContents(),['<브랜드 & "명칭">','브랜드A',''],'Brand prints after material and missing legacy values stay blank');
+    assert.doesNotMatch(await popup.locator('body').textContent(),/납품 요청사항|<img src=x onerror=alert\(1\)>/,'Notes never appear in the print document');
+    assert.equal(await page.locator('.spec-table th').filter({hasText:'유통'}).count(),1,'Distributor remains on screen');
+    assert.equal(await page.locator('.spec-table th').filter({hasText:'비고'}).count(),1,'Notes remain on screen');
     assert.doesNotMatch(await popup.locator('body').textContent(),/단가|12,000|67,000/,'Neither price column nor price-unit guide is printed');
-    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(8).textContent(),'0','Screen prices remain available');
-    assert.equal(await page.locator('#spec-rows tr[data-id="b"] td').nth(8).textContent(),'—');
+    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(9).textContent(),'0','Screen prices remain available');
+    assert.equal(await page.locator('#spec-rows tr[data-id="b"] td').nth(9).textContent(),'—');
     assert.match(await popup.locator('tbody').textContent(),/기존 포장스펙/);
     assert.equal(await popup.locator('img,script,button,input,select').count(),0,'No injected HTML, editor or management buttons');
     assert.ok(!(await popup.locator('body').textContent()).includes('출력제외업체'));
@@ -128,7 +132,8 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.equal(await all.isChecked(),true,'Changing distributor starts with all of its customers selected');
     assert.deepEqual(await ids(),['s1','s3','s4']);
     popup=await openPrint();
-    assert.deepEqual(await popup.locator('tbody tr td:nth-child(2)').allTextContents(),['삼성웰스토리','삼성웰스토리','삼성웰스토리']);await popup.close();
+    assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['거래처A','거래처AB','거래처B']);
+    assert.match(await popup.locator('header').textContent(),/유통사: 삼성웰스토리/);await popup.close();
     await trader('거래처B').uncheck();
     assert.deepEqual(await ids(),['s1','s4'],'Exclude a customer without affecting similarly named customers');
     assert.equal(await all.evaluate(input=>input.indeterminate),true);
@@ -173,11 +178,13 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await page.evaluate(()=>{qaToken='third-session';DBMTProductSpecs.applyPermissions();});
     assert.equal(await page.locator('#spec-filter-traders input').count(),0);assert.equal(await distribution.locator('option').count(),1,'Session changes clear previous customer/distributor choices');
 
-    const many=Array.from({length:70},(_,i)=>({...base,id:'multi-'+i,trader:'업체'+String(i+1).padStart(3,'0'),material:'상품'+String(i+1).padStart(3,'0'),note:i===35?'긴 문구 '.repeat(250)+'긴문구끝표시':'확인사항'+String(i+1).padStart(3,'0')}));
+    const many=Array.from({length:70},(_,i)=>({...base,id:'multi-'+i,trader:'업체'+String(i+1).padStart(3,'0'),material:'상품'+String(i+1).padStart(3,'0'),brand:i===35?'긴 브랜드 '.repeat(20)+'브랜드끝표시':'브랜드'+String(i+1).padStart(3,'0'),note:'인쇄제외비고'+String(i+1).padStart(3,'0')}));
     await page.evaluate(data=>{qaRights.view=true;qaRows=data;return DBMTProductSpecs.load();},many);
     await page.locator('[data-sort="trader"]').click();
     popup=await openPrint();
     assert.equal(await popup.locator('tbody tr').count(),70);
+    assert.match(await popup.locator('body').textContent(),/브랜드끝표시/);
+    assert.doesNotMatch(await popup.locator('body').textContent(),/인쇄제외비고/);
     assert.equal(await popup.locator('tbody tr').last().locator('td').first().textContent(),'업체070');
     await popup.emulateMedia({media:'print'});
     assert.equal(await popup.locator('table').evaluate(table=>table.scrollWidth<=table.clientWidth+1),true);

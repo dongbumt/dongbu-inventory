@@ -29,15 +29,16 @@
 .spec-count{font-size:12px;font-weight:400;color:#666;}
 .spec-list-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .spec-table-wrap,.spec-usage-wrap{width:100%;overflow-x:auto;}
-.spec-table{width:100%;min-width:1040px;table-layout:fixed;border-collapse:collapse;font-size:12px;}
+.spec-table{width:100%;min-width:1120px;table-layout:fixed;border-collapse:collapse;font-size:12px;}
 .spec-table th{background:#f4f5f6;color:#555;text-align:left;font-weight:700;white-space:nowrap;}
 .spec-sort{display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;white-space:nowrap;}
 .spec-sort:hover{text-decoration:underline;}
 .spec-sort:focus-visible{outline:2px solid #777;outline-offset:3px;}
 .spec-sort-indicator{display:inline-block;min-width:10px;font-size:10px;color:#777;text-align:center;}
-.spec-table th:nth-child(4){width:68px;}
-.spec-table th:nth-child(8){width:86px;}
-.spec-table th:nth-child(9),.spec-table th:nth-child(10){width:88px;}
+.spec-table th:nth-child(4){width:80px;}
+.spec-table th:nth-child(5){width:68px;}
+.spec-table th:nth-child(9){width:86px;}
+.spec-table th:nth-child(10),.spec-table th:nth-child(11){width:88px;}
 .spec-table th:last-child{width:160px;text-align:right;}
 .spec-table th,.spec-table td{padding:9px 6px;border-bottom:1px solid #e4e6e8;vertical-align:top;overflow-wrap:anywhere;}
 .spec-table td{white-space:pre-wrap;}
