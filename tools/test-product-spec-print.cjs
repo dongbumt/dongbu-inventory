@@ -105,7 +105,9 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
       {...base,id:'s6',trader:'거래처A',distribution:null,material:'앞다리',origin:'국내산'}
     ];
     await page.evaluate(data=>{qaRights.view=true;qaRows=data;return DBMTProductSpecs.load();},selectionRows);
-    const trader=page.locator('#spec-filter-trader'),distribution=page.locator('#spec-filter-distribution');
+    const distribution=page.locator('#spec-filter-distribution'),all=page.locator('#spec-traders-all');
+    const trader=name=>page.locator('#spec-filter-traders').getByRole('checkbox',{name,exact:true});
+    const selectOnly=async name=>{await all.check();await all.uncheck();await trader(name).check();};
     const ids=()=>page.locator('#spec-rows tr[data-id]').evaluateAll(rows=>rows.map(row=>row.dataset.id).sort());
     await page.locator('#spec-usage-summary summary').click();
     assert.match(await page.locator('#spec-usage-total').textContent(),/350.300001 KG/);
@@ -113,19 +115,35 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'국내산'}).locator('td').last().textContent(),'300.3','Same item/origin groups sum exactly');
     assert.match(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'미국산'}).textContent(),/미입력 1건 제외/,'Different origins remain separate');
     assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'부채살'}).locator('td').last().textContent(),'0','Explicit zero remains distinct from missing usage');
-    assert.deepEqual(await trader.locator('option').allTextContents(),['전체 거래처','거래처A','거래처AB','거래처B']);
+    assert.deepEqual(await page.locator('#spec-filter-traders input').evaluateAll(inputs=>inputs.map(input=>input.value)),['거래처A','거래처AB','거래처B']);
+    assert.equal(await all.isChecked(),true);
     assert.ok((await distribution.locator('option').allTextContents()).includes('<자유 & 유통>'),'Custom distributors are selectable');
-    await trader.selectOption('거래처A');
+    await selectOnly('거래처A');
     assert.match(await page.locator('#spec-usage-total').textContent(),/150.100001 KG/);
     assert.deepEqual(await ids(),['s1','s2','s6'],'Customer selection is exact and includes its unspecified distributors');
     popup=await openPrint();
     assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['거래처A','거래처A','거래처A']);
     assert.match(await popup.locator('header').textContent(),/거래처: 거래처A · 유통사: 전체/);await popup.close();
-    await trader.selectOption('');await distribution.selectOption('삼성웰스토리');
+    await distribution.selectOption('삼성웰스토리');
+    assert.equal(await all.isChecked(),true,'Changing distributor starts with all of its customers selected');
     assert.deepEqual(await ids(),['s1','s3','s4']);
     popup=await openPrint();
     assert.deepEqual(await popup.locator('tbody tr td:nth-child(2)').allTextContents(),['삼성웰스토리','삼성웰스토리','삼성웰스토리']);await popup.close();
-    await trader.selectOption('거래처A');await page.locator('#spec-search').fill('돈등심');
+    await trader('거래처B').uncheck();
+    assert.deepEqual(await ids(),['s1','s4'],'Exclude a customer without affecting similarly named customers');
+    assert.equal(await all.evaluate(input=>input.indeterminate),true);
+    popup=await openPrint();
+    assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['거래처A','거래처AB']);await popup.close();
+    popup=await openPrint('#spec-usage-print');
+    assert.equal(await popup.locator('tbody tr').last().locator('td').textContent(),'300.3','Usage print obeys the same exclusions');await popup.close();
+    await all.check();await all.uncheck();
+    assert.deepEqual(await ids(),[]);
+    assert.equal(await page.locator('#spec-print').isDisabled(),true);
+    assert.equal(await page.locator('#spec-usage-print').isDisabled(),true,'Selecting none cannot print all');
+    const openCount=await page.evaluate(()=>qaOpenCount);
+    await page.evaluate(()=>DBMTProductSpecs.print());assert.equal(await page.evaluate(()=>qaOpenCount),openCount);
+    await all.check();assert.deepEqual(await ids(),['s1','s3','s4']);
+    await selectOnly('거래처A');await page.locator('#spec-search').fill('돈등심');
     assert.deepEqual(await ids(),['s1'],'Both selections and keyword search combine');
     await page.screenshot({path:path.join(output,'selection.png'),fullPage:false});
     popup=await openPrint();
@@ -135,7 +153,7 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await popup.pdf({path:path.join(output,'filtered.pdf'),preferCSSPageSize:true,printBackground:true});await popup.close();
     await page.locator('#spec-search').fill('미국산');assert.equal(await page.locator('#spec-print').isDisabled(),true);
     await page.getByRole('button',{name:'검색 초기화',exact:true}).click();
-    assert.equal(await trader.inputValue(),'');assert.equal(await distribution.inputValue(),'');assert.equal(await page.locator('#spec-search').inputValue(),'');
+    assert.equal(await all.isChecked(),true);assert.equal(await distribution.inputValue(),'');assert.equal(await page.locator('#spec-search').inputValue(),'');
     assert.equal((await ids()).length,6);
     popup=await openPrint('#spec-usage-print');
     assert.equal(await popup.locator('tbody tr').count(),6);
@@ -146,14 +164,14 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await distribution.selectOption('<자유 & 유통>');assert.deepEqual(await ids(),['s5']);
     popup=await openPrint();
     assert.match(await popup.locator('header').textContent(),/<자유 & 유통>/);assert.equal(await popup.locator('img,script').count(),0);await popup.close();
-    await distribution.selectOption('');await trader.selectOption('거래처A');
+    await distribution.selectOption('');await selectOnly('거래처A');
     await page.evaluate(()=>{qaRows=qaRows.filter(row=>row.trader!=='거래처A');return DBMTProductSpecs.load();});
-    assert.equal(await trader.inputValue(),'거래처A','Refresh preserves a selected customer even if its final record disappears');
+    assert.equal(await trader('거래처A').isChecked(),true,'Refresh preserves a selected customer even if its final record disappears');
     assert.deepEqual(await ids(),[]);assert.equal(await page.locator('#spec-print').isDisabled(),true,'Missing selections cannot broaden printing');
     await page.getByRole('button',{name:'검색 초기화',exact:true}).click();assert.equal((await ids()).length,3);
     await distribution.selectOption('삼성웰스토리');
     await page.evaluate(()=>{qaToken='third-session';DBMTProductSpecs.applyPermissions();});
-    assert.equal(await trader.locator('option').count(),1);assert.equal(await distribution.locator('option').count(),1,'Session changes clear previous customer/distributor choices');
+    assert.equal(await page.locator('#spec-filter-traders input').count(),0);assert.equal(await distribution.locator('option').count(),1,'Session changes clear previous customer/distributor choices');
 
     const many=Array.from({length:70},(_,i)=>({...base,id:'multi-'+i,trader:'업체'+String(i+1).padStart(3,'0'),material:'상품'+String(i+1).padStart(3,'0'),note:i===35?'긴 문구 '.repeat(250)+'긴문구끝표시':'확인사항'+String(i+1).padStart(3,'0')}));
     await page.evaluate(data=>{qaRights.view=true;qaRows=data;return DBMTProductSpecs.load();},many);
@@ -172,6 +190,6 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     }
     await page.screenshot({path:path.join(output,'list.png'),fullPage:false});
     assert.deepEqual(errors,[]);
-    console.log('PASS: exact customer/distributor selection, combined search, custom distributors, reset/refresh/session safeguards; price-free sorted A4 print, screen prices, wrapping, permissions and popup failure. QA: '+output);
+    console.log('PASS: distributor-first customer checkboxes, select all/none, individual exclusions, shared usage/detail print, combined search, reset/refresh/session safeguards; sorted A4 print, wrapping and permissions. QA: '+output);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

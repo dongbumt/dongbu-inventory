@@ -1,6 +1,6 @@
 (function(){
   'use strict';
-  const state={rows:[],editing:null,loading:false,saving:false,token:'',request:0,sortKey:'trader',sortDirection:1};
+  const state={rows:[],editing:null,loading:false,saving:false,token:'',request:0,sortKey:'trader',sortDirection:1,traderSelection:null};
   const el=id=>document.getElementById('spec-'+id);
   const can=action=>Boolean(window.DBMTAuth?.isPersonal() && DBMTAuth.can('product_specs',action));
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -14,13 +14,13 @@
   const usageText=value=>usageValue(value)===null?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:6});
   function syncMaterialHint(){
     const id=el('material-product-id').value,p=catalog().find(p=>String(p.id)===id);
-    el('material-meta').textContent=p?[p.productCode,p.brand,p.origin,p.packunit,p.isActive===false?'사용 중지':''].filter(Boolean).join(' · '):el('material').value?(id?'기존 선택 제품 · 제품 선택으로 변경할 수 있습니다.':'기존 직접입력 · 등록 제품을 선택해 연결할 수 있습니다.') : '';
+    el('material-meta').textContent=p?[p.kind,p.productCode,p.brand,p.origin,p.packunit,p.isActive===false?'사용 중지':''].filter(Boolean).join(' · '):el('material').value?(id?'기존 선택 품목 · 품목 선택으로 변경할 수 있습니다.':'기존 직접입력 · 등록 제품 또는 원료육을 선택해 연결할 수 있습니다.') : '';
   }
   function setMaterial(row={}){el('material-product-id').value=row.material_product_id??'';syncMaterialHint();}
   function selectMaterial(id){
     if(state.saving||state.loading||!can(state.editing?'update':'create'))return false;
     const p=catalog().find(p=>String(p.id)===String(id));
-    if(!p||p.isActive===false||String(p.kind||'').trim()!=='제품'){message('품목관리에 등록된 사용 가능한 제품을 선택해주세요.',true);return false;}
+    if(!p||p.isActive===false||!['제품','원료육'].includes(String(p.kind||'').trim())){message('품목관리에 등록된 사용 가능한 제품 또는 원료육을 선택해주세요.',true);return false;}
     el('material-product-id').value=String(p.id);el('material').value=p.name||'';
     el('origin').value=typeof normalizeOriginName==='function'?normalizeOriginName(p.origin):p.origin||'';
     syncMaterialHint();message('');return true;
@@ -80,6 +80,7 @@
     el('editor-title').textContent=state.editing?'제품스펙 수정':'제품스펙 등록';
     el('save').textContent=state.saving?'저장 중…':state.editing?'수정 저장':'+ 스펙 등록';
     el('editor').querySelectorAll('input,select,button').forEach(node=>{node.disabled=state.saving||state.loading||!can(action);});
+    syncTraderChoices();
     syncPrintControl();
   }
   function reset(){
@@ -90,14 +91,14 @@
     const token=window.DBMTAuth?.getSessionToken()||'';
     if(token!==state.token || !can('view')){
       state.token=token;state.request++;state.rows=[];state.loading=false;state.saving=false;
-      el('filter-trader').value='';el('filter-distribution').value='';
+      state.traderSelection=null;el('filter-distribution').value='';
       reset();message('');
     }
     if(state.editing&&!can('update'))reset();
     syncControls();render();
   }
   function syncFilterChoices(){
-    for(const [key,label] of [['trader','전체 거래처'],['distribution','전체 유통사']]){
+    for(const [key,label] of [['distribution','전체 유통사']]){
       const select=el('filter-'+key),selected=select.value;
       const values=new Set(state.rows.map(row=>String(row[key]??'').trim()).filter(Boolean));
       // Keep a missing selection after refresh so printing never expands to all rows.
@@ -106,11 +107,39 @@
       select.value=selected;
     }
   }
+  function traderChoices(){
+    const distribution=el('filter-distribution').value;
+    const values=new Set(state.rows.filter(row=>!distribution||String(row.distribution??'').trim()===distribution).map(row=>String(row.trader??'').trim()));
+    // Keep explicit selections after refresh; removed customers must not broaden printing.
+    state.traderSelection?.forEach(value=>values.add(value));
+    return Array.from(values).sort(collator.compare);
+  }
+  function syncTraderChoices(){
+    const choices=traderChoices(),list=el('filter-traders'),all=el('traders-all');
+    const current=Array.from(list.querySelectorAll('input[data-spec-trader]'));
+    if(current.length!==choices.length||current.some((input,index)=>input.value!==choices[index])){
+      list.innerHTML=choices.length?choices.map(value=>`<label class="spec-trader-option"><input type="checkbox" data-spec-trader value="${esc(value)}"><span>${esc(value||'거래처 미입력')}</span></label>`).join(''):'<span class="spec-trader-empty">선택한 유통사에 등록된 거래처가 없습니다.</span>';
+    }
+    const disabled=state.loading||state.saving||!can('view');
+    let selected=0;
+    list.querySelectorAll('input[data-spec-trader]').forEach(input=>{
+      input.checked=state.traderSelection===null||state.traderSelection.has(input.value);
+      input.disabled=disabled;
+      if(input.checked)selected++;
+    });
+    all.checked=choices.length>0&&selected===choices.length;
+    all.indeterminate=selected>0&&selected<choices.length;
+    all.disabled=disabled||!choices.length;
+    el('traders-count').textContent=`${selected.toLocaleString('ko-KR')} / ${choices.length.toLocaleString('ko-KR')}개 거래처 선택`;
+  }
+  function traderSelectionText(){
+    return state.traderSelection===null?'전체':Array.from(state.traderSelection).sort(collator.compare).map(value=>value||'거래처 미입력').join(', ')||'선택 없음';
+  }
   function filteredRows(){
     const terms=normalize(el('search').value).split(/\s+/).filter(Boolean);
-    const trader=el('filter-trader').value,distribution=el('filter-distribution').value;
+    const distribution=el('filter-distribution').value;
     return state.rows.filter(row=>{
-      if(trader&&String(row.trader??'').trim()!==trader)return false;
+      if(state.traderSelection!==null&&!state.traderSelection.has(String(row.trader??'').trim()))return false;
       if(distribution&&String(row.distribution??'').trim()!==distribution)return false;
       const values=[row.trader,row.distribution,row.material,row.origin].map(normalize);
       return terms.every(term=>values.some(value=>value.includes(term)));
@@ -164,7 +193,7 @@
         @media screen{body{max-width:190mm;margin:10mm auto;padding:0 2mm;}}
       </style></head><body>
       <header><h1>${title}<span class="company">동부엠티 ERP</span></h1>
-        <p class="conditions">거래처: ${esc(el('filter-trader').value||'전체')} · 유통사: ${esc(el('filter-distribution').value||'전체')}<br>검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
+        <p class="conditions">거래처: ${esc(traderSelectionText())} · 유통사: ${esc(el('filter-distribution').value||'전체')}<br>검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
       </header>
       ${mode==='usage'?`<p class="conditions">품목명/원산지별 합계 · 입력 ${report.entered}건 · 미입력 ${report.missing}건 제외</p>${usageTable(report)}`:`<table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
         <thead><tr>${columns.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
@@ -196,6 +225,7 @@
   }
   function render(){
     syncFilterChoices();
+    syncTraderChoices();
     const rows=filteredRows();
     syncPrintControl(rows.length);
     renderUsageSummary(rows);
@@ -272,7 +302,7 @@
       if(raw&&(!Number.isFinite(value)||value<0||value>999999999||Number(value.toFixed(6))!==value))throw new Error('월사용량은 0 이상, 소수 여섯 자리까지 입력해주세요.');
       record.monthly_usage=raw===''?null:value;
       record.material_product_id=el('material-product-id').value||null;
-      if(!record.material_product_id&&(!state.editing||record.material!==state.editing.material))throw new Error('품목관리에 등록된 제품을 선택해주세요.');
+      if(!record.material_product_id&&(!state.editing||record.material!==state.editing.material))throw new Error('품목관리에 등록된 제품 또는 원료육을 선택해주세요.');
     }catch(error){message(error.message,true);return;}
     const previous=state.editing,token=state.token;
     state.saving=true;syncControls();message('제품스펙을 저장하는 중입니다…');
@@ -313,13 +343,20 @@
     else if(button.dataset.action==='delete')remove(button.dataset.id);
   });
   el('search').addEventListener('input',render);
-  el('filter-trader').addEventListener('change',render);
-  el('filter-distribution').addEventListener('change',render);
+  el('traders-all').addEventListener('change',event=>{state.traderSelection=event.target.checked?null:new Set();render();});
+  el('filter-traders').addEventListener('change',event=>{
+    const input=event.target.closest('input[data-spec-trader]');
+    if(!input)return;
+    if(state.traderSelection===null)state.traderSelection=new Set(traderChoices());
+    if(input.checked)state.traderSelection.add(input.value);else state.traderSelection.delete(input.value);
+    render();
+  });
+  el('filter-distribution').addEventListener('change',()=>{state.traderSelection=null;render();});
   document.querySelector('.spec-table thead').addEventListener('click',event=>{
     const button=event.target.closest('button[data-sort]');
     if(button)sortBy(button.dataset.sort);
   });
   el('distribution-choice').addEventListener('change',changeDistribution);
   document.addEventListener('dbmt-product-catalog-changed',syncMaterialHint);
-  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,print:printList,printUsage(){printList('usage');},openMaterialPicker,materialPickerKey,selectMaterial,clearFilters(){el('search').value='';el('filter-trader').value='';el('filter-distribution').value='';render();}};
+  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,print:printList,printUsage(){printList('usage');},openMaterialPicker,materialPickerKey,selectMaterial,clearFilters(){el('search').value='';state.traderSelection=null;el('filter-distribution').value='';render();}};
 })();

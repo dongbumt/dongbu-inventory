@@ -33,7 +33,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261116usage1">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261117selection1">
 <link rel="stylesheet" href="styles/ledgers.css?v=20261112ledger1">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261113pda1">
 <link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
@@ -576,7 +576,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="spec-editor-heading"><strong id="spec-editor-title">제품스펙 등록</strong><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.reset()">입력 초기화</button></div>
       <div class="form-group"><label for="spec-trader">거래처</label><input id="spec-trader" list="sales-trader-list" maxlength="200" required autocomplete="off" placeholder="거래처명"></div>
       <div class="form-group"><label for="spec-distribution-choice">유통</label><select id="spec-distribution-choice"><option value="">선택</option><option>삼성웰스토리</option><option>동원홈푸드</option><option>CJ프레시웨이</option><option>동부축산유통</option><option>직납</option><option value="__custom__">직접입력</option></select><input id="spec-distribution" aria-label="유통 직접입력" maxlength="200" autocomplete="off" placeholder="유통처를 입력하세요" hidden></div>
-      <div class="form-group"><label for="spec-material">원재료</label><input type="hidden" id="spec-material-product-id"><div class="spec-material-picker"><input id="spec-material" data-picker-context="product-spec" readonly placeholder="등록 제품 선택" onclick="DBMTProductSpecs.openMaterialPicker()" onkeydown="DBMTProductSpecs.materialPickerKey(event)"><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.openMaterialPicker()">검색</button></div><small id="spec-material-meta" class="spec-material-meta"></small></div>
+      <div class="form-group"><label for="spec-material">원재료</label><input type="hidden" id="spec-material-product-id"><div class="spec-material-picker"><input id="spec-material" data-picker-context="product-spec" readonly placeholder="등록 제품 · 원료육 선택" onclick="DBMTProductSpecs.openMaterialPicker()" onkeydown="DBMTProductSpecs.materialPickerKey(event)"><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.openMaterialPicker()">검색</button></div><small id="spec-material-meta" class="spec-material-meta"></small></div>
       <div class="form-group"><label for="spec-origin">원산지</label><input id="spec-origin" maxlength="100" placeholder="예: 국내산"></div>
       <div class="form-group"><label for="spec-cutting">세절스펙</label><input id="spec-cutting" maxlength="300" placeholder="예: 3mm 슬라이스"></div>
       <div class="form-group"><label for="spec-inner-packaging">내포장 스펙</label><input id="spec-inner-packaging" maxlength="300" placeholder="예: 1KG 진공포장"></div>
@@ -598,9 +598,9 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
     </div>
     <div class="spec-search">
-      <div class="form-group"><label for="spec-filter-trader">거래처 선택</label><select id="spec-filter-trader"><option value="">전체 거래처</option></select></div>
       <div class="form-group"><label for="spec-filter-distribution">유통사 선택</label><select id="spec-filter-distribution"><option value="">전체 유통사</option></select></div>
       <div class="form-group spec-keyword"><label for="spec-search">검색</label><input id="spec-search" type="search" autocomplete="off" placeholder="거래처 · 유통 · 원재료 · 원산지 검색"></div>
+      <fieldset class="spec-trader-filter"><legend>거래처 선택</legend><div class="spec-trader-toolbar"><label class="spec-trader-option"><input type="checkbox" id="spec-traders-all"><span>전체 선택</span></label><span id="spec-traders-count" aria-live="polite"></span></div><p class="spec-trader-guide">유통사를 선택한 후 출력할 거래처를 체크하세요. 체크를 해제한 거래처는 목록과 인쇄에서 제외됩니다.</p><div id="spec-filter-traders" class="spec-trader-options"></div></fieldset>
     </div>
     <details class="spec-usage-summary" id="spec-usage-summary">
       <summary>월사용량 합계 · 품목/원산지별 <span id="spec-usage-total"></span></summary>
@@ -7657,7 +7657,7 @@ function txnProductStorageBadge(storageValue){
 
 function syncTxnProductKindButtons(){
   document.querySelectorAll('[data-tpp-kind]').forEach(button=>{
-    button.style.display=txnProductPickerTargetInput?.dataset?.pickerContext==='product-spec'&&button.dataset.tppKind!=='제품'?'none':'';
+    button.style.display='';
     const active = button.dataset.tppKind === txnProductPickerKind;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -7665,7 +7665,8 @@ function syncTxnProductKindButtons(){
 }
 
 function refreshTxnProductPickerFilterOptions(){
-  const rows = (labelProducts || []).filter(product => product.isActive !== false && txnProductKindValue(product) === txnProductPickerKind);
+  const rows = (labelProducts || []).filter(product => product.isActive !== false && txnProductKindValue(product) === txnProductPickerKind)
+    .filter(product => txnProductPickerTargetInput?.dataset?.pickerContext !== 'product-spec' || ['제품','원료육'].includes(String(product.kind || '').trim()));
   const setOptions = (id, values) => {
     const select = document.getElementById(id);
     if(!select) return;
@@ -7679,7 +7680,6 @@ function refreshTxnProductPickerFilterOptions(){
 }
 
 function setTxnProductPickerKind(kind){
-  if(txnProductPickerTargetInput?.dataset?.pickerContext==='product-spec'&&kind!=='제품')return;
   const nextKind = kind === '제품' ? '제품' : '원료육';
   const changed = txnProductPickerKind !== nextKind;
   txnProductPickerKind = nextKind;
@@ -7707,12 +7707,12 @@ function openTxnProductPicker(initialQuery, targetInput=null){
   const selectedProduct = selectedProductId
     ? (labelProducts || []).find(product => String(product.id || '') === String(selectedProductId))
     : null;
-  txnProductPickerKind = pickerContext==='product-spec'?'제품':['production-output','workorder-output','manual-label'].includes(pickerContext)
+  txnProductPickerKind = ['production-output','workorder-output','manual-label','product-spec'].includes(pickerContext)
     ? (selectedProduct ? txnProductKindValue(selectedProduct) : '제품')
     : '원료육';
   const title = document.getElementById('txn-product-picker-title');
   if(title) title.textContent = pickerContext === 'manual-label' ? '라벨 출력 제품 선택' : (pickerContext === 'workorder-output' ? '작업지시 생산물 제품 선택' : (pickerContext === 'production-output' ? '생산 품목 선택' : (targetInput ? '입고일괄 품목 선택' : '입고 품목 선택')));
-  if(title&&pickerContext==='product-spec')title.textContent='제품스펙 원재료 제품 선택';
+  if(title&&pickerContext==='product-spec')title.textContent='제품스펙 원재료 선택 (제품 · 원료육)';
   syncTxnProductKindButtons();
   const allSearch = document.getElementById('tpp-search-all');
   const nameSearch = document.getElementById('tpp-search-name');
@@ -7766,6 +7766,7 @@ function renderTxnProductPicker(resetSelection=false){
   const storage = document.getElementById('tpp-search-storage')?.value || '';
   const filtered = (labelProducts || [])
     .filter(product => product.isActive !== false && txnProductKindValue(product) === txnProductPickerKind)
+    .filter(product => txnProductPickerTargetInput?.dataset?.pickerContext !== 'product-spec' || ['제품','원료육'].includes(String(product.kind || '').trim()))
     .filter(product => !allQ || priceKey(labelProductSearchText(product)).includes(allQ))
     .filter(product => !nameQ || priceKey(product.name || '').includes(nameQ))
     .filter(product => !brand || samePriceText(product.brand, brand))
@@ -22710,7 +22711,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="driver-place-label.js?v=20261105place1"></script>
 <script src="production-schedule.js?v=20261020workorders1"></script>
-<script src="product-specs.js?v=20261116usage1"></script>
+<script src="product-specs.js?v=20261117selection1"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261113pda1"></script>

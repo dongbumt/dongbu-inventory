@@ -18,7 +18,8 @@ def tests(conn):
     conn.execute("insert into public.erp_user_sessions(token_hash,user_id,expires_at) values(encode(extensions.digest(%s,'sha256'),'hex'),%s,now()+interval '10 minutes')",(token,user))
     products=[dict(id='qa-product',name='QA 돈등심',kind='제품',origin='국내산',brand='QA A'),
               dict(id='qa-other',name='QA 돈등심',kind='제품',origin='미국산',brand='QA B'),
-              dict(id='qa-raw',name='QA 원료육',kind='원료육'),dict(id='qa-off',name='QA 중지품',kind='제품',isActive=False)]
+              dict(id='qa-raw',name='QA 원료육',kind='원료육'),dict(id='qa-off',name='QA 중지품',kind='제품',isActive=False),
+              dict(id='qa-raw-off',name='QA 중지원료육',kind='원료육',isActive=False),dict(id='qa-wrong-kind',name='QA 부자재',kind='부자재')]
     def catalog():conn.execute("insert into public.app_data(key,payload) values('labelProducts',%s) on conflict(key) do update set payload=excluded.payload",(Jsonb(products),))
     catalog()
     def rpc(name,*args):
@@ -54,8 +55,13 @@ def tests(conn):
     cleared=save(dict(payload,monthly_usage=None),spec_id,zero['revision'])['spec'];assert cleared['monthly_usage'] is None
     for value in [-1,1000000000,0.1234567]:reject(lambda value=value:save(dict(payload,monthly_usage=value)),'월사용량은 0 이상')
     reject(lambda:save(dict(payload,monthly_usage='10')),'월사용량은 숫자')
-    for product_id in ['missing','qa-raw','qa-off']:reject(lambda product_id=product_id:save(dict(payload,material_product_id=product_id)),'사용 가능한 제품')
-    reject(lambda:save(dict(payload,material_product_id=None)),'등록된 제품')
+    raw_payload=dict(payload,material_product_id='qa-raw')
+    raw=save(raw_payload)['spec'];assert raw['material']=='QA 원료육' and raw['material_product_id']=='qa-raw'
+    raw_updated=save(dict(raw_payload,monthly_usage=12.5),uuid.UUID(raw['id']),raw['revision'])['spec']
+    assert raw_updated['monthly_usage']==12.5 and raw_updated['material']=='QA 원료육'
+    raw_copy=save(dict(raw_payload,trader='QA 원료육 복사'))['spec'];assert raw_copy['id']!=raw['id']
+    for product_id in ['missing','qa-off','qa-raw-off','qa-wrong-kind']:reject(lambda product_id=product_id:save(dict(payload,material_product_id=product_id)),'사용 가능한 제품 또는 원료육')
+    reject(lambda:save(dict(payload,material_product_id=None)),'등록된 제품 또는 원료육')
     # Old free-text records remain editable without guessing a link by a duplicate name.
     legacy=conn.execute("insert into public.product_specs(trader,material,origin,note) values('QA 기존거래처','기존 직접입력','국내산','원문 보존') returning id,revision").fetchone()
     legacy_updated=save(dict(trader='QA 기존거래처',material='기존 직접입력',material_product_id=None,origin='국내산',monthly_usage=25,note='원문 보존'),*legacy)['spec']
@@ -72,12 +78,12 @@ def tests(conn):
     assert not rpc('dbmt_erp_get_product_specs',token)['ok']
     assert conn.execute("select relrowsecurity from pg_class where oid='public.product_specs'::regclass").fetchone()[0]
     assert not conn.execute("select has_table_privilege('anon','public.product_specs','select')").fetchone()[0]
-    print('PASS: KG usage create/read/zero/null/precision, canonical product selection, raw/inactive rejection, duplicate-name identity, legacy/old-client retention, removed masters, revisions, audit and permissions')
+    print('PASS: raw meat create/update/copy, KG usage, canonical material selection, inactive/unsupported kind rejection, legacy/old-client retention, removed masters, revisions, audit and permissions')
 
 
 def main():
     if 'hdwjwtmbsxfjrlvicgnn' not in os.environ.get('PGUSER',''):raise RuntimeError('Wrong project')
-    migration,=(ROOT/'supabase/migrations').glob('*_product_spec_monthly_usage_catalog.sql')
+    migration,=(ROOT/'supabase/migrations').glob('*_product_spec_raw_materials.sql')
     with psycopg.connect(sslmode='require',connect_timeout=20,autocommit=True,application_name='dbmt_spec_usage_qa') as conn:
         conn.execute('set role postgres')
         with conn.transaction(force_rollback=True):

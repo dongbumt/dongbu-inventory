@@ -27,7 +27,8 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
       var labelProducts=[{id:'p1',name:'돈등심',origin:'국내산',kind:'제품',brand:'브랜드A',productCode:'P001',packunit:'5KG'},
         {id:'p1-other',name:'돈등심',origin:'미국산',kind:'제품',brand:'브랜드B',productCode:'P002',packunit:'10KG'},
         {id:'p2',name:'우둔살',origin:'호주산',kind:'제품'}, {id:'p3',name:'실패 보존',kind:'제품'},
-        {id:'raw',name:'선택 제외 원료육',kind:'원료육'}, {id:'off',name:'사용중지 제품',kind:'제품',isActive:false}];
+        {id:'raw',name:'선택 가능 원료육',origin:'호주산',kind:'원료육'}, {id:'off',name:'사용중지 제품',kind:'제품',isActive:false},
+        {id:'raw-off',name:'사용중지 원료육',kind:'원료육',isActive:false}, {id:'other-kind',name:'부자재',kind:'부자재'}];
       var txnProductPickerKind='제품',txnProductPickerTargetInput=null,txnProductPickerReturnFocus=null,txnProductPickerBodyOverflow='',txnProductPickerRows=[],txnProductPickerIndex=-1;
       var priceKey=value=>String(value??'').trim().toLowerCase(),samePriceText=(a,b)=>priceKey(a)===priceKey(b),sameOriginText=samePriceText,normalizeOriginName=value=>String(value??'').trim();
       var DBMTAuth={isPersonal:()=>!!qaToken,can:(_,action)=>qaRights[action],getSessionToken:()=>qaToken};
@@ -64,10 +65,20 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     await page.locator('#spec-distribution-choice').selectOption('삼성웰스토리');
     await page.locator('#spec-trader').fill('삼성웰스토리');
     await page.locator('#spec-material').click();
-    assert.equal(await page.locator('#tpp-kind-raw').isVisible(),false);
-    assert.doesNotMatch(await page.locator('#tpp-result-body').textContent(),/선택 제외 원료육|사용중지 제품/);
-    await page.evaluate(()=>setTxnProductPickerKind('원료육'));
-    assert.equal(await page.evaluate(()=>txnProductPickerKind),'제품');
+    assert.equal(await page.locator('#tpp-kind-raw').isVisible(),true);
+    assert.doesNotMatch(await page.locator('#tpp-result-body').textContent(),/선택 가능 원료육|사용중지 제품/);
+    await page.locator('#tpp-kind-raw').click();
+    assert.equal(await page.evaluate(()=>txnProductPickerKind),'원료육');
+    assert.equal(await page.locator('#tpp-result-body tr[data-tpp-index]').count(),1);
+    assert.doesNotMatch(await page.locator('#tpp-result-body').textContent(),/사용중지 원료육/);
+    await page.locator('#tpp-confirm').click();
+    assert.equal(await page.locator('#spec-material-product-id').inputValue(),'raw');
+    assert.equal(await page.locator('#spec-material').inputValue(),'선택 가능 원료육');
+    assert.equal(await page.locator('#spec-origin').inputValue(),'호주산');
+    await page.locator('#spec-material').click();
+    assert.equal(await page.evaluate(()=>txnProductPickerKind),'원료육','Reopening preserves the selected material kind');
+    await page.locator('#tpp-search-all').fill('');
+    await page.locator('#tpp-kind-product').click();
     assert.equal(await page.locator('#tpp-result-body tr[data-tpp-index]').count(),4,JSON.stringify({errors,details:await page.locator('#tpp-result-body').textContent()}));
     await page.locator('#tpp-result-body tr').filter({hasText:'브랜드A'}).click();await page.locator('#tpp-confirm').click();
     assert.equal(await page.locator('#spec-material-product-id').inputValue(),'p1');
@@ -155,7 +166,7 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     }
     await page.setViewportSize({width:1366,height:900});
     await page.screenshot({path:screenshot,fullPage:true});
-    assert.equal(await page.locator('.spec-search input').count(),1);
+    assert.equal(await page.locator('.spec-search input[type="search"]').count(),1);
     for(const [value,material] of [['가상','우둔살'],['급식','우둔살'],['등심','돈등심'],['호주','우둔살'],['  삼성 국내 돈등심  ','돈등심']]){
       await page.locator('#spec-search').fill(value);
       assert.equal(await page.locator('#spec-rows tr[data-id]').count(),1,value+' search');
@@ -245,7 +256,7 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     const legacyCopyCalls=await page.evaluate(()=>qaCalls.length);
     await page.locator('#spec-save').click();
     assert.equal(await page.evaluate(()=>qaCalls.length),legacyCopyCalls,'A new copy of unlinked legacy text requires a registered product');
-    assert.match(await page.locator('#spec-message').textContent(),/등록된 제품을 선택/);
+    assert.match(await page.locator('#spec-message').textContent(),/등록된 제품 또는 원료육을 선택/);
     await page.evaluate(()=>DBMTProductSpecs.reset());
     await page.evaluate(()=>{qaRights={view:true,create:true,update:false,delete:false};DBMTProductSpecs.applyPermissions();});
     assert.equal(await page.locator('[data-action="copy"]').count(),2,'Create-only users can copy');
@@ -259,6 +270,22 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     assert.equal(await page.locator('th:has([data-sort="trader"])').getAttribute('aria-sort'),'ascending','Read-only users can sort');
     await page.evaluate(()=>{qaToken='';DBMTProductSpecs.applyPermissions();});
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),0,'Logout clears private specs');
+    await page.evaluate(()=>{qaToken='raw-session';qaRights={view:true,create:true,update:true,delete:true};return DBMTProductSpecs.load();});
+    assert.equal(await page.evaluate(()=>DBMTProductSpecs.selectMaterial('raw-off')),false);
+    assert.equal(await page.evaluate(()=>DBMTProductSpecs.selectMaterial('other-kind')),false);
+    await page.locator('#spec-trader').fill('원료육 거래처');
+    await page.evaluate(()=>DBMTProductSpecs.selectMaterial('raw'));
+    await page.locator('#spec-save').click();
+    const rawId=await page.evaluate(()=>qaRows.find(row=>row.trader==='원료육 거래처').id);
+    await page.locator(`[data-id="${rawId}"] [data-action="edit"]`).click();
+    await page.locator('#spec-material').click();
+    assert.equal(await page.evaluate(()=>txnProductPickerKind),'원료육');
+    await page.evaluate(()=>closeTxnProductPicker(false));
+    await page.locator('#spec-note').fill('원료육 수정 확인');await page.locator('#spec-save').click();
+    assert.equal(await page.evaluate(id=>qaRows.find(row=>row.id===id).material_product_id,rawId),'raw');
+    await page.locator(`[data-id="${rawId}"] [data-action="copy"]`).click();
+    await page.locator('#spec-trader').fill('원료육 복사 거래처');await page.locator('#spec-save').click();
+    assert.equal(await page.evaluate(()=>qaRows.filter(row=>row.material_product_id==='raw').length),2);
     assert.deepEqual(errors,[]);
     assert.match(fs.readFileSync(path.join(root,'m02-auth.js'),'utf8'),/'nav-product-specs':'product_specs'/);
     await page.setViewportSize({width:390,height:844});
