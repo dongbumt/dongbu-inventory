@@ -6,7 +6,7 @@
 <title>동부엠티 ERP 시스템</title>
 <script src="stock-ledger.js?v=20261113split1"></script>
 <script src="ledger-model.js?v=20261112ledger1"></script>
-<script src="pda-transaction-summary.js?v=20261116stockrow1"></script>
+<script src="pda-transaction-summary.js?v=20261116receipt1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="label-lots.js?v=20261029lots1"></script>
@@ -3705,8 +3705,12 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <button type="button" class="btn btn-secondary btn-sm" onclick="closePdaTransactionDetails()" aria-label="박스별 내역 닫기" title="닫기">×</button>
   </div>
   <div id="txn-pda-detail-summary" style="font-size:12px;line-height:1.6;margin-bottom:10px;"></div>
+  <div id="txn-pda-detail-modes" role="group" aria-label="입고 상세 보기" style="margin-bottom:10px;" hidden>
+    <button type="button" class="btn btn-secondary btn-sm" data-detail-mode="boxes" onclick="document.getElementById('txn-pda-detail-dialog').dataset.detailMode='boxes';renderPdaTransactionDetails()">박스별</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-detail-mode="receipts" onclick="document.getElementById('txn-pda-detail-dialog').dataset.detailMode='receipts';renderPdaTransactionDetails()">입고별</button>
+  </div>
   <div class="tbl-wrap" style="max-height:65vh;overflow:auto;">
-    <table style="min-width:720px;"><thead><tr><th>박스 바코드</th><th style="text-align:right;">중량(KG)</th><th style="text-align:right;">단가</th><th style="text-align:right;">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="txn-pda-detail-body"></tbody></table>
+    <table style="min-width:720px;"><thead id="txn-pda-detail-head"><tr><th>박스 바코드</th><th style="text-align:right;">중량(KG)</th><th style="text-align:right;">단가</th><th style="text-align:right;">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="txn-pda-detail-body"></tbody></table>
   </div>
 </dialog>
 
@@ -10558,7 +10562,7 @@ function renderTransactions(){
   }
   const filtered = getFilteredTransactions('desc').rows;
   const rows = transactionDisplayRows(filtered);
-  const pdaBoxes = filtered.filter(DBMTPdaTransactionSummary.isOutboundBox).length;
+  const pdaBoxes = DBMTPdaTransactionSummary.countBoxes(filtered);
   document.getElementById('t-count').textContent=`(${rows.length}건${pdaBoxes ? ` · PDA ${pdaBoxes}박스` : ''})`;
   document.getElementById('t-table')?.classList.toggle('txn-list-has-details',rows.some(t=>Array.isArray(t._pdaRawBoxes)||t._pdaSummaryRows));
   const b=document.getElementById('t-body');
@@ -10601,14 +10605,14 @@ function renderTransactions(){
     <td class="txn-col-price">
       ${pendingCost ? '미확정' : t._isUser
         ? ((isStockAdjust || isStockMove || isBoxBaseline) ? (price?price.toLocaleString():'-') : `<input type="number" value="${price}"
-             onchange="updateTxnPrice(${jsArg(t.id)}, this.value)" ${isPdaSummary?`title="${t._pdaSummaryRows.length}박스 단가 일괄 수정" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''}`:''}
+             onchange="updateTxnPrice(${jsArg(t.id)}, this.value)" ${isPdaSummary?`title="${t.boxCount}박스 단가 일괄 수정" ${typeof DBMTAuth==='object'&&!DBMTAuth.can('transactions','update')?'disabled':''}`:''}
              class="txn-list-price-input">`)
         : (price?price.toLocaleString():'-')}
     </td>
     <td class="txn-col-amount" id="txn-amt-${domId}">${pendingCost?'미확정':(amount || (t.type==='출고' && t.price!=='' && t.price!=null))?Math.round(amount).toLocaleString():'-'}</td>
     <td class="txn-col-note">${note}</td>
     <td class="txn-col-manage"><span class="txn-list-actions">
-      ${Array.isArray(t._pdaRawBoxes) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${isPdaSummary ? `${t._pdaLabelId?`<button class="btn btn-sm btn-primary" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button> `:''}<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
+      ${!isPdaSummary&&DBMTPdaTransactionSummary.isRawReceipt(t) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${isPdaSummary ? `${t._pdaLabelId||t._pdaReceiptSummary?`<button class="btn btn-sm btn-primary" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button> `:''}<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
          ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
     </span></td>
@@ -10626,11 +10630,12 @@ function findPdaTransactionSummary(id){
 }
 
 let pdaTransactionDetailIds=[];
-function openPdaTransactionDetails(id){
-  const receipt=userTransactions.find(row=>String(row.id)===String(id)&&Array.isArray(row._pdaRawBoxes));
+function openPdaTransactionDetails(id,mode='boxes'){
+  const receipt=userTransactions.find(row=>String(row.id)===String(id)&&DBMTPdaTransactionSummary.isRawReceipt(row));
   const summary=receipt ? {_pdaSummaryRows:[receipt]} : findPdaTransactionSummary(id);
   if(!summary) return;
   pdaTransactionDetailIds=summary._pdaSummaryRows.map(row=>String(row.id));
+  document.getElementById('txn-pda-detail-dialog').dataset.detailMode=mode;
   renderPdaTransactionDetails();
   document.getElementById('txn-pda-detail-dialog').showModal();
 }
@@ -10646,15 +10651,32 @@ function renderPdaTransactionDetails(){
   const ids=new Set(pdaTransactionDetailIds),rows=userTransactions.filter(row=>ids.has(String(row.id)));
   const first=rows[0];
   if(!first){closePdaTransactionDetails();return;}
+  const rawReceipts=rows.every(DBMTPdaTransactionSummary.isRawReceipt);
+  const mode=document.getElementById('txn-pda-detail-dialog').dataset.detailMode||'boxes';
+  const modes=document.getElementById('txn-pda-detail-modes');
+  if(modes){modes.hidden=!rawReceipts;modes.querySelectorAll('button').forEach(button=>{
+    const active=button.dataset.detailMode===mode;button.setAttribute('aria-pressed',String(active));
+    button.classList.toggle('btn-primary',active);button.classList.toggle('btn-secondary',!active);
+  });}
+  const head=document.getElementById('txn-pda-detail-head');
   document.getElementById('txn-pda-detail-title').textContent=first.type==='입고'?'박스별 입고 내역':'박스별 출고 내역';
-  if(first.type==='입고'&&Array.isArray(first._pdaRawBoxes)){
-    summary.textContent=`${first.date} · ${first.trader||''} · ${first.product||''} · ${first.lot||''} / ${first.boxCount}박스 · 장부 ${Number(first.weight).toFixed(2)} KG · ${Math.round(Number(first.amount||0)).toLocaleString()}원`+
-      (Number(first._pdaRawWeightDelta)?` · 스캔 합계 ${Number(first._pdaRawScannedWeight).toFixed(2)} KG · 정정 ${Number(first._pdaRawWeightDelta).toFixed(2)} KG`:'');
-    body.innerHTML=first._pdaRawBoxes.map(box=>`<tr><td style="font-family:monospace;max-width:280px;overflow-wrap:anywhere;">${htmlEscape(String(box.barcode||'').replaceAll(String.fromCharCode(29),'|'))}</td>
-      <td style="text-align:right;">${Number(box.weight).toFixed(2)}</td><td style="text-align:right;">${Number(first.price||0).toLocaleString()}</td>
-      <td style="text-align:right;">${Math.round(Number(box.weight)*Number(first.price||0)).toLocaleString()}</td><td>${htmlEscape(first.note||'-')}</td><td>-</td></tr>`).join('');
+  if(rawReceipts){
+    const kg=rows.reduce((sum,row)=>sum+Math.round(Number(row.weight||0)*100),0)/100;
+    const amount=rows.reduce((sum,row)=>sum+Number(row.amount||0),0);
+    const delta=rows.reduce((sum,row)=>sum+Math.round(Number(row._pdaRawWeightDelta||0)*100),0)/100;
+    summary.textContent=`${first.date} · ${first.trader||''} · ${first.product||''} · ${first.lot||''} / ${DBMTPdaTransactionSummary.countBoxes(rows)}박스 · 장부 ${kg.toFixed(2)} KG · ${Math.round(amount).toLocaleString()}원`+
+      (delta?` · 스캔 합계 ${(kg-delta).toFixed(2)} KG · 정정 ${delta.toFixed(2)} KG`:'');
+    if(mode==='receipts'){
+      document.getElementById('txn-pda-detail-title').textContent='원본 입고 내역';
+      if(head)head.innerHTML='<tr><th>제조일</th><th>소비기한</th><th>지점</th><th>박스수</th><th>장부중량(KG)</th><th>단가</th><th>비고</th><th>관리</th></tr>';
+      body.innerHTML=rows.map(row=>`<tr><td>${htmlEscape(row.proddate||row.mfgdate||'-')}</td><td>${htmlEscape(row.expdate||'-')}</td><td>${htmlEscape(getTxnStockLocation(row))}</td><td style="text-align:right;">${DBMTPdaTransactionSummary.boxCount(row)}</td><td style="text-align:right;">${Number(row.weight||0).toFixed(2)}</td><td style="text-align:right;">${Number(row.price||0).toLocaleString()}</td><td>${htmlEscape(DBMTPdaTransactionSummary.note(row)||'-')}</td><td><button type="button" class="btn btn-secondary btn-sm" onclick="closePdaTransactionDetails();loadTxnToForm(${jsArg(row.id)})">수정</button> <button type="button" class="btn btn-danger btn-sm" onclick="deleteTransaction(${jsArg(row.id)})">삭제</button></td></tr>`).join('');
+    }else{
+      if(head)head.innerHTML='<tr><th>박스 바코드</th><th>중량(KG)</th><th>단가</th><th>금액</th><th>제조일</th><th>소비기한</th><th>비고</th></tr>';
+      body.innerHTML=rows.flatMap(row=>(Array.isArray(row._pdaRawBoxes)?row._pdaRawBoxes:[{barcode:row._pdaCode,weight:row._pdaRawScannedWeight??row.weight}]).map(box=>`<tr><td style="font-family:monospace;max-width:280px;overflow-wrap:anywhere;">${htmlEscape(String(box.barcode||'').replaceAll(String.fromCharCode(29),'|'))}</td><td style="text-align:right;">${Number(box.weight).toFixed(2)}</td><td style="text-align:right;">${Number(row.price||0).toLocaleString()}</td><td style="text-align:right;">${Math.round(Number(box.weight)*Number(row.price||0)).toLocaleString()}</td><td>${htmlEscape(box.mfgdate||row.proddate||row.mfgdate||'-')}</td><td>${htmlEscape(box.expdate||row.expdate||'-')}</td><td>${htmlEscape(row.note||'-')}</td></tr>`)).join('');
+    }
     return;
   }
+  if(head)head.innerHTML='<tr><th>박스 바코드</th><th>중량(KG)</th><th>단가</th><th>금액</th><th>비고</th><th>관리</th></tr>';
   const kg=rows.reduce((sum,row)=>sum+Math.round(Number(row.weight||0)*100),0)/100;
   const amount=rows.reduce((sum,row)=>sum+Number(row.amount||0),0);
   summary.textContent=`${first.date} · ${first.trader||''} · ${first.product||''} · ${first.lot||''} / ${rows.length}박스 · ${kg.toFixed(2)} KG · ${Math.round(amount).toLocaleString()}원`;
@@ -10669,14 +10691,14 @@ async function deleteTransaction(id){
   const linked = summary||userTransactions.find(txn=>String(txn.id)===String(id));
   if(linked?.stockRowId && linked?._prodId){ toast('생산일보에서 생성된 재고입니다. 해당 생산일보에서 삭제해주세요.'); return; }
   const productShipment=linked?.type==='출고'&&linked?._pdaRequestId&&linked?._pdaLabelId;
-  if(summary&&!productShipment){toast('이 PDA 합계의 삭제는 지원하지 않습니다.');return;}
+  const rawReceipt=DBMTPdaTransactionSummary.isRawReceipt(linked||{});
+  if(summary&&!productShipment&&!rawReceipt){toast('이 PDA 합계의 삭제는 지원하지 않습니다.');return;}
   const deletedRows=summary?summary._pdaSummaryRows:(linked?[linked]:[]),ids=deletedRows.length?deletedRows.map(row=>String(row.id)):[String(id)];
   if(ids.some(rowId=>transactionPricePendingIds.has(rowId))){toast('해당 거래내역을 저장 중입니다. 잠시 후 다시 삭제해주세요.');return;}
-  const rawReceipt=linked?.type==='입고'&&linked?._pdaRawRequestId&&linked?._pdaAction==='receive';
   if((rawReceipt||productShipment)&&localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('PDA 입출고 삭제는 서버에 연결한 상태에서만 가능합니다.');return;}
-  if(productShipment&&!DBMTAuth.can('transactions','delete')){toast('거래내역 삭제 권한이 없습니다.');return;}
+  if((productShipment||rawReceipt)&&!DBMTAuth.can('transactions','delete')){toast('거래내역 삭제 권한이 없습니다.');return;}
   const message=productShipment?`${linked.date} · ${linked.trader}\n${linked.product} · 이력번호 ${linked.lot}\n${ids.length}박스 · ${Number(linked.weight).toFixed(2)}KG 출고를 삭제할까요?\n출고를 취소하고 재고와 바코드 상태를 복구합니다. 후속 처리가 있는 박스가 포함되면 삭제하지 않습니다.`
-    :rawReceipt?`${linked.product} · 이력번호 ${linked.lot}\n${boxCountDisplay(linked.boxCount)}박스 · ${Number(linked.weight).toFixed(2)}KG 입고를 삭제할까요?\n사용하지 않은 입고만 삭제되며 해당 바코드는 다시 입고할 수 있습니다.`:'삭제하시겠습니까?';
+    :rawReceipt?`${linked.product} · 이력번호 ${linked.lot}\n${boxCountDisplay(linked.boxCount)}박스 · ${Number(linked.weight).toFixed(2)}KG 입고를 삭제할까요?\n${summary?`${ids.length}건의 원본 입고를 모두 취소합니다.\n`:''}사용하지 않은 입고만 삭제되며 해당 바코드는 다시 입고할 수 있습니다.`:'삭제하시겠습니까?';
   if(!confirm(message))return;
   ids.forEach(rowId=>transactionPricePendingIds.add(rowId));
   try{
@@ -10708,6 +10730,7 @@ function saveEditTxn(){ return addTransaction(); }
 function loadTxnToForm(id){
   const t=(String(id).startsWith('pda-summary:')?findPdaTransactionSummary(id):null)||userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
+  if(t._pdaReceiptSummary){openPdaTransactionDetails(t.id,'receipts');return;}
   if(t._pdaSummaryRows&&!t._pdaLabelId)return;
   if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
   pdaShipmentEditRows=t.type==='출고'&&t._pdaRequestId&&t._pdaLabelId

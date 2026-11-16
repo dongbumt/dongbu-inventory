@@ -11,6 +11,7 @@ const first={id:'qa-box',date:'2026-10-20',type:'출고',trader:'동원홈푸드
 const boxes=count=>Array.from({length:count},(_,i)=>({...first,id:`qa-box-${i}`,_pdaLabelId:`qa-label-${i}`,_pdaCode:`qa-code-${i}`,proddate:i%2?'2026-10-19':'2026-10-20',expdate:i%2?'2027-10-18':'2027-10-19',stockProddate:i%2?'2026-10-19':'2026-10-20',stockUnitPrice:i%2?5315:5505}));
 const sources=Array.from({length:3},(_,i)=>({id:`qa-production-${i}`,date:'2026-10-20',type:'생산입고',product:first.product,labelProductId:first.labelProductId,lot:first.lot,origin:first.origin,packunit:first.packunit,stockLocation:'가공장',stockRowId:`qa-stock-${i}`,weight:200,price:5315,amount:1063000}));
 const initial=[...sources,...boxes(42)];
+const rawReceipts=require('./pda-raw-receipt-fixture.cjs');
 const allowedFiles=['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','mobile-production.js','styles/mobile-production.css'];
 const base=process.env.DBMT_MOBILE_TEST_BASE||'http://mobile-summary.test/';
 const remote=!!process.env.DBMT_MOBILE_TEST_BASE;
@@ -97,6 +98,18 @@ const remote=!!process.env.DBMT_MOBILE_TEST_BASE;
     assert.equal(await page.locator('#transaction-list .more').count(),0,'Aggregate all boxes before the display limit');
     await replaceRows(boxes(250).map(({_pdaRequestId,_pdaLabelId,...row})=>({...row,_pdaRawRequestId:_pdaRequestId,_pdaRawPackageId:_pdaLabelId})));
     assert.equal(await rows.count(),1);assert.equal(await page.locator('#transaction-count').innerText(),'1건 · PDA 250박스');
+    await replaceRows(rawReceipts);await page.locator('#tx-type').selectOption('입고');
+    assert.equal(await rows.count(),1);assert.equal(await page.locator('#transaction-count').innerText(),'1건 · PDA 101박스');
+    assert.match(await rows.innerText(),/2,313\.93kg/);assert.match(await rows.innerText(),/101박스/);
+    assert.equal(await page.evaluate(()=>JSON.stringify(snapshot.transactions)),JSON.stringify(rawReceipts));
+    assert.equal(await page.evaluate(()=>stockRows.length),10,'Raw receipt display must not merge distinct inventory sources');
+    assert.equal(await page.evaluate(()=>Math.round(stockRows.reduce((sum,row)=>sum+row.stock,0)*100)/100),2313.93);
+    for(const width of [320,390,760]){
+      await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await page.screenshot({path:path.join(artifacts,`raw-receipts-${width}.png`),fullPage:true});
+    }
+    await page.locator('#tx-type').selectOption('출고');
+    await replaceRows(boxes(250).map(({_pdaRequestId,_pdaLabelId,...row})=>({...row,_pdaRawRequestId:_pdaRequestId,_pdaRawPackageId:_pdaLabelId})));
     await page.reload();await page.locator('#app-view').waitFor({state:'visible'});assert.equal(await rows.count(),1);assert.equal(await page.locator('#transaction-count').innerText(),'1건 · PDA 250박스');
     assert.equal(await page.evaluate(()=>JSON.stringify(snapshot.transactions)),JSON.stringify(transactions),'Refresh preserves individual boxes');
     const storage=await page.evaluate(()=>({...localStorage}));assert(Object.keys(storage).every(key=>['dbmt_mobile_admin_session_token','dbmt_mobile_admin_view'].includes(key)),'Do not persist business data');
