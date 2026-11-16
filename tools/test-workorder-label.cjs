@@ -239,7 +239,7 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
     console.log('PASS: multiple raw inputs, per-source weights, explicit mixed LOT, total weight, legacy primary source, edit and remove');
     await checkWorkOrderStockChoices(page);
 
-    const context=await browser.newContext({viewport:{width:1366,height:900}});const saved=[];let failSave=false;
+    const context=await browser.newContext({viewport:{width:1366,height:900}});const saved=[],persistedLogs=new Map();let failSave=false;
     await context.addInitScript(()=>{window.__printedLabels=[];window.print=()=>{
       if(window.parent!==window){
         window.parent.__printedLabels.push([...document.querySelectorAll('.print-label')].map(el=>el.textContent));
@@ -251,12 +251,14 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
       if(await innerFixture(route))return;
       if(route.request().url().endsWith('/dbmt_label_print_save_logs')){
         if(failSave){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"mock save failure"}'});return;}
-        saved.push(route.request().postDataJSON());await route.fulfill({contentType:'application/json',body:'{"ok":true}'});return;
+        const request=route.request().postDataJSON();saved.push(request);
+        request.p_logs.forEach(log=>persistedLogs.set(log.id,log));
+        await route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,logs:[...persistedLogs.values()]})});return;
       }
       await route.abort();
     });
     const label=await context.newPage();await label.goto(base+'/label-print.html');
-    await label.evaluate(order=>{state.pin='mock-pin';state.workOrders=[order,{...order,id:'legacy',product:'기존 작업',weight:7.25}];state.selectedId=order.id;state.allDates=true;renderAll();},order);
+    await label.evaluate(order=>{state.pin='mock-pin';state.logsPin=state.pin;state.workOrders=[order,{...order,id:'legacy',product:'기존 작업',weight:7.25}];state.selectedId=order.id;state.allDates=true;renderAll();},order);
     assert(await label.locator('#print-btn').isDisabled());await label.evaluate(()=>printSelectedLabels());assert.equal(saved.length,0);assert.match(await label.locator('#status').textContent(),/중량/);
     await setOuter(label,5,2);
     await label.locator('#preview-btn').click();const preview=label.frameLocator('#label-preview-frame');await preview.locator('.print-label').waitFor();assert.match(await preview.locator('.print-label').textContent(),/5\.00/);await label.locator('#label-preview-close').click();assert.equal(saved.length,0);

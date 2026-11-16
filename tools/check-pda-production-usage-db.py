@@ -42,6 +42,33 @@ def production(conn, fixture):
     other_receipt = commit('inbound', codes[20:22], lot=raw['lot'])
     other_source = lookup(codes[20])['stockRowId']
     assert other_source != source, 'A separately confirmed receipt remains a separate random-selection pool'
+    if DEPLOYED:
+        with conn.transaction(force_rollback=True):
+            grouped_order = copy.deepcopy(order)
+            other_raw = conn.execute('select raw from public.transactions where id=%s', (other_receipt['items'][0]['transactionId'],)).fetchone()[0]
+            other_stock = dict(stock, key='row|' + other_source + '|가공장', stockRowId=other_source,
+                               stock=34.14, stockBoxes=2, proddate=other_raw.get('proddate', ''))
+            grouped_order.update(id=uid('grouped_order'), inputWeight=20, inputBoxCount=2,
+                                 sourceInputs=[dict(sourceStockKey=stock['key'], sourceStock=stock, inputWeight=13, boxCount=1),
+                                               dict(sourceStockKey=other_stock['key'], sourceStock=other_stock, inputWeight=7, boxCount=1)])
+            conn.execute("update public.app_data set payload=payload||%s where key='workOrders'", (Jsonb([grouped_order]),))
+            group_log = dict(logs[0], id=uid('grouped_log'), code='DB2611101200-G' + suffix[:5].upper(),
+                             workOrderId=grouped_order['id'], workOrderSnapshot=grouped_order)
+            package_rows = lambda: conn.execute('select id,barcode,parsed,snapshot,weight,source_id from pda_private.raw_packages where source_id=any(%s) order by id', ([source, other_source],)).fetchall()
+            original_group_packages = package_rows()
+            assert rpc('dbmt_label_print_save_logs', pin, [group_log])['ok']
+            group_result = rpc('dbmt_label_complete_production', pin, grouped_order['id'], [group_log['id']])
+            group_entry = conn.execute('select raw from public.production_entries where id=%s', (group_result['productionId'],)).fetchone()[0]
+            assert [item['stockRowId'] for item in group_entry['inputs']] == [source, other_source]
+            assert [item['qty'] for item in group_entry['inputs']] == [13, 7]
+            assert [item['boxCount'] for item in group_entry['inputs']] == [1, 1]
+            assert sum(item['amount'] for item in group_entry['inputs']) == 88000
+            assert conn.execute("select source_id,count(*) from pda_private.raw_packages where source_id=any(%s) and state='used' group by source_id order by source_id", ([source, other_source],)).fetchall() == sorted([(source, 1), (other_source, 1)])
+            assert package_rows() == original_group_packages
+            assert rpc('dbmt_label_cancel_production', pin, grouped_order['id'], group_result['productionId'])['ok']
+            assert conn.execute("select count(*) from pda_private.raw_packages where source_id=any(%s) and state='used'", ([source, other_source],)).fetchone()[0] == 0
+            assert package_rows() == original_group_packages
+        print('PASS: a grouped work-order choice stays separate original sources through label snapshot, production KG/boxes/cost, raw barcode allocation and cancellation; scan payloads remain immutable')
     if not DEPLOYED:
         reject(complete, 'PDA 원료육 박스 몫')
         assert not conn.execute('select 1 from public.label_production_completions where work_order_id=%s', (order['id'],)).fetchone()

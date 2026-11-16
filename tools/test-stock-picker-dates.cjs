@@ -18,7 +18,7 @@ const tx=[
   {...base,id:'unknown',type:'재고조정',date:'2026-10-16',product:'가상 날짜 미기록',proddate:'',weight:3,price:100}
 ];
 const helpers=['parseAppNumber','normProdDate','priceKey','priceProductKey','samePriceText','samePriceProductText','normalizeOriginName','originKey','sameOriginText','normalizeStockLocation','stockLocationKey','getTxnStockLocation','stockPriceKey','stockDateKey','stockMapKey','sameStockIdentity','getStockMap','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay',
-  'bulkOutboundIdentityKey','bulkOutboundKeyFromValues','bulkOutboundStockOptions','bulkOutboundSearchKey','bulkOutboundSearchText','bulkOutboundStockLabel','getEditingTransaction','stockOptionFromTransaction','sameBulkOutboundStockOption','outboundStockOptionsForEdit','availableStockForEdit','availableBoxesForEdit','getTxnStockSearchOptions','selectTxnStock'];
+  'bulkOutboundIdentityKey','bulkOutboundKeyFromValues','bulkOutboundStockOptions','bulkOutboundSearchKey','bulkOutboundSearchText','bulkOutboundStockLabel','getEditingTransaction','stockOptionFromTransaction','sameBulkOutboundStockOption','outboundStockOptionsForEdit','availableStockForEdit','availableBoxesForEdit','getTxnStockSearchOptions','selectTxnStock','workOrderStockOptions'];
 const pickerStart=html.indexOf('let txnStockPickerRows ='),pickerEnd=html.indexOf('function selectTxnStock(',pickerStart);
 const setup=`
 var userTransactions=${JSON.stringify(tx)},EXCEL_STOCK=[],labelProducts=[],STOCK_LOCATION_DEFAULT='가공장',_stockMapCache=null,_editTxnId=null;

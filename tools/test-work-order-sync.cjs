@@ -58,7 +58,7 @@ const server=http.createServer(async(req,res)=>{
         const APP_DATA_REGISTRY={workOrders:{set:v=>{workOrders=v;},get:()=>workOrders}};
         function collectWorkOrderForm(){return {id:document.getElementById('wo-edit-id').value||workOrderId(),date:document.getElementById('wo-date').value,product:document.getElementById('wo-product').value,title:document.getElementById('wo-title').value,updatedAt:new Date().toISOString()};}
         async function sbRpc(name,args,options={}){const r=await fetch('/rpc',{method:'POST',signal:options.signal,body:JSON.stringify({name,args})});const data=await r.json();if(!r.ok)throw new Error(data.message);return data;}
-        ${['workOrderDraftSignature','setWorkOrderSaving','saveWorkOrder','resetWorkOrderForm','editWorkOrder','deleteWorkOrder','renderWorkOrders','applySupabasePayload'].map(source).join('\n')}
+        ${['workOrderDraftSignature','setWorkOrderSaving','saveWorkOrder','resetWorkOrderForm','editWorkOrder','deleteWorkOrder','renderWorkOrders','applySupabasePayload','workOrderDisplaySourceInputs'].map(source).join('\n')}
         document.getElementById('wo-date').value='2026-10-19';document.getElementById('wo-list-date').value='2026-10-19';
       `});
       await page.addScriptTag({content:fs.readFileSync(path.join(root,'work-orders-sync.js'),'utf8')});

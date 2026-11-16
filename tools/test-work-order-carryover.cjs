@@ -49,6 +49,7 @@ const server=http.createServer(async(req,res)=>{
       const totalRecordedBoxes=()=>null,boxCountDisplay=(v,empty='')=>v==null?empty:String(v),refreshLabelWorkOrderSelect=()=>{};
       async function sbRpc(name,args,options={}){const r=await fetch('/rpc',{method:'POST',signal:options.signal,body:JSON.stringify({name,args})});const data=await r.json();if(!r.ok){const e=new Error(data.message);e.status=r.status;throw e;}return data;}
       ${source('renderWorkOrders')}
+      ${source('workOrderDisplaySourceInputs')}
       document.getElementById('wo-list-date').value='2026-10-19';
     `});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'work-orders-sync.js'),'utf8')});

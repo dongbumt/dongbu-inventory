@@ -8094,12 +8094,16 @@ function excludeSelectedWorkOrderStock(rows, targetInput){
   if(!currentRow) return rows;
   const selectedKeys = new Set();
   document.querySelectorAll('#wo-source-rows .wo-stock-key').forEach(input=>{
-    if(input.closest('.wo-source-row') !== currentRow && input.value) selectedKeys.add(input.value);
+    if(input.closest('.wo-source-row') === currentRow || !input.value)return;
+    selectedKeys.add(input.value);
+    const source=input.closest('.wo-source-row')._sourceStock;
+    (source?._workOrderStockRows||[source]).filter(Boolean).forEach(stock=>selectedKeys.add(stock.key));
   });
   return selectedKeys.size ? rows.filter(stock=>!selectedKeys.has(stock.key)) : rows;
 }
 
 function getTxnStockPickerOptions(){
+  if(txnStockPickerTargetInput?.dataset?.pickerContext==='workorder-input')return workOrderStockOptions(txnStockPickerTargetInput);
   const rows = (txnStockPickerTargetInput ? bulkOutboundStockOptions() : getTxnStockSearchOptions()).filter(isStockProductSelectable);
   const available = excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput);
   const outbound = excludeSelectedBulkOutboundStock(available, txnStockPickerTargetInput);
@@ -8336,6 +8340,11 @@ function moveTxnStockPickerSelection(delta){
 function confirmTxnStockPicker(){
   const stock = txnStockPickerRows[txnStockPickerIndex];
   if(stock && !getTxnStockPickerOptions().some(option=>option.key === stock.key)){ renderTxnStockPicker(true); return; }
+  if(stock?._workOrderStockRows){
+    const latest=getTxnStockPickerOptions().find(option=>option.key===stock.key);
+    const fingerprint=row=>JSON.stringify((row?._workOrderStockRows||[]).map(item=>[item.key,item.stock,item.stockBoxes]));
+    if(fingerprint(stock)!==fingerprint(latest)){renderTxnStockPicker(true);return;}
+  }
   if(!stock) return;
   const targetInput = txnStockPickerTargetInput;
   if(targetInput){
@@ -21330,6 +21339,7 @@ function addWorkOrderSourceRow(source=null){
   container.appendChild(row);
   if(source?.sourceStock){
     row._sourceStock=source.sourceStock;
+    row._sourceInputs=source._workOrderSourceInputs||null;
     row.querySelector('.wo-stock-key').value=source.sourceStockKey || source.sourceStock.key || '';
     row.querySelector('.wo-stock-search').value=source.sourceStock.product || '';
     row.querySelector('.wo-source-summary').textContent=workOrderStockLabel(source.sourceStock);
@@ -21348,7 +21358,7 @@ function removeWorkOrderSourceRow(button){
     row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-stock-search').value='';
     row.querySelector('.wo-input-weight').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
     row.querySelector('.wo-input-box-count').value='';
-    row._sourceStock=null;
+    row._sourceStock=null;row._sourceInputs=null;
   }else row.remove();
   updateWorkOrderInputTotal();refreshWorkOrderPreview();
 }
@@ -21425,7 +21435,7 @@ function onWorkOrderStockInput(input){
   if(previous && lotEl.dataset.autoSourceLot===lotEl.value && lotEl.value===previous.lot){lotEl.value='';lotEl.dataset.autoSourceLot='';}
   row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
   row.querySelector('.wo-input-weight').value='';row.querySelector('.wo-input-box-count').value='';
-  row._sourceStock=null;updateWorkOrderInputTotal();refreshWorkOrderPreview();
+  row._sourceStock=null;row._sourceInputs=null;updateWorkOrderInputTotal();refreshWorkOrderPreview();
 }
 
 function onWorkOrderProductInput(){
@@ -21486,12 +21496,25 @@ function autoSetWorkOrderExpiry(){
   expEl.value = localDateString(d);
 }
 
-function workOrderStockOptions(){
-  return bulkOutboundStockOptions();
+function workOrderStockOptions(targetInput=null){
+  const rows=excludeSelectedWorkOrderStock(bulkOutboundStockOptions().filter(isStockProductSelectable),targetInput);
+  return window.DBMTWorkOrderStockGroups?DBMTWorkOrderStockGroups.group(rows,typeof transactions==='undefined'?[]:transactions):rows;
 }
 
-function findWorkOrderStock(key){
-  return workOrderStockOptions().find(s => s.key === key) || null;
+function findWorkOrderStock(key,targetInput=null){
+  return workOrderStockOptions(targetInput).find(s => s.key === key) || null;
+}
+
+function workOrderDisplaySourceInputs(sources){
+  if(!window.DBMTWorkOrderStockGroups)return sources;
+  const stockSources=new Map(sources.filter(source=>source.sourceStock).map(source=>[
+    {...source.sourceStock,key:source.sourceStock.key||source.sourceStockKey||''},source]));
+  return DBMTWorkOrderStockGroups.group([...stockSources.keys()],typeof transactions==='undefined'?[]:transactions).map(stock=>{
+    if(!stock._workOrderStockRows)return stockSources.get(stock);
+    const originals=stock._workOrderStockRows.map(member=>stockSources.get(member));
+    return {sourceStockKey:stock.key,sourceStock:stock,inputWeight:originals.reduce((sum,row)=>sum+Math.round(parseAppNumber(row.inputWeight)*100),0)/100,
+      boxCount:totalRecordedBoxes(originals),_workOrderSourceInputs:originals};
+  });
 }
 
 function workOrderStockBoxes(stock){
@@ -21532,11 +21555,12 @@ function workOrderStockLabel(s){
 }
 
 function selectWorkOrderStock(key,targetInput){
-  const s = findWorkOrderStock(key);
+  const s = findWorkOrderStock(key,targetInput);
   if(!s) return;
   const row=targetInput?.closest('.wo-source-row') || workOrderSourceRows()[0];
   if(!row)return;
   row._sourceStock=s;
+  row._sourceInputs=null;
   row.querySelector('.wo-stock-key').value=s.key;
   row.querySelector('.wo-stock-search').value=s.product || '';
   row.querySelector('.wo-source-summary').textContent=workOrderStockLabel(s);
@@ -21595,13 +21619,30 @@ function collectWorkOrderForm(){
     if(boxCount!==null && availableBoxes!==null && boxCount>availableBoxes){
       alert(`${stock.product}: 현재 재고 ${boxCountDisplay(availableBoxes)}박스보다 투입 박스수가 큽니다.`);return null;
     }
-    const identity=stock.stockRowId || key;
-    if(usedKeys.has(identity)){alert('같은 재고는 한 번만 선택하고 투입량을 합쳐 입력해주세요.');return null;}
-    usedKeys.add(identity);
-    sourceInputs.push({sourceStockKey:key,sourceStock:workOrderStockSnapshot(stock),inputWeight:qty,boxCount});
+    let inputs;
+    if(stock._workOrderStockRows){
+      const saved=row._sourceInputs;
+      if(saved&&Math.round(saved.reduce((sum,item)=>sum+parseAppNumber(item.inputWeight),0)*100)===Math.round(qty*100)&&totalRecordedBoxes(saved)===boxCount){
+        inputs=saved;
+      }else{
+        try{inputs=DBMTWorkOrderStockGroups.allocate(stock,qty,boxCount).map(item=>({sourceStockKey:item.stock.key,
+          sourceStock:workOrderStockSnapshot(item.stock),inputWeight:item.inputWeight,boxCount:item.boxCount}));}
+        catch(error){alert(error.message);return null;}
+      }
+    }else inputs=[{sourceStockKey:key,sourceStock:workOrderStockSnapshot(stock),inputWeight:qty,boxCount}];
+    for(const input of inputs){
+      const identity=input.sourceStock.stockRowId||input.sourceStockKey;
+      if(usedKeys.has(identity)){alert('같은 재고는 한 번만 선택하고 투입량을 합쳐 입력해주세요.');return null;}
+      usedKeys.add(identity);sourceInputs.push(input);
+    }
   }
   if(!sourceInputs.length){alert('투입 원료육을 하나 이상 선택해주세요.');return null;}
   if(linked?._carryoverFrom)sourceInputs=workOrderSourceInputs(linked);
+  if(sourceInputs.length>30){alert('원본 재고 기준으로 한 작업지시에 원료육은 최대 30건까지 입력할 수 있습니다. 투입량을 나누어 입력해주세요.');return null;}
+  if(linked){
+    const order=new Map(workOrderSourceInputs(linked).map((source,index)=>[source.sourceStock?.stockRowId||source.sourceStockKey,index]));
+    sourceInputs.sort((a,b)=>(order.get(a.sourceStock?.stockRowId||a.sourceStockKey)??Infinity)-(order.get(b.sourceStock?.stockRowId||b.sourceStockKey)??Infinity));
+  }
   if(sourceInputs.length>1 && !val('wo-lot').trim()){alert('여러 원료육을 투입할 때는 생산물 이력번호를 입력해주세요.');return null;}
   const inputWeight=Math.round(sourceInputs.reduce((sum,item)=>sum+item.inputWeight,0)*100)/100;
   const selectedProduct = selectedWorkOrderLabelProduct();
@@ -21680,7 +21721,7 @@ function editWorkOrder(id){
   set('wo-date', row.date);
   set('wo-title', row.title);
   const sourceRows=document.getElementById('wo-source-rows');
-  if(sourceRows){sourceRows.innerHTML='';workOrderSourceInputs(row).forEach(source=>addWorkOrderSourceRow(source));if(!workOrderSourceRows().length)addWorkOrderSourceRow();}
+  if(sourceRows){sourceRows.innerHTML='';workOrderDisplaySourceInputs(workOrderSourceInputs(row)).forEach(source=>addWorkOrderSourceRow(source));if(!workOrderSourceRows().length)addWorkOrderSourceRow();}
   const labelProductId = row.labelProductId || ((labelProducts || []).find(p => samePriceText(p.name || '', row.product || ''))?.id || '');
   set('wo-label-product-id', labelProductId);
   set('wo-label-size', row.labelSize || '7x10');
@@ -21754,7 +21795,7 @@ function renderWorkOrders(){
       <tr data-work-order-id="${htmlEscape(r.id)}">
         <td><strong>${htmlEscape(r.product || '')}</strong><div style="font-size:11px;color:#777;">${htmlEscape(r.title || '')}</div>${window.DBMTWorkOrderCarryover?.relationHtml(r)||''}</td>
         <td>${(r.outputLotSelectionVersion===1?r.outputLots:[r.lot||'']).map(lot=>htmlEscape(lot)).join('<br>')}</td>
-        <td>${workOrderSourceInputs(r).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${boxCountDisplay(source.boxCount,'') ? boxCountDisplay(source.boxCount)+'박스 · ' : ''}${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
+        <td>${workOrderDisplaySourceInputs(workOrderSourceInputs(r)).map(source=>`${htmlEscape(source.sourceStock?.product || '-')} <span style="color:#777;white-space:nowrap;">${boxCountDisplay(source.boxCount,'') ? boxCountDisplay(source.boxCount)+'박스 · ' : ''}${parseAppNumber(source.inputWeight).toFixed(2)} KG</span>`).join('<br>') || '-'}</td>
         <td style="text-align:right;white-space:nowrap;">${r.inputWeight == null || r.inputWeight === '' ? '-' : parseAppNumber(r.inputWeight).toFixed(2)+' KG'}${totalRecordedBoxes(workOrderSourceInputs(r))===null?'':'<br><small>'+boxCountDisplay(totalRecordedBoxes(workOrderSourceInputs(r)))+' 박스</small>'}</td>
         <td style="white-space:nowrap;">
           <div class="wo-actions">
@@ -22717,6 +22758,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261113pda1"></script>
+<script src="work-order-stock-groups.js?v=20261117receipt1"></script>
 <script src="work-orders-sync.js?v=20261020manual1"></script>
 <script src="product-catalog-sync.js?v=20261106catalog1"></script>
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
