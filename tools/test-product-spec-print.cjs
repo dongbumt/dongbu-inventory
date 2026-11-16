@@ -52,9 +52,9 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await page.locator('#spec-search').fill('삼성 목전지 미국');
     await page.locator('[data-sort="price_kg"]').click();
     await page.locator('[data-sort="price_kg"]').click();
-    const openPrint=async()=>{
+    const openPrint=async(selector='#spec-print')=>{
       const waiting=page.waitForEvent('popup');
-      await page.locator('#spec-print').click();
+      await page.locator(selector).click();
       const popup=await waiting;
       await popup.waitForFunction(()=>document.documentElement.dataset.qaPrinted==='true');
       assert.equal(await popup.evaluate(()=>window.opener),null);
@@ -65,11 +65,11 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['검색업체1','검색업체2','검색업체10']);
     assert.match(await popup.locator('header').textContent(),/삼성 목전지 미국 · 3건/);
     assert.match(await popup.locator('header').textContent(),/정렬: 화면 목록 순서/);
-    assert.deepEqual(await popup.locator('thead th').allTextContents(),['거래처','유통','원재료','원산지','세절스펙','내포장 스펙','외포장 스펙','비고']);
-    assert.equal(await popup.locator('tbody tr').evaluateAll(rows=>rows.every(row=>row.cells.length===8)),true);
+    assert.deepEqual(await popup.locator('thead th').allTextContents(),['거래처','유통','원재료','원산지','세절스펙','내포장 스펙','외포장 스펙','월사용량(KG)','비고']);
+    assert.equal(await popup.locator('tbody tr').evaluateAll(rows=>rows.every(row=>row.cells.length===9)),true);
     assert.doesNotMatch(await popup.locator('body').textContent(),/단가|12,000|67,000/,'Neither price column nor price-unit guide is printed');
-    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(7).textContent(),'0','Screen prices remain available');
-    assert.equal(await page.locator('#spec-rows tr[data-id="b"] td').nth(7).textContent(),'—');
+    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(8).textContent(),'0','Screen prices remain available');
+    assert.equal(await page.locator('#spec-rows tr[data-id="b"] td').nth(8).textContent(),'—');
     assert.match(await popup.locator('tbody').textContent(),/기존 포장스펙/);
     assert.equal(await popup.locator('img,script,button,input,select').count(),0,'No injected HTML, editor or management buttons');
     assert.ok(!(await popup.locator('body').textContent()).includes('출력제외업체'));
@@ -97,19 +97,26 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.equal(await page.evaluate(()=>qaOpenCount),2);
 
     const selectionRows=[
-      {...base,id:'s1',trader:'거래처A',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산'},
-      {...base,id:'s2',trader:'거래처A',distribution:'동원홈푸드',material:'우삼겹',origin:'미국산'},
-      {...base,id:'s3',trader:'거래처B',distribution:'삼성웰스토리',material:'목전지',origin:'미국산'},
-      {...base,id:'s4',trader:'거래처AB',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산'},
-      {...base,id:'s5',trader:'거래처B',distribution:'<자유 & 유통>',material:'부채살',origin:'호주산'},
+      {...base,id:'s1',trader:'거래처A',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산',monthly_usage:100.1},
+      {...base,id:'s2',trader:'거래처A',distribution:'동원홈푸드',material:'우삼겹',origin:'미국산',monthly_usage:50.000001},
+      {...base,id:'s3',trader:'거래처B',distribution:'삼성웰스토리',material:'돈등심',origin:'미국산'},
+      {...base,id:'s4',trader:'거래처AB',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산',monthly_usage:200.2},
+      {...base,id:'s5',trader:'거래처B',distribution:'<자유 & 유통>',material:'부채살',origin:'호주산',monthly_usage:0},
       {...base,id:'s6',trader:'거래처A',distribution:null,material:'앞다리',origin:'국내산'}
     ];
     await page.evaluate(data=>{qaRights.view=true;qaRows=data;return DBMTProductSpecs.load();},selectionRows);
     const trader=page.locator('#spec-filter-trader'),distribution=page.locator('#spec-filter-distribution');
     const ids=()=>page.locator('#spec-rows tr[data-id]').evaluateAll(rows=>rows.map(row=>row.dataset.id).sort());
+    await page.locator('#spec-usage-summary summary').click();
+    assert.match(await page.locator('#spec-usage-total').textContent(),/350.300001 KG/);
+    assert.match(await page.locator('#spec-usage-info').textContent(),/입력 4건 · 미입력 2건 제외/);
+    assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'국내산'}).locator('td').last().textContent(),'300.3','Same item/origin groups sum exactly');
+    assert.match(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'미국산'}).textContent(),/미입력 1건 제외/,'Different origins remain separate');
+    assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'부채살'}).locator('td').last().textContent(),'0','Explicit zero remains distinct from missing usage');
     assert.deepEqual(await trader.locator('option').allTextContents(),['전체 거래처','거래처A','거래처AB','거래처B']);
     assert.ok((await distribution.locator('option').allTextContents()).includes('<자유 & 유통>'),'Custom distributors are selectable');
     await trader.selectOption('거래처A');
+    assert.match(await page.locator('#spec-usage-total').textContent(),/150.100001 KG/);
     assert.deepEqual(await ids(),['s1','s2','s6'],'Customer selection is exact and includes its unspecified distributors');
     popup=await openPrint();
     assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['거래처A','거래처A','거래처A']);
@@ -130,6 +137,12 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await page.getByRole('button',{name:'검색 초기화',exact:true}).click();
     assert.equal(await trader.inputValue(),'');assert.equal(await distribution.inputValue(),'');assert.equal(await page.locator('#spec-search').inputValue(),'');
     assert.equal((await ids()).length,6);
+    popup=await openPrint('#spec-usage-print');
+    assert.equal(await popup.locator('tbody tr').count(),6);
+    assert.equal(await popup.locator('tbody tr').filter({hasText:'돈등심'}).filter({hasText:'국내산'}).locator('td').last().textContent(),'300.3');
+    assert.equal(await popup.locator('tbody tr').last().locator('td').textContent(),'350.300001');
+    assert.match(await popup.locator('body').textContent(),/미입력 2건 제외/);
+    await popup.pdf({path:path.join(output,'usage.pdf'),preferCSSPageSize:true,printBackground:true});await popup.close();
     await distribution.selectOption('<자유 & 유통>');assert.deepEqual(await ids(),['s5']);
     popup=await openPrint();
     assert.match(await popup.locator('header').textContent(),/<자유 & 유통>/);assert.equal(await popup.locator('img,script').count(),0);await popup.close();

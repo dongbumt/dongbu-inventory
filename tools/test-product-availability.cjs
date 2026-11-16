@@ -36,6 +36,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
       const autoFillLabelProductShelfDays=()=>{},autoFillLabelProductShelfDaysIfBlank=()=>{},refreshLabelProductNationalPartSelect=()=>{},refreshLabelProductSelect=()=>{};
       const invalidateStockMap=()=>{},safeLocalStorageSet=()=>{},saveDataChangeLogsLocal=()=>{},resetDataChangeAppDataBaseline=()=>{},makeAppId=()=> 'new';
       const personalServerWriteToken=()=> 'qa',assertPersonalServerResult=r=>{if(!r.ok)throw Error('denied');};
+      const DBMTAuth={getSessionToken:()=> 'qa'};
       const bulkOutboundStockOptions=()=>stocks,getTxnStockSearchOptions=()=>stocks;
       const getStockMap=()=>Object.fromEntries(stocks.map(s=>[s.key,s]));
       const sbRpc=async(name,args)=>{requests.push({name,args});if(failSave)throw Error('QA failure');const products=labelProducts.map(p=>p.id===args.p_record.id?structuredClone(args.p_record):p);return {ok:true,products,product:args.p_record};};
@@ -43,7 +44,7 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
       ${block('let txnProductPickerKind =','function handleManagedProductInputKeydown(')}
       ${source('isStockProductSelectable')}
       let txnStockPickerTargetInput=null;
-      ${source('getTxnStockPickerOptions')}
+      ${['excludeSelectedProductionInputStock','excludeSelectedBulkOutboundStock','excludeSelectedWorkOrderStock','getTxnStockPickerOptions'].map(source).join('\n')}
       renderLabelProducts._migrated=true;refreshTxnManagedProductControls._migrated=true;
       renderLabelProducts();
     `});

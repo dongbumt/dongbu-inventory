@@ -6,9 +6,59 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
   const money=value=>value===null || value===undefined?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:2});
-  const fields=['trader','distribution','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','price_kg','price_box','note'];
+  const fields=['trader','distribution','material','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','monthly_usage','price_kg','price_box','note'];
   const collator=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
-  const inputs={trader:'trader',distribution:'distribution',material:'material',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',price_kg:'price-kg',price_box:'price-box',note:'note'};
+  const inputs={trader:'trader',distribution:'distribution',material:'material',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',monthly_usage:'monthly-usage',price_kg:'price-kg',price_box:'price-box',note:'note'};
+  const catalog=()=>typeof labelProducts==='undefined'?[]:labelProducts;
+  const usageValue=value=>value===null||value===undefined||String(value).trim()===''?null:Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null;
+  const usageText=value=>usageValue(value)===null?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:6});
+  function syncMaterialHint(){
+    const id=el('material-product-id').value,p=catalog().find(p=>String(p.id)===id);
+    el('material-meta').textContent=p?[p.productCode,p.brand,p.origin,p.packunit,p.isActive===false?'사용 중지':''].filter(Boolean).join(' · '):el('material').value?(id?'기존 선택 제품 · 제품 선택으로 변경할 수 있습니다.':'기존 직접입력 · 등록 제품을 선택해 연결할 수 있습니다.') : '';
+  }
+  function setMaterial(row={}){el('material-product-id').value=row.material_product_id??'';syncMaterialHint();}
+  function selectMaterial(id){
+    if(state.saving||state.loading||!can(state.editing?'update':'create'))return false;
+    const p=catalog().find(p=>String(p.id)===String(id));
+    if(!p||p.isActive===false||String(p.kind||'').trim()!=='제품'){message('품목관리에 등록된 사용 가능한 제품을 선택해주세요.',true);return false;}
+    el('material-product-id').value=String(p.id);el('material').value=p.name||'';
+    el('origin').value=typeof normalizeOriginName==='function'?normalizeOriginName(p.origin):p.origin||'';
+    syncMaterialHint();message('');return true;
+  }
+  function openMaterialPicker(){
+    if(state.saving||state.loading||!can(state.editing?'update':'create'))return;
+    openTxnProductPicker(el('material').value,el('material'));
+  }
+  function materialPickerKey(event){if(['Enter',' ','ArrowDown'].includes(event.key)){event.preventDefault();openMaterialPicker();}}
+  function usageSummary(rows){
+    const groups=new Map();let total=0n,entered=0,missing=0;
+    for(const row of rows){
+      const key=JSON.stringify([normalize(row.material),normalize(row.origin)]);
+      if(!groups.has(key))groups.set(key,{material:String(row.material??'').trim(),origin:String(row.origin??'').trim(),qty:0n,entered:0,missing:0});
+      const group=groups.get(key),value=usageValue(row.monthly_usage);
+      if(value===null){group.missing++;missing++;}else{
+        const scaled=BigInt(value.toFixed(6).replace('.',''));group.qty+=scaled;total+=scaled;group.entered++;entered++;
+      }
+    }
+    return {rows:Array.from(groups.values()).sort((a,b)=>collator.compare(a.material,b.material)||collator.compare(a.origin,b.origin)),total,entered,missing};
+  }
+  function totalUsageText(value){
+    const fraction=(value%1000000n).toString().padStart(6,'0').replace(/0+$/,'');
+    return (value/1000000n).toLocaleString('ko-KR')+(fraction?'.'+fraction:'');
+  }
+  function usageTable(report){
+    return `<table class="spec-usage-table"><thead><tr><th scope="col">품목(원재료)</th><th scope="col">원산지</th><th scope="col">월사용량 합계(KG)</th></tr></thead><tbody>${usageRows(report)}</tbody></table>`;
+  }
+  function usageRows(report){
+    const groups=report.rows.map(row=>`<tr><td>${esc(row.material||'미입력')}</td><td>${esc(row.origin||'미입력')}</td><td>${row.entered?totalUsageText(row.qty):'—'}${row.missing?`<small class="spec-usage-missing">미입력 ${row.missing}건 제외</small>`:''}</td></tr>`).join('');
+    return groups?groups+`<tr><th scope="row" colspan="2">합계</th><td><strong>${report.entered?totalUsageText(report.total):'—'}</strong></td></tr>`:'<tr><td colspan="3">표시할 제품스펙이 없습니다.</td></tr>';
+  }
+  function renderUsageSummary(rows){
+    const report=usageSummary(rows);
+    el('usage-total').textContent=`${report.entered?totalUsageText(report.total)+' KG':'월사용량 미입력'} · ${report.rows.length}개 품목/원산지`;
+    el('usage-info').textContent=`현재 선택·검색된 목록에서 품목명과 원산지가 같은 스펙끼리 합산합니다. 입력 ${report.entered}건 · 미입력 ${report.missing}건 제외`;
+    el('usage-rows').innerHTML=usageRows(report);
+  }
   const distributions=new Set(['삼성웰스토리','동원홈푸드','CJ프레시웨이','동부축산유통','직납']);
   function setDistribution(value=''){
     const text=String(value??'');
@@ -34,7 +84,7 @@
   }
   function reset(){
     if(state.saving)return;
-    state.editing=null;el('editor').reset();setDistribution();syncControls();
+    state.editing=null;el('editor').reset();setDistribution();setMaterial();syncControls();
   }
   function applyPermissions(){
     const token=window.DBMTAuth?.getSessionToken()||'';
@@ -67,7 +117,7 @@
     }).sort((a,b)=>compareRows(a,b)||collator.compare(a.trader??'',b.trader??'')||collator.compare(a.material??'',b.material??'')||collator.compare(a.id,b.id));
   }
   function compareRows(a,b){
-    const key=state.sortKey,numeric=key==='price_kg'||key==='price_box';
+    const key=state.sortKey,numeric=key==='price_kg'||key==='price_box'||key==='monthly_usage';
     const value=row=>key==='inner_packaging_spec'?(row[key]??row.packaging_spec):row[key];
     const left=value(a),right=value(b);
     const empty=item=>item===null||item===undefined||normalize(item)===''||(numeric&&!Number.isFinite(Number(item)));
@@ -82,18 +132,20 @@
   }
   function syncPrintControl(count=filteredRows().length){
     el('print').disabled=state.loading||state.saving||!can('view')||!count;
+    el('usage-print').disabled=el('print').disabled;
   }
-  function printDocument(rows){
+  function printDocument(rows,mode='details'){
     const columns=[
-      ['trader','거래처',12],['distribution','유통',13],['material','원재료',12],['origin','원산지',9],
-      ['cutting_spec','세절스펙',14],['inner_packaging_spec','내포장 스펙',13],
-      ['outer_packaging_spec','외포장 스펙',14],['note','비고',13]
+      ['trader','거래처',11],['distribution','유통',12],['material','원재료',11],['origin','원산지',8],
+      ['cutting_spec','세절스펙',12],['inner_packaging_spec','내포장 스펙',12],
+      ['outer_packaging_spec','외포장 스펙',12],['monthly_usage','월사용량(KG)',10],['note','비고',12]
     ];
     const search=el('search').value.trim();
     const sortColumn=columns.find(([key])=>key===state.sortKey);
-    const sortLabel=sortColumn?`${sortColumn[1]} ${state.sortDirection===1?'오름차순':'내림차순'}`:'화면 목록 순서';
-    const cell=(row,key)=>key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
-    return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>제품스펙 목록 - 동부엠티 ERP</title>
+    const sortLabel=mode==='usage'?'품목 · 원산지 오름차순':sortColumn?`${sortColumn[1]} ${state.sortDirection===1?'오름차순':'내림차순'}`:'화면 목록 순서';
+    const cell=(row,key)=>key==='monthly_usage'?usageText(row[key]):key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
+    const report=usageSummary(rows),title=mode==='usage'?'월사용량 합계':'제품스펙 목록';
+    return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${title} - 동부엠티 ERP</title>
       <style>
         @page{size:A4 portrait;margin:10mm;}
         *{box-sizing:border-box;}
@@ -107,17 +159,19 @@
         th,td{padding:2mm 1mm;border:0.2mm solid #bbb;text-align:left;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere;}
         th{background:#eee;font-weight:700;}
         tr{break-inside:avoid;page-break-inside:avoid;}
+        .spec-usage-missing{display:block;font-size:8pt;color:#666;}
+        .spec-usage-table th:last-child,.spec-usage-table td:last-child{text-align:right;}
         @media screen{body{max-width:190mm;margin:10mm auto;padding:0 2mm;}}
       </style></head><body>
-      <header><h1>제품스펙 목록<span class="company">동부엠티 ERP</span></h1>
+      <header><h1>${title}<span class="company">동부엠티 ERP</span></h1>
         <p class="conditions">거래처: ${esc(el('filter-trader').value||'전체')} · 유통사: ${esc(el('filter-distribution').value||'전체')}<br>검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
       </header>
-      <table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
+      ${mode==='usage'?`<p class="conditions">품목명/원산지별 합계 · 입력 ${report.entered}건 · 미입력 ${report.missing}건 제외</p>${usageTable(report)}`:`<table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
         <thead><tr>${columns.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
         <tbody>${rows.map(row=>`<tr>${columns.map(([key])=>`<td>${esc(cell(row,key))}</td>`).join('')}</tr>`).join('')}</tbody>
-      </table></body></html>`;
+      </table>`}</body></html>`;
   }
-  function printList(){
+  function printList(mode='details'){
     const token=window.DBMTAuth?.getSessionToken()||'';
     if(!can('view')||token!==state.token){
       applyPermissions();message('제품스펙을 다시 조회한 후 인쇄해주세요.',true);return;
@@ -125,7 +179,7 @@
     if(state.loading||state.saving)return;
     const rows=filteredRows();
     if(!rows.length){message('인쇄할 제품스펙이 없습니다.',true);return;}
-    const html=printDocument(rows);
+    const html=printDocument(rows,mode);
     const popup=window.open('','_blank','width=820,height=900');
     if(!popup){message('인쇄 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.',true);return;}
     popup.opener=null;
@@ -144,6 +198,7 @@
     syncFilterChoices();
     const rows=filteredRows();
     syncPrintControl(rows.length);
+    renderUsageSummary(rows);
     document.querySelectorAll('.spec-sort').forEach(button=>{
       const active=button.dataset.sort===state.sortKey;
       button.closest('th').setAttribute('aria-sort',active?(state.sortDirection===1?'ascending':'descending'):'none');
@@ -154,9 +209,10 @@
     el('rows').innerHTML=rows.length?rows.map(row=>`<tr data-id="${esc(row.id)}">
       <td>${esc(row.trader)}</td><td>${esc(row.distribution)}</td><td>${esc(row.material)}</td><td>${esc(row.origin)}</td>
       <td>${esc(row.cutting_spec)}</td><td>${esc(row.inner_packaging_spec??row.packaging_spec)}</td><td>${esc(row.outer_packaging_spec)}</td>
+      <td class="spec-qty">${usageText(row.monthly_usage)}</td>
       <td class="spec-money">${money(row.price_kg)}</td><td class="spec-money">${money(row.price_box)}</td><td>${esc(row.note)}</td>
       <td>${can('update')?`<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${esc(row.id)}">수정</button>`:''}${can('create')?`<button type="button" class="btn btn-secondary btn-sm" data-action="copy" data-id="${esc(row.id)}">복사</button>`:''}${can('delete')?`<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(row.id)}">삭제</button>`:''}</td>
-    </tr>`).join(''):`<tr><td colspan="11" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
+    </tr>`).join(''):`<tr><td colspan="12" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
   }
   async function load(){
     if(state.saving)return;
@@ -184,6 +240,7 @@
     state.editing={...row};
     fields.forEach(key=>{el(inputs[key]).value=key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');});
     setDistribution(row.distribution);
+    setMaterial(row);
     syncControls();el('editor').scrollIntoView({block:'nearest',behavior:'smooth'});el('trader').focus();
   }
   function readPrice(key){
@@ -200,6 +257,7 @@
     state.editing=null;
     fields.forEach(key=>{el(inputs[key]).value=key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');});
     setDistribution(row.distribution);
+    setMaterial(row);
     syncControls();message('스펙을 입력칸에 복사했습니다. 내용을 수정한 후 새 스펙으로 등록하세요.');
     el('editor').scrollIntoView({block:'nearest',behavior:'smooth'});el('trader').focus();
   }
@@ -208,8 +266,13 @@
     if(!el('editor').reportValidity())return;
     let record;
     try{
-      record=Object.fromEntries(fields.filter(key=>!key.startsWith('price_')).map(key=>[key,el(inputs[key]).value.trim()]));
+      record=Object.fromEntries(fields.filter(key=>!key.startsWith('price_')&&key!=='monthly_usage').map(key=>[key,el(inputs[key]).value.trim()]));
       record.price_kg=readPrice('price_kg');record.price_box=readPrice('price_box');
+      const raw=el('monthly-usage').value.trim(),value=Number(raw);
+      if(raw&&(!Number.isFinite(value)||value<0||value>999999999||Number(value.toFixed(6))!==value))throw new Error('월사용량은 0 이상, 소수 여섯 자리까지 입력해주세요.');
+      record.monthly_usage=raw===''?null:value;
+      record.material_product_id=el('material-product-id').value||null;
+      if(!record.material_product_id&&(!state.editing||record.material!==state.editing.material))throw new Error('품목관리에 등록된 제품을 선택해주세요.');
     }catch(error){message(error.message,true);return;}
     const previous=state.editing,token=state.token;
     state.saving=true;syncControls();message('제품스펙을 저장하는 중입니다…');
@@ -257,5 +320,6 @@
     if(button)sortBy(button.dataset.sort);
   });
   el('distribution-choice').addEventListener('change',changeDistribution);
-  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,print:printList,clearFilters(){el('search').value='';el('filter-trader').value='';el('filter-distribution').value='';render();}};
+  document.addEventListener('dbmt-product-catalog-changed',syncMaterialHint);
+  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,print:printList,printUsage(){printList('usage');},openMaterialPicker,materialPickerKey,selectMaterial,clearFilters(){el('search').value='';el('filter-trader').value='';el('filter-distribution').value='';render();}};
 })();
