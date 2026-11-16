@@ -46,6 +46,31 @@
     const target=cents(weight);
     if(!Number.isSafeInteger(target)||target<=0||Math.abs(Number(weight)*100-target)>.000001)
       throw new Error('투입량은 0보다 크게, 소수 둘째 자리까지 입력해주세요.');
+    if(boxCount!==null&&boxes(boxCount)===null)throw new Error('투입 박스수는 0 이상의 정수로 입력해주세요.');
+    if(boxCount>0){
+      let remainingBoxes=boxCount;
+      const selected=[];
+      for(const source of sources){
+        const available=boxes(source.stockBoxes);
+        if(available===null)throw new Error('원본 재고의 박스수가 미기록입니다. 투입 박스수를 비워두거나 원본별로 확인해주세요.');
+        const take=Math.min(remainingBoxes,available);
+        if(take){selected.push({stock:source,boxCount:take});remainingBoxes-=take;}
+        if(!remainingBoxes)break;
+      }
+      if(remainingBoxes)throw new Error('현재 재고보다 투입 박스수가 큽니다. 재고를 다시 선택해주세요.');
+      const total=selected.reduce((sum,row)=>sum+cents(row.stock.stock),0);
+      if(target>total)throw new Error('선택한 박스수에 연결된 원본 재고보다 투입 중량이 큽니다. 박스수를 확인하거나 비워두세요.');
+      // KG and boxes are independent: allocate the entered KG, never infer it from box counts.
+      const parts=selected.map((row,index)=>{
+        const numerator=BigInt(target)*BigInt(cents(row.stock.stock)),divisor=BigInt(total);
+        return {...row,index,cents:Number(numerator/divisor),remainder:numerator%divisor};
+      });
+      const ranked=[...parts].sort((a,b)=>a.remainder===b.remainder?a.index-b.index:a.remainder>b.remainder?-1:1);
+      const left=target-parts.reduce((sum,row)=>sum+row.cents,0);
+      for(let i=0;i<left;i++)ranked[i].cents++;
+      if(parts.some(row=>!row.cents))throw new Error('선택한 박스수에 비해 투입 중량이 작습니다. 중량과 박스수를 확인해주세요.');
+      return parts.map(row=>({stock:row.stock,inputWeight:row.cents/100,boxCount:row.boxCount}));
+    }
     let remaining=target;
     const allocations=[];
     for(const source of sources){
@@ -54,20 +79,7 @@
       if(!remaining)break;
     }
     if(remaining)throw new Error('묶음 원료육의 현재 재고보다 투입량이 큽니다. 재고를 다시 선택해주세요.');
-    if(boxCount===null)return allocations;
-    if(boxes(boxCount)===null)throw new Error('투입 박스수는 0 이상의 정수로 입력해주세요.');
-    if(boxCount===0){allocations.forEach(row=>row.boxCount=0);return allocations;}
-    let remainingBoxes=boxCount;
-    for(const row of allocations){
-      const available=boxes(row.stock.stockBoxes);
-      if(available===null)throw new Error('원본 재고의 박스수가 미기록입니다. 투입 박스수를 비워두거나 원본별로 확인해주세요.');
-      const full=cents(row.inputWeight)===cents(row.stock.stock);
-      row.boxCount=full?available:remainingBoxes;
-      if(row.boxCount<0||row.boxCount>available||(row.boxCount===0&&available>0))
-        throw new Error('투입 중량과 박스수가 원본 재고에 맞지 않습니다. 박스수를 확인하거나 비워두세요.');
-      remainingBoxes-=row.boxCount;
-    }
-    if(remainingBoxes)throw new Error('투입 중량에 비해 박스수가 큽니다. 박스수를 확인하거나 비워두세요.');
+    if(boxCount===0)allocations.forEach(row=>row.boxCount=0);
     return allocations;
   }
   global.DBMTWorkOrderStockGroups={group,members,allocate};

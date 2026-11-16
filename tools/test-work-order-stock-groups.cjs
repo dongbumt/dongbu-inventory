@@ -26,10 +26,15 @@ assert.equal(full.length,10);assert.equal(full.reduce((sum,row)=>sum+Math.round(
 assert.equal(full.reduce((sum,row)=>sum+row.boxCount,0),101);
 full.forEach(row=>{assert.equal(row.inputWeight,row.stock.stock);assert.equal(row.boxCount,row.stock.stockBoxes);});
 const partial=allocate(summary[0],500,21);
-assert.deepEqual(Array.from(partial,row=>[row.inputWeight,row.boxCount]),[[93.68,4],[371.99,16],[34.33,1]]);
+assert.deepEqual(Array.from(partial,row=>row.boxCount),[4,16,1]);
+assert.equal(partial.reduce((sum,row)=>sum+Math.round(row.inputWeight*100),0),50000);
+partial.forEach(row=>assert(row.inputWeight>0&&row.inputWeight<=row.stock.stock));
+const allBoxesPartialKg=allocate(summary[0],500,101);
+assert.equal(allBoxesPartialKg.length,10);assert.equal(allBoxesPartialKg.reduce((sum,row)=>sum+row.boxCount,0),101);
+assert.equal(allBoxesPartialKg.reduce((sum,row)=>sum+Math.round(row.inputWeight*100),0),50000);
 assert(allocate(summary[0],500,null).every(row=>row.boxCount===null));
 assert(allocate(summary[0],500,0).every(row=>row.boxCount===0));
-for(const [weight,boxes] of [[0,null],[-1,null],[2313.94,101],[.001,null],[500,1],[500,101],[500,-1]])assert.throws(()=>allocate(summary[0],weight,boxes));
+for(const [weight,boxes] of [[0,null],[-1,null],[2313.94,101],[.001,null],[500,1],[500,102],[.01,101],[500,-1]])assert.throws(()=>allocate(summary[0],weight,boxes));
 assert.equal(JSON.stringify({receipts,stocks}),before,'Display grouping/allocation must not mutate stock or barcode receipts');
 const unknown=group(stocks.map((row,i)=>({...row,stockBoxes:i?row.stockBoxes:null})),receipts)[0];
 assert.equal(unknown.stockBoxes,null);assert.throws(()=>allocate(unknown,2313.93,101));
@@ -92,7 +97,9 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
     await page.evaluate(()=>editWorkOrder(workOrders[0].id));
     assert.equal(await page.locator('#wo-source-rows .wo-source-row').count(),1,'Saved group restores as one input row');
     assert.deepEqual(await page.evaluate(()=>collectWorkOrderForm().sourceInputs),fullOrder.sourceInputs,'Reopening must not change print-locked source snapshots or order');
-    await row(0).locator('.wo-input-weight').fill('500');await row(0).locator('.wo-input-box-count').fill('21');
+    await row(0).locator('.wo-input-weight').fill('500');
+    const keptBoxes=await page.evaluate(()=>collectWorkOrderForm());assert(keptBoxes);assert.equal(keptBoxes.inputBoxCount,101);assert.equal(keptBoxes.inputWeight,500);
+    await row(0).locator('.wo-input-box-count').fill('21');
     const part=await page.evaluate(()=>collectWorkOrderForm());assert(part);assert.equal(part.inputWeight,500);assert.equal(part.inputBoxCount,21);assert.equal(part.sourceInputs.length,3);
     assert.equal(part.sourceInputs.reduce((sum,input)=>sum+Math.round(input.inputWeight*100),0),50000);
     await page.evaluate(()=>addWorkOrderSourceRow());
