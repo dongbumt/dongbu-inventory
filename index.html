@@ -33,7 +33,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261112print1">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261116filters1">
 <link rel="stylesheet" href="styles/ledgers.css?v=20261112ledger1">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261113pda1">
 <link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
@@ -597,7 +597,9 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
     </div>
     <div class="spec-search">
-      <div class="form-group"><label for="spec-search">검색</label><input id="spec-search" type="search" autocomplete="off" placeholder="거래처 · 유통 · 원재료 · 원산지 검색"></div>
+      <div class="form-group"><label for="spec-filter-trader">거래처 선택</label><select id="spec-filter-trader"><option value="">전체 거래처</option></select></div>
+      <div class="form-group"><label for="spec-filter-distribution">유통사 선택</label><select id="spec-filter-distribution"><option value="">전체 유통사</option></select></div>
+      <div class="form-group spec-keyword"><label for="spec-search">검색</label><input id="spec-search" type="search" autocomplete="off" placeholder="거래처 · 유통 · 원재료 · 원산지 검색"></div>
     </div>
     <div class="spec-table-wrap"><table class="spec-table"><thead><tr>
       <th scope="col"><button type="button" class="spec-sort" data-sort="trader" data-label="거래처">거래처<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
@@ -22611,7 +22613,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="driver-place-label.js?v=20261105place1"></script>
 <script src="production-schedule.js?v=20261020workorders1"></script>
-<script src="product-specs.js?v=20261112print2"></script>
+<script src="product-specs.js?v=20261116filters1"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261113pda1"></script>

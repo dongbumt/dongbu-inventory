@@ -40,14 +40,28 @@
     const token=window.DBMTAuth?.getSessionToken()||'';
     if(token!==state.token || !can('view')){
       state.token=token;state.request++;state.rows=[];state.loading=false;state.saving=false;
+      el('filter-trader').value='';el('filter-distribution').value='';
       reset();message('');
     }
     if(state.editing&&!can('update'))reset();
     syncControls();render();
   }
+  function syncFilterChoices(){
+    for(const [key,label] of [['trader','전체 거래처'],['distribution','전체 유통사']]){
+      const select=el('filter-'+key),selected=select.value;
+      const values=new Set(state.rows.map(row=>String(row[key]??'').trim()).filter(Boolean));
+      // Keep a missing selection after refresh so printing never expands to all rows.
+      if(selected)values.add(selected);
+      select.replaceChildren(new Option(label,''),...Array.from(values).sort(collator.compare).map(value=>new Option(value,value)));
+      select.value=selected;
+    }
+  }
   function filteredRows(){
     const terms=normalize(el('search').value).split(/\s+/).filter(Boolean);
+    const trader=el('filter-trader').value,distribution=el('filter-distribution').value;
     return state.rows.filter(row=>{
+      if(trader&&String(row.trader??'').trim()!==trader)return false;
+      if(distribution&&String(row.distribution??'').trim()!==distribution)return false;
       const values=[row.trader,row.distribution,row.material,row.origin].map(normalize);
       return terms.every(term=>values.some(value=>value.includes(term)));
     }).sort((a,b)=>compareRows(a,b)||collator.compare(a.trader??'',b.trader??'')||collator.compare(a.material??'',b.material??'')||collator.compare(a.id,b.id));
@@ -96,7 +110,7 @@
         @media screen{body{max-width:190mm;margin:10mm auto;padding:0 2mm;}}
       </style></head><body>
       <header><h1>제품스펙 목록<span class="company">동부엠티 ERP</span></h1>
-        <p class="conditions">검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
+        <p class="conditions">거래처: ${esc(el('filter-trader').value||'전체')} · 유통사: ${esc(el('filter-distribution').value||'전체')}<br>검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
       </header>
       <table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
         <thead><tr>${columns.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
@@ -127,6 +141,7 @@
     }));
   }
   function render(){
+    syncFilterChoices();
     const rows=filteredRows();
     syncPrintControl(rows.length);
     document.querySelectorAll('.spec-sort').forEach(button=>{
@@ -235,10 +250,12 @@
     else if(button.dataset.action==='delete')remove(button.dataset.id);
   });
   el('search').addEventListener('input',render);
+  el('filter-trader').addEventListener('change',render);
+  el('filter-distribution').addEventListener('change',render);
   document.querySelector('.spec-table thead').addEventListener('click',event=>{
     const button=event.target.closest('button[data-sort]');
     if(button)sortBy(button.dataset.sort);
   });
   el('distribution-choice').addEventListener('change',changeDistribution);
-  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,print:printList,clearFilters(){el('search').value='';render();}};
+  window.DBMTProductSpecs={init,load,save,reset,applyPermissions,print:printList,clearFilters(){el('search').value='';el('filter-trader').value='';el('filter-distribution').value='';render();}};
 })();

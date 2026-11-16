@@ -73,7 +73,6 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.match(await popup.locator('tbody').textContent(),/기존 포장스펙/);
     assert.equal(await popup.locator('img,script,button,input,select').count(),0,'No injected HTML, editor or management buttons');
     assert.ok(!(await popup.locator('body').textContent()).includes('출력제외업체'));
-    await popup.pdf({path:path.join(output,'filtered.pdf'),preferCSSPageSize:true,printBackground:true});
     await popup.close();
     assert.equal(await page.locator('#spec-search').inputValue(),'삼성 목전지 미국');
     assert.equal(await page.evaluate(()=>qaCalls.length),1,'Printing uses the displayed snapshot without another RPC');
@@ -97,6 +96,52 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await page.evaluate(()=>{qaRights.view=false;DBMTProductSpecs.print();});
     assert.equal(await page.evaluate(()=>qaOpenCount),2);
 
+    const selectionRows=[
+      {...base,id:'s1',trader:'거래처A',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산'},
+      {...base,id:'s2',trader:'거래처A',distribution:'동원홈푸드',material:'우삼겹',origin:'미국산'},
+      {...base,id:'s3',trader:'거래처B',distribution:'삼성웰스토리',material:'목전지',origin:'미국산'},
+      {...base,id:'s4',trader:'거래처AB',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산'},
+      {...base,id:'s5',trader:'거래처B',distribution:'<자유 & 유통>',material:'부채살',origin:'호주산'},
+      {...base,id:'s6',trader:'거래처A',distribution:null,material:'앞다리',origin:'국내산'}
+    ];
+    await page.evaluate(data=>{qaRights.view=true;qaRows=data;return DBMTProductSpecs.load();},selectionRows);
+    const trader=page.locator('#spec-filter-trader'),distribution=page.locator('#spec-filter-distribution');
+    const ids=()=>page.locator('#spec-rows tr[data-id]').evaluateAll(rows=>rows.map(row=>row.dataset.id).sort());
+    assert.deepEqual(await trader.locator('option').allTextContents(),['전체 거래처','거래처A','거래처AB','거래처B']);
+    assert.ok((await distribution.locator('option').allTextContents()).includes('<자유 & 유통>'),'Custom distributors are selectable');
+    await trader.selectOption('거래처A');
+    assert.deepEqual(await ids(),['s1','s2','s6'],'Customer selection is exact and includes its unspecified distributors');
+    popup=await openPrint();
+    assert.deepEqual(await popup.locator('tbody tr td:first-child').allTextContents(),['거래처A','거래처A','거래처A']);
+    assert.match(await popup.locator('header').textContent(),/거래처: 거래처A · 유통사: 전체/);await popup.close();
+    await trader.selectOption('');await distribution.selectOption('삼성웰스토리');
+    assert.deepEqual(await ids(),['s1','s3','s4']);
+    popup=await openPrint();
+    assert.deepEqual(await popup.locator('tbody tr td:nth-child(2)').allTextContents(),['삼성웰스토리','삼성웰스토리','삼성웰스토리']);await popup.close();
+    await trader.selectOption('거래처A');await page.locator('#spec-search').fill('돈등심');
+    assert.deepEqual(await ids(),['s1'],'Both selections and keyword search combine');
+    await page.screenshot({path:path.join(output,'selection.png'),fullPage:false});
+    popup=await openPrint();
+    assert.equal(await popup.locator('tbody tr').count(),1);
+    assert.match(await popup.locator('header').textContent(),/거래처: 거래처A · 유통사: 삼성웰스토리/);
+    assert.doesNotMatch(await popup.locator('body').textContent(),/거래처AB|거래처B|동원홈푸드/);
+    await popup.pdf({path:path.join(output,'filtered.pdf'),preferCSSPageSize:true,printBackground:true});await popup.close();
+    await page.locator('#spec-search').fill('미국산');assert.equal(await page.locator('#spec-print').isDisabled(),true);
+    await page.getByRole('button',{name:'검색 초기화',exact:true}).click();
+    assert.equal(await trader.inputValue(),'');assert.equal(await distribution.inputValue(),'');assert.equal(await page.locator('#spec-search').inputValue(),'');
+    assert.equal((await ids()).length,6);
+    await distribution.selectOption('<자유 & 유통>');assert.deepEqual(await ids(),['s5']);
+    popup=await openPrint();
+    assert.match(await popup.locator('header').textContent(),/<자유 & 유통>/);assert.equal(await popup.locator('img,script').count(),0);await popup.close();
+    await distribution.selectOption('');await trader.selectOption('거래처A');
+    await page.evaluate(()=>{qaRows=qaRows.filter(row=>row.trader!=='거래처A');return DBMTProductSpecs.load();});
+    assert.equal(await trader.inputValue(),'거래처A','Refresh preserves a selected customer even if its final record disappears');
+    assert.deepEqual(await ids(),[]);assert.equal(await page.locator('#spec-print').isDisabled(),true,'Missing selections cannot broaden printing');
+    await page.getByRole('button',{name:'검색 초기화',exact:true}).click();assert.equal((await ids()).length,3);
+    await distribution.selectOption('삼성웰스토리');
+    await page.evaluate(()=>{qaToken='third-session';DBMTProductSpecs.applyPermissions();});
+    assert.equal(await trader.locator('option').count(),1);assert.equal(await distribution.locator('option').count(),1,'Session changes clear previous customer/distributor choices');
+
     const many=Array.from({length:70},(_,i)=>({...base,id:'multi-'+i,trader:'업체'+String(i+1).padStart(3,'0'),material:'상품'+String(i+1).padStart(3,'0'),note:i===35?'긴 문구 '.repeat(250)+'긴문구끝표시':'확인사항'+String(i+1).padStart(3,'0')}));
     await page.evaluate(data=>{qaRights.view=true;qaRows=data;return DBMTProductSpecs.load();},many);
     await page.locator('[data-sort="trader"]').click();
@@ -114,6 +159,6 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     }
     await page.screenshot({path:path.join(output,'list.png'),fullPage:false});
     assert.deepEqual(errors,[]);
-    console.log('PASS: price-free filtered/sorted print, unchanged screen prices, A4 portrait PDFs, wrapping, legacy values, permissions/session/loading guards and popup failure. QA: '+output);
+    console.log('PASS: exact customer/distributor selection, combined search, custom distributors, reset/refresh/session safeguards; price-free sorted A4 print, screen prices, wrapping, permissions and popup failure. QA: '+output);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
