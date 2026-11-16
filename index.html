@@ -6,7 +6,7 @@
 <title>동부엠티 ERP 시스템</title>
 <script src="stock-ledger.js?v=20261113split1"></script>
 <script src="ledger-model.js?v=20261112ledger1"></script>
-<script src="pda-transaction-summary.js?v=20261106cost1"></script>
+<script src="pda-transaction-summary.js?v=20261116stockrow1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="label-lots.js?v=20261029lots1"></script>
@@ -10586,7 +10586,7 @@ function renderTransactions(){
       ? `${htmlEscape(normalizeStockLocation(t.fromLocation || t.stockLocation))} → ${htmlEscape(normalizeStockLocation(t.toLocation || ''))}`
       : htmlEscape(getTxnStockLocation(t));
     const lot = htmlEscape(t.lot || '-');
-    const note = htmlEscape(t.note || '-') + (t._productionCostStatus==='pending' ? ' <small style="color:#666;white-space:nowrap;">원가 미확정</small>' : '');
+    const note = htmlEscape(DBMTPdaTransactionSummary.note(t) || '-') + (t._productionCostStatus==='pending' ? ' <small style="color:#666;white-space:nowrap;">원가 미확정</small>' : '');
     const weight = Number(t.weight || 0);
     const price = Number(t.price || 0);
     const amount = Number(t.amount || 0);
@@ -10617,7 +10617,7 @@ function renderTransactions(){
 }
 
 function transactionDisplayRows(rows){
-  return DBMTPdaTransactionSummary.group(rows,getTxnStockLocation);
+  return DBMTPdaTransactionSummary.group(rows,getTxnStockLocation,transactions);
 }
 
 function findPdaTransactionSummary(id){
@@ -15131,7 +15131,7 @@ function downloadCSV(rows,filename){
 }
 function exportTransactionsCSV(){
   const header=['날짜','구분','거래처','품목명','원산지','보관','이력번호','중량(KG)','박스수','단가','금액','비고'];
-  const rows=transactionDisplayRows([...transactions].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,t.type==='박스기준'?boxCountDisplay(t.boxCountAfter,''):boxCountDisplay(t.boxCount,''),t.price||'',t.amount||'',t.note||'']);
+  const rows=transactionDisplayRows([...transactions].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')))).map(t=>[t.date,t.type,t.trader||'',t.product,t.origin||'',t.storage||'',t.lot||'',t.weight,t.type==='박스기준'?boxCountDisplay(t.boxCountAfter,''):boxCountDisplay(t.boxCount,''),t.price||'',t.amount||'',DBMTPdaTransactionSummary.note(t)]);
   downloadCSV([header,...rows],'원료수불부_거래내역.csv');
 }
 
@@ -15213,7 +15213,7 @@ function printFilteredTransactions(){
       <td class="numeric">${t.type==='박스기준' ? `${boxCountDisplay(t.boxCountAfter)} (기준)` : boxCountDisplay(t.boxCount)}</td>
       <td class="numeric">${parseAppNumber(t.price) ? parseAppNumber(t.price).toLocaleString('ko-KR',{maximumFractionDigits:2}) : '-'}</td>
       <td class="numeric">${parseAppNumber(t.amount) ? Math.round(parseAppNumber(t.amount)).toLocaleString('ko-KR') : '-'}</td>
-      <td>${htmlEscape(t.note || '-')}</td>
+      <td>${htmlEscape(DBMTPdaTransactionSummary.note(t) || '-')}</td>
     </tr>`;
   }).join('');
   const table=`<table>

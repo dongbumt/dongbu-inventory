@@ -21,7 +21,7 @@ const makeRows=(count,date='2026-10-15',long=false)=>Array.from({length:count},(
   origin:'국내산',proddate:'2026-10-14',lot:`L${date.replace(/-/g,'').slice(2)}${String(i+1).padStart(6,'0')}`,weight:i+0.75}));
 const boxes=Array.from({length:42},(_,i)=>({id:`qa-pda-${i}`,date:'2026-10-15',type:'출고',trader:'동원홈푸드',traderId:'qa-partner',
   product:'돈사태(작업)',labelProductId:'qa-product',origin:'국내산',lot:'L12610134894030',packunit:'3KG',storage:'냉동',
-  proddate:i%2?'2026-10-13':'2026-10-14',stockRowId:`qa-source-${i%3}`,stockLocation:'가공장',
+  proddate:i%2?'2026-10-13':'2026-10-14',stockRowId:'qa-source',stockLocation:'가공장',
   weight:12,boxCount:1,price:7500,amount:90000,note:'',_pdaRequestId:'qa-batch',_pdaLabelId:`qa-label-${i}`}));
 
 (async()=>{
@@ -50,6 +50,9 @@ const boxes=Array.from({length:42},(_,i)=>({id:`qa-pda-${i}`,date:'2026-10-15',t
   const groupedPrint=JSON.parse(JSON.stringify(calls.at(-1).groups));
   context.exportShipLogRange();assert.equal(calls.at(-1).groups[0].items.length,1);
   assert.equal(JSON.stringify(context.transactions),boxesBefore,'Preview and both print actions must never change box-level stock rows');
+  context.transactions=boxes.map((row,i)=>({...row,stockRowId:i<21?'qa-source-A':'qa-source-B'}));
+  const separateStock=context.getShipLogOuts('2026-10-15');
+  assert.equal(separateStock.length,2);assert(separateStock.every(row=>row.weight===252&&row.boxCount===21),'Distinct inventory rows stay separate in the shipping journal too');
   const extra=changes=>({...boxes[0],id:'extra-'+JSON.stringify(changes),_pdaLabelId:'extra-'+JSON.stringify(changes),...changes});
   const manual=extra({id:'manual-1'});delete manual._pdaRequestId;delete manual._pdaLabelId;
   context.transactions=[...structuredClone(boxes),extra({_pdaRequestId:'other-batch'}),extra({lot:'OTHER-LOT'}),extra({trader:'다른 거래처'}),extra({stockLocation:'물류창고'}),manual,{...manual,id:'manual-2'},extra({date:'2026-10-16'}),extra({type:'입고'})];

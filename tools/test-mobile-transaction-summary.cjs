@@ -8,7 +8,7 @@ for(const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm
 const sharedAsset=source=>source.match(/src="(pda-transaction-summary\.js\?v=[^"]+)"/)[1];
 assert.equal(sharedAsset(html),sharedAsset(fs.readFileSync(path.join(root,'index.html'),'utf8')),'PC and mobile must use the same aggregation release');
 const first={id:'qa-box',date:'2026-10-20',type:'출고',trader:'동원홈푸드',traderId:'qa-customer',product:'돈사태(작업)',labelProductId:'qa-product',lot:'QA-LOT',origin:'국내산',storage:'냉동',packunit:'3KG',stockLocation:'가공장',stockRowId:'qa-stock-0',stockUnitPrice:5315,weight:12,boxCount:1,price:7500,amount:90000,note:'',_pdaRequestId:'qa-batch',_pdaLabelId:'qa-label',_pdaCode:'qa-code'};
-const boxes=count=>Array.from({length:count},(_,i)=>({...first,id:`qa-box-${i}`,_pdaLabelId:`qa-label-${i}`,_pdaCode:`qa-code-${i}`,proddate:i%2?'2026-10-19':'2026-10-20',expdate:i%2?'2027-10-18':'2027-10-19',stockProddate:i%2?'2026-10-19':'2026-10-20',stockRowId:`qa-stock-${i%3}`,stockUnitPrice:i%2?5315:5505}));
+const boxes=count=>Array.from({length:count},(_,i)=>({...first,id:`qa-box-${i}`,_pdaLabelId:`qa-label-${i}`,_pdaCode:`qa-code-${i}`,proddate:i%2?'2026-10-19':'2026-10-20',expdate:i%2?'2027-10-18':'2027-10-19',stockProddate:i%2?'2026-10-19':'2026-10-20',stockUnitPrice:i%2?5315:5505}));
 const sources=Array.from({length:3},(_,i)=>({id:`qa-production-${i}`,date:'2026-10-20',type:'생산입고',product:first.product,labelProductId:first.labelProductId,lot:first.lot,origin:first.origin,packunit:first.packunit,stockLocation:'가공장',stockRowId:`qa-stock-${i}`,weight:200,price:5315,amount:1063000}));
 const initial=[...sources,...boxes(42)];
 const allowedFiles=['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','mobile-production.js','styles/mobile-production.css'];
@@ -74,6 +74,13 @@ const remote=!!process.env.DBMT_MOBILE_TEST_BASE;
       transactions=structuredClone(next);await page.getByRole('button',{name:'새로고침',exact:true}).click();
       await page.waitForFunction(expected=>JSON.stringify(snapshot?.transactions)===expected,JSON.stringify(transactions));
     }
+    const distinctSources=sources.map((row,i)=>({...row,stockNote:i===0?'3mm / A업체':'5mm / B업체'}));
+    const distinctBoxes=boxes(42).map((row,i)=>({...row,stockRowId:i<21?'qa-stock-0':'qa-stock-1'}));
+    await replaceRows([...distinctSources,...distinctBoxes]);
+    assert.equal(await rows.count(),2);assert.equal(await page.locator('#transaction-count').innerText(),'2건 · PDA 42박스');
+    assert.match(await rows.nth(0).innerText(),/252kg.*21박스.*3mm \/ A업체/s);
+    assert.match(await rows.nth(1).innerText(),/252kg.*21박스.*5mm \/ B업체/s);
+    await page.screenshot({path:path.join(artifacts,'distinct-stock-notes.png'),fullPage:true});
     const manual={...first,id:'qa-manual'};delete manual._pdaRequestId;delete manual._pdaLabelId;
     const variants=[...initial,{...first,id:'qa-other-batch',_pdaRequestId:'qa-batch-2'},
       {...first,id:'qa-other-lot',lot:'QA-OTHER'},

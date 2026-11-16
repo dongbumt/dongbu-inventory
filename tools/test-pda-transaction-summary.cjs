@@ -7,14 +7,14 @@ for(const match of index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new v
 const pure={window:{}};vm.runInNewContext(fs.readFileSync(path.join(repo,'pda-transaction-summary.js'),'utf8'),pure);
 const group=rows=>pure.window.DBMTPdaTransactionSummary.group(rows);
 const first={id:'tx_pda_01',date:'2026-10-20',type:'출고',trader:'동원홈푸드',traderId:'qa-partner',product:'돈사태(작업)',labelProductId:'qa-product',lot:'L12610134894030',origin:'국내산',storage:'냉동',packunit:'3KG',proddate:'2026-10-13',stockLocation:'가공장',stockRowId:'qa-stock',stockUnitPrice:5000,weight:12,boxCount:1,price:7500,amount:90000,note:'',_isUser:true,_pdaRequestId:'qa-batch',_pdaLabelId:'qa-label-01',_pdaCode:'DB2610201200-ABC120',_pdaAction:'ship'};
-const boxes=Array.from({length:20},(_,i)=>({...first,id:`tx_pda_${String(i+1).padStart(2,'0')}`,stockRowId:`qa-stock-${i%3}`,stockUnitPrice:i%2?5315:5505,proddate:i%2?'2026-10-19':'2026-10-20',expdate:i%2?'2027-10-18':'2027-10-19',stockProddate:i%2?'2026-10-19':'2026-10-20',_pdaLabelId:`qa-label-${i}`,_pdaCode:'DB2610201200-ABC1'+String(i).padStart(2,'0')}));
+const boxes=Array.from({length:20},(_,i)=>({...first,id:`tx_pda_${String(i+1).padStart(2,'0')}`,stockUnitPrice:i%2?5315:5505,proddate:i%2?'2026-10-19':'2026-10-20',expdate:i%2?'2027-10-18':'2027-10-19',stockProddate:i%2?'2026-10-19':'2026-10-20',_pdaLabelId:`qa-label-${i}`,_pdaCode:'DB2610201200-ABC1'+String(i).padStart(2,'0')}));
 const original=JSON.stringify(boxes),summaries=group(boxes);
 assert.equal(summaries.length,1);assert.equal(summaries[0].weight,240);assert.equal(summaries[0].boxCount,20);assert.equal(summaries[0].amount,1800000);
 assert.equal(JSON.stringify(boxes),original,'Grouping must not rewrite or delete original box rows');
-for(const field of ['_pdaRequestId','date','traderId','trader','product','labelProductId','packunit','lot','origin','storage','brand','factoryNo','grade','stockLocation','note','price']){
+for(const field of ['_pdaRequestId','date','traderId','trader','product','labelProductId','packunit','lot','origin','storage','brand','factoryNo','grade','stockLocation','stockRowId','note','price']){
   assert.equal(group([first,{...first,id:'other',_pdaLabelId:'other',[field]:field==='price'?8000:'different'}]).length,2,`Separate different ${field}`);
 }
-for(const field of ['proddate','expdate','stockRowId','stockProddate','stockUnitPrice']){
+for(const field of ['proddate','expdate','stockProddate','stockUnitPrice']){
   const originalRows=[first,{...first,id:'other',_pdaLabelId:'other',[field]:'different'}];
   assert.equal(group(originalRows).length,1,`Display totals across different ${field}`);
   assert.equal(group(originalRows)[0]._pdaSummaryRows[1][field],'different','Retain original source identity');
@@ -28,6 +28,17 @@ const many=group(Array.from({length:200},(_,i)=>({...first,id:String(i),weight:.
 const rawBoxes=boxes.map(({_pdaRequestId,_pdaLabelId,...row},i)=>({...row,_pdaRawRequestId:_pdaRequestId,_pdaRawPackageId:_pdaLabelId,_pdaCode:'076623002060046015970094'+String(i).padStart(2,'0')}));
 assert.equal(group(rawBoxes).length,1);assert.equal(group(rawBoxes)[0].weight,240);
 assert.equal(group([...boxes,...rawBoxes]).length,2,'Raw and product boxes never merge even if request IDs match');
+const separate=boxes.map((row,i)=>({...row,stockRowId:i<8?'stock-A':'stock-B',_productionCostSourceId:'same-original-production'}));
+const receipts=[{type:'생산입고',stockRowId:'stock-A',stockNote:'3mm / A업체'},
+  {type:'생산입고',stockRowId:'stock-B',stockNote:'5mm / B업체'}];
+const separateBefore=JSON.stringify(separate),ledgerBefore=JSON.stringify(receipts);
+const separated=pure.window.DBMTPdaTransactionSummary.group(separate,undefined,receipts);
+assert.equal(separated.length,2);assert.deepEqual(Array.from(separated,row=>[row.boxCount,row.weight,row.amount]),[[8,96,720000],[12,144,1080000]]);
+assert.deepEqual(Array.from(separated,pure.window.DBMTPdaTransactionSummary.note),['3mm / A업체','5mm / B업체']);
+assert.equal(JSON.stringify(separate),separateBefore);assert.equal(JSON.stringify(receipts),ledgerBefore);
+assert.equal(pure.window.DBMTPdaTransactionSummary.note(pure.window.DBMTPdaTransactionSummary.group([separate[0]],undefined,receipts)[0]),'3mm / A업체','A single box must also show its source note');
+assert.equal(group(separate.map(row=>({...row,_pdaProvisional:true,_productionCostStatus:'pending',stockRowId:'stock_pending_'+row._pdaLabelId}))).length,1,'Temporary sources must not ungroup every provisional box');
+assert.equal(group(separate.map(({_pdaRequestId,_pdaLabelId,...row})=>({...row,_pdaRawRequestId:_pdaRequestId,_pdaRawPackageId:_pdaLabelId}))).length,2,'Raw shipments also respect distinct stock rows');
 console.log('PASS: exact weight/box/amount totals, identity boundaries, manual/receipt isolation, original row preservation and per-box rounding');
 const names=['localDateString','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','setTransactionListIdle','prepareTransactionList','markTransactionSearchPending','markTransactionKeywordSearchPending','validateTransactionDateRange','runTransactionSearch','runTransactionExactDateSearch','runTransactionAllSearch','exportTransactionsCSV','printFilteredTransactions'];
 names.push('parseTransactionUnitPrice');
@@ -152,6 +163,28 @@ const server=http.createServer((req,res)=>{
     await page.waitForFunction(()=>userTransactions.length===0);
     assert.equal(await page.evaluate(()=>__saves.length),beforeDelete+1);assert.deepEqual(await page.evaluate(()=>__saves.at(-1).deleted),[receipt.id]);
     assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('dbmt_user_transactions'))),[]);
+    // Existing source notes remain visible even when receipts are outside the date/type filter.
+    await page.evaluate(({rows,sources})=>{
+      userTransactions=[...sources.map((source,i)=>({...source,id:'source-'+i,date:'2026-10-19',product:'돈사태(작업)'})),...rows];
+      transactions=[...userTransactions];
+      for(const id of ['t-search-product','t-search-lot','t-search-from','t-search-to'])document.getElementById(id).value='';
+      document.getElementById('t-search-date').value='2026-10-20';document.getElementById('t-filter-type').value='출고';
+      transactionListQueryActive=true;renderTransactions();
+    },{rows:separate,sources:receipts});
+    assert.equal(await page.locator('#t-body tr').count(),2);
+    const groupA=page.locator('#t-body tr').filter({hasText:'3mm / A업체'}),groupB=page.locator('#t-body tr').filter({hasText:'5mm / B업체'});
+    assert.equal(await groupA.locator('.txn-col-boxes').innerText(),'8');assert.equal(await groupB.locator('.txn-col-boxes').innerText(),'12');
+    await page.setViewportSize({width:1440,height:900});await page.locator('#t-table').screenshot({path:path.join(artifacts,'distinct-stock-notes.png')});
+    const splitSaveCount=await page.evaluate(()=>__saves.length);
+    await groupA.locator('input[type="number"]').fill('8400');await groupA.locator('input[type="number"]').press('Tab');
+    await page.waitForFunction(count=>__saves.length===count+1,splitSaveCount);
+    const splitSave=await page.evaluate(()=>__saves.at(-1).rows);
+    assert.equal(splitSave.length,8);assert(splitSave.every(row=>row.stockRowId==='stock-A'&&!('_pdaStockNote' in row)));
+    assert.equal(await groupB.locator('input[type="number"]').inputValue(),'7500','A group price edit must not touch the other inventory row');
+    await page.locator('#p-transactions').getByRole('button',{name:'인쇄',exact:true}).click();
+    assert.equal(await page.evaluate(()=>__print.count),2);assert.match(await page.evaluate(()=>__print.table),/3mm \/ A업체/);assert.match(await page.evaluate(()=>__print.table),/5mm \/ B업체/);
+    await page.locator('#p-transactions').getByRole('button',{name:'CSV 저장',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>__csv.rows.filter(row=>row[1]==='출고').map(row=>row[11]).sort()),['3mm / A업체','5mm / B업체']);
     assert.deepEqual(errors,[]);console.log('PASS: today/date/range/all/keyword queries; product/raw outbound totals; 20-box raw receipt details; atomic price/delete success/failure, print/CSV, permissions and narrow dialog');console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
