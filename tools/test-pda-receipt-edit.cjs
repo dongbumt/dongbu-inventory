@@ -4,7 +4,7 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-receipt-edit-'));
 const source=name=>{const match=html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'));assert(match,name);return match[0];};
-const names=['htmlEscape','parseOptionalBoxCount','parseTransactionUnitPrice','updateTxnAmtPreview','autoFillTxnPrice','addTransaction','savePdaRawReceiptFromForm','setPdaRawReceiptEditControls',
+const names=['htmlEscape','parseOptionalBoxCount','parseTransactionUnitPrice','updateTxnAmtPreview','autoFillTxnPrice','addTransaction','allocatePdaRawReceiptWeights','savePdaRawReceiptFromForm','setPdaRawReceiptEditControls',
   'loadTxnToForm','clearTransactionForm','showTransactionSaveStatus','supabaseSaveTransactionRows','assertPersonalServerResult','personalServerWriteToken','renderPdaTransactionDetails'];
 const functions=names.map(source).join('\n');new vm.Script(functions);
 const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><main></main>');});
@@ -20,6 +20,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
     },html);
     await page.addStyleTag({content:fs.readFileSync(path.join(root,'styles/main.css'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'stock-ledger.js'),'utf8')});
+    await page.addScriptTag({content:fs.readFileSync(path.join(root,'pda-transaction-summary.js'),'utf8')});
     await page.addScriptTag({content:`
       const seed={id:'qa-receipt',stockRowId:'qa-stock',date:'2026-11-10',type:'입고',product:'목전지',labelProductId:'qa-product',origin:'미국산',storage:'냉동',brand:'S/F',lot:'903024600808',stockLocation:'가공장',
         trader:'쎄븐푸드',traderId:'qa-old-supplier',weight:349.89,boxCount:20,price:4400,amount:1539516,stockUnitPrice:4400,_isUser:true,_pdaAction:'receive',_pdaRawRequestId:'qa-request',_pdaRawPackageId:'qa-box1',

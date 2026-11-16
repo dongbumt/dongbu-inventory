@@ -59,6 +59,27 @@ def corrections(conn, fixture):
         assert conn.execute('select price from public.transactions where id=%s', (tx,)).fetchone()[0] == 4441
     print('PASS: actual ERP API corrects supplier/price/weight/note; raw barcode weights and identities preserved; exact amounts/zero prices, versions, permission/immutable checks and mixed-write rollback')
     with conn.transaction(force_rollback=True):
+        other = commit('inbound', codes[20:22])
+        other_id = other['items'][0]['transactionId']
+        other_row = conn.execute('select raw from public.transactions where id=%s', (other_id,)).fetchone()[0]
+        source_ids = [source, other_row['stockRowId']]
+        packages_before = conn.execute('select id,barcode,parsed,snapshot,weight,revision,source_id from pda_private.raw_packages where source_id=any(%s) order by id', (source_ids,)).fetchall()
+        changes = [dict(corrected, weight=339, price=5300, trader=name, note='Group QA'),
+                   dict(other_row, weight=33.91, price=5300, trader=name, note='Group QA')]
+        result = rpc('dbmt_erp_save_transactions', token, changes, [])
+        saved = result['updatedRawReceipts']
+        assert len(saved) == 2 and sum(Decimal(str(r['weight'])) for r in saved) == Decimal('372.91')
+        for previous, current in zip([corrected, other_row], saved):
+            for key in ['id', 'stockRowId', '_pdaRawRequestId', '_pdaRawPackageId', '_pdaRawBoxes', '_pdaCode', 'proddate', 'mfgdate', 'expdate', 'boxCount']:
+                assert current.get(key) == previous.get(key), key
+            assert current['price'] == 5300 and current['trader'] == name
+            assert current['_pdaRawEditRevision'] == previous.get('_pdaRawEditRevision', 0) + 1
+        assert conn.execute('select id,barcode,parsed,snapshot,weight,revision,source_id from pda_private.raw_packages where source_id=any(%s) order by id', (source_ids,)).fetchall() == packages_before
+        reject(lambda: rpc('dbmt_erp_save_transactions', token, [dict(saved[0], weight=338), dict(other_row, weight=33)], []), '다른 사용자가')
+        assert conn.execute('select raw from public.transactions where id=%s', (tx,)).fetchone()[0] == saved[0], 'A later stale receipt must roll back earlier corrections in the group'
+        assert conn.execute("select sum(pda_private.balance(v,'가공장')) from unnest(%s::text[]) v", (source_ids,)).fetchone()[0] == Decimal('372.91')
+    print('PASS: one group request updates independent receipts atomically; exact ledger total, individual dates/barcodes/scans/sources/revisions preserved and later-row version conflict rolls back the entire request')
+    with conn.transaction(force_rollback=True):
         scans = [fixture['scan'](code) for code in codes[:20]]
         request = uuid.uuid4()
         shipped = rpc('dbmt_pda_raw_commit', token, request, 'outbound', '가공장', fixture['partner'], '2026-11-10', scans, fixture['pid'], 'QA-RECEIPT', None, 4400, 'QA')

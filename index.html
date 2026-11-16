@@ -9116,6 +9116,7 @@ async function updateTxnPrice(id, newPriceStr){
   toast('단가 수정 완료 — 거래명세서에 즉시 반영됩니다.', 2500);
 }
 function autoFillTxnPrice(){
+  if(typeof pdaRawReceiptEditRows!=='undefined'&&pdaRawReceiptEditRows.length){updateTxnAmtPreview();return;}
   if(typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.length){updateTxnAmtPreview();return;}
   const receipt=typeof _editTxnId!=='undefined'&&_editTxnId?userTransactions.find(row=>String(row.id)===String(_editTxnId)):null;
   if(receipt?.type==='입고'&&receipt?._pdaRawRequestId&&receipt?._pdaAction==='receive'){updateTxnAmtPreview();return;}
@@ -9166,10 +9167,14 @@ function parseTransactionUnitPrice(input){
 function updateTxnAmtPreview(){
   const price = parseTransactionUnitPrice(document.getElementById('t-price'));
   const weight = parseFloat(document.getElementById('t-weight')?.value) || 0;
-  const amount=typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.length
+  let amount=typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.length
     ? pdaShipmentEditRows.reduce((sum,row)=>sum+Math.round(price*Number(row.weight)),0) : Math.round(price*weight);
+  if(typeof pdaRawReceiptEditRows!=='undefined'&&pdaRawReceiptEditRows.length){
+    try{amount=allocatePdaRawReceiptWeights(pdaRawReceiptEditRows,weight).reduce((sum,kg)=>sum+Math.round(price*kg),0);}
+    catch{amount=NaN;}
+  }
   const el = document.getElementById('t-amount-preview');
-  if(el) el.value = (price!==null && Number.isFinite(price) && weight>0) ? amount.toLocaleString('ko-KR') + ' 원' : '';
+  if(el) el.value = (price!==null && Number.isFinite(price) && Number.isFinite(amount) && weight>0) ? amount.toLocaleString('ko-KR') + ' 원' : '';
 }
 
 
@@ -9193,6 +9198,7 @@ function totalRecordedBoxes(rows){
 }
 
 async function addTransaction(){
+  if(typeof pdaRawReceiptEditRows!=='undefined'&&pdaRawReceiptEditRows.length)return savePdaRawReceiptFromForm();
   if(typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.length)return savePdaShipmentFromForm();
   const linkedProductionTxn = _editTxnId ? userTransactions.find(txn=>String(txn.id)===String(_editTxnId)) : null;
   if(linkedProductionTxn?.stockRowId && linkedProductionTxn?._prodId){ alert('생산일보에서 생성된 재고입니다. 해당 생산일보에서 수정해주세요.'); return; }
@@ -9423,9 +9429,39 @@ function showTransactionSaveStatus(message, isError=false){
   }
 }
 
+function allocatePdaRawReceiptWeights(rows,weight){
+  const cents=value=>{
+    const n=Number(value),rounded=Math.round(n*100);
+    if(!Number.isFinite(n)||!Number.isSafeInteger(rounded)||rounded<=0||Math.abs(n*100-rounded)>0.000001)
+      throw new Error('입고 중량은 0 초과 숫자로 소수 둘째 자리까지 입력해주세요.');
+    return rounded;
+  };
+  const target=cents(weight),original=rows.map(row=>cents(row.weight)),total=original.reduce((sum,n)=>sum+n,0);
+  if(!original.length||!Number.isSafeInteger(total))throw new Error('원본 입고 중량을 확인한 뒤 다시 수정해주세요.');
+  // Allocate whole hundredths first, then assign the remaining cents by largest remainder.
+  const parts=original.map((n,index)=>{const numerator=BigInt(n)*BigInt(target),divisor=BigInt(total);
+    return {index,cents:Number(numerator/divisor),remainder:numerator%divisor};});
+  const remaining=target-parts.reduce((sum,part)=>sum+part.cents,0);
+  const ranked=[...parts].sort((a,b)=>a.remainder===b.remainder?a.index-b.index:a.remainder>b.remainder?-1:1);
+  for(let i=0;i<remaining;i++)ranked[i].cents++;
+  if(parts.some(part=>part.cents<1||part.cents>1000000000))
+    throw new Error('배분 후 각 원본 입고 중량은 0.01~10,000,000KG여야 합니다. 박스별의 입고별 내역에서 개별 수정해주세요.');
+  return parts.map(part=>part.cents/100);
+}
+
 async function savePdaRawReceiptFromForm(receipt){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('PDA 입고 수정은 서버에 연결한 상태에서만 가능합니다.');return;}
-  if(transactionPricePendingIds.has(String(receipt.id))){toast('입고 저장 중입니다. 잠시 후 다시 수정해주세요.');return;}
+  if(!DBMTAuth.can('transactions','update')){toast('거래내역 수정 권한이 없습니다.');return;}
+  const grouped=typeof pdaRawReceiptEditRows!=='undefined'&&pdaRawReceiptEditRows.length>0;
+  const snapshots=grouped?pdaRawReceiptEditRows:[receipt],ids=snapshots.filter(Boolean).map(row=>String(row.id));
+  if(!ids.length||ids.length>500||new Set(ids).size!==ids.length){toast('원본 입고 내역을 확인해주세요. 한 번에 500건까지 수정할 수 있습니다.');return;}
+  if(ids.some(id=>transactionPricePendingIds.has(id))){toast('입고 저장 중입니다. 잠시 후 다시 수정해주세요.');return;}
+  const checkedFields=['type','stockRowId','weight','price','trader','traderId','note','_pdaRawEditRevision','_pdaRawRequestId','_pdaAction'];
+  if(snapshots.some(snapshot=>{
+    const current=userTransactions.find(row=>String(row.id)===String(snapshot.id));
+    return !current||current.type!=='입고'||!current._pdaRawRequestId||current._pdaAction!=='receive'
+      ||checkedFields.some(key=>current[key]!==snapshot[key]);
+  })){toast('입고 내역이 변경되었습니다. 목록에서 다시 수정해주세요.');return;}
   const weightInput=document.getElementById('t-weight'),price=parseTransactionUnitPrice(document.getElementById('t-price'));
   const weight=Number(weightInput.value),trader=document.getElementById('t-trader').value.trim();
   if(weightInput.validity.badInput||!Number.isFinite(weight)||weight<=0||Math.abs(weight*100-Math.round(weight*100))>0.000001){
@@ -9433,19 +9469,28 @@ async function savePdaRawReceiptFromForm(receipt){
   }
   if(price===null||!Number.isFinite(price)||price<0){alert('입고 단가는 0 이상의 숫자로 입력해주세요.');return;}
   if(!trader){alert('입고처를 선택해주세요.');return;}
-  if(weight!==Number(receipt.weight)&&!confirm(`입고 합계중량을 ${Number(receipt.weight).toFixed(2)}KG에서 ${weight.toFixed(2)}KG로 정정할까요?\n장부 재고에 반영되며 박스별 스캔 중량은 원문 그대로 보존됩니다.`))return;
-  const row={...receipt,trader,weight,price,amount:Math.round(weight*price),note:document.getElementById('t-note').value.trim()};
-  const button=document.getElementById('t-add-btn');
-  transactionPricePendingIds.add(String(receipt.id));if(button)button.disabled=true;
+  const note=document.getElementById('t-note').value.trim();
+  let weights;
+  try{weights=allocatePdaRawReceiptWeights(snapshots,weight);}catch(error){alert(error.message);return;}
+  const rows=snapshots.map((row,index)=>({...row,trader,weight:weights[index],price,amount:Math.round(weights[index]*price),
+    note:grouped&&note===pdaRawReceiptEditNote?row.note:note}));
+  if(rows.some(row=>String(row.note||'').length>500)){alert('비고는 500자 이내로 입력해주세요.');return;}
+  if(rows.every((row,index)=>['trader','weight','price','note'].every(key=>row[key]===snapshots[index][key]))){toast('변경된 내용이 없습니다.');return;}
+  const oldWeight=snapshots.reduce((sum,row)=>sum+Math.round(Number(row.weight)*100),0)/100;
+  if(weight!==oldWeight&&!confirm(`입고 합계중량을 ${oldWeight.toFixed(2)}KG에서 ${weight.toFixed(2)}KG로 정정할까요?\n${grouped?'원본 입고 중량 비율대로 배분하여 장부 재고에 반영합니다.\n':''}제조일과 박스별 바코드·스캔 중량은 그대로 보존됩니다.`))return;
+  const button=document.getElementById('t-add-btn'),editingId=_editTxnId;
+  ids.forEach(id=>transactionPricePendingIds.add(id));if(button)button.disabled=true;
   try{
-    await saveTransactionRows(row,null,null,{action:'수정'});
-    clearTransactionForm({resetType:true});renderTransactions();updateOutProductList();
-    showTransactionSaveStatus(`입고 수정 완료 — ${receipt.product} · ${weight.toFixed(2)}KG · ${price.toLocaleString()}원/KG`);
+    await saveTransactionRows(grouped?rows:rows[0],null,null,{action:'수정'});
+    if(_editTxnId===editingId)clearTransactionForm({resetType:true});
+    renderTransactions();updateOutProductList();
+    if(typeof renderPdaTransactionDetails==='function')renderPdaTransactionDetails();
+    showTransactionSaveStatus(`입고 수정 완료 — ${snapshots[0].product} · ${weight.toFixed(2)}KG · ${price.toLocaleString()}원/KG`);
     toast('PDA 입고 수정 완료');
   }catch(error){
     showTransactionSaveStatus(`거래내역 저장 실패 — ${String(error?.message||error)}`,true);
     toast(String(error?.message||error));
-  }finally{transactionPricePendingIds.delete(String(receipt.id));if(button)button.disabled=false;}
+  }finally{ids.forEach(id=>transactionPricePendingIds.delete(id));if(button)button.disabled=false;}
 }
 
 async function savePdaShipmentFromForm(){
@@ -9493,6 +9538,8 @@ function setPdaRawReceiptEditControls(locked,shipment=false){
 function clearTransactionForm(options={}){
   if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
   pdaShipmentEditRows=[];
+  pdaRawReceiptEditRows=[];
+  pdaRawReceiptEditNote='';
   const resetType = typeof options === 'object' && options ? !!options.resetType : !!options;
   showTransactionSaveStatus('');
   ['t-product-input','t-stock-search','t-origin-input','t-origin-display','t-trader','t-lot','t-note','t-price','t-box-count','t-packunit','t-label-product-id','t-stock-key','t-stock-price','t-meatwatch-process-begin','t-meatwatch-process-end','t-meatwatch-expiry','t-meatwatch-queried-at','t-livestock-species','t-livestock-trace-type','t-livestock-slaughter-date','t-livestock-slaughter-end-date','t-livestock-slaughter-houses','t-livestock-grades','t-livestock-inspection-results','t-livestock-process-date','t-livestock-process-end-date','t-livestock-process-companies','t-livestock-queried-at'].forEach(id=>{
@@ -10712,7 +10759,8 @@ async function deleteTransaction(id){
   safeLocalStorageSet('dbmt_user_transactions',JSON.stringify(userTransactions),true);
   invalidateStockMap();
   if((typeof _editTxnId!=='undefined'&&ids.includes(String(_editTxnId)))
-    ||(typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.some(row=>ids.includes(String(row.id)))))clearTransactionForm();
+    ||(typeof pdaShipmentEditRows!=='undefined'&&pdaShipmentEditRows.some(row=>ids.includes(String(row.id))))
+    ||(typeof pdaRawReceiptEditRows!=='undefined'&&pdaRawReceiptEditRows.some(row=>ids.includes(String(row.id)))))clearTransactionForm();
   if(rawReceipt)toast('입고와 바코드 연결을 취소했습니다.');
   if(productShipment)toast(`${ids.length}박스 출고를 삭제하고 재고와 바코드 상태를 복구했습니다.`);
   renderTransactions();
@@ -10722,6 +10770,8 @@ async function deleteTransaction(id){
 // ── 거래내역 수정 모달 ──
 let _editTxnId=null;
 let pdaShipmentEditRows=[];
+let pdaRawReceiptEditRows=[];
+let pdaRawReceiptEditNote='';
 // 구 모달 함수 (호환성 유지용, 실제로는 loadTxnToForm 사용)
 function openEditTxnModal(id){ loadTxnToForm(id); }
 function closeEditTxnModal(){ clearTransactionForm(); }
@@ -10730,9 +10780,10 @@ function saveEditTxn(){ return addTransaction(); }
 function loadTxnToForm(id){
   const t=(String(id).startsWith('pda-summary:')?findPdaTransactionSummary(id):null)||userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
-  if(t._pdaReceiptSummary){openPdaTransactionDetails(t.id,'receipts');return;}
-  if(t._pdaSummaryRows&&!t._pdaLabelId)return;
+  if(t._pdaSummaryRows&&!t._pdaLabelId&&!t._pdaReceiptSummary)return;
   if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
+  pdaRawReceiptEditRows=t._pdaReceiptSummary?t._pdaSummaryRows.map(row=>structuredClone(row)):[];
+  pdaRawReceiptEditNote=[...new Set(pdaRawReceiptEditRows.map(row=>String(row.note||'').trim()).filter(Boolean))].join(' / ');
   pdaShipmentEditRows=t.type==='출고'&&t._pdaRequestId&&t._pdaLabelId
     ? (t._pdaSummaryRows||[t]).map(row=>({...row})) : [];
   if(t.stockRowId && t._prodId){ openEditProdEntry(t._prodId); return; }
@@ -10780,12 +10831,13 @@ function loadTxnToForm(id){
 
   document.getElementById('t-trader').value  =t.trader||'';
   document.getElementById('t-lot').value     =t.lot||'';
-  document.getElementById('t-proddate').value=t.proddate||'';
+  const productionDates=[...new Set((pdaRawReceiptEditRows.length?pdaRawReceiptEditRows:[t]).map(row=>row.proddate||''))];
+  document.getElementById('t-proddate').value=productionDates.length===1?productionDates[0]:'';
   document.getElementById('t-weight').value  =t.weight||'';
   document.getElementById('t-box-count').value =parseOptionalBoxCount(t.boxCount) ?? '';
   document.getElementById('t-price').value   =t.price ?? '';
   document.getElementById('t-price').dataset.autofilled='0';
-  document.getElementById('t-note').value    =t.note||'';
+  document.getElementById('t-note').value    =pdaRawReceiptEditRows.length?pdaRawReceiptEditNote:(t.note||'');
   if(typeof restoreMeatwatchLookupFromTransaction === 'function') restoreMeatwatchLookupFromTransaction(t);
   updateTxnAmtPreview();
 
@@ -10797,12 +10849,18 @@ function loadTxnToForm(id){
 
   // 수정 모드 UI
   const banner=document.getElementById('t-edit-banner');
-  if(banner) banner.style.display='block';
+  if(banner){
+    banner.textContent=pdaRawReceiptEditRows.length
+      ? `묶음 입고 수정 · 원본 ${pdaRawReceiptEditRows.length}건 · ${t.boxCount}박스`
+      : '수정 모드';
+    banner.style.display='block';
+  }
   const addBtn=document.getElementById('t-add-btn');
   if(addBtn) addBtn.textContent='✓ 수정 저장';
 
   // 거래내역 입력 폼으로 스크롤
   document.querySelector('#p-transactions .card').scrollIntoView({behavior:'smooth', block:'start'});
+  if(pdaRawReceiptEditRows.length){const input=document.getElementById('t-weight');input.focus({preventScroll:true});input.select();}
   toast('수정할 내용을 변경 후 [수정 저장]을 누르세요.', 2500);
 }
 function updateProductList(){

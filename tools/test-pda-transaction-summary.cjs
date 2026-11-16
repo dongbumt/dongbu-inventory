@@ -43,10 +43,6 @@ assert.equal(group(separate.map(({_pdaRequestId,_pdaLabelId,...row})=>({...row,_
 const receiptBefore=JSON.stringify(rawReceipts),receiptSummary=group(rawReceipts);
 assert.equal(receiptSummary.length,1);assert.equal(receiptSummary[0].weight,2313.93);assert.equal(receiptSummary[0].boxCount,101);
 assert.equal(receiptSummary[0]._pdaSummaryRows.length,10);assert.equal(JSON.stringify(rawReceipts),receiptBefore);
-const rawEditCalls=[],rawEditContext={findPdaTransactionSummary:()=>receiptSummary[0],userTransactions:rawReceipts,
-  openPdaTransactionDetails:(...args)=>rawEditCalls.push(args)};
-vm.runInNewContext(index.match(/function loadTxnToForm\([^]*?\n\}/)[0]+`\nloadTxnToForm(${JSON.stringify(receiptSummary[0].id)});`,rawEditContext);
-assert.deepEqual(rawEditCalls,[[receiptSummary[0].id,'receipts']],'Aggregate form editing must open the original receipt chooser, not copy totals into the first receipt');
 for(const field of ['date','trader','traderId','product','labelProductId','lot','price']){
   assert.equal(group([rawReceipts[0],{...rawReceipts[1],[field]:field==='price'?4400:'different'}]).length,2,`Raw receipts keep different ${field} separate`);
 }
