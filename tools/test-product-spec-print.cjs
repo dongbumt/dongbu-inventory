@@ -49,6 +49,7 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await page.evaluate(data=>{qaRows=data;return DBMTProductSpecs.init();},rows);
     assert.equal(await page.locator('#spec-editor').isVisible(),false);
     assert.equal(await page.locator('#spec-print').isEnabled(),true,'View-only users can print');
+    assert.equal(await page.locator('#spec-usage-print').isDisabled(),true,'Specs with no monthly usage can print details but cannot print a usage report');
     await page.locator('#spec-search').fill('삼성 목전지 미국');
     await page.locator('[data-sort="price_kg"]').click();
     await page.locator('[data-sort="price_kg"]').click();
@@ -101,10 +102,10 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.equal(await page.evaluate(()=>qaOpenCount),2);
 
     const selectionRows=[
-      {...base,id:'s1',trader:'거래처A',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산',monthly_usage:100.1},
-      {...base,id:'s2',trader:'거래처A',distribution:'동원홈푸드',material:'우삼겹',origin:'미국산',monthly_usage:50.000001},
+      {...base,id:'s1',trader:'거래처A',distribution:'삼성웰스토리',material:'돈등심',brand:'브랜드A',origin:'국내산',monthly_usage:100.1},
+      {...base,id:'s2',trader:'거래처A',distribution:'동원홈푸드',material:'우삼겹',brand:'브랜드B',origin:'미국산',monthly_usage:50.000001},
       {...base,id:'s3',trader:'거래처B',distribution:'삼성웰스토리',material:'돈등심',origin:'미국산'},
-      {...base,id:'s4',trader:'거래처AB',distribution:'삼성웰스토리',material:'돈등심',origin:'국내산',monthly_usage:200.2},
+      {...base,id:'s4',trader:'거래처AB',distribution:'삼성웰스토리',material:'돈등심',brand:'브랜드A',origin:'국내산',monthly_usage:200.2},
       {...base,id:'s5',trader:'거래처B',distribution:'<자유 & 유통>',material:'부채살',origin:'호주산',monthly_usage:0},
       {...base,id:'s6',trader:'거래처A',distribution:null,material:'앞다리',origin:'국내산'}
     ];
@@ -116,8 +117,10 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await page.locator('#spec-usage-summary summary').click();
     assert.match(await page.locator('#spec-usage-total').textContent(),/350.300001 KG/);
     assert.match(await page.locator('#spec-usage-info').textContent(),/입력 4건 · 미입력 2건 제외/);
-    assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'국내산'}).locator('td').last().textContent(),'300.3','Same item/origin groups sum exactly');
-    assert.match(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'미국산'}).textContent(),/미입력 1건 제외/,'Different origins remain separate');
+    assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'국내산'}).locator('td').last().textContent(),'300.3','Same item/brand/origin groups sum exactly');
+    assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'돈등심'}).filter({hasText:'미국산'}).count(),0,'Groups with no entered usage are omitted');
+    assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'앞다리'}).count(),0);
+    assert.deepEqual(await page.locator('#spec-usage-summary thead button').evaluateAll(buttons=>buttons.map(button=>button.dataset.label)),['품목(원재료)','브랜드','원산지','월사용량 합계(KG)']);
     assert.equal(await page.locator('#spec-usage-rows tr').filter({hasText:'부채살'}).locator('td').last().textContent(),'0','Explicit zero remains distinct from missing usage');
     assert.deepEqual(await page.locator('#spec-filter-traders input').evaluateAll(inputs=>inputs.map(input=>input.value)),['거래처A','거래처AB','거래처B']);
     assert.equal(await all.isChecked(),true);
@@ -161,12 +164,18 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.equal(await all.isChecked(),true);assert.equal(await distribution.inputValue(),'');assert.equal(await page.locator('#spec-search').inputValue(),'');
     assert.equal((await ids()).length,6);
     popup=await openPrint('#spec-usage-print');
-    assert.equal(await popup.locator('tbody tr').count(),6);
+    assert.equal(await popup.locator('tbody tr').count(),4,'Only three entered groups and the total are printed');
+    assert.deepEqual(await popup.locator('thead th').allTextContents(),['품목(원재료)','브랜드','원산지','월사용량 합계(KG)']);
+    assert.equal(await popup.locator('tbody tr').filter({hasText:'돈등심'}).locator('td').nth(1).textContent(),'브랜드A');
+    assert.doesNotMatch(await popup.locator('tbody').textContent(),/앞다리/);
     assert.equal(await popup.locator('tbody tr').filter({hasText:'돈등심'}).filter({hasText:'국내산'}).locator('td').last().textContent(),'300.3');
     assert.equal(await popup.locator('tbody tr').last().locator('td').textContent(),'350.300001');
     assert.match(await popup.locator('body').textContent(),/미입력 2건 제외/);
     await popup.pdf({path:path.join(output,'usage.pdf'),preferCSSPageSize:true,printBackground:true});await popup.close();
     await distribution.selectOption('<자유 & 유통>');assert.deepEqual(await ids(),['s5']);
+    assert.equal(await page.locator('#spec-usage-print').isEnabled(),true,'An entered zero is printable');
+    popup=await openPrint('#spec-usage-print');
+    assert.equal(await popup.locator('tbody tr').count(),2);assert.equal(await popup.locator('tbody tr').last().locator('td').textContent(),'0');await popup.close();
     popup=await openPrint();
     assert.match(await popup.locator('header').textContent(),/<자유 & 유통>/);assert.equal(await popup.locator('img,script').count(),0);await popup.close();
     await distribution.selectOption('');await selectOnly('거래처A');
@@ -177,6 +186,62 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     await distribution.selectOption('삼성웰스토리');
     await page.evaluate(()=>{qaToken='third-session';DBMTProductSpecs.applyPermissions();});
     assert.equal(await page.locator('#spec-filter-traders input').count(),0);assert.equal(await distribution.locator('option').count(),1,'Session changes clear previous customer/distributor choices');
+
+    const summaryRows=[
+      {...base,id:'u1',trader:'합계거래처',material:'품목10',brand:'브랜드2',origin:'원산지3',monthly_usage:100},
+      {...base,id:'u2',trader:'합계거래처',material:'품목2',brand:'브랜드10',origin:'원산지2',monthly_usage:10},
+      {...base,id:'u3',trader:'합계거래처',material:'품목1',brand:'브랜드1',origin:'원산지1',monthly_usage:2},
+      {...base,id:'u4',trader:'합계거래처',material:' 품목１ ',brand:'브랜드１',origin:'원산지1',monthly_usage:0.25},
+      {...base,id:'u5',trader:'합계거래처',material:'품목1',brand:'브랜드2',origin:'원산지1',monthly_usage:0},
+      {...base,id:'u6',trader:'합계거래처',material:'미입력품목',brand:'제외브랜드',monthly_usage:null},
+      {...base,id:'u7',trader:'합계거래처',material:'미입력품목',brand:'제외브랜드',monthly_usage:''},
+      {...base,id:'u8',trader:'합계거래처',material:'미입력품목',brand:'제외브랜드'},
+      {...base,id:'u9',trader:'합계거래처',material:'품목3',brand:'',origin:'',monthly_usage:1}
+    ];
+    await page.evaluate(data=>{qaRows=data;return DBMTProductSpecs.load();},summaryRows);
+    assert.equal(await page.locator('#spec-usage-rows tr').count(),6,'Brands remain distinct and normalized duplicates combine');
+    assert.match(await page.locator('#spec-usage-total').textContent(),/113.25 KG/);
+    const summaryData=()=>page.locator('#spec-usage-rows tr').evaluateAll(rows=>rows.filter(row=>row.querySelectorAll('td').length===4).map(row=>Array.from(row.cells).map(cell=>cell.textContent.normalize('NFKC').trim())));
+    const summarySorts=[
+      ['material',0,['품목1','품목1','품목2','품목3','품목10'],['품목10','품목3','품목2','품목1','품목1']],
+      ['brand',1,['브랜드1','브랜드2','브랜드2','브랜드10',''],['브랜드10','브랜드2','브랜드2','브랜드1','']],
+      ['origin',2,['원산지1','원산지1','원산지2','원산지3','미입력'],['원산지3','원산지2','원산지1','원산지1','미입력']],
+      ['qty',3,['0','1','2.25','10','100'],['100','10','2.25','1','0']]
+    ];
+    const detailsBefore=await ids(),summaryCalls=await page.evaluate(()=>qaCalls.length);
+    for(const [key,column,ascending,descending] of summarySorts){
+      const button=page.locator(`[data-usage-sort="${key}"]`),header=page.locator(`th:has([data-usage-sort="${key}"])`);
+      await button.click();if(await header.getAttribute('aria-sort')!=='ascending')await button.click();
+      assert.deepEqual((await summaryData()).map(row=>row[column]),ascending,key+' ascending');
+      await button.press('Enter');assert.equal(await header.getAttribute('aria-sort'),'descending');
+      assert.deepEqual((await summaryData()).map(row=>row[column]),descending,key+' descending');
+      assert.equal(await page.locator('#spec-usage-summary th[aria-sort="descending"]').count(),1);
+      assert.equal(await page.locator('#spec-usage-rows tr').last().locator('td').textContent(),'113.25','The grand total stays last');
+    }
+    assert.deepEqual(await ids(),detailsBefore,'Usage sorting does not reorder the detail list');
+    assert.equal(await page.evaluate(()=>qaCalls.length),summaryCalls,'Usage sorting never reads or writes the database');
+    const sortedSummary=await summaryData();
+    await page.evaluate(()=>DBMTProductSpecs.load());assert.deepEqual(await summaryData(),sortedSummary,'Refresh preserves usage sorting');
+    popup=await openPrint('#spec-usage-print');
+    assert.deepEqual(await popup.locator('tbody tr').evaluateAll(rows=>rows.filter(row=>row.querySelectorAll('td').length===4).map(row=>Array.from(row.cells).map(cell=>cell.textContent.normalize('NFKC').trim()))),sortedSummary,'Usage print follows the visible sort');
+    assert.match(await popup.locator('header').textContent(),/월사용량 합계\(KG\) 내림차순/);
+    assert.match(await popup.locator('header').textContent(),/전체 · 6건/,'Print count includes entered specs only');
+    assert.doesNotMatch(await popup.locator('tbody').textContent(),/미입력품목|제외브랜드/);
+    assert.equal(await popup.locator('button,input,script').count(),0,'Print headers contain no interactive controls');
+    await popup.pdf({path:path.join(output,'usage-sorted.pdf'),preferCSSPageSize:true,printBackground:true});await popup.close();
+    await page.screenshot({path:path.join(output,'usage-sorted.png'),fullPage:false});
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Usage table scroll stays inside its card on mobile');
+    assert.equal(await page.locator('#spec-usage-summary thead button').evaluateAll(buttons=>buttons.every(button=>button.scrollWidth<=button.closest('th').clientWidth-16)),true,'All usage sort headers fit their cells');
+    await page.screenshot({path:path.join(output,'usage-mobile.png'),fullPage:false});
+    await page.setViewportSize({width:1440,height:900});
+    await page.locator('#spec-search').fill('미입력품목');
+    assert.equal(await page.locator('#spec-print').isEnabled(),true);
+    assert.equal(await page.locator('#spec-usage-print').isDisabled(),true);
+    assert.equal(await page.locator('#spec-usage-rows td').getAttribute('colspan'),'4');
+    const noUsageOpenCount=await page.evaluate(()=>qaOpenCount);
+    await page.evaluate(()=>DBMTProductSpecs.printUsage());assert.equal(await page.evaluate(()=>qaOpenCount),noUsageOpenCount,'Direct calls cannot open a report with no entered usage');
+    await page.getByRole('button',{name:'검색 초기화',exact:true}).click();
 
     const many=Array.from({length:70},(_,i)=>({...base,id:'multi-'+i,trader:'업체'+String(i+1).padStart(3,'0'),material:'상품'+String(i+1).padStart(3,'0'),brand:i===35?'긴 브랜드 '.repeat(20)+'브랜드끝표시':'브랜드'+String(i+1).padStart(3,'0'),note:'인쇄제외비고'+String(i+1).padStart(3,'0')}));
     await page.evaluate(data=>{qaRights.view=true;qaRows=data;return DBMTProductSpecs.load();},many);
@@ -197,6 +262,6 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     }
     await page.screenshot({path:path.join(output,'list.png'),fullPage:false});
     assert.deepEqual(errors,[]);
-    console.log('PASS: distributor-first customer checkboxes, select all/none, individual exclusions, shared usage/detail print, combined search, reset/refresh/session safeguards; sorted A4 print, wrapping and permissions. QA: '+output);
+    console.log('PASS: brand-aware entered-only usage groups, zero handling, four-column ascending/descending sort, matching print order, no-usage print guard and mobile headers; customer filters, detail print and permissions. QA: '+output);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -33,7 +33,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261117brand1">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261117usage2">
 <link rel="stylesheet" href="styles/ledgers.css?v=20261112ledger1">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261113pda1">
 <link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
@@ -604,9 +604,14 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <fieldset class="spec-trader-filter"><legend>거래처 선택</legend><div class="spec-trader-toolbar"><label class="spec-trader-option"><input type="checkbox" id="spec-traders-all"><span>전체 선택</span></label><span id="spec-traders-count" aria-live="polite"></span></div><p class="spec-trader-guide">유통사를 선택한 후 출력할 거래처를 체크하세요. 체크를 해제한 거래처는 목록과 인쇄에서 제외됩니다.</p><div id="spec-filter-traders" class="spec-trader-options"></div></fieldset>
     </div>
     <details class="spec-usage-summary" id="spec-usage-summary">
-      <summary>월사용량 합계 · 품목/원산지별 <span id="spec-usage-total"></span></summary>
+      <summary>월사용량 합계 · 품목/브랜드/원산지별 <span id="spec-usage-total"></span></summary>
       <div class="spec-usage-toolbar"><p id="spec-usage-info"></p><button type="button" id="spec-usage-print" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.printUsage()" disabled>합계표 인쇄 (A4 세로)</button></div>
-      <div class="spec-usage-wrap"><table class="spec-usage-table"><thead><tr><th scope="col">품목(원재료)</th><th scope="col">원산지</th><th scope="col">월사용량 합계(KG)</th></tr></thead><tbody id="spec-usage-rows"></tbody></table></div>
+      <div class="spec-usage-wrap"><table class="spec-usage-table"><thead><tr>
+        <th scope="col"><button type="button" class="spec-usage-sort" data-usage-sort="material" data-label="품목(원재료)">품목(원재료)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+        <th scope="col"><button type="button" class="spec-usage-sort" data-usage-sort="brand" data-label="브랜드">브랜드<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+        <th scope="col"><button type="button" class="spec-usage-sort" data-usage-sort="origin" data-label="원산지">원산지<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+        <th scope="col"><button type="button" class="spec-usage-sort" data-usage-sort="qty" data-label="월사용량 합계(KG)">월사용량 합계(KG)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      </tr></thead><tbody id="spec-usage-rows"></tbody></table></div>
     </details>
     <div class="spec-table-wrap"><table class="spec-table"><thead><tr>
       <th scope="col"><button type="button" class="spec-sort" data-sort="trader" data-label="거래처">거래처<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
@@ -22754,7 +22759,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="driver-place-label.js?v=20261105place1"></script>
 <script src="production-schedule.js?v=20261020workorders1"></script>
-<script src="product-specs.js?v=20261117brand1"></script>
+<script src="product-specs.js?v=20261117usage2"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261113pda1"></script>

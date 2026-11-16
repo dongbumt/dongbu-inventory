@@ -1,6 +1,6 @@
 (function(){
   'use strict';
-  const state={rows:[],editing:null,loading:false,saving:false,token:'',request:0,sortKey:'trader',sortDirection:1,traderSelection:null};
+  const state={rows:[],editing:null,loading:false,saving:false,token:'',request:0,sortKey:'trader',sortDirection:1,traderSelection:null,usageSortKey:'material',usageSortDirection:1};
   const el=id=>document.getElementById('spec-'+id);
   const can=action=>Boolean(window.DBMTAuth?.isPersonal() && DBMTAuth.can('product_specs',action));
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -31,34 +31,52 @@
     openTxnProductPicker(el('material').value,el('material'));
   }
   function materialPickerKey(event){if(['Enter',' ','ArrowDown'].includes(event.key)){event.preventDefault();openMaterialPicker();}}
+  const usageColumns=[['material','품목(원재료)'],['brand','브랜드'],['origin','원산지'],['qty','월사용량 합계(KG)']];
   function usageSummary(rows){
     const groups=new Map();let total=0n,entered=0,missing=0;
     for(const row of rows){
-      const key=JSON.stringify([normalize(row.material),normalize(row.origin)]);
-      if(!groups.has(key))groups.set(key,{material:String(row.material??'').trim(),origin:String(row.origin??'').trim(),qty:0n,entered:0,missing:0});
-      const group=groups.get(key),value=usageValue(row.monthly_usage);
-      if(value===null){group.missing++;missing++;}else{
-        const scaled=BigInt(value.toFixed(6).replace('.',''));group.qty+=scaled;total+=scaled;group.entered++;entered++;
-      }
+      const value=usageValue(row.monthly_usage);
+      if(value===null){missing++;continue;}
+      const key=JSON.stringify([normalize(row.material),normalize(row.brand),normalize(row.origin)]);
+      if(!groups.has(key))groups.set(key,{material:String(row.material??'').trim(),brand:String(row.brand??'').trim(),origin:String(row.origin??'').trim(),qty:0n});
+      const scaled=BigInt(value.toFixed(6).replace('.',''));groups.get(key).qty+=scaled;total+=scaled;entered++;
     }
-    return {rows:Array.from(groups.values()).sort((a,b)=>collator.compare(a.material,b.material)||collator.compare(a.origin,b.origin)),total,entered,missing};
+    return {rows:Array.from(groups.values()).sort((a,b)=>compareUsageRows(a,b)||collator.compare(a.material,b.material)||collator.compare(a.brand,b.brand)||collator.compare(a.origin,b.origin)),total,entered,missing};
+  }
+  function compareUsageRows(a,b){
+    const key=state.usageSortKey;
+    if(key==='qty')return (a.qty<b.qty?-1:a.qty>b.qty?1:0)*state.usageSortDirection;
+    const left=normalize(a[key]),right=normalize(b[key]);
+    if(!left||!right)return Number(!left)-Number(!right);
+    return collator.compare(left,right)*state.usageSortDirection;
+  }
+  function sortUsageBy(key){
+    if(!usageColumns.some(([column])=>column===key))return;
+    state.usageSortDirection=state.usageSortKey===key?-state.usageSortDirection:1;
+    state.usageSortKey=key;renderUsageSummary(filteredRows());
   }
   function totalUsageText(value){
     const fraction=(value%1000000n).toString().padStart(6,'0').replace(/0+$/,'');
     return (value/1000000n).toLocaleString('ko-KR')+(fraction?'.'+fraction:'');
   }
   function usageTable(report){
-    return `<table class="spec-usage-table"><thead><tr><th scope="col">품목(원재료)</th><th scope="col">원산지</th><th scope="col">월사용량 합계(KG)</th></tr></thead><tbody>${usageRows(report)}</tbody></table>`;
+    return `<table class="spec-usage-table"><thead><tr>${usageColumns.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${usageRows(report)}</tbody></table>`;
   }
   function usageRows(report){
-    const groups=report.rows.map(row=>`<tr><td>${esc(row.material||'미입력')}</td><td>${esc(row.origin||'미입력')}</td><td>${row.entered?totalUsageText(row.qty):'—'}${row.missing?`<small class="spec-usage-missing">미입력 ${row.missing}건 제외</small>`:''}</td></tr>`).join('');
-    return groups?groups+`<tr><th scope="row" colspan="2">합계</th><td><strong>${report.entered?totalUsageText(report.total):'—'}</strong></td></tr>`:'<tr><td colspan="3">표시할 제품스펙이 없습니다.</td></tr>';
+    const groups=report.rows.map(row=>`<tr><td>${esc(row.material||'미입력')}</td><td>${esc(row.brand)}</td><td>${esc(row.origin||'미입력')}</td><td>${totalUsageText(row.qty)}</td></tr>`).join('');
+    return groups?groups+`<tr><th scope="row" colspan="3">합계</th><td><strong>${totalUsageText(report.total)}</strong></td></tr>`:'<tr><td colspan="4">월사용량이 입력된 제품스펙이 없습니다.</td></tr>';
   }
   function renderUsageSummary(rows){
     const report=usageSummary(rows);
-    el('usage-total').textContent=`${report.entered?totalUsageText(report.total)+' KG':'월사용량 미입력'} · ${report.rows.length}개 품목/원산지`;
-    el('usage-info').textContent=`현재 선택·검색된 목록에서 품목명과 원산지가 같은 스펙끼리 합산합니다. 입력 ${report.entered}건 · 미입력 ${report.missing}건 제외`;
+    el('usage-total').textContent=`${report.entered?totalUsageText(report.total)+' KG':'월사용량 미입력'} · ${report.rows.length}개 품목/브랜드/원산지`;
+    el('usage-info').textContent=`현재 선택·검색된 목록에서 월사용량이 입력된 스펙만 품목명·브랜드·원산지별로 합산합니다. 입력 ${report.entered}건 · 미입력 ${report.missing}건 제외`;
     el('usage-rows').innerHTML=usageRows(report);
+    document.querySelectorAll('.spec-usage-sort').forEach(button=>{
+      const active=button.dataset.usageSort===state.usageSortKey;
+      button.closest('th').setAttribute('aria-sort',active?(state.usageSortDirection===1?'ascending':'descending'):'none');
+      button.querySelector('.spec-sort-indicator').textContent=active?(state.usageSortDirection===1?'▲':'▼'):'↕';
+      button.title=`${button.dataset.label} ${active&&state.usageSortDirection===1?'내림차순':'오름차순'} 정렬`;
+    });
   }
   const distributions=new Set(['삼성웰스토리','동원홈푸드','CJ프레시웨이','동부축산유통','직납']);
   function setDistribution(value=''){
@@ -160,9 +178,9 @@
     state.sortDirection=state.sortKey===key?-state.sortDirection:1;
     state.sortKey=key;render();
   }
-  function syncPrintControl(count=filteredRows().length){
-    el('print').disabled=state.loading||state.saving||!can('view')||!count;
-    el('usage-print').disabled=el('print').disabled;
+  function syncPrintControl(rows=filteredRows()){
+    el('print').disabled=state.loading||state.saving||!can('view')||!rows.length;
+    el('usage-print').disabled=el('print').disabled||!rows.some(row=>usageValue(row.monthly_usage)!==null);
   }
   function printDocument(rows,mode='details'){
     const columns=[
@@ -172,7 +190,7 @@
     ];
     const search=el('search').value.trim();
     const sortColumn=columns.find(([key])=>key===state.sortKey);
-    const sortLabel=mode==='usage'?'품목 · 원산지 오름차순':sortColumn?`${sortColumn[1]} ${state.sortDirection===1?'오름차순':'내림차순'}`:'화면 목록 순서';
+    const sortLabel=mode==='usage'?`${usageColumns.find(([key])=>key===state.usageSortKey)[1]} ${state.usageSortDirection===1?'오름차순':'내림차순'}`:sortColumn?`${sortColumn[1]} ${state.sortDirection===1?'오름차순':'내림차순'}`:'화면 목록 순서';
     const cell=(row,key)=>key==='monthly_usage'?usageText(row[key]):key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
     const report=usageSummary(rows),title=mode==='usage'?'월사용량 합계':'제품스펙 목록';
     return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${title} - 동부엠티 ERP</title>
@@ -189,14 +207,13 @@
         th,td{padding:2mm 1mm;border:0.2mm solid #bbb;text-align:left;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere;}
         th{background:#eee;font-weight:700;}
         tr{break-inside:avoid;page-break-inside:avoid;}
-        .spec-usage-missing{display:block;font-size:8pt;color:#666;}
         .spec-usage-table th:last-child,.spec-usage-table td:last-child{text-align:right;}
         @media screen{body{max-width:190mm;margin:10mm auto;padding:0 2mm;}}
       </style></head><body>
       <header><h1>${title}<span class="company">동부엠티 ERP</span></h1>
-        <p class="conditions">거래처: ${esc(traderSelectionText())} · 유통사: ${esc(el('filter-distribution').value||'전체')}<br>검색: ${esc(search||'전체')} · ${rows.length.toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
+        <p class="conditions">거래처: ${esc(traderSelectionText())} · 유통사: ${esc(el('filter-distribution').value||'전체')}<br>검색: ${esc(search||'전체')} · ${(mode==='usage'?report.entered:rows.length).toLocaleString('ko-KR')}건<br>정렬: ${esc(sortLabel)}</p>
       </header>
-      ${mode==='usage'?`<p class="conditions">품목명/원산지별 합계 · 입력 ${report.entered}건 · 미입력 ${report.missing}건 제외</p>${usageTable(report)}`:`<table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
+      ${mode==='usage'?`<p class="conditions">품목명/브랜드/원산지별 합계 · 입력 ${report.entered}건 · 미입력 ${report.missing}건 제외</p>${usageTable(report)}`:`<table><colgroup>${columns.map(([, ,width])=>`<col style="width:${width}%">`).join('')}</colgroup>
         <thead><tr>${columns.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead>
         <tbody>${rows.map(row=>`<tr>${columns.map(([key])=>`<td>${esc(cell(row,key))}</td>`).join('')}</tr>`).join('')}</tbody>
       </table>`}</body></html>`;
@@ -209,6 +226,7 @@
     if(state.loading||state.saving)return;
     const rows=filteredRows();
     if(!rows.length){message('인쇄할 제품스펙이 없습니다.',true);return;}
+    if(mode==='usage'&&!rows.some(row=>usageValue(row.monthly_usage)!==null)){message('월사용량이 입력된 제품스펙이 없습니다.',true);return;}
     const html=printDocument(rows,mode);
     const popup=window.open('','_blank','width=820,height=900');
     if(!popup){message('인쇄 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제해주세요.',true);return;}
@@ -228,7 +246,7 @@
     syncFilterChoices();
     syncTraderChoices();
     const rows=filteredRows();
-    syncPrintControl(rows.length);
+    syncPrintControl(rows);
     renderUsageSummary(rows);
     document.querySelectorAll('.spec-sort').forEach(button=>{
       const active=button.dataset.sort===state.sortKey;
@@ -344,6 +362,10 @@
     else if(button.dataset.action==='delete')remove(button.dataset.id);
   });
   el('search').addEventListener('input',render);
+  document.querySelector('#spec-usage-summary thead').addEventListener('click',event=>{
+    const button=event.target.closest('button[data-usage-sort]');
+    if(button)sortUsageBy(button.dataset.usageSort);
+  });
   el('traders-all').addEventListener('change',event=>{state.traderSelection=event.target.checked?null:new Set();render();});
   el('filter-traders').addEventListener('change',event=>{
     const input=event.target.closest('input[data-spec-trader]');
