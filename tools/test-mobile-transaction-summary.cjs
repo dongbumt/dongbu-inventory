@@ -12,7 +12,7 @@ const boxes=count=>Array.from({length:count},(_,i)=>({...first,id:`qa-box-${i}`,
 const sources=Array.from({length:3},(_,i)=>({id:`qa-production-${i}`,date:'2026-10-20',type:'생산입고',product:first.product,labelProductId:first.labelProductId,lot:first.lot,origin:first.origin,packunit:first.packunit,stockLocation:'가공장',stockRowId:`qa-stock-${i}`,weight:200,price:5315,amount:1063000}));
 const initial=[...sources,...boxes(42)];
 const rawReceipts=require('./pda-raw-receipt-fixture.cjs');
-const allowedFiles=['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','mobile-production.js','styles/mobile-production.css'];
+const allowedFiles=['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','work-order-stock-groups.js','mobile-production.js','styles/mobile-production.css'];
 const base=process.env.DBMT_MOBILE_TEST_BASE||'http://mobile-summary.test/';
 const remote=!!process.env.DBMT_MOBILE_TEST_BASE;
 (async()=>{

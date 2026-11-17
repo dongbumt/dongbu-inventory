@@ -65,10 +65,27 @@ def production(conn, fixture):
             assert sum(item['amount'] for item in group_entry['inputs']) == 88000
             assert conn.execute("select source_id,count(*) from pda_private.raw_packages where source_id=any(%s) and state='used' group by source_id order by source_id", ([source, other_source],)).fetchall() == sorted([(source, 1), (other_source, 1)])
             assert package_rows() == original_group_packages
+            note_only = copy.deepcopy(group_entry)
+            note_only['note'] = 'Receipt bundle note-only correction QA'
+            corrected_group = rpc('dbmt_erp_save_production', token, note_only, [], group_result['productionId'])
+            assert corrected_group['ok'] and corrected_group['entry']['inputs'] == group_entry['inputs']
+            assert corrected_group['entry']['outputs'] == group_entry['outputs']
+            assert package_rows() == original_group_packages
+            revised = copy.deepcopy(corrected_group['entry'])
+            for item, kg in zip(revised['inputs'], [12, 6]):
+                item['qty'], item['price'], item['amount'] = kg, 5000, kg * 5000
+            edited = rpc('dbmt_erp_save_production', token, revised, [], group_result['productionId'])
+            assert edited['ok'] and sum(item['amount'] for item in edited['entry']['inputs']) == 90000
+            assert [item['stockRowId'] for item in edited['entry']['inputs']] == [source, other_source]
+            assert [item['boxCount'] for item in edited['entry']['inputs']] == [1, 1]
+            assert edited['entry']['outputs'] == group_entry['outputs']
+            assert conn.execute("select pda_private.balance(%s,'가공장')", (source,)).fetchone()[0] == Decimal('329.4')
+            assert conn.execute("select pda_private.balance(%s,'가공장')", (other_source,)).fetchone()[0] == Decimal('28.14')
+            assert package_rows() == original_group_packages
             assert rpc('dbmt_label_cancel_production', pin, grouped_order['id'], group_result['productionId'])['ok']
             assert conn.execute("select count(*) from pda_private.raw_packages where source_id=any(%s) and state='used'", ([source, other_source],)).fetchone()[0] == 0
             assert package_rows() == original_group_packages
-        print('PASS: a grouped work-order choice stays separate original sources through label snapshot, production KG/boxes/cost, raw barcode allocation and cancellation; scan payloads remain immutable')
+        print('PASS: receipt bundle -> label completion -> note/KG/price journal corrections -> cancellation; original input IDs/boxes, output labels, cost totals, barcode snapshots and stock balances preserved')
     if not DEPLOYED:
         reject(complete, 'PDA 원료육 박스 몫')
         assert not conn.execute('select 1 from public.label_production_completions where work_order_id=%s', (order['id'],)).fetchone()

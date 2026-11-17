@@ -416,7 +416,7 @@ async function testProductionDefaultList(page) {
   await page.addScriptTag({content:`
     var productionListQueryActive=false,subMaterialUsages=[];
     ${['totalRecordedBoxes','setProductionListIdle','prepareProductionList','productionMatchesSearch',
-      'getFilteredProductionEntries','renderProduction'].map(source).join('\n')}
+      'getFilteredProductionEntries','renderProduction','productionDisplayInputs'].map(source).join('\n')}
   `});
   const dates=await page.evaluate(()=>{
     const current=localDateString(),prior=new Date(current+'T12:00:00');prior.setDate(prior.getDate()-1);

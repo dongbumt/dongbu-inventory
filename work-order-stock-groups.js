@@ -1,4 +1,4 @@
-/* Work-order choices only. Never replace the original stock ledger identities. */
+/* Shared receipt bundles for work orders and production. Ledger sources stay intact. */
 (function(global){
   'use strict';
   const text=value=>String(value??'').trim();
@@ -7,7 +7,7 @@
     Number.isSafeInteger(Number(value))&&Number(value)>=0?Number(value):null;
   const members=stock=>stock?stock._workOrderStockRows||[stock]:[];
   const totalBoxes=rows=>rows.some(row=>boxes(row.stockBoxes)===null)?null:rows.reduce((sum,row)=>sum+boxes(row.stockBoxes),0);
-  function group(rows,transactions=[]){
+  function group(rows,transactions=[],extraIdentity=()=>[]){
     const receipts=new Map(),result=[],groups=new Map();
     for(const row of transactions){
       if(row.type!=='입고'||!row.stockRowId)continue;
@@ -22,7 +22,7 @@
       const key=JSON.stringify([receipt.date,receipt.traderId,receipt.trader,receipt.labelProductId||receipt.productId,
         stock.product,stock.lot,Number(stock.price),Number(receipt.price),stock.stockLocation||'가공장',stock.origin,
         stock.packunit,stock.brand||receipt.brand,stock.factoryNo||receipt.factoryNo,stock.grade||receipt.grade,
-        receipt.storage,stock.stockNote,receipt.note].map(value=>text(value)));
+        receipt.storage,stock.stockNote,receipt.note,...extraIdentity(stock)].map(value=>text(value)));
       let summary=groups.get(key);
       if(!summary){
         summary={...stock,key:'wo-receipt:'+encodeURIComponent(key),stockRowId:'',stock:0,stockBoxes:0,
@@ -40,6 +40,45 @@
       stock.proddate=dates.length===1?dates[0]:'';
       return stock;
     });
+  }
+  function workOrderInputs(sources,transactions=[]){
+    const stockSources=new Map(sources.filter(source=>source.sourceStock).map(source=>[
+      {...source.sourceStock,key:source.sourceStock.key||source.sourceStockKey||''},source]));
+    return group([...stockSources.keys()],transactions).map(stock=>{
+      if(!stock._workOrderStockRows)return stockSources.get(stock);
+      const originals=stock._workOrderStockRows.map(member=>stockSources.get(member));
+      return {sourceStockKey:stock.key,sourceStock:stock,
+        inputWeight:originals.reduce((sum,row)=>sum+cents(row.inputWeight),0)/100,
+        boxCount:totalBoxes(originals.map(row=>({stockBoxes:row.boxCount}))),_workOrderSourceInputs:originals};
+    });
+  }
+  function productionInputs(inputs,transactions=[]){
+    const originals=new Map(inputs.map((input,index)=>[{
+      ...input,key:input.sourceStockKey||'',stock:input.qty,stockBoxes:input.boxCount,
+      proddate:input.proddate||input.stockProddate||'',stockNote:input.stockNote||input.note||''
+    },{input,index}]));
+    return group([...originals.keys()],transactions,stock=>[
+      Number(stock.stockUnitPrice??stock.price),JSON.stringify(stock.samsung??null),stock.note||'',stock._prodId||'',stock.date||''
+    ]).map(stock=>{
+      if(!stock._workOrderStockRows)return originals.get(stock).input;
+      const members=stock._workOrderStockRows.map(member=>originals.get(member));
+      return {...members[0].input,qty:stock.stock,boxCount:stock.stockBoxes,
+        amount:members.reduce((sum,row)=>sum+(Number(row.input.amount)||0),0),
+        proddate:stock.proddate,stockProddate:stock.proddate,stockRowId:'',sourceStockKey:stock.key,
+        _receiptInputRows:members.map(row=>row.input),_receiptInputIndexes:members.map(row=>row.index)};
+    });
+  }
+  function productionTransactions(rows,transactions=[]){
+    const inputs=rows.filter(row=>row.type==='사용'&&row._isProdUse&&row._prodId).map(row=>({...row,qty:row.weight,_receiptTransaction:row}));
+    const mapped=new Map();
+    for(const summary of productionInputs(inputs,transactions)){
+      const originals=(summary._receiptInputRows||[summary]).map(input=>input._receiptTransaction);
+      const display=originals.length===1?originals[0]:{...originals[0],id:'production-input-summary:'+originals[0].id,
+        weight:summary.qty,boxCount:summary.boxCount,amount:summary.amount,stockRowId:'',_receiptUseRows:originals};
+      originals.forEach(row=>mapped.set(row,display));
+    }
+    const seen=new Set();
+    return rows.flatMap(row=>{const display=mapped.get(row)||row;if(seen.has(display))return [];seen.add(display);return [display];});
   }
   function allocate(stock,weight,boxCount){
     const sources=[...members(stock)].sort((a,b)=>text(a.proddate||'9999').localeCompare(text(b.proddate||'9999'))||text(a.key).localeCompare(text(b.key)));
@@ -82,5 +121,5 @@
     if(boxCount===0)allocations.forEach(row=>row.boxCount=0);
     return allocations;
   }
-  global.DBMTWorkOrderStockGroups={group,members,allocate};
+  global.DBMTWorkOrderStockGroups={group,members,allocate,workOrderInputs,productionInputs,productionTransactions};
 })(window);
