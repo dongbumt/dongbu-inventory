@@ -109,6 +109,7 @@ ${preview?'<div class="preview-watermark">미리보기</div>':''}
   let hiddenPrintQueue=Promise.resolve();
   let activeHiddenFrame=null;
   function printHidden(options={}){
+    const retryInstruction=options.retryInstruction||'출력이력에서 재출력해주세요.';
     // One native print request at a time, including calls from different buttons.
     const task=hiddenPrintQueue.then(()=>new Promise((resolve,reject)=>{
       if(activeHiddenFrame?.isConnected){
@@ -159,7 +160,7 @@ ${preview?'<div class="preview-watermark">미리보기</div>':''}
         loadHandled=true;
         try{
           if(!win.DBMTLabelPrintReady||!await win.DBMTLabelPrintReady){
-            throw new Error('라벨 이미지나 글꼴을 준비하지 못해 인쇄하지 않았습니다. 연결을 확인한 뒤 출력이력에서 재출력해주세요.');
+            throw new Error('라벨 이미지나 글꼴을 준비하지 못해 인쇄하지 않았습니다. 연결을 확인한 뒤 '+retryInstruction);
           }
           if(settled) return;
           global.clearTimeout(prepareTimer);
@@ -170,7 +171,7 @@ ${preview?'<div class="preview-watermark">미리보기</div>':''}
           win.print();
         }catch(error){fail(error);}
       });
-      prepareTimer=global.setTimeout(()=>fail(new Error('인쇄 자료 준비 시간이 초과됐습니다. 출력이력에서 재출력해주세요.')),15000);
+      prepareTimer=global.setTimeout(()=>fail(new Error('인쇄 자료 준비 시간이 초과됐습니다. '+retryInstruction)),15000);
       try{
         frame.srcdoc=createDocument({...options,preview:false,autoPrint:false});
         activeHiddenFrame=frame;

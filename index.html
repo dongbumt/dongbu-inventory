@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="styles/work-order-output-lots.css?v=20261029lots1">
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
 <script src="label-layout.js?v=20261113suffix1"></script>
-<script src="label-print-document.js?v=20261013inset2"></script>
+<script src="label-print-document.js?v=20261118hidden1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
 // variables are created so no prior business data exists behind the login wall.
@@ -22747,11 +22747,12 @@ function updateLabelPreview(){
 function printLabelData(data, sizeKey='7x10', copies=1){
   const count = Math.max(1, Math.min(parseInt(copies || 1, 10) || 1, 500));
   const labelsHtml = Array.from({length: count}, () => `<div class="lbl-label">${buildLabelBody(data)}</div>`).join('');
-  const html = DBMTLabelPrint.createDocument({labelsHtml,sizeKey});
-
-  const win = window.open('', '_blank', 'width=400,height=600');
-  if(!win){ alert('팝업이 차단되어 라벨 인쇄창을 열 수 없습니다. 팝업을 허용한 뒤 다시 시도해주세요.'); return; }
-  DBMTLabelPrint.write(win,html);
+  return DBMTLabelPrint.printHidden({labelsHtml,sizeKey,
+    retryInstruction:'실제 출력 여부를 확인한 뒤 현재 화면에서 다시 출력해주세요.'
+  }).then(()=>true,error=>{
+    alert(error?.message || '라벨 인쇄 요청에 실패했습니다. 실제 출력 여부를 확인해주세요.');
+    return false;
+  });
 }
 
 function printLabel(){
@@ -22864,7 +22865,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="product-catalog-sync.js?v=20261106catalog1"></script>
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
-<script src="manual-label.js?v=20261023ingredients1"></script>
+<script src="manual-label.js?v=20261118hidden1"></script>
 <link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
 <script src="label-weight-split.js?v=20261113split1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>

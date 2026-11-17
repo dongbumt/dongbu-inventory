@@ -20,8 +20,24 @@ const server=http.createServer((req,res)=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
  try{
   const context=await browser.newContext({viewport:{width:1400,height:1000}}),page=await context.newPage(),errors=[],external=[];
+  let failImage=false;
+  await context.route('**/HACCP2.png',route=>failImage?route.fulfill({status:404,body:''}):route.continue());
   await context.route('https://**/*',route=>{external.push(route.request().url());return route.abort();});
-  await context.addInitScript(()=>{window.print=()=>{window.__printed=(window.__printed||0)+1;};});
+  await context.addInitScript(()=>{
+    window.__printRequests=[];window.__waitingFrames=[];window.__printMode='async';window.__popupCalls=0;
+    window.open=()=>{window.__popupCalls++;return null;};
+    window.print=()=>{
+      if(parent===window)throw Error('Physical printing is forbidden');
+      if(parent.__printMode==='throw')throw Error('QA printer unavailable');
+      parent.__printRequests.push({count:document.querySelectorAll('.lbl-label').length,
+        artwork:document.querySelector('.dbmt-label-body')?.outerHTML,
+        css:document.querySelector('style').textContent,
+        imagesReady:[...document.images].every(img=>img.complete&&img.naturalWidth>0),
+        hidden:window.frameElement?.getAttribute('aria-hidden')});
+      if(parent.__printMode==='hold'){parent.__waitingFrames.push(window);return;}
+      setTimeout(()=>window.dispatchEvent(new Event('afterprint')),10);
+    };
+  });
   await page.route(base+'/fixture',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html lang="ko"><meta charset="utf-8"><body></body></html>'}));
   page.on('pageerror',e=>errors.push(e.message));await page.goto(base+'/fixture');
   await page.evaluate(html=>{const t=document.createElement('template');t.innerHTML=html;for(const id of ['p-label','txn-product-picker-modal'])document.body.append(t.content.querySelector('#'+id));document.getElementById('p-label').classList.add('active');},index);
@@ -59,15 +75,47 @@ const server=http.createServer((req,res)=>{
   for(const text of ['가상 삼겹살(작업)','미국산','수정 등급','12.34','2026.11.25','돼지고기'])assert((await preview.locator('.dbmt-label-body').innerText()).includes(text),text);
   await page.screenshot({path:path.join(artifacts,'office-desktop.png'),fullPage:true});
   const expected=await preview.locator('.dbmt-label-body').evaluate(node=>node.outerHTML);
-  const popupEvent=page.waitForEvent('popup');await page.locator('#manual-label-print').click();const popup=await popupEvent;
-  await popup.waitForFunction(()=>window.DBMTLabelPrintReady);assert(await popup.evaluate(()=>DBMTLabelPrintReady));
-  assert.equal(await popup.locator('.lbl-label').count(),2);assert.equal(await popup.locator('.dbmt-label-body').first().evaluate(node=>node.outerHTML),expected,'Print uses exactly the preview artwork and barcode');
-  assert.equal(await popup.evaluate(()=>__printed),1);await popup.close();
+  assert.equal(await page.evaluate(()=>__printRequests.length),0,'Preview never auto-prints');
+  await page.locator('#manual-label-print').click();
+  await page.waitForFunction(()=>__printRequests.length===1&&!document.getElementById('manual-label-print').disabled);
+  const printed=await page.evaluate(()=>__printRequests[0]);
+  assert.equal(printed.count,2);assert.equal(printed.artwork,expected,'Print uses exactly the preview artwork and barcode');
+  assert(printed.imagesReady);assert.equal(printed.hidden,'true');assert.match(printed.css,/size:70mm 100mm/);
+  assert.equal(context.pages().length,1);assert.equal(await page.evaluate(()=>__popupCalls),0);
+  assert.equal(await page.locator('iframe[data-dbmt-label-print]').count(),0);
+  // A second click cannot enqueue duplicate labels while the first native
+  // print lifecycle is open, including permission refreshes during printing.
+  await page.evaluate(()=>{__printMode='hold';printLabel();DBMTManualLabel.print();printLabel();DBMTManualLabel.applyPermissions();});
+  await page.waitForFunction(()=>__waitingFrames.length===1);
+  assert.equal(await page.evaluate(()=>__printRequests.length),2);assert(await page.locator('#manual-label-print').isDisabled());
+  assert.equal(await page.locator('#manual-label-print').getAttribute('aria-busy'),'true');
+  await page.evaluate(()=>__waitingFrames.shift().dispatchEvent(new Event('afterprint')));
+  await page.waitForFunction(()=>!document.getElementById('manual-label-print').disabled);
+  assert.equal(await page.locator('#lbl-weight').inputValue(),'12.34','Printing preserves the draft');
+  await page.evaluate(()=>__printMode='async');
   await page.locator('#lbl-size').selectOption('10x10');await preview.locator('.dbmt-label-body').waitFor();
   assert.equal(await preview.locator('[data-barcode-kind=product]').first().getAttribute('data-barcode-value'),code,'Edits preserve the preview code');
   await page.locator('#lbl-preview-frame').evaluate(frame=>frame.contentWindow.DBMTLabelPrintReady);
   const narrow=await page.locator('#lbl-preview-frame').evaluate(frame=>{const label=frame.contentDocument.querySelector('.lbl-label'),r=label.getBoundingClientRect();return {width:r.width,height:r.height};});
   assert(narrow.width>0&&narrow.height>0);
+  await page.locator('#manual-label-print').click();
+  await page.waitForFunction(()=>__printRequests.length===3&&!document.getElementById('manual-label-print').disabled);
+  assert.match(await page.evaluate(()=>__printRequests[2].css),/size:100mm 100mm/);
+  failImage=true;await page.locator('#manual-label-print').click();
+  await page.waitForFunction(()=>!document.getElementById('manual-label-print').disabled);
+  assert.equal(await page.evaluate(()=>__printRequests.length),3,'Missing artwork never prints');
+  assert.match(await page.evaluate(()=>alerts.at(-1)),/현재 화면에서 다시 출력/);
+  assert.doesNotMatch(await page.evaluate(()=>alerts.at(-1)),/출력이력/);
+  assert.equal(await page.locator('iframe[data-dbmt-label-print]').count(),0);
+  failImage=false;await page.evaluate(()=>__printMode='throw');await page.locator('#manual-label-print').click();
+  await page.waitForFunction(()=>!document.getElementById('manual-label-print').disabled);
+  assert.match(await page.evaluate(()=>alerts.at(-1)),/QA printer unavailable/);
+  assert.equal(await page.evaluate(()=>__printRequests.length),3,'Native errors are not automatically retried');
+  assert.equal(await page.locator('iframe[data-dbmt-label-print]').count(),0);
+  await page.evaluate(()=>__printMode='async');await page.locator('#manual-label-print').click();
+  await page.waitForFunction(()=>__printRequests.length===4&&!document.getElementById('manual-label-print').disabled);
+  assert.equal(context.pages().length,1);assert.equal(await page.evaluate(()=>__popupCalls),0);
+  console.log('PASS: hidden printing without popups, duplicate-click guard, native end/cancel cleanup, both paper sizes, artwork/native failures and manual retry');
   for(const width of [1100,768,360]){
     await page.setViewportSize({width,height:1000});await page.waitForTimeout(180);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow at '+width);

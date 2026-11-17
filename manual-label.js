@@ -2,7 +2,7 @@
 (function(global){
   'use strict';
   const el=id=>document.getElementById('lbl-'+id);
-  const state={initialized:false,barcode:'',token:'',timer:null,previewKey:''};
+  const state={initialized:false,barcode:'',token:'',timer:null,previewKey:'',printing:false};
   const fields=['origin','grade','mfgdate','expdate','weight','itemno','lot','ingredients','temptype','licenseno','prodtype','packaging','manufacturer','phone','address'];
   const value=id=>el(id)?.value.trim()||'';
   function selectedProduct(){
@@ -27,7 +27,12 @@
   function applyPermissions(){
     const token=global.DBMTAuth?.getSessionToken()||'';
     if(token!==state.token){clear();state.token=token;}
-    const print=document.getElementById('manual-label-print');if(print)print.disabled=!permitted('create');
+    const print=document.getElementById('manual-label-print');
+    if(print){
+      print.disabled=state.printing||!permitted('create');
+      print.textContent=state.printing?'출력 중…':'라벨 출력';
+      print.setAttribute('aria-busy',String(state.printing));
+    }
   }
   function init(){
     applyPermissions();
@@ -95,7 +100,8 @@
     const screen=`<style>@media screen{html,body{width:${width}px!important;height:${height}px!important;padding:0!important;margin:0!important;background:#fff!important;overflow:hidden!important}body{zoom:${scale}}.print-tools{display:none!important}.lbl-label{margin:0 0 0 2mm!important}#label-print-pages{padding:0!important;margin:0!important}}</style>`;
     frame.srcdoc=documentHtml(data,sizeKey).replace('</head>',screen+'</head>');
   }
-  function print(){
+  async function print(){
+    if(state.printing)return;
     if(!permitted('create')){toast('라벨을 출력할 권한이 없습니다.');return;}
     const data=collect();
     if(!data){alert('품목관리에 등록된 제품을 선택해주세요.');return;}
@@ -103,7 +109,9 @@
     if(!el('mfgdate').checkValidity()||!value('mfgdate')||!el('expdate').checkValidity()||!value('expdate')||value('expdate')<value('mfgdate')){alert('제조일과 소비기한을 확인해주세요.');return;}
     const copies=Number(value('print-count'));
     if(!Number.isInteger(copies)||copies<1||copies>500){alert('출력 매수는 1~500장으로 입력해주세요.');el('print-count').focus();return;}
-    printLabelData(data,value('size')||'7x10',copies);
+    state.printing=true;applyPermissions();
+    try{return await printLabelData(data,value('size')||'7x10',copies);}
+    finally{state.printing=false;applyPermissions();}
   }
   document.getElementById('manual-label-form').addEventListener('input',()=>{clearTimeout(state.timer);state.timer=setTimeout(updatePreview,80);});
   document.getElementById('manual-label-form').addEventListener('change',event=>{

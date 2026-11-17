@@ -20,7 +20,8 @@ const server=http.createServer((req,res)=>{
       if(route.request().url().endsWith('/dbmt_label_print_save_logs')){
         if(failSave){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA save failed"}'});return;}
         saves.push(route.request().postDataJSON());
-        await route.fulfill({contentType:'application/json',body:'{"ok":true}'});return;
+        const logs=await page.evaluate(()=>state.logs);
+        await route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,logs})});return;
       }
       await route.abort();
     });
@@ -54,7 +55,7 @@ const server=http.createServer((req,res)=>{
     await page.goto(base+'/label-print.html');
     await page.evaluate(()=>{
       state.pin='qa-pin';state.workOrders=[{id:'qa-order',date:'2026-09-14',product:'돈등심(작업)',inputWeight:100,weight:0,origin:'미국산',lot:'903112100182',mfgdate:'2026-09-14',expdate:'2027-09-13',temptype:'냉동',itemno:'202502930933'}];
-      state.selectedId='qa-order';state.allDates=true;renderAll();
+      state.logsPin=state.pin;state.selectedId='qa-order';state.allDates=true;renderAll();
       window.__originalOpen=window.open;window.__openCalls=0;
       window.open=()=>{window.__openCalls++;return null;};
     });
