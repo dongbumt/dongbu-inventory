@@ -21409,6 +21409,7 @@ function setWorkOrderSaving(busy){
 
 function inferLabelMeatType(product='', ingredients=''){
   const text = `${product} ${ingredients}`;
+  if(/양(?:고기|육|어깨|갈비|다리|등심|목심|사태|정육|꼬치)|(?:^|\s)(?:냉장|냉동)?램|\blamb\b|\bmutton\b/i.test(text)) return '양고기';
   if(/소고기|쇠고기|한우|육우|우[^유]?|알목심|설도|차돌|토시/i.test(text)) return '소고기';
   return '돼지고기';
 }
@@ -22355,9 +22356,10 @@ function getSelectedLabelMeatType(){
   const pidx = sel && sel.value !== '' ? parseInt(sel.value) : -1;
   const selected = pidx >= 0 ? labelProducts[pidx] : null;
   const meat = String(selected?.meattype || '').trim();
-  if(meat === '돼지고기' || meat === '소고기') return meat;
+  if(meat === '돼지고기' || meat === '소고기' || meat === '양고기') return meat;
 
   const ingredients = String(document.getElementById('lbl-ingredients')?.value || '');
+  if(ingredients.includes('양고기')) return '양고기';
   if(ingredients.includes('돼지고기')) return '돼지고기';
   if(ingredients.includes('소고기')) return '소고기';
   return '';

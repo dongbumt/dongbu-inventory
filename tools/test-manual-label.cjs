@@ -4,10 +4,24 @@ const {chromium}=require('playwright');
 const repo=path.resolve(__dirname,'..'),index=fs.readFileSync(path.join(repo,'index.html'),'utf8');
 const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-manual-label-'));
 const source=name=>{const m=index.match(new RegExp(`function ${name}\\([^]*?\\n\\}`));assert(m,name);return m[0];};
+const stationHtml=fs.readFileSync(path.join(repo,'label-print.html'),'utf8');
+const stationSource=name=>{const m=stationHtml.match(new RegExp(`function ${name}\\([^]*?\\n    \\}`));assert(m,name);return m[0];};
+const bothNotice='본 제품은 소고기, 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
+for(const [infer,notice,read] of [['inferLabelMeatType','labelCrossFacilityNoticeFromText',source],['inferMeatType','crossFacilityNotice',stationSource]]){
+ const model={};vm.runInNewContext(`${read(infer)}\n${read(notice)};this.infer=${infer};this.notice=${notice};`,model);
+ for(const product of ['양어깨살','양갈비','양정육','양다리','램숄더랙','냉동램숄더랙','LAMB shoulder','MUTTON']){
+  assert.equal(model.infer(product,''),'양고기');assert.equal(model.notice(product,''),bothNotice,product);
+ }
+ assert.equal(model.notice('등록명','양고기 100%'),bothNotice);
+ assert.equal(model.notice('양념 돈목살','돼지고기 100%'),'본 제품은 소고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다');
+ assert.equal(model.notice('돈목살','돼지고기 100% (100그램)'),'본 제품은 소고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다');
+ assert.equal(model.notice('한우 등심','소고기 100%'),'본 제품은 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다');
+}
 const block=(a,b)=>index.slice(index.indexOf(a),index.indexOf(b,index.indexOf(a)));
 for(const match of index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(match[1]);
 const products=[{id:'p-a',name:'가상 삼겹살(작업)',brand:'가상 A',kind:'제품',origin:'스페인',storage:'냉동',shelfdays:365,grade:'1',itemno:'REPORT-A',meattype:'돼지고기',productCode:'QA001'},
  {id:'p-b',name:'가상 삼겹살(작업)',brand:'가상 B',kind:'제품',origin:'칠레',storage:'냉장',shelfdays:30,itemno:'REPORT-B',meattype:'돼지고기',productCode:'QA002',ingredientDetails:'삼겹살 95%, 지방 5%'},
+ {id:'p-lamb',name:'양어깨살',brand:'THOMAS(토마스)',kind:'제품',origin:'호주산',storage:'냉동',shelfdays:730,meattype:'양고기',productCode:'QA003'},
  {id:'raw',name:'가상 원료육',kind:'원료육',origin:'국내산',storage:'냉동'},
  {id:'stopped',name:'중지 제품',kind:'제품',isActive:false}];
 const server=http.createServer((req,res)=>{
@@ -59,7 +73,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#lbl-workorder-select').count(),0);assert.equal(await page.locator('#lbl-product').getAttribute('readonly'),'');
   await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/등록된 제품/);
   await page.locator('#lbl-product').click();assert.equal(await page.locator('#tpp-kind-product').getAttribute('aria-pressed'),'true');
-  assert.equal(await page.locator('#tpp-result-body tr').count(),2,'Only active registered products: '+errors.join(';'));
+  assert.equal(await page.locator('#tpp-result-body tr').count(),3,'Only active registered products: '+errors.join(';'));
   await page.locator('#tpp-search-brand').selectOption('가상 B');await page.locator('#tpp-result-body tr').dblclick();
   assert.equal(await page.locator('#lbl-product-id').inputValue(),'p-b');assert.equal(await page.locator('#lbl-origin').inputValue(),'칠레');
   assert.equal(await page.locator('#lbl-ingredients').inputValue(),'돼지고기 100% (삼겹살 95%, 지방 5%)');
@@ -127,6 +141,24 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>DBMTManualLabel.selectProduct('p-b'));await page.locator('#lbl-weight').fill('-1');await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/중량/);
   await page.locator('#lbl-weight').fill('1');await page.locator('#lbl-print-count').fill('1.5');await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/출력 매수/);
   await page.locator('#lbl-print-count').fill('1');await page.evaluate(()=>{labelProducts=labelProducts.filter(p=>p.id!=='p-b');});await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/등록된 제품/);
+  await page.evaluate(()=>DBMTManualLabel.selectProduct('p-lamb'));
+  assert.equal(await page.locator('#lbl-ingredients').inputValue(),'양고기 100%');
+  for(const size of ['7x10','10x10']){
+   await page.locator('#lbl-size').selectOption(size);
+   await page.locator('#lbl-preview-frame').evaluate(frame=>frame.contentWindow.DBMTLabelPrintReady);
+   assert.equal(await preview.locator('.dl-cross-notice').textContent(),'· '+bothNotice);
+   const fits=await preview.locator('.dbmt-label-body').evaluate(body=>{
+    const notice=body.querySelector('.dl-cross-notice').getBoundingClientRect(),manufacturer=body.querySelector('.dl-manufacturer').getBoundingClientRect();
+    return notice.bottom<=manufacturer.top+0.5&&body.querySelector('.dl-company-address').getBoundingClientRect().bottom<=body.getBoundingClientRect().bottom+0.5;
+   });
+   assert(fits,'Lamb notice and manufacturer fit '+size);
+   const count=await page.evaluate(()=>__printRequests.length);
+   await page.locator('#manual-label-print').click();
+   await page.waitForFunction(n=>__printRequests.length===n+1&&!document.getElementById('manual-label-print').disabled,count);
+   assert((await page.evaluate(()=>__printRequests.at(-1).artwork)).includes(bothNotice),'Printed lamb notice matches preview');
+   await preview.locator('.dbmt-label-body').screenshot({path:path.join(artifacts,'lamb-'+size+'.png')});
+  }
+  console.log('PASS: lamb/pork/beef notice rules in office and station, lamb preview/print and footer fit at both sizes');
   await page.evaluate(()=>{allowed=false;DBMTManualLabel.applyPermissions();});assert(await page.locator('#manual-label-print').isDisabled());
   await page.evaluate(()=>{allowed=true;session='';loggedIn=false;DBMTManualLabel.applyPermissions();});assert.equal(await page.locator('#lbl-product-id').inputValue(),'');assert(await page.locator('#lbl-preview-frame').isHidden());
   assert.deepEqual(await page.evaluate(()=>[workOrders,labelPrintLogs,userProduction,transactions]),[[],[],[],[]]);assert.deepEqual(external,[]);assert.deepEqual(errors,[]);

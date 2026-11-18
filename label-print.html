@@ -1434,6 +1434,7 @@
     }
 
     function inferMeatType(product='', ingredients=''){
+      if(/양(?:고기|육|어깨|갈비|다리|등심|목심|사태|정육|꼬치)|(?:^|\s)(?:냉장|냉동)?램|\blamb\b|\bmutton\b/i.test(`${product} ${ingredients}`)) return '양고기';
       const ingredientText = String(ingredients || '');
       if(/돼지고기|돈육/.test(ingredientText)) return '돼지고기';
       if(/소고기|쇠고기|한우|육우/.test(ingredientText)) return '소고기';
@@ -1453,6 +1454,7 @@
 
     function crossFacilityNotice(product='', ingredients=''){
       const meat = inferMeatType(product, ingredients);
+      if(meat === '양고기') return '본 제품은 소고기, 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
       if(meat === '소고기') return '본 제품은 돼지고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
       return '본 제품은 소고기를 사용한 제품과 같은 제조시설에서 제조하고 있습니다';
     }
