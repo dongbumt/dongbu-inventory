@@ -3980,6 +3980,14 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           </div>
           <div id="lbl-product-meta">품목관리에서 등록한 제품을 선택하세요.</div>
         </div>
+        <div class="form-group manual-label-full">
+          <label for="lbl-manufacturer-choice">제조판매원 선택</label>
+          <select id="lbl-manufacturer-choice">
+            <option value="default">주식회사 동부엠티</option>
+            <option value="dongbu_distribution">(주)동부축산유통</option>
+            <option value="custom">직접입력</option>
+          </select>
+        </div>
         <div class="form-group"><label for="lbl-origin">원산지</label><input id="lbl-origin" type="text" placeholder="원산지"></div>
         <div class="form-group"><label for="lbl-grade">성별 및 등급</label><input id="lbl-grade" type="text" placeholder="선택 입력"></div>
         <div class="form-group"><label for="lbl-mfgdate">제조일</label><input id="lbl-mfgdate" type="date" required></div>
@@ -22867,7 +22875,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="product-catalog-sync.js?v=20261106catalog1"></script>
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
-<script src="manual-label.js?v=20261118hidden1"></script>
+<script src="manual-label.js?v=20261118manufacturer1"></script>
 <link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
 <script src="label-weight-split.js?v=20261113split1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>

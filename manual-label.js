@@ -81,15 +81,30 @@
   function documentHtml(data,sizeKey){
     return DBMTLabelPrint.createDocument({labelsHtml:`<div class="lbl-label">${buildLabelBody(data)}</div>`,sizeKey,autoPrint:false});
   }
+  function defaultManufacturer(){return String(LBL_DEFAULTS.manufacturer||'주식회사 동부엠티').trim();}
+  function syncManufacturerChoice(){
+    const choice=el('manufacturer-choice'),name=value('manufacturer');
+    choice.options[0].textContent=defaultManufacturer().replace(/주식회사\s*동부엠티/g,'주식회사 동부엠티');
+    choice.value=name===defaultManufacturer()?'default':name==='(주)동부축산유통'?'dongbu_distribution':'custom';
+  }
+  function selectManufacturer(){
+    const choice=value('manufacturer-choice');
+    el('manufacturer').value=choice==='default'?defaultManufacturer():choice==='dongbu_distribution'?'(주)동부축산유통':'';
+    if(choice==='custom'){
+      el('manufacturer').closest('details').open=true;
+      el('manufacturer').focus();
+    }
+  }
   function updatePreview(){
     clearTimeout(state.timer);
     if(!state.initialized||!permitted())return;
+    syncManufacturerChoice();
     const data=collect(),frame=el('preview-frame'),sizeKey=value('size')||'7x10';
     el('preview-size-text').textContent=`(${sizeKey==='10x10'?'10×10':'7×10'}cm · 임의 바코드)`;
-    if(!data){
+    if(!data||!data.manufacturer){
       state.previewKey='';
       el('preview-empty').hidden=false;frame.hidden=true;
-      el('preview-empty').textContent=value('product-id')?'선택한 품목을 사용할 수 없습니다. 등록 품목을 다시 선택하세요.':'제품을 선택하면 라벨이 표시됩니다.';
+      el('preview-empty').textContent=data?'제조판매원을 입력하면 라벨이 표시됩니다.':value('product-id')?'선택한 품목을 사용할 수 없습니다. 등록 품목을 다시 선택하세요.':'제품을 선택하면 라벨이 표시됩니다.';
       return;
     }
     el('preview-empty').hidden=true;frame.hidden=false;
@@ -105,6 +120,7 @@
     if(!permitted('create')){toast('라벨을 출력할 권한이 없습니다.');return;}
     const data=collect();
     if(!data){alert('품목관리에 등록된 제품을 선택해주세요.');return;}
+    if(!data.manufacturer){alert('제조판매원을 입력해주세요.');el('manufacturer').closest('details').open=true;el('manufacturer').focus();return;}
     if(!DBMTLabelWeight.valid(value('weight'))){alert('중량을 0보다 큰 값으로 소수 둘째 자리까지 입력해주세요.');el('weight').focus();return;}
     if(!el('mfgdate').checkValidity()||!value('mfgdate')||!el('expdate').checkValidity()||!value('expdate')||value('expdate')<value('mfgdate')){alert('제조일과 소비기한을 확인해주세요.');return;}
     const copies=Number(value('print-count'));
@@ -115,10 +131,12 @@
   }
   document.getElementById('manual-label-form').addEventListener('input',()=>{clearTimeout(state.timer);state.timer=setTimeout(updatePreview,80);});
   document.getElementById('manual-label-form').addEventListener('change',event=>{
+    if(event.target===el('manufacturer-choice'))selectManufacturer();
     if(event.target===el('mfgdate'))setExpiry();
     if(event.target===el('size'))localStorage.setItem('dbmt_label_size',value('size'));
     updatePreview();
   });
+  document.addEventListener('dbmt-company-master-changed',()=>{if(state.initialized)updatePreview();});
   let resizeTimer;global.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(document.getElementById('p-label').classList.contains('active'))updatePreview();},100);});
   global.DBMTManualLabel={init,reset,openPicker,pickerKey,selectProduct,updatePreview,print,applyPermissions};
 })(window);
