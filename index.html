@@ -2096,7 +2096,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       백업 파일(.json)을 저장한 뒤, 새 환경에서 복원하면 모든 데이터가 그대로 옮겨집니다.
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-      <button class="btn btn-primary" onclick="backupAllData()" style="background:#8e44ad;border-color:#8e44ad;">
+      <button type="button" id="backup-download" class="btn btn-primary" onclick="backupAllData()" style="background:#8e44ad;border-color:#8e44ad;">
         ⬇️ 전체 데이터 백업 (JSON 저장)
       </button>
       <label class="btn btn-secondary" style="cursor:pointer;margin:0;">
@@ -3339,7 +3339,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   <div class="card">
     <div class="section-header">
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#475467;"></div>데이터 변경이력</div>
-      <div style="font-size:12px;color:#667085;">최신 변경사항부터 표시됩니다.</div>
+      <button type="button" id="cl-refresh" class="btn btn-secondary btn-sm" onclick="loadDataChangeLog()">새로고침</button>
     </div>
     <div class="form-row" style="align-items:flex-end;">
       <div class="form-group" style="max-width:180px;">
@@ -3365,6 +3365,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <button class="btn btn-secondary btn-sm" onclick="resetDataChangeLogFilters()">초기화</button>
       </div>
     </div>
+    <div id="cl-status" role="status" style="font-size:12px;color:#475467;margin-top:4px;"></div>
     <div id="cl-summary" style="font-size:12px;color:#667085;margin-top:4px;"></div>
   </div>
 
@@ -3381,7 +3382,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           </tr>
         </thead>
         <tbody id="cl-tbody">
-          <tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">변경이력이 없습니다.</td></tr>
+          <tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">변경이력을 불러오기 전입니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -5485,7 +5486,8 @@ function renderPageById(id, reason='menu'){
         renderFactorySim();
         break;
       case 'p-change-log':
-        renderDataChangeLog();
+        if(reason==='menu' && !document.body.classList.contains('erp-auth-locked')) asyncTask = loadDataChangeLog();
+        else renderDataChangeLog();
         break;
       case 'p-import':
       default:
@@ -5660,6 +5662,7 @@ let dataChangeAppDataSigs = null;
 let dataChangeAppDataMeta = null;
 let dataChangeLogSyncTimer = null;
 let dataChangePendingAppDetails = new Map();
+let dataChangeLogView = {token:'', rows:null, request:null, error:''};
 
 function dataChangeDateLabel(value){
   const text = String(value || '').trim().replace(/\//g, '-');
@@ -5677,25 +5680,26 @@ function dataChangeId(){
   return `cl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function normalizeDataChangeLogs(){
-  if(!Array.isArray(dataChangeLogs)) dataChangeLogs = [];
-  dataChangeLogs = dataChangeLogs
+function sortedDataChangeLogs(logs){
+  return logs
     .filter(Boolean)
     .sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')))
     .slice(0, DATA_CHANGE_LOG_LIMIT);
 }
 
 function saveDataChangeLogsLocal(){
-  normalizeDataChangeLogs();
+  dataChangeLogs = sortedDataChangeLogs(dataChangeLogs);
   safeLocalStorageSet('dbmt_change_logs', JSON.stringify(dataChangeLogs), true);
 }
 
 function syncDataChangeLogsSoon(){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return;
-  if(!getSupabasePassword()) return;
+  const token = getSupabasePassword();
+  if(!token || !dataChangeLogs.length) return;
   clearTimeout(dataChangeLogSyncTimer);
   dataChangeLogSyncTimer = setTimeout(() => {
-    sbRpc('dbmt_erp_append_change_logs', {p_token:getSupabasePassword(), p_logs:dataChangeLogs.slice(0,100)})
+    if(token!==getSupabasePassword() || !dataChangeLogs.length) return;
+    sbRpc('dbmt_erp_append_change_logs', {p_token:token, p_logs:dataChangeLogs.slice(0,100)})
       .catch(err => console.warn('변경이력 Supabase 저장 실패:', err));
   }, 800);
 }
@@ -5951,22 +5955,74 @@ function recordAppDataChanges(){
   return changedKeys;
 }
 
-function dataChangeMenuOptions(){
+function dataChangeLogToken(){
+  return window.DBMTAuth?.can('change_log','view') ? DBMTAuth.getSessionToken() : '';
+}
+
+function applyDataChangeLogPermissions(){
+  const token = dataChangeLogToken();
+  if(dataChangeLogView.token===token) return;
+  dataChangeLogView.request?.abort();
+  dataChangeLogView = {token, rows:null, request:null, error:''};
+  renderDataChangeLog();
+}
+
+async function loadDataChangeLog(){
+  applyDataChangeLogPermissions();
+  const view = dataChangeLogView;
+  if(!view.token || view.request || document.body.classList.contains('erp-auth-locked')) return;
+  const controller = new AbortController();
+  view.request = controller;
+  view.error = '';
+  renderDataChangeLog();
+  try{
+    const logs = await fetchDataChangeLogs(view.token, controller);
+    if(view!==dataChangeLogView || view.token!==dataChangeLogToken()) return;
+    view.rows = logs;
+  }catch(error){
+    if(view!==dataChangeLogView || view.token!==dataChangeLogToken()) return;
+    if(['42501','28000'].includes(error?.code) || error?.status===401 || error?.status===403) view.rows = null;
+    view.error = '변경이력을 불러오지 못했습니다. 새로고침으로 다시 시도해 주세요.';
+    console.warn('변경이력 조회 실패:', error);
+  }finally{
+    if(view===dataChangeLogView && view.token===dataChangeLogToken()){
+      view.request = null;
+      renderDataChangeLog();
+    }
+  }
+}
+
+async function fetchDataChangeLogs(token, controller=new AbortController()){
+  const timeout = setTimeout(()=>controller.abort(), 15000);
+  try{
+    const result = await sbRpc('dbmt_erp_get_change_logs', {p_token:token}, {signal:controller.signal});
+    if(!result?.ok || !Array.isArray(result.logs)) throw new Error(result?.message || '변경이력 응답을 확인해 주세요.');
+    return result.logs;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+function mergeDataChangeLogs(remote){
+  const remoteIds = new Set(remote.filter(Boolean).map(log=>log.id).filter(Boolean));
+  return sortedDataChangeLogs([...remote, ...dataChangeLogs.filter(log=>log && !remoteIds.has(log.id))]);
+}
+
+function dataChangeMenuOptions(logs){
   const current = document.getElementById('cl-menu')?.value || '';
-  const menus = [...new Set([...DATA_CHANGE_MENU_ORDER, ...dataChangeLogs.map(l => l.menu).filter(Boolean)])];
+  const menus = [...new Set([...DATA_CHANGE_MENU_ORDER, ...logs.map(l => l.menu).filter(Boolean)])];
   const sel = document.getElementById('cl-menu');
   if(!sel) return;
   sel.innerHTML = '<option value="">전체 메뉴</option>' + menus.map(m => `<option value="${htmlEscape(m)}">${htmlEscape(m)}</option>`).join('');
   sel.value = menus.includes(current) ? current : '';
 }
 
-function filteredDataChangeLogs(){
-  normalizeDataChangeLogs();
+function filteredDataChangeLogs(logs){
   const from = document.getElementById('cl-from')?.value || '';
   const to = document.getElementById('cl-to')?.value || '';
   const menu = document.getElementById('cl-menu')?.value || '';
   const q = String(document.getElementById('cl-search')?.value || '').trim().toLowerCase();
-  return dataChangeLogs.filter(log => {
+  return logs.filter(log => {
     const day = String(log.at || '').slice(0, 10);
     if(from && day < from) return false;
     if(to && day > to) return false;
@@ -5988,14 +6044,23 @@ function formatDataChangeTime(iso){
 }
 
 function renderDataChangeLog(){
-  dataChangeMenuOptions();
-  const rows = filteredDataChangeLogs();
+  const authorized = Boolean(dataChangeLogView.token && dataChangeLogView.token===dataChangeLogToken());
+  const remote = authorized ? dataChangeLogView.rows : null;
+  const logs = remote ? mergeDataChangeLogs(remote) : [];
+  dataChangeMenuOptions(logs);
+  const rows = filteredDataChangeLogs(logs);
   const summary = document.getElementById('cl-summary');
-  if(summary) summary.textContent = `표시 ${rows.length.toLocaleString()}건 / 전체 ${dataChangeLogs.length.toLocaleString()}건`;
+  const status = document.getElementById('cl-status');
+  const refresh = document.getElementById('cl-refresh');
+  const loading = authorized && Boolean(dataChangeLogView.request);
+  if(refresh) refresh.disabled = !authorized || loading;
+  if(status) status.textContent = loading ? '변경이력을 불러오는 중입니다.' : authorized ? dataChangeLogView.error : '';
+  if(summary) summary.textContent = remote ? `표시 ${rows.length.toLocaleString()}건 / 전체 ${logs.length.toLocaleString()}건` : '';
   const tbody = document.getElementById('cl-tbody');
   if(!tbody) return;
   if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">조건에 맞는 변경이력이 없습니다.</td></tr>';
+    const empty = remote ? '조건에 맞는 변경이력이 없습니다.' : loading || (authorized && dataChangeLogView.error) ? '' : '변경이력을 불러오기 전입니다.';
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">${empty}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.slice(0, 1000).map(log => `
@@ -6123,7 +6188,7 @@ async function refreshProtectedCoreAfterFailure(){
   if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return;
   try{
     const token = requireSupabasePassword();
-    const data = await sbRpc('dbmt_erp_get_all', {p_token:token});
+    const data = await sbRpc('dbmt_erp_get_all', {p_token:token,p_defer_change_logs:true});
     try{ data.subMaterialUsages = await supabaseLoadSubMaterialUsages(token); }catch(_){ }
     applySupabasePayload(data);
     renderAll('server-recovery');
@@ -16188,14 +16253,33 @@ async function doImport(){
 
 
 // ── 전체 데이터 백업 / 복원 ──────────────────────────────
-function backupAllData(){
+async function backupAllData(){
+  const token = dataChangeLogToken();
+  const status = document.getElementById('backup-status');
+  const button = document.getElementById('backup-download');
+  if(button?.disabled) return;
+  let changeLogs = null;
+  if(token){
+    if(button) button.disabled = true;
+    if(status){status.textContent = '백업에 포함할 변경이력을 불러오는 중입니다.';status.style.display='block';}
+    try{
+      const logs = await fetchDataChangeLogs(token);
+      if(token!==dataChangeLogToken()) return;
+      changeLogs = mergeDataChangeLogs(logs);
+    }catch(error){
+      if(status && token===dataChangeLogToken()) status.textContent = '백업용 변경이력을 불러오지 못했습니다. 다시 시도해 주세요.';
+      return;
+    }finally{
+      if(button) button.disabled = false;
+    }
+  }
   const KEYS = [
     'dbmt_user_transactions','dbmt_user_prod','dbmt_prices','dbmt_submaterial_usages',
     'dbmt_schedule_events','dbmt_samsung_vendors',
     'dbmt_employees','dbmt_leaves','dbmt_weekend_work','dbmt_leave_deductions',
     'dbmt_trader_info','dbmt_doc_checks','dbmt_pangwanbi',
     'dbmt_expenses','dbmt_costcalc','dbmt_quotations','dbmt_label_templates',
-    'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_change_logs','dbmt_gs_url','dbmt_gs_skip'
+    'dbmt_label_products','dbmt_work_orders','dbmt_label_print_logs','dbmt_submaterial_items','dbmt_submaterial_lots','dbmt_submaterial_counts','dbmt_gs_url','dbmt_gs_skip'
   ];
   const liveCoreValues = {
     dbmt_user_transactions: JSON.stringify(Array.isArray(userTransactions) ? userTransactions : []),
@@ -16210,6 +16294,7 @@ function backupAllData(){
       : localStorage.getItem(k);
     if(v) backup.data[k] = v;
   });
+  if(changeLogs) backup.data.dbmt_change_logs = JSON.stringify(changeLogs);
   const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -16217,8 +16302,7 @@ function backupAllData(){
   a.href = url; a.download = `동부엠티ERP_백업_${dateStr}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  const st = document.getElementById('backup-status');
-  if(st){ st.textContent = `✅ 백업 완료 — ${Object.keys(backup.data).length}개 항목 저장됨`; st.style.display='block'; }
+  if(status){ status.textContent = `✅ 백업 완료 — ${Object.keys(backup.data).length}개 항목 저장됨`; status.style.display='block'; }
 }
 
 function restoreAllData(input){
@@ -16497,7 +16581,7 @@ async function supabaseInit(){
     : Promise.resolve(null);
   const fetchStartedAt = performance.now();
   const [data] = await Promise.all([
-    sbRpc('dbmt_erp_get_all', {p_token:token}),
+    sbRpc('dbmt_erp_get_all', {p_token:token,p_defer_change_logs:true}),
     companyMasterPromise
   ]);
   try{
@@ -16553,6 +16637,7 @@ window.startAuthenticatedErp = function(){
     document.body.classList.remove('erp-auth-locked');
     document.getElementById('gs-setup')?.classList.add('hidden');
     document.getElementById('gs-overlay')?.classList.add('hidden');
+    if(document.getElementById('p-change-log')?.classList.contains('active')) void loadDataChangeLog();
     return data;
   })();
   return authenticatedErpStartPromise.catch(err=>{
@@ -16563,10 +16648,14 @@ window.startAuthenticatedErp = function(){
 };
 
 window.lockErpForLogin = function(reload=false){
+  authenticatedErpStartPromise = null;
   if(window.DBMTWorkOrders) DBMTWorkOrders.stop();
   if(window.DBMTProductCatalog) DBMTProductCatalog.stop();
   document.body.classList.add('erp-auth-locked');
   clearSupabaseSessionPassword();
+  clearTimeout(dataChangeLogSyncTimer);
+  dataChangeLogs = [];
+  applyDataChangeLogPermissions();
   if(window.DBMTLabelStockSplit) window.DBMTLabelStockSplit.applyPermissions();
   [
     'dbmt_user_transactions','dbmt_user_prod','dbmt_prices','dbmt_submaterial_usages',
@@ -22907,6 +22996,6 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
 <script src="ledgers.js?v=20261112ledger1"></script>
-<script src="m02-auth.js?v=20261119board1"></script>
+<script src="m02-auth.js?v=20261119changehistory1"></script>
 </body>
 </html>

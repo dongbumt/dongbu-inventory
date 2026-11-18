@@ -118,18 +118,54 @@ const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-login-recovery-'));
   assert.deepEqual(errors,[]);
   // Whole ERP smoke check: actual HTML, modules, fetch wrapper and initialization.
   const full=await context.newPage(),fullCalls=[],fullErrors=[];
+  const fullUser={id:'qa-full-user',loginId:'qa-full',displayName:'가상 사용자'};
+  const limitedPermissions=[{menuCode:'schedule',canView:true},{menuCode:'import',canView:true,canCreate:true}];
+  const fullPermissions=[...limitedPermissions,{menuCode:'change_log',canView:true}];
+  const limitedUser={id:'qa-limited-user',loginId:'qa-limited',displayName:'조회 제한 사용자'};
+  const historyRows=[
+   {id:'qa-history-newer',at:'2026-11-19T02:00:00Z',menu:'거래내역',action:'수정',target:'테스트 거래처',summary:'서버 변경이력 최신'},
+   {id:'qa-history-older',at:'2026-11-18T02:00:00Z',menu:'생산일보',action:'등록',target:'테스트 품목',summary:'서버 변경이력 이전'}
+  ];
   let failFullLoad=true;
+  let historyRequests=0,releaseHistory,releaseStaleHistory,finishStaleHistory;
+  const coreRequests=[];
+  const sessionTokens=[];
+  const historyWait=new Promise(resolve=>{releaseHistory=resolve;});
+  const staleHistoryWait=new Promise(resolve=>{releaseStaleHistory=resolve;});
+  const staleHistoryFinished=new Promise(resolve=>{finishStaleHistory=resolve;});
   full.on('pageerror',error=>fullErrors.push(error.message));
   await full.route('**/*',async route=>{
    const request=route.request(),url=new URL(request.url());
    if(request.method()==='POST'){
     const name=url.pathname.split('/').pop();fullCalls.push(name);
     let result;
-    if(name==='dbmt_erp_login')result={ok:true,token:'qa-full-session',user:{id:'qa-full-user',loginId:'qa-full',displayName:'가상 사용자'},permissions:[{menuCode:'schedule',canView:true}]};
-    else if(name==='dbmt_erp_session')result={ok:true,user:{id:'qa-full-user',displayName:'가상 사용자'},permissions:[{menuCode:'schedule',canView:true}]};
+    if(name==='dbmt_erp_login'){
+     const limited=request.postDataJSON().p_login_id===limitedUser.loginId;
+     result={ok:true,token:limited?'qa-limited-session':'qa-full-session',user:limited?limitedUser:fullUser,permissions:limited?limitedPermissions:fullPermissions};
+    }
+    else if(name==='dbmt_erp_session')result={ok:true,user:fullUser,permissions:fullPermissions};
+    else if(name==='dbmt_erp_logout')result={ok:true};
     else if(name==='dbmt_erp_get_all'){
+     coreRequests.push(request.postDataJSON());
      if(failFullLoad)return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({code:'57014',message:'canceling statement due to statement timeout'})});
-     result={transactions:[],prod:[],prices:[],appData:{}};
+     result={transactions:[],prod:[],prices:[],appData:{},deferredAppData:['labelPrintLogs','dataChangeLogs']};
+    }else if(name==='dbmt_erp_get_change_logs'){
+     sessionTokens.push(request.postDataJSON().p_token);
+     historyRequests++;
+     if(historyRequests===1){
+      await historyWait;
+      return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({code:'57014',message:'canceling statement due to statement timeout'})});
+     }
+     if(historyRequests===4){
+      await staleHistoryWait;
+      try{
+       await route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,logs:[{...historyRows[0],id:'qa-stale-history',summary:'이전 계정의 지연된 변경이력'}]})});
+      }catch(error){
+       if(!/handled|closed|interception|abort/i.test(error.message))throw error;
+      }finally{finishStaleHistory();}
+      return;
+     }
+     result={ok:true,logs:historyRows};
     }else if(name==='dbmt_erp_get_company_master')result={companies:[],documentSenderProfiles:[]};
     else if(name==='dbmt_erp_get_submaterial_usages')result=[];
     else return route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({message:'Unmocked QA request: '+name})});
@@ -150,10 +186,64 @@ const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-login-recovery-'));
   await full.waitForFunction(()=>!document.body.classList.contains('erp-auth-locked'));
   assert(await full.locator('#m02-login-modal').isHidden());
   assert.equal(fullCalls.filter(name=>name==='dbmt_erp_login').length,1);
-  assert.equal(fullCalls.filter(name=>name==='dbmt_erp_get_all').length,2);
+  assert.deepEqual(coreRequests,[
+   {p_token:'qa-full-session',p_defer_change_logs:true},
+   {p_token:'qa-full-session',p_defer_change_logs:true}
+  ],'Both startup and retry omit change history from the core response');
+  assert.equal(historyRequests,0,'History is not requested during authentication or startup');
+  const systemGroup=full.locator('[data-nav-group="system"] .nav-group-title');
+  if(await systemGroup.getAttribute('aria-expanded')!=='true')await systemGroup.click();
+  const historyStarted=full.waitForRequest(request=>request.url().endsWith('/rpc/dbmt_erp_get_change_logs'));
+  await full.locator('#nav-change-log').click();
+  await historyStarted;
+  await full.waitForFunction(()=>document.querySelector('#cl-refresh')?.disabled===true);
+  assert.match(await full.locator('#cl-status').textContent(),/불러오는 중/);
+  await full.locator('#cl-search').fill('테스트');
+  assert.equal(historyRequests,1,'Filtering during a pending fetch does not start another request');
+  releaseHistory();
+  await full.waitForFunction(()=>document.querySelector('#cl-refresh')?.disabled===false);
+  assert.match(await full.locator('#cl-status').textContent(),/실패|못했|초과/);
+  assert(await full.locator('#m02-login-modal').isHidden(),'A menu read failure does not interrupt signed-in work');
+  assert(await full.evaluate(()=>DBMTAuth.isPersonal()&&!document.body.classList.contains('erp-auth-locked')));
+  await full.locator('#cl-refresh').click();
+  await full.locator('#cl-tbody tr').filter({hasText:'서버 변경이력 최신'}).waitFor();
+  assert.equal(historyRequests,2);
+  assert.deepEqual(sessionTokens,['qa-full-session','qa-full-session']);
+  assert.deepEqual(await full.locator('#cl-tbody tr td:nth-child(4)').allTextContents(),['서버 변경이력 최신','서버 변경이력 이전']);
+  await full.locator('#cl-search').fill('이전');
+  assert.deepEqual(await full.locator('#cl-tbody tr td:nth-child(4)').allTextContents(),['서버 변경이력 이전']);
+  assert.equal(historyRequests,2,'History filters operate on already loaded data');
+  assert.equal(fullCalls.filter(name=>name==='dbmt_erp_login').length,1);
+
+  async function downloadBackup(){
+   if(await systemGroup.getAttribute('aria-expanded')!=='true')await systemGroup.click();
+   await full.locator('#nav-import').click();
+   const [download]=await Promise.all([full.waitForEvent('download'),full.locator('#backup-download').click()]);
+   return JSON.parse(fs.readFileSync(await download.path(),'utf8'));
+  }
+  assert.deepEqual(JSON.parse((await downloadBackup()).data.dbmt_change_logs),historyRows,'An authorized manual backup includes the latest server history');
+  assert.equal(historyRequests,3);
+
+  const staleHistoryStarted=full.waitForRequest(request=>request.url().endsWith('/rpc/dbmt_erp_get_change_logs'));
+  await full.locator('#nav-change-log').click();
+  await staleHistoryStarted;
+  await full.evaluate(()=>DBMTAuth.changeLoginUser());
+  releaseStaleHistory();
+  await staleHistoryFinished;
+  await full.locator('#m02-login-id').fill(limitedUser.loginId);
+  await full.locator('#m02-login-password').fill('0123');
+  await full.locator('#m02-login-submit').click();
+  await full.waitForFunction(()=>!document.body.classList.contains('erp-auth-locked')&&document.getElementById('m02-login-modal').classList.contains('hidden'));
+  assert(await full.locator('#nav-change-log').isHidden(),'A user without history permission cannot navigate to the menu');
+  assert.equal(await full.evaluate(()=>showPage('p-change-log',document.getElementById('nav-change-log'))),false);
+  assert.equal(await full.evaluate(()=>dataChangeLogView.rows),null,'Switching accounts discards loaded history and any delayed response');
+  assert.doesNotMatch(await full.locator('#cl-tbody').textContent(),/서버 변경이력|이전 계정의 지연된 변경이력/);
+  assert.equal((await downloadBackup()).data.dbmt_change_logs,undefined,'A limited manual backup omits history');
+  assert.equal(historyRequests,4,'A limited account does not request history');
   assert.deepEqual(fullErrors,[]);
   console.log('PASS: credential/initial-load/restore states, retained authentication, query-only retry, repeated-click guard, expired sessions, account change, locked ERP, password clearing and mobile layout.');
   console.log('PASS: full ERP initializes through the actual fetch/startup path after retry, with no repeated login.');
+  console.log('PASS: startup defers history, navigation loads it, failed requests can be retried, filters do not refetch, history is cleared on account change, and exports respect permissions.');
   console.log('Artifacts: '+artifacts);
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

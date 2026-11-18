@@ -304,6 +304,7 @@
   function getSessionToken(){ return isPersonal() ? sessionToken() : ''; }
 
   function notifyPermissionSurfaces(){
+    if(typeof window.applyDataChangeLogPermissions === 'function') window.applyDataChangeLogPermissions();
     if(window.DBMTLedgers) window.DBMTLedgers.applyPermissions();
     if(window.DBMTProductCatalog) window.DBMTProductCatalog.applyPermissions();
     if(window.DBMTExpenseStores) window.DBMTExpenseStores.applyPermissions();
