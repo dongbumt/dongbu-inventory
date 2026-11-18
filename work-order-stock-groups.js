@@ -81,33 +81,47 @@
     return rows.flatMap(row=>{const display=mapped.get(row)||row;if(seen.has(display))return [];seen.add(display);return [display];});
   }
   function allocate(stock,weight,boxCount){
-    const sources=[...members(stock)].sort((a,b)=>text(a.proddate||'9999').localeCompare(text(b.proddate||'9999'))||text(a.key).localeCompare(text(b.key)));
+    const sources=members(stock).filter(source=>cents(source.stock)>0).sort((a,b)=>text(a.proddate||'9999').localeCompare(text(b.proddate||'9999'))||text(a.key).localeCompare(text(b.key)));
     const target=cents(weight);
     if(!Number.isSafeInteger(target)||target<=0||Math.abs(Number(weight)*100-target)>.000001)
       throw new Error('투입량은 0보다 크게, 소수 둘째 자리까지 입력해주세요.');
     if(boxCount!==null&&boxes(boxCount)===null)throw new Error('투입 박스수는 0 이상의 정수로 입력해주세요.');
+    const availableWeight=sources.reduce((sum,source)=>sum+cents(source.stock),0);
+    if(!Number.isSafeInteger(availableWeight)||target>availableWeight)
+      throw new Error('묶음 원료육의 현재 재고보다 투입량이 큽니다. 재고를 다시 선택해주세요.');
     if(boxCount>0){
       let remainingBoxes=boxCount;
-      const selected=[];
+      const selected=new Map();
       for(const source of sources){
         const available=boxes(source.stockBoxes);
         if(available===null)throw new Error('원본 재고의 박스수가 미기록입니다. 투입 박스수를 비워두거나 원본별로 확인해주세요.');
         const take=Math.min(remainingBoxes,available);
-        if(take){selected.push({stock:source,boxCount:take});remainingBoxes-=take;}
+        if(take){selected.set(source,{stock:source,boxCount:take});remainingBoxes-=take;}
         if(!remainingBoxes)break;
       }
       if(remainingBoxes)throw new Error('현재 재고보다 투입 박스수가 큽니다. 재고를 다시 선택해주세요.');
-      const total=selected.reduce((sum,row)=>sum+cents(row.stock.stock),0);
-      if(target>total)throw new Error('선택한 박스수에 연결된 원본 재고보다 투입 중량이 큽니다. 박스수를 확인하거나 비워두세요.');
-      // KG and boxes are independent: allocate the entered KG, never infer it from box counts.
-      const parts=selected.map((row,index)=>{
-        const numerator=BigInt(target)*BigInt(cents(row.stock.stock)),divisor=BigInt(total);
-        return {...row,index,cents:Number(numerator/divisor),remainder:numerator%divisor};
+      // Select weight sources independently, including unboxed remainders. A
+      // zero-box source must not disappear merely because boxes were entered.
+      let remainingWeight=target;
+      for(const source of sources){
+        if(!selected.has(source))selected.set(source,{stock:source,boxCount:0});
+        remainingWeight-=Math.min(remainingWeight,cents(source.stock));
+        if(!remainingWeight)break;
+      }
+      const selectedRows=sources.filter(source=>selected.has(source)).map(source=>selected.get(source));
+      // Saved source inputs require positive KG. Reserve one cent of a KG per
+      // selected source, then apportion the rest within each source's capacity.
+      // Integer cents and largest remainders keep both entered totals exact.
+      if(target<selectedRows.length)throw new Error('선택한 박스수에 비해 투입 중량이 작습니다. 중량과 박스수를 확인해주세요.');
+      const remaining=target-selectedRows.length;
+      const capacity=selectedRows.reduce((sum,row)=>sum+cents(row.stock.stock)-1,0);
+      const parts=selectedRows.map((row,index)=>{
+        const numerator=BigInt(remaining)*BigInt(cents(row.stock.stock)-1),divisor=BigInt(capacity||1);
+        return {...row,index,cents:1+Number(numerator/divisor),remainder:numerator%divisor};
       });
       const ranked=[...parts].sort((a,b)=>a.remainder===b.remainder?a.index-b.index:a.remainder>b.remainder?-1:1);
       const left=target-parts.reduce((sum,row)=>sum+row.cents,0);
       for(let i=0;i<left;i++)ranked[i].cents++;
-      if(parts.some(row=>!row.cents))throw new Error('선택한 박스수에 비해 투입 중량이 작습니다. 중량과 박스수를 확인해주세요.');
       return parts.map(row=>({stock:row.stock,inputWeight:row.cents/100,boxCount:row.boxCount}));
     }
     let remaining=target;

@@ -142,7 +142,7 @@ async function checkMobile(browser){
   await context.route('**/*',async route=>{
     const req=route.request(),url=new URL(req.url());
     if(url.origin==='http://mobile.test'){
-      const name=url.pathname==='/'?'mobile-admin.html':url.pathname.slice(1),allowed=['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','work-order-stock-groups.js','mobile-production.js','styles/mobile-production.css'];
+      const name=url.pathname==='/'?'mobile-admin.html':url.pathname.slice(1),allowed=['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','work-order-stock-groups.js','stock-receipt-view.js','mobile-production.js','styles/mobile-production.css'];
       if(!allowed.includes(name))throw Error('Unexpected asset: '+name);
       return route.fulfill({contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(path.join(root,name),'utf8')});
     }

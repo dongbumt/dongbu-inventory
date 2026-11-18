@@ -34,11 +34,55 @@ assert.equal(allBoxesPartialKg.length,10);assert.equal(allBoxesPartialKg.reduce(
 assert.equal(allBoxesPartialKg.reduce((sum,row)=>sum+Math.round(row.inputWeight*100),0),50000);
 assert(allocate(summary[0],500,null).every(row=>row.boxCount===null));
 assert(allocate(summary[0],500,0).every(row=>row.boxCount===0));
-for(const [weight,boxes] of [[0,null],[-1,null],[2313.94,101],[.001,null],[500,1],[500,102],[.01,101],[500,-1]])assert.throws(()=>allocate(summary[0],weight,boxes));
+const moreKgThanBoxSources=allocate(summary[0],500,1);
+assert.equal(moreKgThanBoxSources.reduce((sum,row)=>sum+Math.round(row.inputWeight*100),0),50000);
+assert.equal(moreKgThanBoxSources.reduce((sum,row)=>sum+row.boxCount,0),1);
+for(const [weight,boxes] of [[0,null],[-1,null],[2313.94,101],[.001,null],[500,102],[.01,101],[500,-1]])assert.throws(()=>allocate(summary[0],weight,boxes));
 assert.equal(JSON.stringify({receipts,stocks}),before,'Display grouping/allocation must not mutate stock or barcode receipts');
 const unknown=group(stocks.map((row,i)=>({...row,stockBoxes:i?row.stockBoxes:null})),receipts)[0];
 assert.equal(unknown.stockBoxes,null);assert.throws(()=>allocate(unknown,2313.93,101));
 assert(allocate(unknown,2313.93,null).every(row=>row.boxCount===null));
+// Regression: 127.84KG remains in source rows whose boxes were already used.
+const currentBalances=[[338.33,14],[356.61,16],[41,0],[45.41,0],[256.55,12],[22.72,1],[16.16,0],[35.71,7],[11.44,0],[13.83,0]];
+const remainingTransactions=[...receipts,...receipts.flatMap((receipt,i)=>{
+  const [weight,boxCount]=currentBalances[i],used=Math.round((receipt.weight-weight)*100)/100;
+  return used?[{...receipt,id:'qa-prior-use-'+i,type:'사용',weight:used,boxCount:receipt.boxCount-boxCount,stockUnitPrice:5300}]:[];
+})];
+const remainingStocks=stockRows(remainingTransactions),remainingBundle=group(remainingStocks,remainingTransactions)[0];
+assert.equal(remainingBundle.stock,1137.76);assert.equal(remainingBundle.stockBoxes,50);
+const remainingBefore=JSON.stringify({remainingTransactions,remainingStocks});
+const remainingFull=allocate(remainingBundle,1137.76,50);
+assert.equal(remainingFull.length,10);
+remainingFull.forEach(row=>{assert.equal(Math.round(row.inputWeight*100),Math.round(row.stock.stock*100));assert.equal(row.boxCount,row.stock.stockBoxes)});
+assert.equal(remainingFull.filter(row=>row.boxCount===0).reduce((sum,row)=>sum+Math.round(row.inputWeight*100),0),12784);
+const completed=stockRows([...remainingTransactions,...remainingFull.map((allocation,i)=>({...allocation.stock,id:'qa-completed-use-'+i,
+  date:'2026-10-20',type:'사용',weight:allocation.inputWeight,boxCount:allocation.boxCount,stockUnitPrice:5300}))]);
+assert(completed.every(row=>Math.abs(row.stock)<.005&&row.stockBoxes===0),'Production consumes each source exactly, including its zero-box remainder');
+for(const [weight,boxCount] of [[1000,50],[1100,1],[500,21],[127.84,0],[127.84,null]]){
+  const result=allocate(remainingBundle,weight,boxCount);
+  assert.equal(result.reduce((sum,row)=>sum+Math.round(row.inputWeight*100),0),Math.round(weight*100));
+  if(boxCount===null)assert(result.every(row=>row.boxCount===null));
+  else assert.equal(result.reduce((sum,row)=>sum+row.boxCount,0),boxCount);
+  result.forEach(row=>{assert(row.inputWeight>0&&Math.round(row.inputWeight*100)<=Math.round(row.stock.stock*100));if(row.boxCount!==null)assert(row.boxCount<=row.stock.stockBoxes)});
+}
+assert.throws(()=>allocate(remainingBundle,1137.77,50));assert.throws(()=>allocate(remainingBundle,1137.76,51));
+assert.equal(JSON.stringify({remainingTransactions,remainingStocks}),remainingBefore);
+// Uneven source weights, including a 0.01KG source, must stay in bounds after rounding.
+const uneven={_workOrderStockRows:[{key:'a',proddate:'2026-01-01',stock:.01,stockBoxes:0},{key:'b',proddate:'2026-01-02',stock:10,stockBoxes:3}]};
+const rounded=allocate(uneven,.02,3);assert.deepEqual(Array.from(rounded,row=>[row.inputWeight,row.boxCount]),[[.01,0],[.01,3]]);
+let randomState=20261119;
+const randomInt=max=>{randomState=(Math.imul(randomState,1664525)+1013904223)>>>0;return randomState%max};
+for(let trial=0;trial<150;trial++){
+  const sources=Array.from({length:1+randomInt(12)},(_,i)=>({key:'qa-source-'+i,proddate:'2026-01-'+String(i+1).padStart(2,'0'),stock:(1+randomInt(30000))/100,stockBoxes:randomInt(20)}));
+  const capacity=sources.reduce((sum,row)=>sum+Math.round(row.stock*100),0),count=sources.reduce((sum,row)=>sum+row.stockBoxes,0);
+  const target=Math.max(sources.length,1+randomInt(capacity)),wanted=randomInt(count+1);
+  const result=allocate({_workOrderStockRows:sources},target/100,wanted);
+  assert.equal(result.reduce((sum,row)=>sum+Math.round(row.inputWeight*100),0),target);
+  assert.equal(result.reduce((sum,row)=>sum+row.boxCount,0),wanted);
+  assert.equal(new Set(result.map(row=>row.stock.key)).size,result.length);
+  result.forEach(row=>{assert(row.inputWeight>0&&Math.round(row.inputWeight*100)<=Math.round(row.stock.stock*100));assert(row.boxCount>=0&&row.boxCount<=row.stock.stockBoxes)});
+}
+console.log('PASS: 1137.76KG/50-box mixed remainders, full/partial/zero/unknown counts, per-source capacities, exact ledger posting and cent rounding');
 console.log('PASS: same receipt conditions -> one 101-box choice, exact sums, date/barcode/source preservation, identity boundaries, FIFO partial/full and explicit zero/unknown boxes');
 const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<main></main>');});
 (async()=>{
@@ -129,6 +173,19 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
     await page.evaluate(()=>{resetFixture();transactions[0].note='다른 업체 스펙';stockMap=DBMTStockLedger.calculate(transactions);});await open();
     assert.equal(await page.locator('#tsp-result-body tr[data-tsp-index]').count(),2,'Different notes/specifications remain separate');
     await page.evaluate(()=>closeTxnStockPicker(false));
+    await page.evaluate(records=>{resetFixture();transactions=records;userTransactions=records;stockMap=DBMTStockLedger.calculate(userTransactions);},remainingTransactions);
+    await open();await page.locator('#tsp-search-all').press('Enter');
+    assert.equal(await row(0).locator('.wo-input-weight').inputValue(),'1137.76');assert.equal(await row(0).locator('.wo-input-box-count').inputValue(),'50');
+    await page.locator('#wo-product').fill('QA 잔량 생산품');
+    const remainingOrder=await page.evaluate(()=>collectWorkOrderForm());assert(remainingOrder);assert.equal(remainingOrder.sourceInputs.length,10);
+    assert.equal(remainingOrder.inputWeight,1137.76);assert.equal(remainingOrder.inputBoxCount,50);
+    assert.equal(remainingOrder.sourceInputs.filter(input=>input.boxCount===0).reduce((sum,input)=>sum+Math.round(input.inputWeight*100),0),12784);
+    await page.locator('#wo-save-btn').click();await page.waitForFunction(()=>workOrders.length===1&&!workOrderSaving);
+    await page.evaluate(()=>editWorkOrder(workOrders[0].id));
+    assert.deepEqual(await page.evaluate(()=>collectWorkOrderForm().sourceInputs),remainingOrder.sourceInputs,'Reopened mixed-box work order keeps every original source');
+    await row(0).locator('.wo-input-weight').fill('1000');
+    const editedRemainder=await page.evaluate(()=>collectWorkOrderForm());assert(editedRemainder);assert.equal(editedRemainder.inputWeight,1000);assert.equal(editedRemainder.inputBoxCount,50);
+    await page.locator('#wo-editor').screenshot({path:path.join(artifacts,'zero-box-remainders.png')});
     assert.deepEqual(await page.evaluate(()=>seed),receipts);assert.deepEqual(errors,[]);
     console.log('PASS: real work-order popup -> one choice, keyboard selection, one editor row, original-source-only saves, immutable edit round trip, exact partial quantities/boxes, duplicate exclusion/release, legacy partial selection, stale confirmation and 1440/390px layouts');
     console.log('Artifacts: '+artifacts);
