@@ -8,6 +8,7 @@
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
 <script src="work-order-stock-groups.js?v=20261117production1"></script>
+<script src="stock-receipt-view.js?v=20261119receipt1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="label-lots.js?v=20261029lots1"></script>
@@ -30,7 +31,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261112quotehistory1">
+<link rel="stylesheet" href="styles/main.css?v=20261119receipt1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -12619,8 +12620,8 @@ function renderStock(){
   stockSearchActivated = true;
   stockSearchDirty = false;
 
-  const allRows = DBMTStockLedger.rows(stockMap);
-  let rows = DBMTStockLedger.filterRows(allRows, filters);
+  const allRows = DBMTStockReceiptView.groupRows(DBMTStockLedger.rows(stockMap), userTransactions);
+  let rows = DBMTStockReceiptView.filterRows(allRows, filters);
 
   // 정렬: 클릭한 열 기준 오름차순/내림차순
   const _dir = stockSortDir === 'asc' ? 1 : -1;
@@ -12629,7 +12630,7 @@ function renderStock(){
     if(k==='product'||k==='brand'||k==='grade'||k==='lot'||k==='origin'||k==='proddate'||k==='stockLocation')
       return _dir * String(a[k]||'').localeCompare(String(b[k]||''),'ko');
     if(k==='stock_amount')
-      return _dir * (((a.stock||0) * (a.price||0)) - ((b.stock||0) * (b.price||0)));
+      return _dir * (DBMTStockReceiptView.amount(a) - DBMTStockReceiptView.amount(b));
     return _dir * ((a[k]||0) - (b[k]||0));
   });
   const undatedCount = filters.asOfDate ? userTransactions.filter(t=>
@@ -12647,10 +12648,10 @@ function renderStock(){
   });
 
   // 통계 (전체 기준)
-  const {count:totalItems, totalWeight:totalStockQty, totalAmount:totalStockAmount} = DBMTStockLedger.summarize(rows);
-  const inStock   =allRows.filter(s=>s.stock>0.01).length;
-  const outStock  =allRows.filter(s=>s.stock>=-0.005&&s.stock<=0.01).length;
-  const minusStock=allRows.filter(s=>s.stock<-0.005).length;
+  const {count:totalItems, totalWeight:totalStockQty, totalAmount:totalStockAmount} = DBMTStockReceiptView.summarize(rows);
+  const inStock   =allRows.filter(s=>s.stock>0.01&&!DBMTStockReceiptView.hasNegative(s)).length;
+  const outStock  =DBMTStockReceiptView.filterRows(allRows,{status:'소진'}).length;
+  const minusStock=allRows.filter(s=>DBMTStockReceiptView.hasNegative(s)).length;
   const statsEl=document.getElementById('stock-stats');
   if(statsEl) statsEl.innerHTML=`
     <div class="stat"><div class="stat-label">조회 품목</div><div class="stat-val">${totalItems}</div></div>
@@ -12666,35 +12667,59 @@ function renderStock(){
     b.innerHTML=`<tr><td colspan="${canAdjustStock ? 17 : 16}" style="text-align:center;padding:20px;color:#888">항목 없음</td></tr>`;
     return;
   }
-  b.innerHTML=rows.map(s=>{
+  b.innerHTML=rows.map((s,index)=>{
     const stk=s.stock;
-    const stockAmount = Math.round((Number(s.stock)||0) * (Number(s.price)||0));
-    const isMinus=stk<-0.005;
+    const stockAmount = DBMTStockReceiptView.amount(s);
+    const isMinus=DBMTStockReceiptView.hasNegative(s);
+    const grouped=!!s._inventoryStockRows;
     const cls  =isMinus?'stock-ng':stk>0.01?'stock-ok':'stock-ng';
-    const label=isMinus?'⚠마이너스':stk>0.01?'정상':'소진';
+    const label=isMinus?(stk<-.005?'⚠마이너스':'⚠일부 부족'):stk>0.01?'정상':'소진';
     const stkStyle=isMinus?'text-align:right;font-weight:700;color:#e74c3c':'text-align:right;font-weight:700';
     const rowBg=isMinus?'background:#fff5f5;':'';
-    const boxIdentity=JSON.stringify({product:s.product,lot:s.lot,origin:s.origin,price:s.price,proddate:s.proddate,packunit:s.packunit,stockLocation:s.stockLocation,stockRowId:s.stockRowId,stockNote:s.stockNote,stock:s.stock,stockBoxes:s.stockBoxes});
+    const detailButton=grouped?`<button type="button" class="stock-receipt-toggle" data-stock-group="${index}" aria-expanded="false" aria-controls="stock-receipt-${index}" onclick="toggleStockReceiptDetails(${index})">입고묶음 상세</button>`:'';
     return `<tr style="${rowBg}">
       <td class="stock-col-location"><span class="stock-location-badge">${htmlEscape(s.stockLocation || STOCK_LOCATION_DEFAULT)}</span></td>
-      <td>${htmlEscape(s.product||'')}${s.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(s.packunit)}</span>`:''}</td>
+      <td>${htmlEscape(s.product||'')}${s.packunit?` <span style="font-size:10px;color:#1a7ab5;border:1px solid #cfe6ff;background:#eef7ff;border-radius:999px;padding:1px 5px;">${htmlEscape(s.packunit)}</span>`:''}${detailButton}</td>
       <td>${htmlEscape(s.brand||'-')}</td>
       <td>${htmlEscape(s.grade||'-')}</td>
       <td style="font-family:monospace;font-size:11px">${htmlEscape(s.lot||'-')}</td>
-      <td style="font-size:11px;white-space:nowrap;">${s.proddate||'-'}</td>
+      <td style="font-size:11px;white-space:nowrap;" title="${htmlEscape(DBMTStockReceiptView.dateText(s))}">${htmlEscape(DBMTStockReceiptView.dateLabel(s))}</td>
       <td>${htmlEscape(s.origin||'-')}</td>
       <td style="text-align:right">${(s.total_in||0).toFixed(2)}</td>
       <td style="text-align:right">${(s.total_use||0).toFixed(2)}</td>
       <td style="text-align:right">${(s.total_out||0).toFixed(2)}</td>
       <td style="text-align:right;color:${(s.total_adjust||0)<0?'#e74c3c':(s.total_adjust||0)>0?'#3440a0':'#888'}">${(s.total_adjust||0).toFixed(2)}</td>
-      <td style="${stkStyle}">${stk.toFixed(2)}<br><small style="font-weight:400;color:#666">${s.stockBoxes === null ? '박스 미기록' : `${boxCountDisplay(s.stockBoxes)} 박스`}</small></td>
+      <td style="${stkStyle}">${stk.toFixed(2)}<br><small style="font-weight:400;color:#666">${s.stockBoxes===null?'박스 미기록':`${DBMTStockReceiptView.boxText(s.stockBoxes)} 박스`}</small></td>
       <td style="text-align:right">${s.price?Number(s.price).toLocaleString():'-'}</td>
       <td style="text-align:right;font-weight:700;">${stockAmount?stockAmount.toLocaleString():'-'}</td>
       <td><span class="${cls}">${label}</span></td>
       <td class="stock-col-note">${htmlEscape(s.stockNote||'')}</td>
-      ${canAdjustStock ? `<td class="stock-col-manage"><button class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(stk)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})">정리</button>${canSetBoxBaseline ? ` <button class="btn btn-sm btn-secondary" onclick="openStockBoxBaseline(${jsArg(boxIdentity)})">박스기준</button>` : ''}</td>` : ''}
-    </tr>`;
+      ${canAdjustStock ? `<td class="stock-col-manage">${grouped?`<button type="button" class="btn btn-sm stock-adjust-btn" data-stock-group="${index}" aria-expanded="false" aria-controls="stock-receipt-${index}" onclick="toggleStockReceiptDetails(${index})">상세/정리</button>`:stockManagementButtons(s,canSetBoxBaseline)}</td>` : ''}
+    </tr>${grouped?renderStockReceiptDetails(s,index,canAdjustStock,canSetBoxBaseline):''}`;
   }).join('');
+}
+
+function stockManagementButtons(s,canSetBoxBaseline){
+  const boxIdentity=JSON.stringify({product:s.product,lot:s.lot,origin:s.origin,price:s.price,proddate:s.proddate,packunit:s.packunit,stockLocation:s.stockLocation,stockRowId:s.stockRowId,stockNote:s.stockNote,stock:s.stock,stockBoxes:s.stockBoxes});
+  return `<button type="button" class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(s.stock)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')})">정리</button>${canSetBoxBaseline?` <button type="button" class="btn btn-sm btn-secondary" onclick="openStockBoxBaseline(${jsArg(boxIdentity)})">박스기준</button>`:''}`;
+}
+
+function renderStockReceiptDetails(s,index,canAdjust,canSetBoxes){
+  return `<tr id="stock-receipt-${index}" class="stock-receipt-details" hidden><td colspan="${canAdjust?17:16}">
+    <div class="stock-receipt-caption">PDA 입고일 ${htmlEscape(s.inboundDate||'-')} · 원본 재고 ${s._inventoryStockRows.length}건${canAdjust?' · 아래 원본 재고별로 정리할 수 있습니다.':''}</div>
+    <div class="stock-receipt-scroll"><table class="stock-receipt-table"><thead><tr><th>No.</th><th>생산일</th><th>총입고(KG)</th><th>총사용(KG)</th><th>총출고(KG)</th><th>조정(KG)</th><th>재고(KG)</th><th>박스수</th>${canAdjust?'<th>관리</th>':''}</tr></thead>
+    <tbody>${s._inventoryStockRows.map((source,i)=>`<tr${DBMTStockReceiptView.hasNegative(source)?' class="stock-ng"':''}>
+      <td>${i+1}</td><td>${htmlEscape(source.proddate||'-')}</td>
+      ${['total_in','total_use','total_out','total_adjust','stock'].map(field=>`<td>${Number(source[field]||0).toFixed(2)}</td>`).join('')}
+      <td>${DBMTStockReceiptView.boxText(source.stockBoxes,'미기록')}</td>${canAdjust?`<td class="stock-receipt-actions">${stockManagementButtons(source,canSetBoxes)}</td>`:''}</tr>`).join('')}</tbody></table></div>
+  </td></tr>`;
+}
+
+function toggleStockReceiptDetails(index){
+  const row=document.getElementById('stock-receipt-'+index);
+  if(!row)return;
+  row.hidden=!row.hidden;
+  document.querySelectorAll('[data-stock-group="'+index+'"]').forEach(button=>button.setAttribute('aria-expanded',String(!row.hidden)));
 }
 
 function stockPersonalCan(action){
@@ -15604,15 +15629,15 @@ function exportStockCSV(){
   if(!snapshot) return;
   const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','재고(박스)','단가','재고금액','비고'];
   const rows=snapshot.rows.map(r=>[
-    snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',r.proddate||'',r.origin||'',
+    snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',DBMTStockReceiptView.dateText(r),r.origin||'',
     Number(r.total_in||0).toFixed(2),
     Number(r.total_use||0).toFixed(2),
     Number(r.total_out||0).toFixed(2),
     Number(r.total_adjust||0).toFixed(2),
     Number(r.stock||0).toFixed(2),
-    boxCountDisplay(r.stockBoxes,''),
+    DBMTStockReceiptView.boxText(r.stockBoxes,''),
     r.price||'',
-    Math.round((Number(r.stock)||0) * (Number(r.price)||0)) || '',
+    DBMTStockReceiptView.amount(r) || '',
     r.stockNote||r.note||''
   ]);
   downloadCSV([header,...rows],`재고현황_${snapshot.filters.asOfDate || '현재'}.csv`);
@@ -22863,7 +22888,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
 <script src="trace-integration.js?v=20260827m05preview1"></script>
 <script src="submaterial-usage-print.js?v=20260907a4usage1"></script>
-<script src="stock-report.js?v=20261002count1"></script>
+<script src="stock-report.js?v=20261119receipt1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="driver-place-label.js?v=20261105place1"></script>

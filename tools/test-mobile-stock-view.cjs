@@ -26,7 +26,7 @@ const fixture=[
       const request=route.request(),url=new URL(request.url());
       if(url.origin==='http://stock.test'){
         const file=url.pathname==='/'?'mobile-admin.html':url.pathname.slice(1);
-        if(!['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','work-order-stock-groups.js','mobile-production.js','styles/mobile-production.css'].includes(file))return route.fulfill({status:404,body:''});
+        if(!['mobile-admin.html','stock-ledger.js','pda-transaction-summary.js','work-order-stock-groups.js','stock-receipt-view.js','mobile-production.js','styles/mobile-production.css'].includes(file))return route.fulfill({status:404,body:''});
         return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html',body:fs.readFileSync(path.join(root,file),'utf8')});
       }
       const headers={'access-control-allow-origin':'*','access-control-allow-headers':'apikey,authorization,content-type','access-control-allow-methods':'POST,OPTIONS'};
@@ -59,6 +59,15 @@ const fixture=[
     transactions.push({...base,type:'출고',product:'가상 생산품',stockRowId:'A',weight:5,boxCount:1});
     await page.getByRole('button',{name:'새로고침',exact:true}).click();await page.waitForFunction(()=>document.getElementById('stock-summary').textContent.includes('140kg'));
     for(const width of [320,390,760]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`No horizontal overflow at ${width}px`);}
+    transactions=require('./pda-raw-receipt-fixture.cjs').map(row=>({...row,price:5300}));
+    await page.getByRole('button',{name:'새로고침',exact:true}).click();await page.waitForFunction(()=>document.getElementById('stock-count').textContent==='1항목');
+    assert.match(await page.locator('#stock-summary').innerText(),/2,313\.93kg/);
+    assert.match(await page.locator('#stock-list').innerText(),/박스수 101/);
+    await page.locator('#stock-list summary').click();assert.equal(await page.locator('#stock-list details .meta').count(),10);
+    await page.locator('#stock-search').fill('2026-07-23');assert.equal(await page.locator('#stock-count').innerText(),'1항목');
+    await page.locator('#stock-search').fill('');await page.locator('#stock-list summary').click();
+    for(const width of [320,390,760]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`No bundle-detail overflow at ${width}px`);}
+    await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(artifacts,'pda-receipt.png'),fullPage:true});
     const storage=await page.evaluate(()=>({...localStorage}));assert.ok(Object.keys(storage).every(key=>['dbmt_mobile_admin_session_token','dbmt_mobile_admin_view'].includes(key)),'Business data is never persisted in browser storage');
     assert.ok(calls.every(name=>['dbmt_mobile_admin_login','dbmt_mobile_admin_snapshot','dbmt_mobile_admin_driver_week'].includes(name)),'Viewing stock cannot write transactions');
     await page.getByRole('button',{name:'로그아웃'}).click();assert.equal(await page.locator('#app-view').isVisible(),false);

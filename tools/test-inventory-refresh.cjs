@@ -4,6 +4,7 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8'),artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-inventory-refresh-'));
 const names=['inventoryRefreshBlocked','refreshTransactionList','refreshInventoryStock','refreshInventoryData','saveTransactionRows','markLocalCoreChanged','assertPersonalServerResult'];
 names.push('stockLedgerDateKey','normProdDate');
+names.push('stockManagementButtons','renderStockReceiptDetails','toggleStockReceiptDetails');
 names.push('localDateString','htmlEscape','jsArg','parseAppNumber','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','renderTransactions','getStockMap','getKnownStockLocations','stockLocationOptionsHtml','refreshStockLocationFilter','stockCanAdjustCurrent','stockPersonalCan','applyStockPermissionState','closeStockAdjust','closeStockBoxBaseline','setStockExportEnabled','getStockQueryFilters','stockQueryDescription','renderStock');
 const functions=names.map(name=>{const match=html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'));assert(match,name);return match[0];}).join('\n');new vm.Script(functions);
 const auth=fs.readFileSync(path.join(root,'m02-auth.js'),'utf8');
@@ -28,6 +29,7 @@ const server=http.createServer((req,res)=>{
     },html);
     await page.addStyleTag({content:fs.readFileSync(path.join(root,'styles/main.css'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'stock-ledger.js'),'utf8')});
+    for(const file of ['work-order-stock-groups.js','stock-receipt-view.js'])await page.addScriptTag({content:fs.readFileSync(path.join(root,file),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'pda-transaction-summary.js'),'utf8')});
     await page.addScriptTag({content:`
       const seed={id:'qa-old',date:'2026-11-11',type:'입고',product:'기존 품목',lot:'OLD',stockLocation:'가공장',stockRowId:'qa-old-stock',weight:10,boxCount:1,price:1000};
