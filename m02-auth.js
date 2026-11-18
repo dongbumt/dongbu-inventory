@@ -22,6 +22,7 @@
     'nav-product-specs':'product_specs',
     'nav-prod-loss':'production_loss',
     'nav-production-board':'production_board',
+    'nav-production-board-standalone':'production_board',
     'nav-stock':'stock',
     'nav-cold-storage-request':'cold_storage_request',
     'nav-submaterials':'submaterials',
@@ -47,8 +48,9 @@
     'nav-factorysim':'factory_sim',
     'nav-change-log':'change_log'
   };
+  const STANDALONE_NAV = new Set(['nav-label-print-standalone','nav-production-board-standalone','nav-pda']);
   const PAGE_MENU = Object.fromEntries(Object.entries(NAV_MENU)
-    .filter(([nav])=>!['nav-label-print-standalone','nav-pda'].includes(nav))
+    .filter(([nav])=>!STANDALONE_NAV.has(nav))
     .map(([nav,menu])=>['p-' + nav.slice(4), menu]));
 
   // One permission registry drives both button visibility and direct calls.
@@ -381,6 +383,11 @@
     return !menuCode || can(menuCode, 'view');
   }
 
+  function openProductionBoard(){
+    if(!requireAction('production_board','view')) return false;
+    return window.open('production-board.html?v=20260831board9','_blank','noopener');
+  }
+
   function applyNavigation(){
     Object.entries(NAV_MENU).forEach(([navId, menuCode])=>{
       const el = document.getElementById(navId);
@@ -400,7 +407,7 @@
     const active = document.querySelector('.tab-panel.active');
     if(state.user && (!active || !canOpenPage(active.id))){
       const first = Object.keys(NAV_MENU).map(id=>document.getElementById(id))
-        .find(el=>el && el.style.display !== 'none' && !['nav-label-print-standalone','nav-pda'].includes(el.id));
+        .find(el=>el && el.style.display !== 'none' && !STANDALONE_NAV.has(el.id));
       if(first) first.click();
       else if(active) active.classList.remove('active');
     }
@@ -880,7 +887,7 @@
 
   const api={
     initializeSession, openLogin, closeLogin, loginFromModal, changeLoginUser, logoutConfirm,
-    can, canAction, requireAction, canOpenPage, isPersonal, getSessionToken, auditIdentity, applyNavigation,
+    can, canAction, requireAction, canOpenPage, openProductionBoard, isPersonal, getSessionToken, auditIdentity, applyNavigation,
     applyActionPermissions,
     initAdminPage, refreshAdmin, newUser, newRole, editUser, editRole,
     saveUser, deleteUser, saveRole, deleteRole

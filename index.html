@@ -429,7 +429,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="window.open('label-print.html?v=20261023inputreview1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
       <div class="nav-tab" onclick="showPage('p-product-specs',this)" id="nav-product-specs">📐 제품스펙</div>
       <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산로스율</div>
-      <div class="nav-tab" onclick="window.open('production-board.html?v=20260831board9','_blank');" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
+      <div class="nav-tab" onclick="DBMTAuth.openProductionBoard()" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
       <div class="nav-tab" onclick="showPage('p-production-board',this)" id="nav-production-board">📌 생산현황 보드</div>
     </div>
   </div>
@@ -22907,6 +22907,6 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
 <script src="ledgers.js?v=20261112ledger1"></script>
-<script src="m02-auth.js?v=20261113split1"></script>
+<script src="m02-auth.js?v=20261119board1"></script>
 </body>
 </html>
