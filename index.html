@@ -13,7 +13,7 @@
 <script src="label-lots.js?v=20261029lots1"></script>
 <link rel="stylesheet" href="styles/work-order-output-lots.css?v=20261029lots1">
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-<script src="label-layout.js?v=20261113suffix1"></script>
+<script src="label-layout.js?v=20261118manufacturer2"></script>
 <script src="label-print-document.js?v=20261118hidden1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
@@ -3997,7 +3997,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <input id="lbl-weight" type="number" inputmode="decimal" min="0.01" step="0.01" value="1" required>
         </div>
         <div class="form-group"><label for="lbl-temptype">보관방법</label><select id="lbl-temptype"><option value="냉동">냉동 (-18℃ 이하)</option><option value="냉장">냉장 (-2℃ ~ 5℃ 이하)</option></select></div>
-        <div class="form-group"><label for="lbl-itemno">품목보고번호</label><input id="lbl-itemno" type="text" placeholder="품목보고번호"></div>
+        <div class="form-group"><label for="lbl-itemno">품목보고번호</label><input id="lbl-itemno" type="text" placeholder="품목보고번호"><small id="lbl-itemno-hint" class="manual-label-guide" hidden></small></div>
         <div class="form-group"><label for="lbl-lot">이력번호(LOT)</label><input id="lbl-lot" type="text" placeholder="이력번호"></div>
         <div class="form-group manual-label-full"><label for="lbl-ingredients">원료 및 함량</label><input id="lbl-ingredients" type="text" placeholder="예) 돼지고기 100%"></div>
         <div class="form-group"><label for="lbl-size">라벨 크기</label><select id="lbl-size"><option value="7x10">7 × 10cm</option><option value="10x10">10 × 10cm</option></select></div>
@@ -21391,6 +21391,7 @@ document.addEventListener('dbmt-company-master-changed',()=>{
     loadInvoiceByDate();
   }
   [['lbl-licenseno','licenseno'],['lbl-manufacturer','manufacturer'],['lbl-phone','phone'],['lbl-address','address']].forEach(([id,key])=>{
+    if(document.getElementById('lbl-manufacturer-choice')?.value==='dongbu_distribution')return;
     const input=document.getElementById(id);
     if(input && !input.value) input.value=LBL_DEFAULTS[key] || '';
   });
@@ -22855,7 +22856,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 
 
 </script>
-<script src="company-master.js?v=20260827requiredlogin1"></script>
+<script src="company-master.js?v=20261118labelidentity1"></script>
 <script src="quotation.js?v=20261112history1"></script>
 <script src="cold-storage-request.js?v=20260827requiredlogin1"></script>
 <script src="meatwatch-lookup.js?v=20260826bulktrace1"></script>
@@ -22875,7 +22876,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="product-catalog-sync.js?v=20261106catalog1"></script>
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
-<script src="manual-label.js?v=20261118manufacturer1"></script>
+<script src="manual-label.js?v=20261118manufacturer2"></script>
 <link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
 <script src="label-weight-split.js?v=20261113split1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>

@@ -2,7 +2,8 @@
 (function(global){
   'use strict';
   const el=id=>document.getElementById('lbl-'+id);
-  const state={initialized:false,barcode:'',token:'',timer:null,previewKey:'',printing:false};
+  const state={initialized:false,barcode:'',token:'',timer:null,previewKey:'',printing:false,manufacturerKind:'default'};
+  const distributionProfile={manufacturer:'(주)동부축산유통',licenseno:'2014-0209300',phone:'032-579-3920',address:'인천광역시 서해구 가좌로96번길 11'};
   const fields=['origin','grade','mfgdate','expdate','weight','itemno','lot','ingredients','temptype','licenseno','prodtype','packaging','manufacturer','phone','address'];
   const value=id=>el(id)?.value.trim()||'';
   function selectedProduct(){
@@ -17,7 +18,7 @@
     return 'ML'+Date.now().toString(36).toUpperCase()+Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
   }
   function clear(){
-    clearTimeout(state.timer);state.initialized=false;state.barcode='';state.previewKey='';
+    clearTimeout(state.timer);state.initialized=false;state.barcode='';state.previewKey='';state.manufacturerKind='default';
     document.getElementById('manual-label-form').reset();el('product-id').value='';el('product').value='';
     el('product-meta').textContent='품목관리에서 등록한 제품을 선택하세요.';
     el('preview-frame').removeAttribute('srcdoc');
@@ -58,7 +59,8 @@
     const row=(labelProducts||[]).find(item=>String(item.id)===String(id)&&item.isActive!==false);if(!row)return;
     if(!state.initialized)init();
     el('product-id').value=String(row.id);el('product').value=row.name||'';
-    for(const key of ['origin','grade','itemno'])el(key).value=row[key]||'';
+    for(const key of ['origin','grade'])el(key).value=row[key]||'';
+    el('itemno').value=manufacturerKind()==='dongbu_distribution'?'':row.itemno||'';
     el('temptype').value=row.storage==='냉장'?'냉장':'냉동';
     el('ingredients').value=DBMTLabelProducts.ingredients(row,inferLabelMeatType(row.name,'')+' 100%');
     el('product-meta').textContent=[row.productCode,row.brand&&'브랜드 '+row.brand,row.packunit&&'포장 '+row.packunit].filter(Boolean).join(' · ')||'등록 품목';
@@ -71,10 +73,13 @@
     d.setDate(d.getDate()+days-1);el('expdate').value=localDateString(d);
   }
   function collect(){
+    syncManufacturerChoice();
     const row=selectedProduct();
     if(!row||value('product')!==String(row.name||''))return null;
     const data=Object.fromEntries(fields.map(key=>[key,value(key)]));
-    return {...data,product:row.name,mfgdate:fmtLblDate(data.mfgdate),expdate:fmtLblDate(data.expdate),
+    const distribution=manufacturerKind()==='dongbu_distribution';
+    return {...data,itemno:distribution&&isMasterItemNo(data.itemno)?'':data.itemno,showHaccp:!distribution,
+      product:row.name,mfgdate:fmtLblDate(data.mfgdate),expdate:fmtLblDate(data.expdate),
       weight:DBMTLabelWeight.valid(data.weight)?Number(data.weight).toFixed(2):'',lotText:data.lot,
       productBarcode:state.barcode,crossFacilityNotice:labelCrossFacilityNoticeFromText(row.name,data.ingredients)};
   }
@@ -82,14 +87,34 @@
     return DBMTLabelPrint.createDocument({labelsHtml:`<div class="lbl-label">${buildLabelBody(data)}</div>`,sizeKey,autoPrint:false});
   }
   function defaultManufacturer(){return String(LBL_DEFAULTS.manufacturer||'주식회사 동부엠티').trim();}
+  function manufacturerKind(){
+    const name=value('manufacturer'),compact=name.replace(/\s/g,'').replace(/^주식회사/,'(주)');
+    return ['동부축산유통','(주)동부축산유통'].includes(compact)?'dongbu_distribution':name===defaultManufacturer()?'default':'custom';
+  }
+  function isMasterItemNo(number){
+    const key=String(number||'').replace(/[\s-]/g,'').toUpperCase();
+    return Boolean(key&&(labelProducts||[]).some(row=>String(row.itemno||'').replace(/[\s-]/g,'').toUpperCase()===key));
+  }
   function syncManufacturerChoice(){
-    const choice=el('manufacturer-choice'),name=value('manufacturer');
+    const choice=el('manufacturer-choice'),kind=manufacturerKind();
+    if(kind!==state.manufacturerKind){
+      if(kind!=='custom'){
+        const profile=kind==='dongbu_distribution'?distributionProfile:LBL_DEFAULTS;
+        for(const key of ['licenseno','phone','address'])el(key).value=profile[key]||'';
+        el('itemno').value=kind==='dongbu_distribution'?'':selectedProduct()?.itemno||'';
+      }
+      state.manufacturerKind=kind;
+    }
     choice.options[0].textContent=defaultManufacturer().replace(/주식회사\s*동부엠티/g,'주식회사 동부엠티');
-    choice.value=name===defaultManufacturer()?'default':name==='(주)동부축산유통'?'dongbu_distribution':'custom';
+    choice.value=kind;
+    const distribution=kind==='dongbu_distribution';
+    el('itemno').placeholder=distribution?'동부축산유통 품목보고번호 직접 입력':'품목보고번호';
+    el('itemno-hint').hidden=!distribution;
+    el('itemno-hint').textContent=isMasterItemNo(value('itemno'))?'동부엠티 등록번호는 출력할 수 없습니다. 동부축산유통 번호를 입력하거나 공란으로 두세요.':'동부엠티 등록번호는 사용하지 않습니다. 동부축산유통 번호가 있으면 직접 입력하세요.';
   }
   function selectManufacturer(){
     const choice=value('manufacturer-choice');
-    el('manufacturer').value=choice==='default'?defaultManufacturer():choice==='dongbu_distribution'?'(주)동부축산유통':'';
+    el('manufacturer').value=choice==='default'?defaultManufacturer():choice==='dongbu_distribution'?distributionProfile.manufacturer:'';
     if(choice==='custom'){
       el('manufacturer').closest('details').open=true;
       el('manufacturer').focus();
@@ -98,7 +123,6 @@
   function updatePreview(){
     clearTimeout(state.timer);
     if(!state.initialized||!permitted())return;
-    syncManufacturerChoice();
     const data=collect(),frame=el('preview-frame'),sizeKey=value('size')||'7x10';
     el('preview-size-text').textContent=`(${sizeKey==='10x10'?'10×10':'7×10'}cm · 임의 바코드)`;
     if(!data||!data.manufacturer){
@@ -121,6 +145,7 @@
     const data=collect();
     if(!data){alert('품목관리에 등록된 제품을 선택해주세요.');return;}
     if(!data.manufacturer){alert('제조판매원을 입력해주세요.');el('manufacturer').closest('details').open=true;el('manufacturer').focus();return;}
+    if(manufacturerKind()==='dongbu_distribution'&&isMasterItemNo(value('itemno'))){alert('동부엠티에 등록된 품목보고번호는 동부축산유통 라벨에 사용할 수 없습니다. 동부축산유통 번호를 직접 입력하거나 공란으로 두세요.');el('itemno').focus();return;}
     if(!DBMTLabelWeight.valid(value('weight'))){alert('중량을 0보다 큰 값으로 소수 둘째 자리까지 입력해주세요.');el('weight').focus();return;}
     if(!el('mfgdate').checkValidity()||!value('mfgdate')||!el('expdate').checkValidity()||!value('expdate')||value('expdate')<value('mfgdate')){alert('제조일과 소비기한을 확인해주세요.');return;}
     const copies=Number(value('print-count'));

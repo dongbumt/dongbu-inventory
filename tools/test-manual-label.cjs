@@ -67,8 +67,10 @@ const server=http.createServer((req,res)=>{
     const labelProductSearchText=p=>Object.values(p).join(' '),samePriceText=(a,b)=>a===b,sameOriginText=samePriceText;
     const priceKey=v=>String(v||'').trim().toLowerCase();
     ${['htmlEscape','localDateString','inferLabelMeatType','labelCrossFacilityNoticeFromText','fmtLblDate','getDefaultShelfDays','buildLabelBody','printLabelData','updateLabelPreview','printLabel'].map(source).join('\n')}
+    ${block("document.addEventListener('dbmt-company-master-changed'",'function workOrderId(')}
     ${block('let txnProductPickerKind =','function handleManagedProductInputKeydown(')}
   `});
+  await page.addScriptTag({url:base+'/company-master.js'});
   await page.addScriptTag({url:base+'/manual-label.js'});await page.evaluate(()=>DBMTManualLabel.init());
   assert.equal(await page.locator('#lbl-workorder-select').count(),0);assert.equal(await page.locator('#lbl-product').getAttribute('readonly'),'');
   await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/등록된 제품/);
@@ -88,15 +90,36 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#lbl-manufacturer-choice').inputValue(),'default');
   assert.equal(await preview.locator('.dl-company-name').textContent(),'주식회사 동부엠티');
   const maker=page.locator('#lbl-manufacturer-choice');
-  const draft=await page.evaluate(()=>Object.fromEntries(['product-id','weight','mfgdate','expdate','lot','phone','address','licenseno'].map(key=>[key,document.getElementById('lbl-'+key).value])));
+  const draft=await page.evaluate(()=>Object.fromEntries(['product-id','weight','mfgdate','expdate','lot'].map(key=>[key,document.getElementById('lbl-'+key).value])));
+  const mtCompany=await page.evaluate(()=>Object.fromEntries(['phone','address','licenseno'].map(key=>[key,document.getElementById('lbl-'+key).value])));
+  const distribution={phone:'032-579-3920',address:'인천광역시 서해구 가좌로96번길 11',licenseno:'2014-0209300'};
   await maker.selectOption('dongbu_distribution');
   await preview.locator('.dl-company-name').filter({hasText:'(주)동부축산유통'}).waitFor();
   assert.equal(await page.locator('#lbl-manufacturer').inputValue(),'(주)동부축산유통');
-  assert.deepEqual(await page.evaluate(()=>Object.fromEntries(['product-id','weight','mfgdate','expdate','lot','phone','address','licenseno'].map(key=>[key,document.getElementById('lbl-'+key).value]))),draft);
+  assert.deepEqual(await page.evaluate(()=>Object.fromEntries(['product-id','weight','mfgdate','expdate','lot'].map(key=>[key,document.getElementById('lbl-'+key).value]))),draft);
+  assert.deepEqual(await page.evaluate(()=>Object.fromEntries(['phone','address','licenseno'].map(key=>[key,document.getElementById('lbl-'+key).value]))),distribution);
+  assert.equal(await page.locator('#lbl-itemno').inputValue(),'');
+  assert.equal(await preview.locator('img[alt="HACCP"]').count(),0);
+  assert.equal(await preview.locator('.dl-report-value').textContent(),'');
   assert.equal(await preview.locator('[data-barcode-kind=product]').first().getAttribute('data-barcode-value'),code);
   await page.evaluate(()=>{DBMTManualLabel.init();document.dispatchEvent(new CustomEvent('dbmt-company-master-changed'));});
   assert.equal(await maker.inputValue(),'dongbu_distribution','Reopening and master refresh preserve manufacturer selection');
+  // Real company defaults and the main ERP's listener must not refill cleared
+  // distribution fields with the primary manufacturer's identity.
+  await page.evaluate(()=>{
+    const master=DBMTCompanyMaster.getMaster();window.__masterBefore=structuredClone(master);
+    const site=master.companies[0].sites[0];site.phone='QA MT PHONE';site.roadAddress='QA MT ADDRESS';site.livestockBusinessLicenseNo='QA MT LICENSE';
+    document.getElementById('lbl-phone').value='';
+    DBMTCompanyMaster.setMaster(master,{source:'server',mergeLegacy:false,persist:false});
+  });
+  assert.equal(await page.locator('#lbl-phone').inputValue(),'','Primary master refresh cannot leak MT data into distribution fields');
+  await page.evaluate(()=>DBMTCompanyMaster.setMaster(__masterBefore,{source:'server',mergeLegacy:false,persist:false}));
+  await page.locator('.manual-label-advanced').evaluate(details=>details.open=true);
+  await page.locator('#lbl-phone').fill(distribution.phone);
   await maker.selectOption('default');await preview.locator('.dl-company-name').filter({hasText:'주식회사 동부엠티'}).waitFor();
+  assert.deepEqual(await page.evaluate(()=>Object.fromEntries(['phone','address','licenseno'].map(key=>[key,document.getElementById('lbl-'+key).value]))),mtCompany);
+  assert.equal(await page.locator('#lbl-itemno').inputValue(),'REPORT-B');
+  assert.equal(await preview.locator('img[alt="HACCP"]').count(),1);
   await maker.selectOption('custom');
   assert(await page.locator('#lbl-manufacturer').isVisible());assert(await page.locator('#lbl-preview-frame').isHidden());
   await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/제조판매원을 입력/);
@@ -106,6 +129,11 @@ const server=http.createServer((req,res)=>{
   await page.locator('#lbl-manufacturer').fill('주식회사 동부엠티');
   await preview.locator('.dl-company-name').filter({hasText:'주식회사 동부엠티'}).waitFor();assert.equal(await maker.inputValue(),'default');
   await maker.selectOption('dongbu_distribution');await preview.locator('.dl-company-name').filter({hasText:'(주)동부축산유통'}).waitFor();
+  await page.locator('#lbl-itemno').fill('REPORT-B');await page.evaluate(()=>DBMTManualLabel.updatePreview());
+  assert.equal(await preview.locator('.dl-report-value').textContent(),'','MT report numbers cannot appear even when entered manually');
+  await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/동부엠티에 등록된 품목보고번호/);
+  assert.equal(await page.evaluate(()=>__printRequests.length),0);
+  await page.locator('#lbl-itemno').fill('QA-DIST-REPORT');await page.evaluate(()=>DBMTManualLabel.updatePreview());
   await page.locator('.manual-label-advanced').evaluate(details=>details.open=false);
   assert.equal(await preview.locator('[data-barcode-kind=product]').count(),2);assert.equal(await preview.locator('[data-barcode-kind=trace]').count(),1);
   for(const text of ['가상 삼겹살(작업)','미국산','수정 등급','12.34','2026.11.25','돼지고기'])assert((await preview.locator('.dbmt-label-body').innerText()).includes(text),text);
@@ -117,6 +145,8 @@ const server=http.createServer((req,res)=>{
   const printed=await page.evaluate(()=>__printRequests[0]);
   assert.equal(printed.count,2);assert.equal(printed.artwork,expected,'Print uses exactly the preview artwork and barcode');
   assert(printed.artwork.includes('(주)동부축산유통'),'Selected manufacturer is printed');
+  for(const text of [...Object.values(distribution),'QA-DIST-REPORT'])assert(printed.artwork.includes(text),text);
+  assert(!printed.artwork.includes('alt="HACCP"'));assert(!printed.artwork.includes('REPORT-B'));
   assert(printed.imagesReady);assert.equal(printed.hidden,'true');assert.match(printed.css,/size:70mm 100mm/);
   assert.equal(context.pages().length,1);assert.equal(await page.evaluate(()=>__popupCalls),0);
   assert.equal(await page.locator('iframe[data-dbmt-label-print]').count(),0);
@@ -138,13 +168,15 @@ const server=http.createServer((req,res)=>{
   await page.locator('#manual-label-print').click();
   await page.waitForFunction(()=>__printRequests.length===3&&!document.getElementById('manual-label-print').disabled);
   assert.match(await page.evaluate(()=>__printRequests[2].css),/size:100mm 100mm/);
+  await maker.selectOption('default');await preview.locator('img[alt="HACCP"]').waitFor();
   failImage=true;await page.locator('#manual-label-print').click();
   await page.waitForFunction(()=>!document.getElementById('manual-label-print').disabled);
   assert.equal(await page.evaluate(()=>__printRequests.length),3,'Missing artwork never prints');
   assert.match(await page.evaluate(()=>alerts.at(-1)),/현재 화면에서 다시 출력/);
   assert.doesNotMatch(await page.evaluate(()=>alerts.at(-1)),/출력이력/);
   assert.equal(await page.locator('iframe[data-dbmt-label-print]').count(),0);
-  failImage=false;await page.evaluate(()=>__printMode='throw');await page.locator('#manual-label-print').click();
+  failImage=false;await maker.selectOption('dongbu_distribution');await preview.locator('.dl-company-name').filter({hasText:'(주)동부축산유통'}).waitFor();
+  await page.evaluate(()=>__printMode='throw');await page.locator('#manual-label-print').click();
   await page.waitForFunction(()=>!document.getElementById('manual-label-print').disabled);
   assert.match(await page.evaluate(()=>alerts.at(-1)),/QA printer unavailable/);
   assert.equal(await page.evaluate(()=>__printRequests.length),3,'Native errors are not automatically retried');
@@ -166,6 +198,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('#lbl-print-count').fill('1');await page.evaluate(()=>{labelProducts=labelProducts.filter(p=>p.id!=='p-b');});await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/등록된 제품/);
   await page.evaluate(()=>DBMTManualLabel.selectProduct('p-lamb'));
   assert.equal(await page.locator('#lbl-ingredients').inputValue(),'양고기 100%');
+  assert.equal(await page.locator('#lbl-itemno').inputValue(),'','Changing products never copies an MT report number for distribution');
   for(const size of ['7x10','10x10']){
    await page.locator('#lbl-size').selectOption(size);
    await page.locator('#lbl-preview-frame').evaluate(frame=>frame.contentWindow.DBMTLabelPrintReady);
@@ -180,12 +213,14 @@ const server=http.createServer((req,res)=>{
    await page.waitForFunction(n=>__printRequests.length===n+1&&!document.getElementById('manual-label-print').disabled,count);
    assert((await page.evaluate(()=>__printRequests.at(-1).artwork)).includes(bothNotice),'Printed lamb notice matches preview');
    assert.equal(await preview.locator('.dl-company-name').textContent(),'(주)동부축산유통');
+   assert.equal(await preview.locator('img[alt="HACCP"]').count(),0);
+   assert.equal(await preview.locator('.dl-report-value').textContent(),'');
    await preview.locator('.dbmt-label-body').screenshot({path:path.join(artifacts,'lamb-'+size+'.png')});
   }
   console.log('PASS: lamb/pork/beef notice rules in office and station, lamb preview/print and footer fit at both sizes');
   await page.evaluate(()=>DBMTManualLabel.reset());
   assert.equal(await maker.inputValue(),'default');assert.equal(await page.locator('#lbl-manufacturer').inputValue(),'주식회사 동부엠티');
-  console.log('PASS: manufacturer dropdown, distribution preview/print at both sizes, unchanged draft/barcodes/contact details, custom input, menu persistence and reset');
+  console.log('PASS: manufacturer-specific license/phone/address, MT report blocking, distribution custom reports, no HACCP, master-refresh isolation, both paper sizes and default restoration');
   await page.evaluate(()=>{allowed=false;DBMTManualLabel.applyPermissions();});assert(await page.locator('#manual-label-print').isDisabled());
   await page.evaluate(()=>{allowed=true;session='';loggedIn=false;DBMTManualLabel.applyPermissions();});assert.equal(await page.locator('#lbl-product-id').inputValue(),'');assert(await page.locator('#lbl-preview-frame').isHidden());
   assert.deepEqual(await page.evaluate(()=>[workOrders,labelPrintLogs,userProduction,transactions]),[[],[],[],[]]);assert.deepEqual(external,[]);assert.deepEqual(errors,[]);

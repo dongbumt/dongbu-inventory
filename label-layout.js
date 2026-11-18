@@ -146,7 +146,7 @@
             <div>· 동봉되는 흡습제는 먹어서는 아니됩니다</div><div>· ${escape(d.crossNotice||d.crossFacilityNotice||'')}</div></div>
           <div class="il-marks" style="display:flex;flex-direction:column;align-items:center;margin-left:2pt;flex-shrink:0;">
             <div style="font-size:13pt;font-weight:900;border:1.5pt solid #000;padding:1pt 3pt;">${escape(d.temptype||'냉동')}</div>
-            <div style="margin-top:20pt;text-align:center;"><img src="${asset('assets/other-recycle.svg')}" alt="OTHER 재활용 표시" style="height:33pt;width:auto;display:block;margin:0 auto 1pt;"><img src="${asset('HACCP2.png')}" alt="HACCP" style="height:33pt;width:33pt;object-fit:contain;display:block;"></div></div></div>
+            <div style="margin-top:20pt;text-align:center;"><img src="${asset('assets/other-recycle.svg')}" alt="OTHER 재활용 표시" style="height:33pt;width:auto;display:block;margin:0 auto 1pt;">${d.showHaccp===false?'':`<img src="${asset('HACCP2.png')}" alt="HACCP" style="height:33pt;width:33pt;object-fit:contain;display:block;">`}</div></div></div>
         <div class="il-manufacturer" style="display:flex;align-items:flex-start;margin-top:-18pt;padding-bottom:3pt;line-height:1.12;">
           <div style="max-width:100%;"><div style="display:flex;align-items:baseline;gap:8pt;margin-bottom:1pt;"><span style="font-size:6.5pt;">제조판매원</span><strong style="font-size:11pt;">${escape(name)}</strong></div>
             <div style="margin-top:1pt;font-size:6.2pt;">${escape(d.phone)}</div><div style="font-size:6.2pt;">${escape(d.address)}</div></div></div></div>
@@ -181,7 +181,7 @@
       </div><div class="dl-side-strip"><div class="dl-side-code">${codeImage(productImage,code,'product','우측 세로 제품 고유바코드')}</div></div></div>
       <div class="dl-footer"><div class="dl-notices"><div class="dl-notice-heading"><div class="dl-notice-short"><div>· 허가번호: ${escape(d.licenseno)}</div><div>· 식품의유형: ${escape(d.prodtype)}</div><div>· 포장재질: ${escape(d.packaging)}</div></div><strong class="dl-temperature">${escape(temperature)}</strong></div>
         <div>· 반품및교환: 제조원및판매원 하단 표시</div><div>· 부정,불량 축산물 신고는 국번없이 1399</div><div>· 이 제품은 공정거래위원회 고시 소비자 분쟁해결기준에 의거 교환 또는 보상받을 수 있습니다</div><div>· 동봉되는 흡습제는 먹어서는 아니됩니다</div><div class="dl-cross-notice">· ${escape(notice)}</div>
-      </div><div class="dl-manufacturer"><div class="dl-company"><div class="dl-company-role">제조판매원</div><div class="dl-company-name">${escape(name)}</div><div class="dl-company-phone">${escape(d.phone)}</div></div><div class="dl-marks"><img class="dl-mark" src="${asset('assets/other-recycle.svg')}" alt="OTHER 재활용 표시"><img class="dl-mark dl-haccp" src="${asset('HACCP2.png')}" alt="HACCP"></div><div class="dl-company-address">${escape(d.address)}</div></div></div>
+      </div><div class="dl-manufacturer"><div class="dl-company"><div class="dl-company-role">제조판매원</div><div class="dl-company-name">${escape(name)}</div><div class="dl-company-phone">${escape(d.phone)}</div></div><div class="dl-marks"><img class="dl-mark" src="${asset('assets/other-recycle.svg')}" alt="OTHER 재활용 표시">${d.showHaccp===false?'':`<img class="dl-mark dl-haccp" src="${asset('HACCP2.png')}" alt="HACCP">`}</div><div class="dl-company-address">${escape(d.address)}</div></div></div>
     </div>`;
   }
   const style=global.document.createElement('style');

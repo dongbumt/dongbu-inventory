@@ -373,6 +373,7 @@ function applyCompanyDefaults(){
       [['lbl-licenseno','licenseno'],['lbl-manufacturer','manufacturer'],['lbl-phone','phone'],['lbl-address','address']]
         .forEach(([id,key])=>{
           const input=document.getElementById(id);
+          if(document.getElementById('lbl-manufacturer-choice')?.value==='dongbu_distribution')return;
           if(input && (!input.value || input.value === previous[key])) input.value=LBL_DEFAULTS[key];
         });
     }
