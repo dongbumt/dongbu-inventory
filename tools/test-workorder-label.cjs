@@ -132,6 +132,11 @@ const server=http.createServer((req,res)=>{
 ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelProducts)')}
       initWorkOrderForm();
     `});
+    await page.evaluate(()=>{localStorage.setItem('dbmt_label_size','10x10');document.getElementById('wo-label-size').value='';initWorkOrderForm();});
+    assert.equal(await page.locator('#wo-label-size').inputValue(),'7x10','New work orders ignore other label screens’ saved size');
+    await page.locator('#wo-label-size').selectOption('10x10');await page.evaluate(()=>initWorkOrderForm());
+    assert.equal(await page.locator('#wo-label-size').inputValue(),'10x10','Keep a size explicitly selected in the current draft');
+    await page.evaluate(()=>resetWorkOrderForm());assert.equal(await page.locator('#wo-label-size').inputValue(),'7x10','Reset/new work orders always start at 7×10cm');
     const openStock=()=>page.locator('#p-workorders .wo-source-row').first().locator('button[onclick="openWorkOrderStockPicker(this)"]').click();
     const primary=page.locator('#p-workorders .wo-source-row').first();
     await openStock();assert.equal(await page.locator('#tsp-result-head th').count(),11);assert.equal(await page.locator('#tsp-result-body tr').count(),4);

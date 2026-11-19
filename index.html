@@ -21642,7 +21642,7 @@ function initWorkOrderForm(){
   const mfgEl = document.getElementById('wo-mfgdate');
   if(mfgEl && !mfgEl.value) mfgEl.value = todayStr;
   const sizeEl = document.getElementById('wo-label-size');
-  if(sizeEl && !sizeEl.value) sizeEl.value = localStorage.getItem('dbmt_label_size') || '7x10';
+  if(sizeEl && !sizeEl.value) sizeEl.value = '7x10';
   if(!workOrderSourceRows().length) addWorkOrderSourceRow();
   autoSetWorkOrderExpiry();
   refreshWorkOrderPreview();
@@ -21665,7 +21665,7 @@ function resetWorkOrderForm(force=false){
   const tempEl = document.getElementById('wo-temptype');
   if(tempEl) tempEl.value = '냉동';
   const sizeEl = document.getElementById('wo-label-size');
-  if(sizeEl) sizeEl.value = localStorage.getItem('dbmt_label_size') || '7x10';
+  if(sizeEl) sizeEl.value = '7x10';
   document.getElementById('wo-lot').dataset.autoSourceLot='';
   const sourceRows=document.getElementById('wo-source-rows');
   if(sourceRows){sourceRows.innerHTML='';addWorkOrderSourceRow();}
