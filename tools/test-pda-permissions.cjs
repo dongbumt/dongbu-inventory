@@ -4,13 +4,13 @@ const {chromium}=require('playwright');
 const repo=path.resolve(__dirname,'..'),artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-pda-permissions-'));
 const index=fs.readFileSync(path.join(repo,'index.html'),'utf8');
 const panel=index.slice(index.indexOf('<div class="tab-panel" id="p-access-control">'),index.indexOf('<div class="tab-panel" id="p-labelproducts">'));
-const nav=['nav-schedule','nav-transactions','nav-stock','nav-pda','nav-access-control'].map(id=>index.match(new RegExp(`<div\\b[^>]*\\bid="${id}"[^>]*>[\\s\\S]*?</div>`))[0]).join('\n');
+const nav=['nav-schedule','nav-distribution-products','nav-transactions','nav-stock','nav-pda','nav-access-control'].map(id=>index.match(new RegExp(`<div\\b[^>]*\\bid="${id}"[^>]*>[\\s\\S]*?</div>`))[0]).join('\n');
 assert(panel&&nav.includes('PDA 입출고'));
 const server=http.createServer((req,res)=>{
   const url=new URL(req.url,'http://local');
   if(url.pathname==='/fixture.html'){
     const asset=process.env.DBMT_ACCESS_TEST_BASE||`http://127.0.0.1:${server.address().port}/`;
-    res.setHeader('Content-Type','text/html');res.end(`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="${asset}styles/main.css"><link rel="stylesheet" href="${asset}styles/m02-access-control.css"><header><button id="m02-user-button"></button><span id="m02-auth-mode-label"></span></header><nav><div class="nav-group">${nav}</div></nav><main class="main"><div class="tab-panel active" id="p-schedule">일정</div><div class="tab-panel" id="p-transactions">거래</div><div class="tab-panel" id="p-stock">재고</div>${panel}</main><script src="${asset}m02-auth.js?v=20261013pda2"></script>`);return;
+    res.setHeader('Content-Type','text/html');res.end(`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="${asset}styles/main.css"><link rel="stylesheet" href="${asset}styles/m02-access-control.css"><header><button id="m02-user-button"></button><span id="m02-auth-mode-label"></span></header><nav><div class="nav-group">${nav}</div></nav><main class="main"><div class="tab-panel active" id="p-schedule">일정</div><div class="tab-panel" id="p-transactions">거래</div><div class="tab-panel" id="p-stock">재고</div><div class="tab-panel" id="p-distribution-products">동부축산유통</div>${panel}</main><script src="${asset}m02-auth.js?v=20261119distribution1"></script>`);return;
   }
   const file=path.resolve(repo,url.pathname.slice(1));
   if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
@@ -24,7 +24,7 @@ const server=http.createServer((req,res)=>{
     await context.route('**/*',route=>route.request().method()==='GET'?route.continue():route.abort());
     await context.addInitScript(()=>{
       sessionStorage.setItem('dbmt_erp_user_session_token','qa-token');
-      const catalog=[['transactions','거래내역'],['stock','재고현황'],['pda','PDA 입출고'],['access_control','사용자·권한']].map(([menuCode,menuName])=>({menuCode,menuName}));
+      const catalog=[['transactions','거래내역'],['stock','재고현황'],['pda','PDA 입출고'],['distribution_products','동부축산유통 품목관리'],['access_control','사용자·권한']].map(([menuCode,menuName])=>({menuCode,menuName}));
       const fields=['canView','canCreate','canUpdate','canDelete','canClose','canApiSend','canAdmin'];
       const permissions=(roleId,value)=>catalog.map(menu=>({roleId,menuCode:menu.menuCode,...Object.fromEntries(fields.map(field=>[field,value]))}));
       window.__admin={users:[],catalog,roles:[{id:'admin-role',code:'system_admin',name:'시스템 관리자',active:true,systemRole:true,protectedRole:true,revision:1},{id:'warehouse-role',code:'warehouse',name:'창고 담당',active:true,revision:1}],permissions:[...permissions('admin-role',true),...permissions('warehouse-role',false)]};
@@ -48,6 +48,10 @@ const server=http.createServer((req,res)=>{
     await page.waitForFunction(()=>window.DBMTAuth?.isPersonal());
     await page.locator('#nav-access-control').click();await page.evaluate(()=>DBMTAuth.refreshAdmin());
     await page.locator('[data-role-id="warehouse-role"]').click();
+    const distribution=page.locator('tr[data-menu-code="distribution_products"]');
+    for(const action of ['view','create','update','delete'])assert(await distribution.locator(`[data-action="${action}"]`).isEnabled());
+    for(const action of ['close','apiSend','admin'])assert(await distribution.locator(`[data-action="${action}"]`).isDisabled());
+    await distribution.locator('[data-action="view"]').check();await distribution.locator('[data-action="update"]').check();
     const pda=page.locator('tr[data-menu-code="pda"]');
     assert.match(await pda.textContent(),/PDA 입출고/);
     for(const action of ['view','create'])assert(await pda.locator(`[data-action="${action}"]`).isEnabled());
@@ -60,6 +64,8 @@ const server=http.createServer((req,res)=>{
     await page.getByRole('button',{name:'역할 저장',exact:true}).click();
     await page.waitForFunction(()=>__saves.length===1&&document.getElementById('m02-role-revision').value==='2');
     const saved=await page.evaluate(()=>__saves[0].p_permissions.find(row=>row.menuCode==='pda'));
+    const savedDistribution=await page.evaluate(()=>__saves[0].p_permissions.find(row=>row.menuCode==='distribution_products'));
+    assert(savedDistribution.canView&&savedDistribution.canUpdate);assert(!savedDistribution.canClose&&!savedDistribution.canApiSend&&!savedDistribution.canAdmin);
     assert(saved.canView&&saved.canCreate);for(const field of ['canUpdate','canDelete','canClose','canApiSend','canAdmin'])assert.equal(saved[field],false);
     assert(await pda.locator('[data-action="create"]').isChecked(),'Save/reload must retain PDA assignment');
     await pda.locator('[data-action="create"]').uncheck();await page.getByRole('button',{name:'역할 저장',exact:true}).click();
@@ -75,6 +81,8 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.evaluate(()=>__opened.length),0,'Logging in must not auto-open the standalone PDA');
     await page.locator('#nav-pda').click();assert.equal((await page.evaluate(()=>__opened[0]))[0],'pda.html?v=20261021raw1');
     await switchPermissions([{menuCode:'pda',canView:false,canCreate:true}]);assert(await page.locator('#nav-pda').isHidden());
+    await switchPermissions([{menuCode:'label_products',canView:true}]);assert(await page.locator('#nav-distribution-products').isHidden(),'MT catalog rights cannot grant the distribution menu');
+    await switchPermissions([{menuCode:'distribution_products',canView:true}]);assert(await page.locator('#nav-distribution-products').isVisible());assert.equal(await page.locator('.tab-panel.active').getAttribute('id'),'p-distribution-products');
     await switchPermissions([{menuCode:'transactions',canView:true}]);assert.equal(await page.locator('.tab-panel.active').getAttribute('id'),'p-transactions','Returning from a PDA-only session must restore an allowed office page');
     assert.deepEqual(errors,[]);
     console.log('PASS: actual permission form, PDA view/create save roundtrip, unsupported/bulk/system-role controls, independent navigation, no auto-popup or unauthorized office page');

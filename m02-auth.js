@@ -12,6 +12,7 @@
     'nav-company-master':'company_master',
     'nav-access-control':'access_control',
     'nav-labelproducts':'label_products',
+    'nav-distribution-products':'distribution_products',
     'nav-traders':'traders',
     'nav-transactions':'transactions',
     'nav-customer-ledger':'customer_ledger',
@@ -312,6 +313,7 @@
     if(window.DBMTLabelWeightSplit) window.DBMTLabelWeightSplit.applyPermissions();
     if(window.DBMTProductionSchedule) window.DBMTProductionSchedule.applyPermissions();
     if(window.DBMTManualLabel) window.DBMTManualLabel.applyPermissions();
+    if(window.DBMTDistributionProducts) window.DBMTDistributionProducts.applyPermissions();
     if(window.DBMTDocumentRequestDetail) window.DBMTDocumentRequestDetail.applyPermissions();
     if(typeof window.applySchedulePermissionState === 'function') window.applySchedulePermissionState();
     if(typeof window.renderScheduleCalendar === 'function' && document.getElementById('p-schedule')?.classList.contains('active')){
@@ -723,10 +725,11 @@
       `<td><input type="checkbox" data-all-action="${action}" ${(locked || (viewOnly && action!=='view'))?'disabled':''}></td>`).join('')}</tr>`;
     body.innerHTML=allRow+rows.map(row=>`<tr data-menu-code="${esc(row.menuCode)}"><td>${esc(row.menuName)}</td>${ACTION_KEYS.map(action=>{
       const field=ACTION_FIELDS[action];
-      const unsupported=row.menuCode==='pda' && !['view','create'].includes(action);
+      const unsupported=(row.menuCode==='pda' && !['view','create'].includes(action)) ||
+        (row.menuCode==='distribution_products' && !['view','create','update','delete'].includes(action));
       const disabled=locked || unsupported || (viewOnly && action!=='view');
       const checked=unsupported || (viewOnly && action!=='view') ? false : Boolean(row[field]);
-      return `<td><input type="checkbox" data-action="${action}" ${checked?'checked':''} ${disabled?'disabled':''} ${unsupported?'title="PDA 입출고는 조회·등록 권한만 사용합니다."':''}></td>`;
+      return `<td><input type="checkbox" data-action="${action}" ${checked?'checked':''} ${disabled?'disabled':''} ${unsupported?`title="${row.menuCode==='pda'?'PDA 입출고는 조회·등록 권한만 사용합니다.':'동부축산유통 품목관리는 조회·등록·수정·삭제 권한을 사용합니다.'}"`:''}></td>`;
     }).join('')}</tr>`).join('');
     body.querySelectorAll('[data-all-action]').forEach(box=>{
       const action=box.dataset.allAction;

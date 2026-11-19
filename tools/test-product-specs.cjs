@@ -5,7 +5,7 @@ const os=require('node:os');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
 const markup=fs.readFileSync(path.join(root,'index.html'),'utf8');
-const pickerNames=['txnProductKindValue','txnProductSelectionText','txnProductStorageBadge','syncTxnProductKindButtons','refreshTxnProductPickerFilterOptions','setTxnProductPickerKind','openTxnProductPicker','closeTxnProductPicker','renderTxnProductPicker','syncTxnProductPickerSelection','setTxnProductPickerIndex','moveTxnProductPickerSelection','confirmTxnProductPicker','handleTxnProductPickerKeydown','labelProductSearchText'];
+const pickerNames=['txnProductPickerProducts','txnProductKindValue','txnProductSelectionText','txnProductStorageBadge','syncTxnProductKindButtons','refreshTxnProductPickerFilterOptions','setTxnProductPickerKind','openTxnProductPicker','closeTxnProductPicker','renderTxnProductPicker','syncTxnProductPickerSelection','setTxnProductPickerIndex','moveTxnProductPickerSelection','confirmTxnProductPicker','handleTxnProductPickerKeydown','labelProductSearchText'];
 const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.match(new RegExp(`function ${name}\\([^]*?\\n\\}`));assert(m,name);return m[0]}).join('\n');
 
 (async()=>{

@@ -33,6 +33,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261119receipt1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
+<link rel="stylesheet" href="styles/distribution-products.css?v=20261119catalog1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
 <link rel="stylesheet" href="styles/product-specs.css?v=20261117usage2">
@@ -400,6 +401,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="nav-group-items">
       <div class="nav-tab" onclick="showPage('p-company-master',this)" id="nav-company-master">🏢 법인·사업장·창고</div>
       <div class="nav-tab" onclick="showPage('p-labelproducts',this)" id="nav-labelproducts">📦 품목관리</div>
+      <div class="nav-tab" onclick="showPage('p-distribution-products',this)" id="nav-distribution-products" style="white-space:normal;line-height:1.4;">🏷️ 동부축산유통 품목관리</div>
       <div class="nav-tab" onclick="showPage('p-traders',this)" id="nav-traders">🏢 거래처 관리</div>
       <div class="nav-tab" onclick="showPage('p-prices',this)" id="nav-prices">💰 단가표</div>
     </div>
@@ -2320,8 +2322,33 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </div>
 
 <!-- ══════════════════════════════════════════
-     거래처 관리
+     동부축산유통 품목관리
 ══════════════════════════════════════════ -->
+<div class="tab-panel" id="p-distribution-products">
+  <div class="card">
+    <div class="section-header"><div class="card-title"><div class="ct-bar" style="background:#777;"></div><span id="dist-title">동부축산유통 품목 등록</span></div><button id="dist-new" type="button" class="btn btn-secondary btn-sm" onclick="DBMTDistributionProducts.reset()">+ 신규등록</button></div>
+    <p class="dist-note">동부축산유통 라벨에 사용할 품목입니다. 라벨출력에서 제조판매원을 동부축산유통으로 선택하면 이 목록과 품목보고번호를 사용합니다.</p>
+    <form id="dist-form"><fieldset id="dist-fields"><div class="dist-grid">
+      <div class="form-group"><label for="dist-name">제품명</label><input id="dist-name" required maxlength="200" placeholder="제품명"></div>
+      <div class="form-group"><label for="dist-itemno">품목보고번호</label><input id="dist-itemno" maxlength="80" placeholder="동부축산유통 품목보고번호"></div>
+      <div class="form-group"><label for="dist-origin">원산지</label><input id="dist-origin" maxlength="100" placeholder="예: 국내산"></div>
+      <div class="form-group"><label for="dist-brand">브랜드</label><input id="dist-brand" maxlength="200" placeholder="선택 입력"></div>
+      <div class="form-group"><label for="dist-meattype">원료 종류</label><select id="dist-meattype"><option>돼지고기</option><option>소고기</option><option>양고기</option><option>닭고기</option><option>오리고기</option><option>기타</option></select></div>
+      <div class="form-group"><label for="dist-storage">보관</label><select id="dist-storage"><option>냉동</option><option>냉장</option></select></div>
+      <div class="form-group"><label for="dist-shelfdays">소비기한 (제조일 포함 일수)</label><input id="dist-shelfdays" type="number" value="365" min="1" max="3650" step="1" required></div>
+      <div class="form-group"><label for="dist-packunit">포장단위</label><input id="dist-packunit" maxlength="100" placeholder="예: 5KG"></div>
+      <div class="form-group"><label for="dist-grade">성별 및 등급</label><input id="dist-grade" maxlength="100" placeholder="선택 입력"></div>
+      <div class="form-group dist-wide"><label for="dist-ingredientDetails">원재료·함량 상세 (선택)</label><input id="dist-ingredientDetails" maxlength="1000" placeholder="원료 100% 뒤 괄호 안에 표시할 내용"></div>
+    </div></fieldset><div class="btn-row"><button id="dist-save" type="submit" class="btn btn-primary">+ 품목 등록</button><button id="dist-reset" type="button" class="btn btn-secondary" onclick="DBMTDistributionProducts.reset()">입력 초기화</button></div></form>
+    <div id="dist-status" role="status"></div>
+  </div>
+  <div class="card"><div class="dist-toolbar"><div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#777;"></div>동부축산유통 품목 목록 <small id="dist-count"></small></div><button id="dist-refresh" type="button" class="btn btn-secondary btn-sm" onclick="DBMTDistributionProducts.init()">새로고침</button></div>
+    <input id="dist-search" placeholder="제품명·브랜드·원산지·품목보고번호 검색" oninput="DBMTDistributionProducts.render()" style="margin-bottom:12px;">
+    <div class="table-wrap"><table><thead><tr><th>제품명</th><th>브랜드</th><th>원산지</th><th>품목보고번호</th><th>보관</th><th>소비기한</th><th>포장단위</th><th>원료 및 함량</th><th>관리</th></tr></thead><tbody id="dist-body"></tbody></table></div>
+  </div>
+</div>
+
+<!-- 거래처 관리 -->
 <div class="tab-panel" id="p-traders">
   <div class="card">
     <div class="card-title">
@@ -3974,6 +4001,14 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <p class="manual-label-guide" style="margin-bottom:14px;">작업지시 없이 라벨 내용을 입력해 출력합니다. 바코드는 임의로 생성되며, 생산일보·재고에는 반영되지 않습니다.</p>
       <form id="manual-label-form" class="manual-label-form" onsubmit="event.preventDefault();printLabel()">
         <div class="form-group manual-label-full">
+          <label for="lbl-manufacturer-choice">제조판매원 선택</label>
+          <select id="lbl-manufacturer-choice">
+            <option value="default">주식회사 동부엠티</option>
+            <option value="dongbu_distribution">(주)동부축산유통</option>
+            <option value="custom">직접입력</option>
+          </select>
+        </div>
+        <div class="form-group manual-label-full">
           <label for="lbl-product">제품명</label>
           <input id="lbl-product-id" type="hidden">
           <div class="manual-label-product">
@@ -3981,14 +4016,6 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTManualLabel.openPicker()">검색</button>
           </div>
           <div id="lbl-product-meta">품목관리에서 등록한 제품을 선택하세요.</div>
-        </div>
-        <div class="form-group manual-label-full">
-          <label for="lbl-manufacturer-choice">제조판매원 선택</label>
-          <select id="lbl-manufacturer-choice">
-            <option value="default">주식회사 동부엠티</option>
-            <option value="dongbu_distribution">(주)동부축산유통</option>
-            <option value="custom">직접입력</option>
-          </select>
         </div>
         <div class="form-group"><label for="lbl-origin">원산지</label><input id="lbl-origin" type="text" placeholder="원산지"></div>
         <div class="form-group"><label for="lbl-grade">성별 및 등급</label><input id="lbl-grade" type="text" placeholder="선택 입력"></div>
@@ -5362,6 +5389,9 @@ function renderPageById(id, reason='menu'){
         break;
       case 'p-labelproducts':
         renderLabelProducts();
+        break;
+      case 'p-distribution-products':
+        asyncTask = DBMTDistributionProducts.init();
         break;
       case 'p-traders':
         renderTraders();
@@ -7703,6 +7733,11 @@ let txnProductPickerReturnFocus = null;
 let txnProductPickerBodyOverflow = '';
 let txnProductPickerTargetInput = null;
 
+function txnProductPickerProducts(){
+  return txnProductPickerTargetInput?.dataset?.pickerContext==='manual-label' && window.DBMTManualLabel?.catalogProducts
+    ? DBMTManualLabel.catalogProducts() : (labelProducts||[]);
+}
+
 function txnProductKindValue(product){
   return String(product?.kind || '').trim() === '제품' ? '제품' : '원료육';
 }
@@ -7739,7 +7774,8 @@ function txnProductStorageBadge(storageValue){
 
 function syncTxnProductKindButtons(){
   document.querySelectorAll('[data-tpp-kind]').forEach(button=>{
-    button.style.display='';
+    const distribution=txnProductPickerTargetInput?.dataset?.pickerContext==='manual-label' && window.DBMTManualLabel?.isDistributionCatalog?.();
+    button.style.display=distribution&&button.dataset.tppKind!=='제품'?'none':'';
     const active = button.dataset.tppKind === txnProductPickerKind;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -7747,7 +7783,7 @@ function syncTxnProductKindButtons(){
 }
 
 function refreshTxnProductPickerFilterOptions(){
-  const rows = (labelProducts || []).filter(product => product.isActive !== false && txnProductKindValue(product) === txnProductPickerKind)
+  const rows = txnProductPickerProducts().filter(product => product.isActive !== false && txnProductKindValue(product) === txnProductPickerKind)
     .filter(product => txnProductPickerTargetInput?.dataset?.pickerContext !== 'product-spec' || ['제품','원료육'].includes(String(product.kind || '').trim()));
   const setOptions = (id, values) => {
     const select = document.getElementById(id);
@@ -7787,7 +7823,7 @@ function openTxnProductPicker(initialQuery, targetInput=null){
     ? (document.getElementById(`prod-out-product-id-${targetInput.dataset.productionRowId}`)?.value || '')
     : (pickerContext === 'workorder-output' ? (document.getElementById('wo-label-product-id')?.value || '') : (pickerContext === 'manual-label' ? (document.getElementById('lbl-product-id')?.value || '') : (pickerContext === 'product-spec' ? (document.getElementById('spec-material-product-id')?.value || '') : '')));
   const selectedProduct = selectedProductId
-    ? (labelProducts || []).find(product => String(product.id || '') === String(selectedProductId))
+    ? txnProductPickerProducts().find(product => String(product.id || '') === String(selectedProductId))
     : null;
   txnProductPickerKind = ['production-output','workorder-output','manual-label','product-spec'].includes(pickerContext)
     ? (selectedProduct ? txnProductKindValue(selectedProduct) : '제품')
@@ -7795,6 +7831,7 @@ function openTxnProductPicker(initialQuery, targetInput=null){
   const title = document.getElementById('txn-product-picker-title');
   if(title) title.textContent = pickerContext === 'manual-label' ? '라벨 출력 제품 선택' : (pickerContext === 'workorder-output' ? '작업지시 생산물 제품 선택' : (pickerContext === 'production-output' ? '생산 품목 선택' : (targetInput ? '입고일괄 품목 선택' : '입고 품목 선택')));
   if(title&&pickerContext==='product-spec')title.textContent='제품스펙 원재료 선택 (제품 · 원료육)';
+  if(title&&pickerContext==='manual-label'&&window.DBMTManualLabel?.isDistributionCatalog?.())title.textContent='동부축산유통 라벨 제품 선택';
   syncTxnProductKindButtons();
   const allSearch = document.getElementById('tpp-search-all');
   const nameSearch = document.getElementById('tpp-search-name');
@@ -7841,15 +7878,16 @@ function renderTxnProductPicker(resetSelection=false){
   const body = document.getElementById('tpp-result-body');
   const count = document.getElementById('tpp-result-count');
   if(!modal || modal.classList.contains('hidden') || !body) return;
+  const distribution=txnProductPickerTargetInput?.dataset?.pickerContext==='manual-label' && window.DBMTManualLabel?.isDistributionCatalog?.();
   const allQ = priceKey(document.getElementById('tpp-search-all')?.value || '');
   const nameQ = priceKey(document.getElementById('tpp-search-name')?.value || '');
   const brand = document.getElementById('tpp-search-brand')?.value || '';
   const origin = document.getElementById('tpp-search-origin')?.value || '';
   const storage = document.getElementById('tpp-search-storage')?.value || '';
-  const filtered = (labelProducts || [])
+  const filtered = txnProductPickerProducts()
     .filter(product => product.isActive !== false && txnProductKindValue(product) === txnProductPickerKind)
     .filter(product => txnProductPickerTargetInput?.dataset?.pickerContext !== 'product-spec' || ['제품','원료육'].includes(String(product.kind || '').trim()))
-    .filter(product => !allQ || priceKey(labelProductSearchText(product)).includes(allQ))
+    .filter(product => !allQ || priceKey(labelProductSearchText(product)+(distribution?' '+(product.itemno||''):'')).includes(allQ))
     .filter(product => !nameQ || priceKey(product.name || '').includes(nameQ))
     .filter(product => !brand || samePriceText(product.brand, brand))
     .filter(product => !origin || sameOriginText(product.origin, origin))
@@ -7866,7 +7904,7 @@ function renderTxnProductPicker(resetSelection=false){
     return;
   }
   body.innerHTML = txnProductPickerRows.map((product,index)=>`<tr data-tpp-index="${index}" aria-selected="${index===txnProductPickerIndex?'true':'false'}" class="${index===txnProductPickerIndex?'selected':''}" onclick="setTxnProductPickerIndex(${index})" ondblclick="confirmTxnProductPicker()">
-    <td><strong>${htmlEscape(product.name || '-')}</strong>${product.productCode?`<span class="txn-product-code">${htmlEscape(product.productCode)}</span>`:''}</td>
+    <td><strong>${htmlEscape(product.name || '-')}</strong>${distribution?`<span class="txn-product-code">품목보고번호 ${htmlEscape(product.itemno||'미등록')}</span>`:product.productCode?`<span class="txn-product-code">${htmlEscape(product.productCode)}</span>`:''}</td>
     <td>${htmlEscape(product.brand || '-')}</td>
     <td>${htmlEscape(product.factoryNo || '-')}</td>
     <td>${htmlEscape(product.grade || '-')}</td>
@@ -7908,7 +7946,7 @@ function moveTxnProductPickerSelection(delta){
 }
 
 function confirmTxnProductPicker(){
-  const selectedProduct = (labelProducts || []).find(p=>String(p.id) === String(txnProductPickerRows[txnProductPickerIndex]?.id));
+  const selectedProduct = txnProductPickerProducts().find(p=>String(p.id) === String(txnProductPickerRows[txnProductPickerIndex]?.id));
   if(!selectedProduct || selectedProduct.isActive === false){ renderTxnProductPicker(true); return; }
   if(txnProductPickerTargetInput){
     const targetInput = txnProductPickerTargetInput;
@@ -22990,12 +23028,13 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="product-catalog-sync.js?v=20261106catalog1"></script>
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
-<script src="manual-label.js?v=20261118manufacturer2"></script>
+<script src="distribution-products.js?v=20261119catalog1"></script>
+<script src="manual-label.js?v=20261119catalog1"></script>
 <link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
 <script src="label-weight-split.js?v=20261113split1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
 <script src="ledgers.js?v=20261112ledger1"></script>
-<script src="m02-auth.js?v=20261119changehistory1"></script>
+<script src="m02-auth.js?v=20261119distribution1"></script>
 </body>
 </html>
