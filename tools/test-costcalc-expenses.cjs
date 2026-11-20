@@ -67,17 +67,21 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     assert.equal(await expenseRows.count(),3,'Inactive defaults remain available for this calculation');
     assert.equal(await active(2).isChecked(),false);
     assert.equal((await result()).totOutput,90);
-    await checkCostSplit(500000,30000);
+    await checkCostSplit(500000,27000);
     assert.equal(await page.locator('#cc-expense-total-kg').innerText(),'300 원/KG');
-    assert.equal(await page.locator('#cc-r-othercostkg').innerText(),'333.33 원/KG');
+    assert.equal(await page.locator('#cc-r-othercostkg').innerText(),'300 원/KG');
+    assert.equal((await result()).costPerKg,500000/90+300);
+    assert.equal((await result()).profit,193000);
     const laborDetail = page.locator('#cc-breakdown-tbody tr').filter({hasText:'↳ 인건비'});
-    assert.equal(await laborDetail.locator('td').nth(2).innerText(),'222.22 원');
+    assert.equal(await laborDetail.locator('td').nth(1).innerText(),'18,000 원');
+    assert.equal(await laborDetail.locator('td').nth(2).innerText(),'200 원');
     const lossInput = page.locator('#cc-mat-tbody input[type=number]').nth(2);
     await lossInput.fill('0');
     await page.evaluate(()=>calcCost());
     assert.equal((await result()).totOutput,100);
     await checkCostSplit(500000,30000);
     assert.equal(await page.locator('#cc-r-othercostkg').innerText(),'300 원/KG');
+    assert.equal((await result()).costPerKg,5300);
     await lossInput.fill('10');
     await page.evaluate(()=>calcCost());
 
@@ -86,7 +90,7 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     assert.equal(await amount(0).inputValue(),'6600000','Recalculation must keep the input focused while typing');
     await expenseRows.nth(1).locator('.cc-expense-name').fill('시설 임대료');
     await active(1).uncheck();
-    assert.equal((await result()).totExpCost,30000);
+    assert.equal((await result()).totExpCost,27000);
     assert.equal(await expenseRows.nth(1).locator('.cc-expense-state').innerText(),'제외');
     assert.equal(await expenseRows.nth(1).locator('.cc-expense-kg').innerText(),'-');
     assert.doesNotMatch(await page.locator('#cc-breakdown-tbody').innerText(),/시설 임대료/);
@@ -114,7 +118,7 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     await active(2).check();
     await page.evaluate(()=>saveCostCalc());
     const second = (await saved())[0];
-    assert.equal(second.totExpCost,55000);
+    assert.equal(second.totExpCost,49500);
     await mount();
     await page.evaluate(id=>loadCostCalc(id),first.id);
     assert.equal(await amount(0).inputValue(),'6600000');
@@ -122,8 +126,8 @@ const material = {id:1, name:'테스트 원료', origin:'국내산', qty:100, pr
     assert.equal(await active(2).isChecked(),false);
     assert.equal((await result()).totExpCost,first.totExpCost);
     await page.locator('#cc-daily-qty').fill('500');
-    assert.equal((await result()).totExpCost,60000);
-    await checkCostSplit(500000,60000);
+    assert.equal((await result()).totExpCost,54000);
+    await checkCostSplit(500000,54000);
     assert.equal(await amount(0).inputValue(),'6600000','Changing production volume retains the overridden expense');
     await page.evaluate(id=>loadCostCalc(id),second.id);
     assert.equal(await amount(0).inputValue(),'8800000');

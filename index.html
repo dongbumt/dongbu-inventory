@@ -19225,22 +19225,21 @@ function calcCost(){
     return;
   }
 
-  // 일경비를 작업 투입량에 배분하고, 그 금액을 실 생산중량으로 나눈다.
+  // 일일 투입량으로 구한 경비 단가를 완제품 KG당 그대로 적용한다.
   const activeExp  = getCostCalcActiveExpenses();
-  let totExpCost   = 0;
+  let otherPerKg   = 0;
   const expRows    = activeExp.map(e => {
     const monthlyCost = parseFloat(e.monthlyCost) || 0;
     const dailyCost  = monthlyCost / WORK_DAYS;
-    const expensePerInputKg = dailyInputQty > 0 ? dailyCost / dailyInputQty : 0;
-    const expTotal   = expensePerInputKg * totInput;
-    totExpCost      += expTotal;
-    return { name: e.name, total: expTotal, perKg: totOutput > 0 ? expTotal / totOutput : 0 };
+    const perKg = dailyInputQty > 0 ? dailyCost / dailyInputQty : 0;
+    otherPerKg += perKg;
+    return { name: e.name, total: perKg * totOutput, perKg };
   });
 
+  const totExpCost = otherPerKg * totOutput;
   const totalCost  = totRawCost + totExpCost;
   const rawPerKg   = totOutput > 0 ? totRawCost / totOutput : 0;
-  const otherPerKg = totOutput > 0 ? totExpCost / totOutput : 0;
-  const costPerKg  = totOutput > 0 ? totalCost / totOutput : 0;
+  const costPerKg  = totOutput > 0 ? rawPerKg + otherPerKg : 0;
   const revenue    = sellPrice * totOutput;
   const profit     = revenue - totalCost;
 
