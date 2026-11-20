@@ -2938,9 +2938,9 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     </div>
     <div class="form-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:12px;">
       <div class="form-group">
-        <label>일일생산량 (KG)</label>
+        <label for="cc-daily-qty">일일 투입량 (KG)</label>
         <input type="number" id="cc-daily-qty" placeholder="예) 2000" min="1" oninput="renderCostExpenseArea(); calcCost();">
-        <span style="font-size:11px;color:#888;margin-top:3px;">월경비 ÷ 22일 ÷ 일일생산량 = KG당 경비</span>
+        <span style="font-size:11px;color:#888;margin-top:3px;">월경비 ÷ 22일 ÷ 일일 투입량 = 투입 KG당 경비</span>
       </div>
       <div class="form-group">
         <label>인건비 인원수 (명)</label>
@@ -2949,7 +2949,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       </div>
     </div>
     <div id="cc-expense-area">
-      <div style="color:#aaa;font-size:12px;padding:8px 0;">일일생산량을 입력하면 KG당 경비가 계산됩니다.</div>
+      <div style="color:#aaa;font-size:12px;padding:8px 0;">일일 투입량을 입력하면 투입 KG당 경비가 계산됩니다.</div>
     </div>
     <div id="cc-expense-note" style="font-size:11px;color:#777;margin-top:8px;">조정한 경비는 이 계산내역에 함께 저장됩니다. 경비 설정의 기본 금액은 유지됩니다.</div>
   </div>
@@ -3025,7 +3025,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <thead><tr>
           <th>항목</th>
           <th style="text-align:right;">금액 (원)</th>
-          <th style="text-align:right;">KG당 (원)</th>
+          <th style="text-align:right;">완제품 KG당 (원)</th>
           <th style="text-align:right;">비중 (%)</th>
         </tr></thead>
         <tbody id="cc-breakdown-tbody"></tbody>
@@ -3041,7 +3041,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <thead><tr>
           <th>날짜</th><th>원자재</th>
           <th style="text-align:right;">인원수</th>
-          <th style="text-align:right;">일일생산량</th>
+          <th style="text-align:right;">일일 투입량</th>
           <th style="text-align:right;">실생산(KG)</th>
           <th style="text-align:right;">생산단가/KG</th>
           <th style="text-align:right;">판매단가/KG</th>
@@ -3421,7 +3421,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
   <!-- 경비 항목 등록 -->
   <div class="card">
     <div class="card-title"><div class="ct-bar" style="background:#d35400;"></div>경비 항목 등록
-      <span style="font-size:11px;font-weight:400;color:#999;margin-left:8px;">월경비 ÷ 22일 = 일경비 / KG당 경비는 원가계산기의 일일생산량에 따라 자동 계산</span>
+      <span style="font-size:11px;font-weight:400;color:#999;margin-left:8px;">월경비 ÷ 22일 = 일경비 / 투입 KG당 경비는 원가계산기의 일일 투입량에 따라 계산</span>
     </div>
     <div class="form-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
       <div class="form-group"><label>항목명</label><input id="pgb-name" placeholder="예) 인건비, 물류비, 임대료"></div>
@@ -19094,7 +19094,7 @@ function updateCostCalcExpense(index, field, value){
 }
 
 function updateCostExpenseTotals(){
-  const dailyQty = parseFloat(document.getElementById('cc-daily-qty')?.value) || 0;
+  const dailyInputQty = parseFloat(document.getElementById('cc-daily-qty')?.value) || 0;
   let totalMonthly = 0;
   getCostCalcExpenses().forEach((expense, index) => {
     const monthlyCost = Math.max(0, parseAppNumber(expense.monthlyCost));
@@ -19105,17 +19105,17 @@ function updateCostExpenseTotals(){
       row.querySelector('.cc-expense-state').textContent = expense.active ? '적용' : '제외';
       row.querySelector('.cc-expense-daily').textContent = expense.active ? fmt(dailyCost) + ' 원/일' : '-';
       row.querySelector('.cc-expense-kg').textContent = expense.active
-        ? (dailyQty > 0 ? fmtD(dailyCost / dailyQty) + ' 원/KG' : '일일생산량 입력 필요') : '-';
+        ? (dailyInputQty > 0 ? fmtD(dailyCost / dailyInputQty) + ' 원/KG' : '일일 투입량 입력 필요') : '-';
     }
     if(expense.active) totalMonthly += monthlyCost;
   });
   const set = (id, value) => { const el = document.getElementById(id); if(el) el.textContent = value; };
   set('cc-expense-total-monthly', fmt(totalMonthly) + ' 원/월');
   set('cc-expense-total-daily', fmt(totalMonthly / WORK_DAYS) + ' 원/일');
-  set('cc-expense-total-kg', dailyQty > 0 ? fmtD(totalMonthly / WORK_DAYS / dailyQty) + ' 원/KG' : '-');
+  set('cc-expense-total-kg', dailyInputQty > 0 ? fmtD(totalMonthly / WORK_DAYS / dailyInputQty) + ' 원/KG' : '-');
 }
 
-// 원가계산기 내 경비 영역 렌더 (일일생산량 입력 후 KG당 표시)
+// 원가계산기 내 경비 영역 렌더 (투입 KG당 경비 표시)
 function renderCostExpenseArea(){
   const el = document.getElementById('cc-expense-area'); if(!el) return;
   if(ccExpenses === null && !document.getElementById('p-costcalc')?.classList.contains('active')) return;
@@ -19143,7 +19143,7 @@ function renderCostExpenseArea(){
         <th>항목명</th>
         <th style="text-align:right;">월경비 (원/월)</th>
         <th style="text-align:right;">일경비 (÷22)</th>
-        <th style="text-align:right;">KG당 경비</th>
+        <th style="text-align:right;">투입 KG당 경비</th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr style="font-weight:700;background:#f2f2f2;">
@@ -19210,7 +19210,7 @@ function updateMatTotals(){
 // ── 원가 계산 ──────────────────────────────
 function calcCost(){
   const sellPrice = parseFloat(document.getElementById('cc-sell-price')?.value) || 0;
-  const dailyQty  = parseFloat(document.getElementById('cc-daily-qty')?.value)  || 0;
+  const dailyInputQty = parseFloat(document.getElementById('cc-daily-qty')?.value) || 0;
   const workers   = parseFloat(document.getElementById('cc-workers')?.value)    || 0;
 
   let totInput=0, totRawCost=0, totOutput=0;
@@ -19225,16 +19225,16 @@ function calcCost(){
     return;
   }
 
-  // 기타비용(판관비): 월경비 → 일경비 → KG당 → 실 생산중량 기준 총액
+  // 일경비를 작업 투입량에 배분하고, 그 금액을 실 생산중량으로 나눈다.
   const activeExp  = getCostCalcActiveExpenses();
   let totExpCost   = 0;
   const expRows    = activeExp.map(e => {
     const monthlyCost = parseFloat(e.monthlyCost) || 0;
     const dailyCost  = monthlyCost / WORK_DAYS;
-    const kgCost     = dailyQty > 0 ? dailyCost / dailyQty : 0;
-    const expTotal   = kgCost * totOutput;
+    const expensePerInputKg = dailyInputQty > 0 ? dailyCost / dailyInputQty : 0;
+    const expTotal   = expensePerInputKg * totInput;
     totExpCost      += expTotal;
-    return { name: e.name, total: expTotal, perKg: kgCost };
+    return { name: e.name, total: expTotal, perKg: totOutput > 0 ? expTotal / totOutput : 0 };
   });
 
   const totalCost  = totRawCost + totExpCost;
@@ -19265,8 +19265,8 @@ function calcCost(){
   // 두 비용 구분을 먼저 표시하고, 판관비 세부항목은 합계에 포함된 내역으로 표시합니다.
   expRows.sort((a, b) => b.total - a.total);
 
-  const kgWarn = dailyQty===0 && activeExp.length>0
-    ? '<tr><td colspan="4" style="color:#e67e22;font-size:11px;padding:6px 12px;">⚠️ 일일생산량 미입력 — 기타비용(판관비)이 KG당 0원으로 계산됨</td></tr>' : '';
+  const kgWarn = dailyInputQty<=0 && activeExp.length>0
+    ? '<tr><td colspan="4" style="color:#e67e22;font-size:11px;padding:6px 12px;">⚠️ 일일 투입량을 입력하면 기타비용(판관비)이 반영됩니다.</td></tr>' : '';
 
   document.getElementById('cc-breakdown-tbody').innerHTML =
     kgWarn + rows.map(r => `<tr style="font-weight:700;">
@@ -19311,7 +19311,7 @@ function calcCost(){
       .reduce((sum, e) => sum + parseAppNumber(e.monthlyCost), 0);
     const infoItems = [
       { label:'품목명',       value: matNames },
-      { label:'일일생산량',   value: dailyQty  ? fmt(dailyQty) + ' KG' : '-' },
+      { label:'일일 투입량',   value: dailyInputQty > 0 ? fmtD(dailyInputQty) + ' KG' : '-' },
       { label:'인건비 인원수', value: workers   ? workers + ' 명'        : '-' },
       { label:'인건비',       value: fmt(laborMonthly) + ' 원/월' },
       { label:'평균 매입가',  value: avgPrice  ? fmt(avgPrice) + ' 원/KG' : '-' },
@@ -19324,7 +19324,7 @@ function calcCost(){
 
   document.getElementById('cc-result-card').style.display = 'block';
   window._ccLastResult = { totInput, totOutput, totRawCost, totExpCost, totalCost, costPerKg,
-    sellPrice, revenue, profit, dailyQty, workers, materials: JSON.stringify(ccMaterials),
+    sellPrice, revenue, profit, dailyQty:dailyInputQty, workers, materials: JSON.stringify(ccMaterials),
     expenses: JSON.stringify(getCostCalcExpenses()) };
 }
 
@@ -19567,7 +19567,7 @@ function renderCostCompare(){
     {label:'기타비용(판관비)', field:'totExpCost', type:'money', lowerBetter:true},
     {label:'총 투입중량', field:'totInput', type:'kg'},
     {label:'실 생산중량', field:'totOutput', type:'kg'},
-    {label:'일일생산량', field:'dailyQty', type:'kg'},
+    {label:'일일 투입량', field:'dailyQty', type:'kg'},
     {label:'인건비 인원수', field:'workers', type:'person', lowerBetter:true},
     {label:'판매단가', field:'sellPrice', type:'moneyKg'},
     {label:'판매가 합계', field:'revenue', type:'money'},
