@@ -72,8 +72,13 @@ const server=http.createServer(async(req,res)=>{
       return page;
     }
     const a=await client('qa-a'),b=await client('qa-b');
-    async function save(page,name,kind='제품',id='',brand='신규브랜드'){
+    async function openProductRegistration(page){
       await page.evaluate(()=>setPage('p-labelproducts'));
+      const form = page.locator('#lp-form-card');
+      if(!await form.evaluate(card=>card.open)) await form.locator('summary').click();
+    }
+    async function save(page,name,kind='제품',id='',brand='신규브랜드'){
+      await openProductRegistration(page);
       await page.locator('#lp-edit-id').evaluate((el,value)=>{el.value=value;},id);await page.locator('#lp-name').fill(name);await page.locator('#lp-brand').fill(brand);
       await page.locator('#lp-kind').selectOption(kind);await page.locator('#lp-meattype').selectOption('가금류');await page.locator('#lp-origin').fill('미국산');
       await page.evaluate(()=>saveLabelProduct());
@@ -94,7 +99,7 @@ const server=http.createServer(async(req,res)=>{
     await save(a,'테스트 신규원료','원료육');
     await b.waitForFunction(()=>document.getElementById('tpp-result-body').textContent.includes('테스트 신규원료'),null,{timeout:8000});
     const eventCount=await b.evaluate(()=>catalogEvents);await b.evaluate(()=>DBMTProductCatalog.refresh());assert.equal(await b.evaluate(()=>catalogEvents),eventCount,'Unchanged polls do not repaint the UI');
-    await b.evaluate(()=>{closeTxnProductPicker(false);setPage('p-labelproducts');});
+    await b.evaluate(()=>closeTxnProductPicker(false));await openProductRegistration(b);
     await b.locator('#lp-name').fill('수정 중인 품목');await b.locator('#lp-shelfdays').fill('');await b.locator('#lp-search').fill('테스트');
     const draft=await b.locator('#p-labelproducts input,#p-labelproducts select,#p-labelproducts textarea').evaluateAll(els=>els.map(el=>[el.id,el.value]));
     await save(a,'테스트 원료육','원료육','raw','변경브랜드');

@@ -31,7 +31,7 @@
 try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
-<link rel="stylesheet" href="styles/main.css?v=20261119receipt1">
+<link rel="stylesheet" href="styles/main.css?v=20261122itemform1">
 <link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
 <link rel="stylesheet" href="styles/distribution-products.css?v=20261119catalog1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
@@ -3756,8 +3756,11 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 
     <!-- 등록 폼 -->
     <div style="width:100%;">
-      <div class="card" id="lp-form-card">
-        <div class="card-title" id="lp-form-title"><div class="ct-bar" style="background:#e67e22;"></div>📦 품목 등록</div>
+      <details class="card" id="lp-form-card">
+        <summary class="section-header">
+          <span class="card-title" id="lp-form-title"><span class="ct-bar" style="background:#e67e22;"></span>📦 품목 등록</span>
+          <span class="lp-form-toggle" aria-hidden="true"></span>
+        </summary>
         <div style="display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:8px;">
           <input type="hidden" id="lp-edit-id">
           <div class="form-group">
@@ -3848,7 +3851,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <button class="btn" onclick="resetLabelProductForm()" style="flex:1;background:#95a5a6;color:#fff;">✖ 초기화</button>
         </div>
         <p style="font-size:12px;color:#666;margin:10px 0 0;">사용안함 품목은 거래내역·생산일보의 새 품목/재고 선택 목록에서 제외됩니다. 기존 거래·생산 기록과 재고는 유지되며, 언제든 다시 사용으로 변경할 수 있습니다.</p>
-      </div>
+      </details>
     </div>
 
     <!-- 목록 -->
@@ -22753,11 +22756,14 @@ function editLabelProduct(idx){
   set('lp-grade', p.grade || '');
   set('lp-ingredient-details', p.ingredientDetails || '');
   const title = document.getElementById('lp-form-title');
-  if(title) title.innerHTML = '<div class="ct-bar" style="background:#e67e22;"></div>✏️ 품목 수정';
+  if(title) title.innerHTML = '<span class="ct-bar" style="background:#e67e22;"></span>✏️ 품목 수정';
   const saveButton = document.getElementById('lp-save-btn');
   if(saveButton) saveButton.textContent = '💾 수정 저장';
   const formCard = document.getElementById('lp-form-card');
-  formCard?.scrollIntoView({behavior:'smooth', block:'start'});
+  if(formCard){
+    formCard.open = true;
+    formCard.scrollIntoView({behavior:'smooth', block:'start'});
+  }
   setTimeout(()=>document.getElementById('lp-name')?.focus(), 350);
 }
 
@@ -22821,7 +22827,7 @@ function resetLabelProductForm(){
   autoFillLabelProductShelfDays();
   refreshLabelProductNationalPartSelect('');
   const title = document.getElementById('lp-form-title');
-  if(title) title.innerHTML = '<div class="ct-bar" style="background:#e67e22;"></div>📦 품목 등록';
+  if(title) title.innerHTML = '<span class="ct-bar" style="background:#e67e22;"></span>📦 품목 등록';
   const saveButton = document.getElementById('lp-save-btn');
   if(saveButton) saveButton.textContent = '💾 저장';
 }
