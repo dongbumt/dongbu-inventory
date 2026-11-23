@@ -22592,6 +22592,7 @@ function autoFillLabelProductShelfDaysIfBlank(){
 function sameLabelProduct(a, b){
   return samePriceText(a.name, b.name) &&
     samePriceText(a.brand, b.brand) &&
+    samePriceText(a.grade, b.grade) &&
     samePriceText(a.factoryNo, b.factoryNo) &&
     samePriceText(a.nationalPartCode, b.nationalPartCode) &&
     sameOriginText(a.origin, b.origin) &&
@@ -22664,6 +22665,7 @@ async function saveLabelProduct(){
 
 제품명: ${prod.name}
 브랜드: ${prod.brand || '-'}
+성별 및 등급: ${prod.grade || '-'}
 공장넘버: ${prod.factoryNo || '-'}
 국가부위코드: ${prod.nationalPartCode ? `${prod.nationalPartCode} ${prod.nationalPartName}` : '-'}
 원산지: ${prod.origin || '-'}

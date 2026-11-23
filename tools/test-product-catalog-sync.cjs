@@ -77,10 +77,11 @@ const server=http.createServer(async(req,res)=>{
       const form = page.locator('#lp-form-card');
       if(!await form.evaluate(card=>card.open)) await form.locator('summary').click();
     }
-    async function save(page,name,kind='제품',id='',brand='신규브랜드'){
+    async function save(page,name,kind='제품',id='',brand='신규브랜드',grade=''){
       await openProductRegistration(page);
       await page.locator('#lp-edit-id').evaluate((el,value)=>{el.value=value;},id);await page.locator('#lp-name').fill(name);await page.locator('#lp-brand').fill(brand);
       await page.locator('#lp-kind').selectOption(kind);await page.locator('#lp-meattype').selectOption('가금류');await page.locator('#lp-origin').fill('미국산');
+      await page.locator('#lp-grade').fill(grade);
       await page.evaluate(()=>saveLabelProduct());
     }
     await b.evaluate(()=>setPage('p-production'));
@@ -117,6 +118,17 @@ const server=http.createServer(async(req,res)=>{
     await a.evaluate(()=>{window.pendingCatalog=DBMTProductCatalog.refresh(true);});await a.waitForTimeout(80);
     await save(a,'테스트 읽기경쟁');release();await a.evaluate(()=>pendingCatalog);
     assert(await a.evaluate(()=>labelProducts.some(row=>row.name==='테스트 읽기경쟁')),'A late read cannot erase a successful save');
+    const variantName = '테스트 같은 이름 제품';
+    await save(a,variantName,'제품','','브랜드 A','암/1등급');
+    await save(a,variantName,'제품','','브랜드 B','암/1등급');
+    await save(a,variantName,'제품','','브랜드 A','수/2등급');
+    const variants = products.filter(row=>row.name===variantName);
+    assert.equal(variants.length,3,'Brand-only and grade-only variants both save');
+    assert.equal(new Set(variants.map(row=>row.id)).size,3);
+    const savesBeforeDuplicate = calls.filter(call=>call.name==='dbmt_erp_save_label_product').length;
+    await save(a,variantName,'제품','','브랜드 A','암 / 1등급');
+    assert.match(await a.evaluate(()=>failures.at(-1)),/이미 같은 품목이 등록/);
+    assert.equal(calls.filter(call=>call.name==='dbmt_erp_save_label_product').length,savesBeforeDuplicate);
     failSave=true;await save(a,'통신실패 초안');failSave=false;assert.equal(await a.locator('#lp-name').inputValue(),'통신실패 초안');
     const lastGood=await b.evaluate(()=>labelProducts.length);fail=true;assert.equal(await b.evaluate(()=>DBMTProductCatalog.refresh()),false);fail=false;
     assert.equal(await b.evaluate(()=>labelProducts.length),lastGood);assert.equal(await b.evaluate(()=>DBMTProductCatalog.refresh()),true);
