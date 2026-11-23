@@ -313,6 +313,8 @@ function calculate(transactions, options={}){
       if(t.type==='생산입고'){
         bucket.source = '생산입고';
         if(!bucket.proddate) bucket.proddate = stockProddate || t.proddate || t.date || '';
+        // Only a production receipt supplies the date shown in inventory.
+        if(stockProddate) bucket.factoryProductionDate = stockProddate;
       } else if(!bucket.source) {
         bucket.source = '입고';
       }
@@ -348,6 +350,10 @@ function calculate(transactions, options={}){
       applyBucketProductMeta(dest, t);
       const receiptDates = [dest.inboundDate,...movedBuckets.map(s=>s.inboundDate)].filter(Boolean).sort();
       if(receiptDates.length) dest.inboundDate = receiptDates[0];
+      const movedProductionDate = movedBuckets[0]?.factoryProductionDate;
+      if(movedProductionDate && movedBuckets.every(s=>s.factoryProductionDate===movedProductionDate)){
+        dest.factoryProductionDate = movedProductionDate;
+      }
       dest.total_adjust += weight;
       dest.stock += weight;
       if(moveBoxesKnown && movedBuckets[0].stockBoxes !== null) applyStockBoxes(dest, t.boxCount);
@@ -397,18 +403,27 @@ function calculate(transactions, options={}){
       else usedBuckets.forEach(s=>{ s.stockBoxes = null; });
     }
   });
-  const productionNotes = new Map();
+  const productionOrigins = new Map();
   const inboundPrices = new Map();
   const inboundDates = new Map();
   stockTxns.forEach(({t})=>{
-    if(t.type === '생산입고' && t.stockRowId) productionNotes.set(String(t.stockRowId), String(t.stockNote || ''));
+    if(t.type === '생산입고' && t.stockRowId){
+      productionOrigins.set(String(t.stockRowId), {
+        note:String(t.stockNote || ''),
+        date:t._pdaProvisional === true ? '' : getStockTxnProddate(t)
+      });
+    }
     if(t.type === '입고' && t.stockRowId){
       inboundPrices.set(String(t.stockRowId), getTxnUnitPrice(t));
       inboundDates.set(String(t.stockRowId), stockLedgerDateKey(t.date));
     }
   });
   Object.values(map).forEach(bucket=>{
-    if(bucket.stockRowId && productionNotes.has(bucket.stockRowId)) bucket.stockNote = productionNotes.get(bucket.stockRowId);
+    const production = productionOrigins.get(bucket.stockRowId);
+    if(production){
+      bucket.stockNote = production.note;
+      if(production.date) bucket.factoryProductionDate = production.date;
+    }
     // 이동 당시 단가가 남아 있어도 현재 재고 평가는 정정한 입고원본 단가를 따른다.
     if(bucket.stockRowId && inboundPrices.has(bucket.stockRowId)) bucket.price = inboundPrices.get(bucket.stockRowId);
     if(bucket.stockRowId && inboundDates.has(bucket.stockRowId)) bucket.inboundDate = inboundDates.get(bucket.stockRowId);

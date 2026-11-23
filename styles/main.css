@@ -205,7 +205,6 @@
   #stock-table .stock-receipt-table{width:100%;min-width:680px;background:#fff;border:1px solid #d7dce2;}
   #stock-table .stock-receipt-table th,#stock-table .stock-receipt-table td{padding:6px 8px;text-align:right;}
   #stock-table .stock-receipt-table th{position:static;background:#eee;}
-  #stock-table .stock-receipt-table td:nth-child(2),#stock-table .stock-receipt-table th:nth-child(2){text-align:left;}
   #stock-table .stock-receipt-actions{width:130px;white-space:nowrap;}
   #stock-table .stock-receipt-actions .btn{padding:3px 5px;font-size:10px;}
 

@@ -11,7 +11,8 @@ const group=transactions=>view.groupRows(stock(transactions),transactions);
 const original=JSON.stringify(receipts),rows=stock(receipts),rawBefore=JSON.stringify(rows),grouped=view.groupRows(rows,receipts);
 assert.equal(grouped.length,1);assert.equal(grouped[0].stock,2313.93);assert.equal(grouped[0].total_in,2313.93);
 assert.equal(grouped[0].stockBoxes,101);assert.equal(grouped[0]._inventoryStockRows.length,10);
-assert.equal(view.dateLabel(grouped[0]),'여러 날짜');assert.match(view.dateText(grouped[0]),/2026-07-23/);
+assert(rows.every(row=>!row.factoryProductionDate));
+assert.equal(view.members(grouped[0])[0].proddate,receipts[0].proddate);
 assert.equal(view.summarize(grouped).totalAmount,ledger.summarize(rows).totalAmount);
 assert.equal(JSON.stringify(rows),rawBefore);assert.equal(JSON.stringify(receipts),original);
 assert.equal(new Set(view.members(grouped[0]).map(row=>row.stockRowId)).size,10);
@@ -40,9 +41,25 @@ assert.equal(group(receipts.map((row,i)=>({...row,boxCount:i?row.boxCount:null})
 const tiny=receipts.slice(0,2).map(row=>({...row,weight:.25,boxCount:1,price:1}));
 assert.equal(group(tiny)[0].stock,.5);assert.equal(view.amount(group(tiny)[0]),0,'Sum rounded source valuations, never round aggregate again');
 assert.equal(ledger.rows(ledger.calculate(receipts,{asOfDate:'2026-10-19'})).length,0);
+const made={id:'qa-made',type:'생산입고',product:'QA 자체 생산품',lot:'QA-MADE',stockRowId:'qa-factory',
+  date:'2026-10-21',weight:10,boxCount:2,price:0,origin:'미국산',stockLocation:'가공장'};
+const transfer=(source,fields={})=>({...source,id:'qa-move-'+source.id,type:'재고이동',date:'2026-10-22',
+  fromLocation:'가공장',toLocation:'물류창고',weight:4,boxCount:1,...fields});
+const legacyMade={...made,id:'qa-legacy-made',stockRowId:'',lot:'QA-LEGACY',price:5000};
+const movementRows=stock([made,transfer(made),legacyMade,transfer(legacyMade,{proddate:legacyMade.date}),
+  receipts[0],transfer(receipts[0])]);
+const producedRows=movementRows.filter(row=>row.product===made.product);
+assert.equal(producedRows.length,4,'Both ID-based and legacy production transfer to another warehouse');
+assert(producedRows.every(row=>row.factoryProductionDate===made.date),'Produced dates follow stock, including zero-cost production');
+const rawMoved=movementRows.find(row=>row.stockRowId===receipts[0].stockRowId&&row.stockLocation==='물류창고');
+assert(rawMoved);
+assert.equal(rawMoved.proddate,receipts[0].proddate);
+assert.equal(rawMoved.factoryProductionDate,undefined);
 vm.runInNewContext(fs.readFileSync(path.join(root,'stock-report.js'),'utf8'),pure);
-const report=pure.window.DBMTStockReport.buildDocument({rows:[remaining]});
-assert.match(report,/2218.48|2,218.48/);assert.match(report,/2026-07-23/);assert.match(report,/PDA 입고묶음/);
+for(const kind of ['stock','count']){
+  const report=pure.window.DBMTStockReport.buildDocument({rows:[remaining,...producedRows],kind});
+  assert.match(report,/2218.48|2,218.48/);assert.match(report,/2026-10-21/);assert.doesNotMatch(report,/2026-07-23/);assert.match(report,/PDA 입고묶음/);
+}
 assert.match(pure.window.DBMTStockReport.buildDocument({rows:[shortage]}),/일부 부족/);
 assert.match(pure.window.DBMTStockReport.buildDocument({rows:group(tiny)}),/재고금액 <strong>0원/);
 console.log('PASS: 10 PDA sources -> 1 bundle, exact quantities/cost/boxes, boundaries, dates, negative/unknown boxes, raw barcode identities intact');
@@ -84,19 +101,23 @@ const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-stock-receipt-'));
     `});
     const summaries=page.locator('#stock-body>tr:not(.stock-receipt-details)');
     assert.equal(await summaries.count(),1);assert.match(await summaries.innerText(),/2313\.93/);assert.match(await summaries.innerText(),/101 박스/);
+    assert.equal(await summaries.locator('td').nth(5).innerText(),'-');
     assert.match(await page.locator('#stock-stats').innerText(),/2,313|2313/);
     assert.equal(await page.locator('.stock-receipt-details:visible').count(),0);
     await page.getByRole('button',{name:'입고묶음 상세',exact:true}).click();
     assert.equal(await page.locator('.stock-receipt-table tbody tr').count(),10);
+    assert.doesNotMatch(await page.locator('.stock-receipt-table').innerText(),/생산일|2026-07-23/);
     assert.equal(await page.getByRole('button',{name:'상세/정리',exact:true}).getAttribute('aria-expanded'),'true');
     await page.screenshot({path:path.join(artifacts,'desktop-expanded.png'),fullPage:true});
     const first=page.locator('.stock-receipt-table tbody tr').first();
     await first.getByRole('button',{name:'정리',exact:true}).click();
     assert.equal(await page.locator('#stock-adj-row-id').inputValue(),receipts[0].stockRowId);
     assert.equal(await page.locator('#stock-adj-proddate').inputValue(),receipts[0].proddate);
+    assert.equal(await page.locator('#stock-adj-proddate-view').inputValue(),'-');
     await page.locator('#stock-adj-actual').fill('300');await page.getByRole('button',{name:'정리 저장',exact:true}).click();
     await page.waitForFunction(()=>writes.length===1&&stockQuerySnapshot.rows[0].stock===2275.60);
     const write=await page.evaluate(()=>writes[0]);assert.equal(write.stockRowId,receipts[0].stockRowId);assert.equal(write.weight,-38.33);
+    assert.equal(write.proddate,receipts[0].proddate);
     await page.getByRole('button',{name:'상세/정리',exact:true}).click();
     await first.getByRole('button',{name:'박스기준',exact:true}).click();
     const boxIdentity=JSON.parse(await page.locator('#stock-box-identity').inputValue());assert.equal(boxIdentity.stockRowId,receipts[0].stockRowId);
@@ -104,7 +125,7 @@ const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-stock-receipt-'));
     await page.waitForFunction(()=>writes.length===2);assert.equal((await page.evaluate(()=>writes[1])).stockRowId,receipts[0].stockRowId);
     assert.equal(await page.evaluate(()=>stockQuerySnapshot.rows[0].stockBoxes),99);
     await page.evaluate(()=>exportStockCSV());
-    const csv=await page.evaluate(()=>csvResult);assert.equal(csv.rows.length,2);assert.equal(csv.rows[1][13],'2275.60');assert.equal(csv.rows[1][14],'99');assert.match(csv.rows[1][7],/2026-07-23/);
+    const csv=await page.evaluate(()=>csvResult);assert.equal(csv.rows.length,2);assert.equal(csv.rows[1][13],'2275.60');assert.equal(csv.rows[1][14],'99');assert.equal(csv.rows[1][7],'');
     await page.evaluate(()=>{document.getElementById('stock-search').value='2026-07-23';renderStock()});assert.equal(await summaries.count(),1);
     await page.evaluate(()=>{document.getElementById('stock-search').value='';document.getElementById('stock-as-of-date').value='2026-10-20';renderStock()});
     assert.equal(await page.locator('#stock-body .stock-adjust-btn').count(),0,'Historical details are read only');
@@ -113,6 +134,13 @@ const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-stock-receipt-'));
     await page.evaluate(()=>{document.getElementById('stock-as-of-date').value='';canEdit=false;renderStock()});
     assert.equal(await page.locator('#stock-body .stock-adjust-btn').count(),0,'No adjustment controls without permission');
     assert.equal(await page.getByRole('button',{name:'입고묶음 상세',exact:true}).count(),1);
+    await page.evaluate(production=>{
+      userTransactions.push(production);invalidateStockMap();stockSortKey='proddate';stockSortDir='desc';canEdit=true;renderStock();exportStockCSV();
+    },made);
+    assert.equal(await summaries.first().locator('td').nth(5).innerText(),made.date);
+    assert.equal((await page.evaluate(()=>csvResult)).rows[1][7],made.date);
+    await summaries.first().getByRole('button',{name:'정리',exact:true}).click();
+    assert.equal(await page.locator('#stock-adj-proddate-view').inputValue(),made.date);
     assert.deepEqual(errors,[]);
     console.log('PASS: desktop one row/details, exact-source adjustment and box baseline, date search, historical/permission locks, grouped CSV');
   }finally{await browser.close()}

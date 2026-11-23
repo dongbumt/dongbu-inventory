@@ -7,15 +7,12 @@
   const hasNegative=row=>members(row).some(source=>source.stock<-.005 || source.stockBoxes<0);
   const boxText=(value,missing='박스 미기록')=>value===null||value===undefined||value===''||!Number.isSafeInteger(Number(value))?
     missing:Number(value).toLocaleString('ko-KR');
-  const dateText=row=>(row._inventoryProductionDates||[row.proddate||'-']).join(' / ');
-  const dateLabel=row=>row._inventoryProductionDates?.length>1?'여러 날짜':row.proddate||'-';
   function groupRows(rows,transactions=[]){
     return root.DBMTWorkOrderStockGroups.group(rows,transactions).map(row=>{
       if(!row._workOrderStockRows)return row;
       const sources=row._workOrderStockRows;
       const summary={...row,_inventoryStockRows:sources,
-        _inventoryAmount:sources.reduce((sum,source)=>sum+amount(source),0),
-        _inventoryProductionDates:[...new Set(sources.map(source=>source.proddate||'-'))].sort()};
+        _inventoryAmount:sources.reduce((sum,source)=>sum+amount(source),0)};
       for(const field of ['total_in','total_use','total_out','total_adjust','stock']){
         summary[field]=sources.reduce((sum,source)=>sum+Math.round((Number(source[field])||0)*100),0)/100;
       }
@@ -39,5 +36,5 @@
     return {count:rows.length,totalWeight:rows.reduce((sum,row)=>sum+Math.round((Number(row.stock)||0)*100),0)/100,
       totalAmount:rows.reduce((sum,row)=>sum+amount(row),0)};
   }
-  root.DBMTStockReceiptView={groupRows,members,filterRows,summarize,amount,hasNegative,boxText,dateText,dateLabel};
+  root.DBMTStockReceiptView={groupRows,members,filterRows,summarize,amount,hasNegative,boxText};
 })(window);

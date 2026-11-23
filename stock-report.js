@@ -12,7 +12,6 @@
   const money = value => Math.round(number(value)).toLocaleString('ko-KR');
   const cell = value => escapeHtml(String(value ?? '').trim() || '-');
   const amount = row => Number.isFinite(row._inventoryAmount) ? row._inventoryAmount : Math.round(number(row.stock) * number(row.price));
-  const productionDates = row => (row._inventoryProductionDates || [row.proddate || '-']).join(' / ');
   const status = row => number(row.stock) < -.005 ? '마이너스' :
     (row._inventoryStockRows || [row]).some(source=>source.stock<-.005 || source.stockBoxes<0) ? '일부 부족' : number(row.stock) > 0.01 ? '정상' : '소진';
   const stockBoxDetail = row => {
@@ -32,7 +31,7 @@
       <td class="center">${i + 1}</td><td>${cell(row.stockLocation)}</td>
       <td><strong>${cell(row.product)}</strong>${row.packunit ? `<span class="detail">${escapeHtml(row.packunit)}</span>` : ''}${row.stockNote ? `<span class="detail">비고: ${escapeHtml(row.stockNote)}</span>` : ''}${row._inventoryStockRows ? `<span class="detail">PDA 입고묶음 (${cell(row.inboundDate)})</span>` : ''}</td>
       <td>${cell(row.brand)}<span class="detail">${cell(row.grade)}</span></td>
-      <td>${cell(row.lot)}<span class="detail">${cell(productionDates(row))}</span></td><td>${cell(row.origin)}</td>
+      <td>${cell(row.lot)}${row.factoryProductionDate ? `<span class="detail">${cell(row.factoryProductionDate)}</span>` : ''}</td><td>${cell(row.origin)}</td>
       ${countSheet ? `<td class="number">${qty(row.total_adjust)}</td>
       <td class="number"><strong>${qty(row.stock)}</strong></td>
       <td class="write-cell" aria-label="실재고 기입란"></td><td class="write-cell" aria-label="차이 기입란"></td>` : `
