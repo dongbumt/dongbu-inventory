@@ -147,7 +147,7 @@
       <div class="controls"><div class="control-row">
         <select id="stock-location" onchange="renderStock()"><option value="">전체 지점</option></select>
         <select id="stock-positive" onchange="renderStock()"><option value="재고">재고·마이너스</option><option value="소진">소진</option><option value="">전체 재고</option></select>
-        <input id="stock-search" class="wide" type="search" placeholder="품목·이력번호·원산지·비고 검색" oninput="renderStock()">
+        <input id="stock-search" class="wide" type="search" placeholder="품목·이력번호·입고(생산)일 등 검색" oninput="renderStock()">
       </div></div>
       <div id="stock-summary" class="summary"></div><div id="stock-list" class="list"></div>
     </section>
@@ -180,7 +180,7 @@
   <script src="stock-ledger.js?v=20261123factorydate1"></script>
   <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
   <script src="work-order-stock-groups.js?v=20261119allocation1"></script>
-  <script src="stock-receipt-view.js?v=20261123factorydate1"></script>
+  <script src="stock-receipt-view.js?v=20261123receiptdate1"></script>
   <script src="mobile-production.js?v=20261117receipt1"></script>
   <script>
     const SUPABASE_URL='https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -328,18 +328,21 @@
       const {count,totalWeight,totalAmount}=DBMTStockReceiptView.summarize(rows);
       document.getElementById('stock-count').textContent=`${count}항목`;
       document.getElementById('stock-summary').innerHTML=`<span>총 재고 <strong>${qty(totalWeight)}kg</strong></span><span>재고금액 <strong>${money(totalAmount)}원</strong></span>`;
-      document.getElementById('stock-list').innerHTML=rows.length?limitedRows(rows,row=>`<div class="row">
+      document.getElementById('stock-list').innerHTML=rows.length?limitedRows(rows,row=>{
+        const date=DBMTStockReceiptView.displayDate(row);
+        return `<div class="row">
         <div class="row-top"><div class="row-title">${text(row.product||'-')}</div><div class="row-value ${DBMTStockReceiptView.hasNegative(row)?'warning':''}">${qty(row.stock)}kg</div></div>
         <div class="meta"><span>${text(row.stockLocation)}</span><span>${text(row.origin||'-')}</span><span>LOT ${text(row.lot||'-')}</span>
           ${row.packunit?`<span>포장 ${text(row.packunit)}</span>`:''}
-          ${row.factoryProductionDate?`<span>생산 ${text(row.factoryProductionDate)}</span>`:''}
+          ${date?`<span>${row.factoryProductionDate?'생산':'입고'} ${text(date)}</span>`:''}
           ${row.price?`<span>${money(row.price)}원/kg</span>`:''}<span>박스수 ${DBMTStockReceiptView.boxText(row.stockBoxes,'미기록')}</span>
           ${row.stockNote?`<span>비고 ${text(row.stockNote)}</span>`:''}${DBMTStockReceiptView.hasNegative(row)?'<span>재고 부족 · 상세 확인</span>':''}
         </div>
         ${row._inventoryStockRows?`<details><summary>PDA 입고묶음 상세 · ${text(row.inboundDate)}</summary>
           ${row._inventoryStockRows.map(source=>`<div class="meta"><span>${qty(source.stock)}kg</span><span>${DBMTStockReceiptView.boxText(source.stockBoxes,'미기록')} 박스</span></div>`).join('')}
         </details>`:''}
-      </div>`,300):empty('재고');
+      </div>`;
+      },300):empty('재고');
     }
 
     function monday(value){const d=new Date(`${dateValue(value)}T12:00:00`);d.setDate(d.getDate()-((d.getDay()+6)%7));return localDate(d)}

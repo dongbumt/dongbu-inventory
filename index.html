@@ -8,7 +8,7 @@
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
 <script src="work-order-stock-groups.js?v=20261119allocation1"></script>
-<script src="stock-receipt-view.js?v=20261123factorydate1"></script>
+<script src="stock-receipt-view.js?v=20261123receiptdate1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="label-lots.js?v=20261029lots1"></script>
@@ -1403,7 +1403,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <label for="stock-as-of-date" style="font-size:12px;white-space:nowrap;">기준일</label>
         <input type="date" id="stock-as-of-date" style="width:150px;" onchange="markStockSearchPending()" oninput="markStockSearchPending()" aria-describedby="stock-query-note">
         <button class="btn btn-secondary btn-sm" onclick="resetStockAsOfDate()">현재</button>
-        <input placeholder="품목/이력번호 검색..." id="stock-search" style="width:180px;" autocomplete="off" oninput="markStockSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runStockSearch();}">
+        <input placeholder="품목·이력번호·입고(생산)일" id="stock-search" style="width:180px;" autocomplete="off" oninput="markStockSearchPending()" onkeydown="if(event.key==='Enter'){event.preventDefault();runStockSearch();}">
         <button id="stock-search-btn" class="btn btn-primary btn-sm" onclick="runStockSearch()">조회</button>
         <select id="stock-location-filter" style="font-size:12px;padding:7px 10px;width:auto;" onchange="markStockSearchPending()">
           <option value="">전체 지점</option>
@@ -1430,7 +1430,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <th onclick="stockSort('brand')" style="cursor:pointer;user-select:none;">브랜드 <span id="ss-brand"></span></th>
           <th onclick="stockSort('grade')" style="cursor:pointer;user-select:none;">등급 <span id="ss-grade"></span></th>
           <th onclick="stockSort('lot')" style="cursor:pointer;user-select:none;">이력번호 <span id="ss-lot"></span></th>
-          <th onclick="stockSort('proddate')" style="cursor:pointer;user-select:none;">생산일 <span id="ss-proddate"></span></th>
+          <th onclick="stockSort('displayDate')" style="cursor:pointer;user-select:none;">입고(생산)일 <span id="ss-displayDate"></span></th>
           <th onclick="stockSort('origin')" style="cursor:pointer;user-select:none;">원산지 <span id="ss-origin"></span></th>
           <th onclick="stockSort('total_in')" style="text-align:right;cursor:pointer;user-select:none;">총입고(KG) <span id="ss-total_in"></span></th>
           <th onclick="stockSort('total_use')" style="text-align:right;cursor:pointer;user-select:none;">총사용(KG) <span id="ss-total_use"></span></th>
@@ -1470,7 +1470,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
     <div class="form-row">
       <div class="form-group"><label>원산지</label><input id="stock-adj-origin-view" readonly style="background:#f8f9fa;"></div>
       <div class="form-group"><label>이력번호</label><input id="stock-adj-lot-view" readonly style="background:#f8f9fa;"></div>
-      <div class="form-group"><label>생산일</label><input id="stock-adj-proddate-view" readonly style="background:#f8f9fa;"></div>
+      <div class="form-group"><label>입고(생산)일</label><input id="stock-adj-proddate-view" readonly style="background:#f8f9fa;"></div>
       <div class="form-group"><label>단가</label><input id="stock-adj-price-view" readonly style="background:#f8f9fa;text-align:right;"></div>
     </div>
     <div class="form-row">
@@ -12732,8 +12732,10 @@ function renderStock(){
   // 정렬: 클릭한 열 기준 오름차순/내림차순
   const _dir = stockSortDir === 'asc' ? 1 : -1;
   rows.sort((a,b)=>{
-    const k = stockSortKey === 'proddate' ? 'factoryProductionDate' : stockSortKey;
-    if(k==='product'||k==='brand'||k==='grade'||k==='lot'||k==='origin'||k==='factoryProductionDate'||k==='stockLocation')
+    const k = stockSortKey;
+    if(k==='displayDate')
+      return _dir * DBMTStockReceiptView.displayDate(a).localeCompare(DBMTStockReceiptView.displayDate(b));
+    if(k==='product'||k==='brand'||k==='grade'||k==='lot'||k==='origin'||k==='stockLocation')
       return _dir * String(a[k]||'').localeCompare(String(b[k]||''),'ko');
     if(k==='stock_amount')
       return _dir * (DBMTStockReceiptView.amount(a) - DBMTStockReceiptView.amount(b));
@@ -12748,7 +12750,7 @@ function renderStock(){
   const queryNote = document.getElementById('stock-query-note');
   if(queryNote) queryNote.textContent = [stockQueryDescription(filters), warning].filter(Boolean).join(' ');
   // 정렬 표시(▲▼) 업데이트
-  ['stockLocation','product','brand','grade','lot','proddate','origin','price','total_in','total_use','total_out','total_adjust','stock','stock_amount'].forEach(k=>{
+  ['stockLocation','product','brand','grade','lot','displayDate','origin','price','total_in','total_use','total_out','total_adjust','stock','stock_amount'].forEach(k=>{
     const el=document.getElementById('ss-'+k);
     if(el) el.textContent = k===stockSortKey ? (stockSortDir==='asc'?'▲':'▼') : '';
   });
@@ -12789,7 +12791,7 @@ function renderStock(){
       <td>${htmlEscape(s.brand||'-')}</td>
       <td>${htmlEscape(s.grade||'-')}</td>
       <td style="font-family:monospace;font-size:11px">${htmlEscape(s.lot||'-')}</td>
-      <td style="font-size:11px;white-space:nowrap;">${htmlEscape(s.factoryProductionDate||'-')}</td>
+      <td style="font-size:11px;white-space:nowrap;">${htmlEscape(DBMTStockReceiptView.displayDate(s)||'-')}</td>
       <td>${htmlEscape(s.origin||'-')}</td>
       <td style="text-align:right">${(s.total_in||0).toFixed(2)}</td>
       <td style="text-align:right">${(s.total_use||0).toFixed(2)}</td>
@@ -12807,7 +12809,7 @@ function renderStock(){
 
 function stockManagementButtons(s,canSetBoxBaseline){
   const boxIdentity=JSON.stringify({product:s.product,lot:s.lot,origin:s.origin,price:s.price,proddate:s.proddate,packunit:s.packunit,stockLocation:s.stockLocation,stockRowId:s.stockRowId,stockNote:s.stockNote,stock:s.stock,stockBoxes:s.stockBoxes});
-  return `<button type="button" class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(s.stock)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')},${jsArg(s.factoryProductionDate||'')})">정리</button>${canSetBoxBaseline?` <button type="button" class="btn btn-sm btn-secondary" onclick="openStockBoxBaseline(${jsArg(boxIdentity)})">박스기준</button>`:''}`;
+  return `<button type="button" class="btn btn-sm stock-adjust-btn" onclick="openStockAdjust(${jsArg(s.product)},${jsArg(s.lot)},${jsArg(s.origin)},${Number(s.price)||0},${Number(s.stock)||0},${jsArg(s.proddate||'')},${jsArg(s.packunit||'')},${jsArg(s.stockLocation||STOCK_LOCATION_DEFAULT)},${jsArg(s.stockRowId||'')},${jsArg(s.stockNote||'')},${jsArg(DBMTStockReceiptView.displayDate(s))})">정리</button>${canSetBoxBaseline?` <button type="button" class="btn btn-sm btn-secondary" onclick="openStockBoxBaseline(${jsArg(boxIdentity)})">박스기준</button>`:''}`;
 }
 
 function renderStockReceiptDetails(s,index,canAdjust,canSetBoxes){
@@ -12839,7 +12841,7 @@ function applyStockPermissionState(){
   if(!canAdjust){ closeStockAdjust(); closeStockBoxBaseline(); }
 }
 
-function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit='', stockLocation='', stockRowId='', stockNote='', factoryProductionDate=''){
+function openStockAdjust(product, lot, origin, price, stock, proddate='', packunit='', stockLocation='', stockRowId='', stockNote='', displayDate=''){
   if(!stockPersonalCan('update')){ toast('재고 정리 권한이 없습니다.'); return; }
   if(!stockCanAdjustCurrent()){ toast('기준일 재고는 조회 전용입니다. ‘현재’로 조회한 뒤 재고를 정리해주세요.'); return; }
   const set = (id, value) => { const el=document.getElementById(id); if(el) el.value=value; };
@@ -12858,7 +12860,7 @@ function openStockAdjust(product, lot, origin, price, stock, proddate='', packun
   set('stock-adj-product-view', product || '');
   set('stock-adj-packunit-view', packunit || '-');
   set('stock-adj-lot-view', lot || '');
-  set('stock-adj-proddate-view', factoryProductionDate || '-');
+  set('stock-adj-proddate-view', displayDate || '-');
   set('stock-adj-origin-view', origin || '');
   set('stock-adj-price-view', price ? Number(price).toLocaleString() : '-');
   set('stock-adj-current', (Number(stock)||0).toFixed(2));
@@ -15733,9 +15735,9 @@ function printStockCountSheet(){
 function exportStockCSV(){
   const snapshot = getStockExportSnapshot();
   if(!snapshot) return;
-  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','생산일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','재고(박스)','단가','재고금액','비고'];
+  const header=['기준일','지점','품목명','포장규격','브랜드','등급','이력번호','입고(생산)일','원산지','총입고(KG)','총사용(KG)','총출고(KG)','조정(KG)','재고(KG)','재고(박스)','단가','재고금액','비고'];
   const rows=snapshot.rows.map(r=>[
-    snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',r.factoryProductionDate||'',r.origin||'',
+    snapshot.filters.asOfDate || '현재',r.stockLocation||STOCK_LOCATION_DEFAULT,r.product,r.packunit||'',r.brand||'',r.grade||'',r.lot||'',DBMTStockReceiptView.displayDate(r),r.origin||'',
     Number(r.total_in||0).toFixed(2),
     Number(r.total_use||0).toFixed(2),
     Number(r.total_out||0).toFixed(2),
@@ -23022,7 +23024,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="livestock-trace-lookup.js?v=20260826bulktrace1"></script>
 <script src="trace-integration.js?v=20260827m05preview1"></script>
 <script src="submaterial-usage-print.js?v=20260907a4usage1"></script>
-<script src="stock-report.js?v=20261123factorydate1"></script>
+<script src="stock-report.js?v=20261123receiptdate1"></script>
 <script src="temperature-record.js?v=20260908temp1"></script>
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="driver-place-label.js?v=20261105place1"></script>

@@ -5,7 +5,7 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
 const base={date:'2026-10-15',origin:'국내산',stockLocation:'가공장',price:6000,lot:'QA-LOT',packunit:'5KG',proddate:'2026-10-15'};
 const fixture=[
-  {...base,type:'입고',product:'가상 원료육',origin:'미국',lot:'QA-OLD',weight:100,price:2500,proddate:'2026-10-02'},
+  {...base,type:'입고',product:'가상 원료육',origin:'미국',lot:'QA-OLD',date:'2026-10-13',weight:100,price:2500,proddate:'2026-10-02'},
   {...base,type:'출고',product:'가상 원료육',origin:'미국산',lot:'QA-OLD',weight:25,price:5000,proddate:'2026-10-02'},
   {...base,type:'생산입고',product:'가상 생산품',stockRowId:'A',stockNote:'3mm',weight:100,boxCount:10},
   {...base,type:'생산입고',product:'가상 생산품',stockRowId:'B',stockNote:'5mm',weight:60},
@@ -51,7 +51,9 @@ const fixture=[
     assert.match(await page.locator('#stock-list').innerText(),/박스수 미기록/);
     assert.match(await page.locator('#stock-list').innerText(),/포장 5KG/);
     const rawRow=page.locator('#stock-list .row').filter({hasText:'가상 원료육'});
-    assert.doesNotMatch(await rawRow.innerText(),/생산|2026-10-02/);
+    const rawText=await rawRow.innerText();
+    assert.match(rawText,/입고 2026-10-13/);
+    assert.doesNotMatch(rawText,/생산|2026-10-02/);
     const madeRows=await page.locator('#stock-list .row').filter({hasText:'가상 생산품'}).allInnerTexts();
     assert.equal(madeRows.length,3);
     assert(madeRows.every(row=>row.includes('생산 2026-10-15')));
@@ -68,6 +70,7 @@ const fixture=[
     await page.getByRole('button',{name:'새로고침',exact:true}).click();await page.waitForFunction(()=>document.getElementById('stock-count').textContent==='1항목');
     assert.match(await page.locator('#stock-summary').innerText(),/2,313\.93kg/);
     assert.match(await page.locator('#stock-list').innerText(),/박스수 101/);
+    assert.match(await page.locator('#stock-list .row>.meta').innerText(),/입고 2026-10-20/);
     await page.locator('#stock-list summary').click();assert.equal(await page.locator('#stock-list details .meta').count(),10);
     assert.doesNotMatch(await page.locator('#stock-list').innerText(),/2026-07-23|여러 날짜/);
     await page.locator('#stock-search').fill('2026-07-23');assert.equal(await page.locator('#stock-count').innerText(),'1항목');

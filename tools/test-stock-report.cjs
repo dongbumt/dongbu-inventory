@@ -229,7 +229,7 @@ async function testBrowser(){
     await countPopup.waitForFunction(()=>document.documentElement.dataset.printReady === 'true');
     assert.equal(await countPopup.locator('h1').innerText(), '재고 실사조사표');
     assert.deepEqual(await countPopup.locator('thead th').allTextContents(),
-      ['No.','지점','품목 / 포장 / 비고','브랜드 / 등급','이력번호 / 생산일','원산지','조정','현재고','실재고','차이']);
+      ['No.','지점','품목 / 포장 / 비고','브랜드 / 등급','이력번호 / 입고(생산)일','원산지','조정','현재고','실재고','차이']);
     assert.ok(!(await countPopup.locator('.summary').innerText()).includes('재고금액'));
     assert.equal(await countPopup.locator('tbody tr:first-child td').count(), 10);
     const firstStock=await page.evaluate(()=>stockQuerySnapshot.rows[0].stock.toFixed(2));
@@ -279,7 +279,7 @@ async function testBrowser(){
       if(name==='count'){
         assert.ok(pages.length>1, 'Count sheet should paginate');
         assert.deepEqual(await page.locator('thead').first().locator('th').allTextContents(),
-          ['No.','지점','품목 / 포장 / 비고','브랜드 / 등급','이력번호 / 생산일','원산지','조정','현재고','실재고','차이']);
+          ['No.','지점','품목 / 포장 / 비고','브랜드 / 등급','이력번호 / 입고(생산)일','원산지','조정','현재고','실재고','차이']);
         assert.equal(await page.locator('tbody tr').first().locator('td').count(),10);
         assert.equal(await page.locator('tbody tr').first().locator('td').nth(8).innerText(),'');
         assert.equal(await page.locator('tbody tr').first().locator('td').nth(9).innerText(),'');
