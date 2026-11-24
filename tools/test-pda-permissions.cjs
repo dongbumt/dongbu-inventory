@@ -79,7 +79,8 @@ const server=http.createServer((req,res)=>{
     assert(await page.locator('#nav-pda').isVisible());assert(await page.locator('#nav-transactions').isHidden());assert(await page.locator('#nav-stock').isHidden());
     assert.equal(await page.locator('.tab-panel.active').count(),0,'PDA-only role must not see an unauthorized office page');
     assert.equal(await page.evaluate(()=>__opened.length),0,'Logging in must not auto-open the standalone PDA');
-    await page.locator('#nav-pda').click();assert.equal((await page.evaluate(()=>__opened[0]))[0],'pda.html?v=20261021raw1');
+    await page.locator('#nav-pda').click();
+    assert.match((await page.evaluate(()=>__opened[0]))[0],/^pda\.html\?v=[0-9a-z]+$/i);
     await switchPermissions([{menuCode:'pda',canView:false,canCreate:true}]);assert(await page.locator('#nav-pda').isHidden());
     await switchPermissions([{menuCode:'label_products',canView:true}]);assert(await page.locator('#nav-distribution-products').isHidden(),'MT catalog rights cannot grant the distribution menu');
     await switchPermissions([{menuCode:'distribution_products',canView:true}]);assert(await page.locator('#nav-distribution-products').isVisible());assert.equal(await page.locator('.tab-panel.active').getAttribute('id'),'p-distribution-products');

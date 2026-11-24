@@ -30,8 +30,8 @@
   function focusScan(){if(!state.pending&&!state.saving&&!$('workspace').hidden)$('barcode').focus({preventScroll:true});}
   function pendingStore(){const key=PENDING+'_'+state.user.id;if(state.pending)storage.set(key,JSON.stringify({userId:state.user.id,body:state.pending,items:state.items}));else storage.remove(key);}
   function renderPartners(){
-    const selected=$('partner').value,query=$('partner-search').value.trim().toLocaleLowerCase();
-    $('partner').innerHTML='<option value="">거래처 선택</option>'+state.partners.filter(p=>!query||p.name.toLocaleLowerCase().includes(query)||p.id===selected).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    const selected=$('partner').value,match=DBMTPdaSearch.matcher($('partner-search').value);
+    $('partner').innerHTML='<option value="">거래처 선택</option>'+state.partners.filter(p=>match(p.name)||p.id===selected).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     $('partner').value=selected;
   }
   function render(){

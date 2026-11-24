@@ -77,7 +77,13 @@ const server=http.createServer((req,res)=>{
     commitDelay=100;await page.evaluate(()=>{const button=document.getElementById('save');button.click();button.dispatchEvent(new Event('click'));});
     assert(await page.locator('#confirm-dialog').isHidden());await page.waitForFunction(()=>document.getElementById('status').textContent.startsWith('저장 완료'));commitDelay=0;
     assert.equal(commits.length,1);assert.equal(saved.size,1);assert.equal(await page.locator('#items li').count(),0);
-    await page.locator('[name=mode][value=outbound]').check();await page.locator('#partner').selectOption('qa-partner');await scan();
+    await page.locator('[name=mode][value=outbound]').check();
+    const partnerSearch=page.locator('#partner-search'),partner=page.locator('#partner');
+    await partnerSearch.fill('ㄱㄴㄷ');assert.equal(await partner.locator('option[value="qa-partner"]').count(),0);
+    await partnerSearch.fill('ㅁㅊㅊ');assert.equal(await partner.locator('option[value="qa-partner"]').count(),1);
+    await partnerSearch.fill('매출처');assert.equal(await partner.locator('option[value="qa-partner"]').count(),1);
+    await partner.selectOption('qa-partner');await partnerSearch.fill('ㄱㄴㄷ');assert.equal(await partner.inputValue(),'qa-partner');
+    await partnerSearch.fill('');await scan();
     await page.screenshot({path:path.join(artifacts,'pm351-outbound.png'),fullPage:true});
     failAfterSave=true;await page.locator('#save').click();await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
     assert(await page.locator('#barcode').isDisabled());assert(await page.locator('#clear-items').isDisabled());const requestId=commits.at(-1).p_request_id;

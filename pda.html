@@ -8,10 +8,11 @@
   <link rel="stylesheet" href="styles/pda.css?v=20261110correct1">
   <link rel="stylesheet" href="styles/pda-kind.css?v=20261021raw1">
   <script src="pda-sound.js?v=20261014sound2" defer></script>
-  <script src="pda.js?v=20261111cancel1" defer></script>
+  <script src="pda-search.js?v=20261124initials1" defer></script>
+  <script src="pda.js?v=20261124initials1" defer></script>
 </head>
 <body>
-  <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><span aria-current="page">제품</span><a href="pda-raw.html">원료육</a></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
+  <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><span aria-current="page">제품</span><a href="pda-raw.html?v=20261124initials1">원료육</a></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
   <main>
     <div id="status" role="status" aria-live="polite"></div>
     <form id="login-form" class="login-form">
@@ -25,7 +26,7 @@
       <details id="settings-panel" open><summary id="settings-summary">작업 설정</summary><div class="settings">
         <label>작업일<input type="date" id="work-date" required></label>
         <label>재고 지점<select id="location" required></select></label>
-        <div class="partner-fields" id="partner-fields" hidden><label>출고 거래처<input type="search" id="partner-search" placeholder="거래처명 검색" autocomplete="off"></label><select id="partner" aria-label="출고 거래처"><option value="">거래처 선택</option></select></div>
+        <div class="partner-fields" id="partner-fields" hidden><label>출고 거래처<input type="search" id="partner-search" placeholder="거래처명·초성 검색" autocomplete="off"></label><select id="partner" aria-label="출고 거래처"><option value="">거래처 선택</option></select></div>
       </div></details>
       <form id="scan-form" class="scan-form"><label for="barcode">제품 고유바코드</label><div class="scan-input"><input id="barcode" name="barcode" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100"><button id="scan-submit" class="primary" type="submit">조회</button></div><label class="manual-toggle"><input id="manual-entry" type="checkbox">수기입력</label></form>
       <div id="queue-heading" class="queue-heading"><h2>스캔 목록 <span id="item-count">0</span></h2><div><button id="refresh-items" type="button">다시 조회</button><button id="clear-items" type="button">비우기</button></div></div>

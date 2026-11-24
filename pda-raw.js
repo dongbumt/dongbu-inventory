@@ -101,14 +101,14 @@
     catch(error){if(rulePicker===picker&&request===picker.request)$('rule-count').textContent=error.message;}
   });
   function renderProducts(){
-    const selected=$('product').value,q=$('product-search').value.trim().toLowerCase();
-    $('product').innerHTML='<option value="">품목 선택</option>'+state.products.filter(p=>String(p.id)===selected||!q||[p.name,p.productCode,p.brand,p.factoryNo,p.origin].join(' ').toLowerCase().includes(q)).map(p=>`<option value="${esc(p.id)}">${esc([p.productCode,p.name,p.brand,p.factoryNo,p.origin,p.storage,p.packunit].filter(Boolean).join(' · '))}</option>`).join('');
+    const selected=$('product').value,match=DBMTPdaSearch.matcher($('product-search').value);
+    $('product').innerHTML='<option value="">품목 선택</option>'+state.products.filter(p=>String(p.id)===selected||match(p.name,[p.name,p.productCode,p.brand,p.factoryNo,p.origin].join(' '))).map(p=>`<option value="${esc(p.id)}">${esc([p.productCode,p.name,p.brand,p.factoryNo,p.origin,p.storage,p.packunit].filter(Boolean).join(' · '))}</option>`).join('');
     $('product').value=selected;renderProductMeta();
   }
   function renderProductMeta(){const p=selectedProduct();$('product-meta').textContent=p?[p.name,p.brand||'브랜드 -',p.factoryNo||'공장번호 -',p.origin,p.storage,p.packunit].filter(Boolean).join(' · '):'';}
   function renderPartners(){
-    const selected=$('partner').value,q=$('partner-search').value.trim().toLowerCase(),kind=state.mode==='outbound'?'매출':'매입';
-    $('partner').innerHTML='<option value="">거래처 선택</option>'+state.partners.filter(p=>[kind,'매입/매출'].includes(p.tradeType)&&(!q||p.name.toLowerCase().includes(q)||p.id===selected)).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('partner').value=selected;
+    const selected=$('partner').value,match=DBMTPdaSearch.matcher($('partner-search').value),kind=state.mode==='outbound'?'매출':'매입';
+    $('partner').innerHTML='<option value="">거래처 선택</option>'+state.partners.filter(p=>[kind,'매입/매출'].includes(p.tradeType)&&(match(p.name)||p.id===selected)).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('partner').value=selected;
   }
   async function loadSources(){
     const request=++state.sourceRequest,epoch=state.epoch;state.sources=[];$('source').innerHTML='<option value="">재고 선택</option>';

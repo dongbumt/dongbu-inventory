@@ -73,8 +73,16 @@ const server=http.createServer((req,res)=>{
     });
     await page.goto(url);assert(await page.locator('#workspace').isHidden());
     await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0123');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});
-    assert.equal(await page.locator('#partner option[value="sales-only"]').count(),0,'Only purchase partners for raw receipt');
-    await page.locator('#product-search').fill('DE123');await page.locator('#product').selectOption(product.id);await page.locator('#partner').selectOption('qa-partner');await page.locator('#unit-price').fill('5000');
+    const productSearch=page.locator('#product-search'),productSelect=page.locator('#product');
+    const partnerSearch=page.locator('#partner-search'),partner=page.locator('#partner');
+    await partnerSearch.fill('ㅁㅊㅈㅇ');assert.equal(await partner.locator('option[value="sales-only"]').count(),0,'Only purchase partners for raw receipt');
+    await partnerSearch.fill('ㄱㄹㅊ');assert.equal(await partner.locator('option[value="qa-partner"]').count(),1);
+    await partner.selectOption('qa-partner');await partnerSearch.fill('');assert.equal(await partner.inputValue(),'qa-partner');
+    await productSearch.fill('ㄱㄴㄷ');assert.equal(await productSelect.locator('option[value="qa-raw-product"]').count(),0);
+    await productSearch.fill('ㅅㄱㅅ');assert.equal(await productSelect.locator('option[value="qa-raw-product"]').count(),1);
+    await productSearch.fill('DE123');await productSelect.selectOption(product.id);
+    await productSearch.fill('ㄱㄴㄷ');assert.equal(await productSelect.inputValue(),product.id);
+    await productSearch.fill('DE123');await page.locator('#unit-price').fill('5000');
     await page.locator('#barcode').fill('0104');await page.locator('#barcode').press('Control+]');assert.equal(await page.locator('#barcode').inputValue(),'0104|');
     const scan=async code=>{await page.locator('#barcode').fill(code);await page.locator('#barcode').press('Enter');};
     const choose=async()=>{
@@ -108,7 +116,10 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator('#logout').isDisabled(),false,'An uncertain request must not prevent reauthentication');
     await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('#save').innerText(),'같은 요청 재시도');
     await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.length,2);assert.equal(commits[1].p_request_id,requestId);
-    await page.locator('[name="mode"][value="outbound"]').check();await page.locator('#partner').selectOption('qa-partner');await scan(cases[0].code);await idle();
+    await page.locator('[name="mode"][value="outbound"]').check();
+    await partnerSearch.fill('ㅁㅊㅈㅇ');assert.equal(await partner.locator('option[value="sales-only"]').count(),1,'Sales partners are searchable for raw shipments');
+    assert.equal(await partner.inputValue(),'qa-partner','Filtering retains the selected partner');
+    await partnerSearch.fill('');await partner.selectOption('qa-partner');await scan(cases[0].code);await idle();
     assert.match(await page.locator('#items').innerText(),new RegExp('이력번호 '+traceability),'Outbound retrieves the saved domestic traceability number');
     denyCommit=true;await confirm();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('다른 작업자'));assert.equal(await page.locator('#items li').count(),1);assert.equal(await page.locator('#save').innerText(),'출고 확인');
     denyCommit=false;await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);
@@ -251,7 +262,8 @@ const server=http.createServer((req,res)=>{
       await page.setViewportSize({width,height:800});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`No overflow at ${width}px`);
       await page.screenshot({path:path.join(artifacts,`raw-${width}.png`),fullPage:true});
     }
-    assert.match(await page.locator('.pda-kind-mini a').first().getAttribute('href'),/^pda\.html$/);
+    const productPdaUrl=new URL(await page.locator('.pda-kind-mini a').first().getAttribute('href'),url);
+    assert.match(productPdaUrl.pathname,/\/pda\.html$/);
     const stored=await page.evaluate(()=>({...sessionStorage}));assert.deepEqual(Object.keys(stored),['dbmt_pda_session_token'],'Never persist a draft or business data outside pending retries');
     await page.locator('#logout').click();assert(await page.locator('#workspace').isHidden());
     assert.deepEqual(errors,[]);assert.deepEqual(blocked,[]);assert(calls.every(name=>name.startsWith('dbmt_pda_raw_')||['dbmt_erp_login','dbmt_erp_session','dbmt_erp_logout'].includes(name)),'Raw screen never calls product commit');
