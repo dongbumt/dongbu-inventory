@@ -26,8 +26,15 @@ const server=http.createServer((req,res)=>{
   const historicalOther=structuredClone(logs.filter(row=>row.workOrderId==='b'));
   const originalA=structuredClone(logs[0]);
   const summary=()=>orders.map(row=>{const all=logs.filter(l=>l.workOrderId===row.id),active=all.filter(l=>l.status!=='void');return {workOrderId:row.id,count:active.length,weight:active.reduce((s,l)=>s+l.labelWeight,0),totalCount:all.length};});
-  let hold='a',release,fail='',wrongScope='',complete=false,confirmInputs;
-  const completions=()=>complete?[{workOrderId:'a',productionId:'qa-production',deleted:false}]:[];
+  let hold='a',release,fail='',wrongScope='',complete=false,confirmInputs,revision=1;
+  const changes=new Map();
+  const otherCompletion={workOrderId:'b',productionId:'qa-other-production',deleted:false};
+  const completions=()=>complete?[otherCompletion,{workOrderId:'a',productionId:'qa-production',deleted:false}]:[otherCompletion];
+  function save(row){
+   const i=logs.findIndex(log=>log.id===row.id);
+   if(i<0)logs.push(row);else if(logs[i].status!=='void')logs[i]=row;
+   changes.set(row.id,++revision);
+  }
   await context.route('https://**/*',async route=>{
    const name=new URL(route.request().url()).pathname.split('/').pop(),body=route.request().postDataJSON();
    if(!body)return route.abort();
@@ -38,11 +45,16 @@ const server=http.createServer((req,res)=>{
     if(id&&hold===id)await new Promise(resolve=>release=resolve);
     if(id&&fail===id)return route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({message:'QA 이력 조회 실패'})});
     const scope=id&&wrongScope===id?'b':id;
-    result={appData:{workOrders:orders,labelProducts:[],labelPrintLogs:id?logs.filter(l=>l.workOrderId===scope):[]},logScope:{workOrderId:scope},logSummaries:summary(),completions:completions()};
-   }else if(name==='dbmt_label_print_save_logs'){
+    result={appData:{workOrders:orders,labelProducts:[],labelPrintLogs:id?logs.filter(l=>l.workOrderId===scope):[]},logScope:{workOrderId:scope,revision:String(revision)},logSummaries:summary(),completions:completions()};
+   }else if(name==='dbmt_label_print_save_logs_delta'){
     assert.equal(body.p_work_order_id,'a');assert(body.p_logs.every(l=>l.workOrderId==='a'));
-    for(const row of body.p_logs){const i=logs.findIndex(l=>l.id===row.id);if(i<0)logs.push(row);else logs[i]=row;}
-    result={ok:true,logs:logs.filter(l=>l.workOrderId==='a'),logScope:{workOrderId:'a'},logSummaries:summary(),completions:completions()};
+    for(const row of body.p_logs)save(row);
+    const submitted=new Set(body.p_logs.map(row=>row.id));
+    result={ok:true,
+      changedLogs:logs.filter(row=>row.workOrderId==='a'&&(submitted.has(row.id)||(changes.get(row.id)||0)>Number(body.p_after_revision))),
+      logScope:{workOrderId:'a',revision:String(revision)},
+      logSummaries:summary().filter(row=>row.workOrderId==='a'),
+      completions:completions().filter(row=>row.workOrderId==='a')};
    }else if(name.startsWith('dbmt_label_complete_production')){
     assert.equal(body.p_work_order_id,'a');assert.deepEqual(body.p_log_ids.slice().sort(),logs.filter(l=>l.workOrderId==='a'&&l.status!=='void').map(l=>l.id).sort());
     confirmInputs=body.p_confirmed_work_order;complete=true;result={ok:true,completions:completions()};
@@ -72,31 +84,51 @@ const server=http.createServer((req,res)=>{
   fail='b';await page.evaluate(()=>selectOrder('b'));await wait();
   assert.match(await page.locator('#status').textContent(),/조회 실패/);assert(await page.locator('#print-btn').isDisabled());
   assert(await page.locator('#inner-print-btn').isDisabled());assert(await page.locator('#complete-production-btn').isDisabled());
-  const writes=calls.filter(c=>c.name==='dbmt_label_print_save_logs').length;
-  await page.evaluate(()=>printSelectedLabels());assert.equal(calls.filter(c=>c.name==='dbmt_label_print_save_logs').length,writes);
+  const writes=()=>calls.filter(c=>c.name==='dbmt_label_print_save_logs_delta');
+  const readCount=()=>calls.filter(c=>c.name==='dbmt_label_print_get_data').length;
+  await page.evaluate(()=>printSelectedLabels());assert.equal(writes().length,0);
   fail='';await page.evaluate(()=>selectOrder('c'));await wait();
   assert.equal(await page.evaluate(()=>state.logs.length),0);assert(await page.locator('#print-btn').isEnabled());assert(await page.locator('#complete-production-btn').isDisabled());
   wrongScope='a';await page.evaluate(()=>selectOrder('a'));await wait();
   assert.match(await page.locator('#status').textContent(),/확인하지 못했습니다/);assert(await page.locator('#print-btn').isDisabled());
   wrongScope='';await page.evaluate(()=>selectOrder('a'));await wait();
-  // Reprint uses historical content; scoped save does not pull or mutate 1,500 other labels.
+  // Reprint uses historical content and receives only intervening rows for its work.
+  const readBeforeDelta=readCount();
+  const readRevision=String(revision);
+  save(makeLog(order,'a4',3));
   await page.evaluate(()=>reprintLog('a1'));await wait();
   assert.equal(logs.find(l=>l.id==='a1').reprintCount,1);
   assert.deepEqual(logs[0].workOrderSnapshot,originalA.workOrderSnapshot);assert.equal(logs[0].code,originalA.code);
-  assert.equal(await page.evaluate(()=>state.logs.length),3);
+  assert.equal(writes()[0].body.p_after_revision,readRevision);
+  assert.deepEqual(writes()[0].body.p_logs.map(row=>row.id),['a1']);
+  assert.equal(readCount(),readBeforeDelta,'A complete delta does not trigger a second read');
+  assert.equal(await page.evaluate(()=>state.logs.length),4,'Another station’s newly printed label appears');
+  assert.equal(await page.evaluate(()=>state.logsRevision),String(revision));
+  assert(await page.evaluate(()=>state.logSummaries.some(row=>row.workOrderId==='b'&&row.totalCount===1500)));
+  assert.deepEqual(await page.evaluate(()=>state.completions),[otherCompletion]);
   assert.match((await page.evaluate(()=>__printed)).join(' '),/5\.00/);
-  await page.evaluate(()=>voidLog('a2'));await wait();assert.equal(await page.locator('#metric-output').textContent(),'5 kg');
+  // An intervening deletion wins over stale local reprint data.
+  save({...logs.find(row=>row.id==='a2'),status:'void'});
+  const prints=await page.evaluate(()=>__printed.length);
+  await page.evaluate(()=>reprintLog('a2'));await wait();
+  assert.equal(await page.evaluate(()=>__printed.length),prints);
+  assert.match(await page.locator('#status').textContent(),/삭제 처리된 라벨/);
+  assert.equal(await page.locator('#metric-output').textContent(),'8 kg');
+  await page.evaluate(()=>printSelectedLabels());await wait();
+  assert.equal(writes().at(-1).body.p_logs.length,1,'Only newly printed records are sent');
+  assert.equal(readCount(),readBeforeDelta);
+  assert.equal(await page.locator('#metric-output').textContent(),'13 kg');
   assert.deepEqual(logs.filter(l=>l.workOrderId==='b'),historicalOther);
   await page.screenshot({path:path.join(artifacts,'selected-work-only.png')});
   // Recheck the latest input using a scoped read before completing; old barcode stays intact.
   order.inputWeight=110;order.sourceStock={...order.sourceStock,stock:110};
   await page.evaluate(()=>completeProduction());await wait();
-  assert.equal(confirmInputs.inputWeight,110);assert(complete);assert.equal(await page.evaluate(()=>state.logs.length),3);
+  assert.equal(confirmInputs.inputWeight,110);assert(complete);assert.equal(await page.evaluate(()=>state.logs.length),5);
   assert.match(dialogs.at(-1),/투입내역이 변경/);
   assert.deepEqual(logs[0].workOrderSnapshot,originalA.workOrderSnapshot);
   assert.deepEqual(logs.filter(l=>l.workOrderId==='b'),historicalOther);
   assert.deepEqual(errors,[]);
-  console.log('PASS: lightweight bootstrap, selected-work reads, other-work summaries, deferred-state preservation, failed/mismatched read guards, empty work, historical reprint/barcode, scoped save/void isolation and fresh-input completion.');
+  console.log('PASS: selected-work reads, revision-based save delta, other-work summary isolation, concurrent save/void, historical reprint/barcode and fresh-input completion.');
   console.log('Artifacts: '+artifacts);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

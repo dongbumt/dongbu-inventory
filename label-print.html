@@ -535,6 +535,7 @@
       scopedLogs: false,
       logsOrderId: '',
       logsPin: '',
+      logsRevision:undefined,
       completions: [],
       selectedId: '',
       requestedOrderId: new URLSearchParams(location.search).get('workOrderId') || '',
@@ -739,8 +740,14 @@
         state.scopedLogs=false;
         state.logsOrderId='';
       }
+      state.logsRevision=data?.logScope && Object.hasOwn(data.logScope,'revision')?
+        parseLogRevision(data.logScope.revision):undefined;
       state.logs=normalizeArray(logs);
       state.logsPin=state.pin;
+    }
+
+    function parseLogRevision(value){
+      return typeof value==='string'&&/^\d+$/.test(value)?value:null;
     }
 
     function applyLabelData(data,expectedId){
@@ -799,17 +806,72 @@
     async function saveLogs(changedLogs){
       if(!state.pin) throw new Error('라벨전용 PIN이 없습니다.');
       if(!Array.isArray(changedLogs) || !changedLogs.length) throw new Error('저장할 출력이력이 없습니다.');
-      // The RPC merges these rows into the saved history; resending all rows can exceed its time limit.
-      const result = await sbRpc('dbmt_label_print_save_logs', {
-        p_pin: state.pin,
-        p_logs: changedLogs,
-        p_work_order_id:String(state.selectedId)
-      });
+      const orderId = String(state.selectedId);
+      const args = {p_pin:state.pin,p_logs:changedLogs,p_work_order_id:orderId};
+      let result;
+      if(state.logsRevision===undefined){
+        result = await sbRpc('dbmt_label_print_save_logs', args);
+      }else{
+        try{
+          result = await sbRpc('dbmt_label_print_save_logs_delta',{...args,p_after_revision:state.logsRevision});
+        }catch(error){
+          // A PostgREST signature miss guarantees that no save was attempted.
+          if(error.code!=='PGRST202') throw error;
+          result = await sbRpc('dbmt_label_print_save_logs',args);
+        }
+      }
       if(result?.ok !== true) throw new Error(result?.message || '출력이력 저장을 확인하지 못했습니다.');
-      if(!Array.isArray(result.logs)) throw new Error('저장된 출력이력을 확인하지 못했습니다. 새로고침해주세요.');
-      applyLogData(result,result.logs,state.selectedId);
-      if(Array.isArray(result.completions)) state.completions = result.completions;
+      const isDelta = Array.isArray(result.changedLogs);
+      const rows = isDelta ? result.changedLogs : result.logs;
+      if(!Array.isArray(rows)) throw new Error('저장된 출력이력을 확인하지 못했습니다. 새로고침해주세요.');
+      const savedById = new Map(rows.map(row=>[String(row.id),row]));
+      if(changedLogs.some(row=>String(savedById.get(String(row.id))?.workOrderId)!==orderId)){
+        throw new Error('저장한 라벨의 출력이력을 확인하지 못했습니다. 새로고침해주세요.');
+      }
+      if(isDelta){
+        await applySavedLogDelta(result,savedById,orderId);
+      }else{
+        applyLogData(result,rows,orderId);
+        if(Array.isArray(result.completions)) state.completions = result.completions;
+      }
       renderAll();
+      return changedLogs.map(row=>savedById.get(String(row.id)));
+    }
+
+    async function applySavedLogDelta(data,savedById,orderId){
+      if(String(data.logScope?.workOrderId)!==orderId || parseLogRevision(data.logScope.revision)===null ||
+         savedById.size!==data.changedLogs.length || !Array.isArray(data.logSummaries) ||
+         data.changedLogs.some(row=>!row.id||String(row.workOrderId)!==orderId)||
+         data.logSummaries.some(row=>String(row.workOrderId)!==orderId)){
+        throw new Error('선택 작업의 출력이력을 확인하지 못했습니다. 새로고침해주세요.');
+      }
+      const logs = new Map(state.logs.filter(row=>String(row.workOrderId)===orderId).map(row=>[String(row.id),row]));
+      for(const [id,row] of savedById) logs.set(id,row);
+      const logSummaries = state.logSummaries.filter(row=>String(row.workOrderId)!==orderId).concat(data.logSummaries);
+      applyLogData({...data,logSummaries},[...logs.values()],orderId);
+      if(Array.isArray(data.completions)){
+        state.completions = state.completions.filter(row=>String(row.workOrderId)!==orderId)
+          .concat(data.completions.filter(row=>String(row.workOrderId)===orderId));
+      }
+      const summary = data.logSummaries[0] || {totalCount:0,count:0,weight:0};
+      const active = state.logs.filter(row=>row.status!=='void');
+      const weight = active.reduce((sum,row)=>sum+toNumber(row.labelWeight),0);
+      if(state.logs.length===Number(summary.totalCount) && active.length===Number(summary.count) &&
+         Math.abs(weight-Number(summary.weight))<.005) return;
+
+      // Another station changed this order after the last scoped read.
+      try{
+        const fresh = await sbRpc('dbmt_label_print_get_data',{p_pin:state.pin,p_work_order_id:orderId});
+        applyLabelData(fresh,orderId);
+        for(const row of state.logs){
+          const id = String(row.id);
+          if(savedById.has(id)) savedById.set(id,row);
+        }
+      }catch(error){
+        // Keep the confirmed save and require a fresh read before the next action.
+        state.logsPin='';
+        console.warn('선택 작업의 최신 출력이력을 불러오지 못했습니다.',error);
+      }
     }
 
     function renderAll(){
@@ -1200,10 +1262,14 @@
       setStatus('출력이력 저장 중...', 'warn');
       let logsSaved = false;
       try {
-        await saveLogs(records);
+        const saved = await saveLogs(records);
         logsSaved = true;
+        if(saved.some(log=>log.status==='void')){
+          setStatus('삭제 처리된 라벨은 출력할 수 없습니다. 출력이력을 확인해주세요.', 'warn');
+          return;
+        }
         setStatus('라벨 인쇄 준비 중...', 'warn');
-        await writePrintDocument(null, records, size);
+        await writePrintDocument(null, saved, size);
         setStatus(`출력 요청 처리됨: ${records.length}장 · 실제 출력을 확인해주세요.`, 'ok');
       } catch(err) {
         if(!logsSaved){
@@ -1272,11 +1338,15 @@
       setStatus('재출력 기록 저장 중...', 'warn');
       let logsSaved = false;
       try {
-        await saveLogs(records);
+        const saved = await saveLogs(records);
         logsSaved = true;
+        if(saved.some(log=>log.status==='void')){
+          setStatus('삭제 처리된 라벨은 재출력할 수 없습니다. 출력이력을 확인해주세요.', 'warn');
+          return;
+        }
         setStatus('라벨 재출력 준비 중...', 'warn');
         for(const size of ['7x10','10x10']){
-          const group=records.filter(log=>(log.sizeKey || log.workOrderSnapshot?.labelSize || '7x10')===size);
+          const group=saved.filter(log=>(log.sizeKey || log.workOrderSnapshot?.labelSize || '7x10')===size);
           if(group.length) await writePrintDocument(null, group, size);
         }
         setStatus(`외포장 ${records.length}장 재출력 요청 · 생산량 추가 없음 · 실제 출력을 확인해주세요.`, 'ok');
