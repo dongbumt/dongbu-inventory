@@ -8,14 +8,14 @@
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
 <script src="work-order-stock-groups.js?v=20261119allocation1"></script>
-<script src="work-order-blend.js?v=20261124blend1"></script>
+<script src="work-order-blend.js?v=20261124blend2"></script>
 <script src="stock-receipt-view.js?v=20261123receiptdate1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="label-lots.js?v=20261029lots1"></script>
 <link rel="stylesheet" href="styles/work-order-output-lots.css?v=20261029lots1">
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-<script src="label-layout.js?v=20261124blend1"></script>
+<script src="label-layout.js?v=20261124blend2"></script>
 <script src="label-print-document.js?v=20261118hidden1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
@@ -33,7 +33,7 @@ try{sessionStorage.removeItem('dbmt_supabase_session_token');}catch(_){}
 try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 </script>
 <link rel="stylesheet" href="styles/main.css?v=20261123factorydate1">
-<link rel="stylesheet" href="styles/manual-label.css?v=20261020manual1">
+<link rel="stylesheet" href="styles/manual-label.css?v=20261124blend2">
 <link rel="stylesheet" href="styles/distribution-products.css?v=20261119catalog1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
@@ -429,7 +429,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">🏭 생산일보</div>
       <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders">📝 작업지시</div>
       <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label">🏷️ 라벨출력</div>
-      <div class="nav-tab" onclick="window.open('label-print.html?v=20261023inputreview1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
+      <div class="nav-tab" onclick="window.open('label-print.html?v=20261124blend2','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
       <div class="nav-tab" onclick="showPage('p-product-specs',this)" id="nav-product-specs">📐 제품스펙</div>
       <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산로스율</div>
       <div class="nav-tab" onclick="DBMTAuth.openProductionBoard()" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
@@ -4042,7 +4042,16 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <div id="lbl-product-meta">품목관리에서 등록한 제품을 선택하세요.</div>
         </div>
         <div class="form-group"><label for="lbl-origin">원산지</label><input id="lbl-origin" type="text" placeholder="원산지"></div>
-        <div class="form-group"><label for="lbl-grade">성별 및 등급</label><input id="lbl-grade" type="text" placeholder="선택 입력"></div>
+        <div class="form-group" id="lbl-grade-field"><label for="lbl-grade">성별 및 등급</label><input id="lbl-grade" type="text" placeholder="선택 입력"></div>
+        <div class="form-group" id="lbl-fat-lot-field" hidden>
+          <label for="lbl-fat-lot">한우지방 이력번호</label>
+          <div class="manual-label-trace"><input id="lbl-fat-lot" type="text" autocomplete="off"><button id="lbl-slaughterhouse-lookup" type="button" class="btn btn-secondary btn-sm" disabled>조회</button></div>
+        </div>
+        <div class="form-group manual-label-full" id="lbl-slaughterhouse-field" hidden>
+          <label for="lbl-slaughterhouse">도축장</label>
+          <input id="lbl-slaughterhouse" type="text" maxlength="100" autocomplete="off" placeholder="조회하거나 원물 서류를 확인해 입력">
+          <small id="lbl-slaughterhouse-status" class="manual-label-guide" role="status"></small>
+        </div>
         <div class="form-group"><label for="lbl-mfgdate">제조일</label><input id="lbl-mfgdate" type="date" required></div>
         <div class="form-group"><label for="lbl-expdate">소비기한</label><input id="lbl-expdate" type="date" required></div>
         <div class="form-group">
@@ -22407,7 +22416,7 @@ function refreshLabelWorkOrderSelect(){
 
 function selectLabelWorkOrder(id){
   if(window.DBMTAuth && !DBMTAuth.can('label_print','view')){toast('라벨전용 화면을 조회할 권한이 없습니다.');return;}
-  const url=new URL('label-print.html',document.baseURI);url.searchParams.set('workOrderId',String(id));
+  const url=new URL('label-print.html?v=20261124blend2',document.baseURI);url.searchParams.set('workOrderId',String(id));
   window.open(url.href,'_blank');
 }
 
@@ -23287,7 +23296,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="distribution-products.js?v=20261119catalog1"></script>
-<script src="manual-label.js?v=20261119catalog1"></script>
+<script src="manual-label.js?v=20261124blend2"></script>
 <link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
 <script src="label-weight-split.js?v=20261113split1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>

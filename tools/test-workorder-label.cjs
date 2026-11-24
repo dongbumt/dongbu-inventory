@@ -208,7 +208,10 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
     });
     assert.deepEqual(await page.evaluate(()=>calls.map(c=>c[0])),['production-stock','production-product','bulk-stock','bulk-product','transaction-stock','transaction-product']);
     await page.evaluate(()=>{window.open=(url,target)=>calls.push(['label-window',url,target]);selectLabelWorkOrder('qa-workorder');});
-    assert.match((await page.evaluate(()=>calls.find(c=>c[0]==='label-window')))[1],/label-print\.html\?workOrderId=qa-workorder$/);
+    const labelUrl=new URL((await page.evaluate(()=>calls.find(c=>c[0]==='label-window')))[1]);
+    assert.match(labelUrl.pathname,/\/label-print\.html$/);
+    assert.equal(labelUrl.searchParams.get('workOrderId'),'qa-workorder');
+    assert.ok(labelUrl.searchParams.get('v'),'The workstation link names the current version');
     assert.equal(await page.locator('#lbl-workorder-select').count(),0,'Office labels no longer depend on a work-order selection');
     console.log('PASS: workorder popup selection, full stock KG/boxes and replacement, optional unknown/zero boxes, partial edits, source snapshot, legacy edit, stale search clearing, shared picker regression, dedicated label link');
 

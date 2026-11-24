@@ -7,7 +7,7 @@
     ])
   });
   const compact=value=>String(value??'').normalize('NFKC').replace(/\s+/g,'');
-  const traceKey=value=>compact(value).replace(/-/g,'').toUpperCase();
+  const normalizeTraceNo=value=>compact(value).replace(/-/g,'').toUpperCase();
   function recipe(productName){
     return compact(productName)==='우민찌(지방15%)' ? blendRecipe : null;
   }
@@ -40,16 +40,16 @@
   }
 
   function findSavedSlaughterhouses(stock,transactions=[]){
-    const lot=traceKey(stock?.lot);
+    const lot=normalizeTraceNo(stock?.lot);
     const members=stock?._workOrderStockRows||[stock];
     const ids=new Set(members.map(member=>String(member?.stockRowId||'')));
     if(!lot||ids.has('')) return [];
     const receipts=transactions.filter(txn=>txn.type==='입고'&&txn._pdaProvisional!==true&&
-      traceKey(txn.lot)===lot&&ids.has(String(txn.stockRowId||'')));
+      normalizeTraceNo(txn.lot)===lot&&ids.has(String(txn.stockRowId||'')));
     const results=receipts.map(txn=>normalizeSlaughterhouses(txn.livestockSlaughterHouses));
     if(new Set(receipts.map(txn=>String(txn.stockRowId))).size!==ids.size || results.some(names=>!names.length)) return [];
     return normalizeSlaughterhouses(results.flat());
   }
 
-  root.DBMTWorkOrderBlend={recipe,matchesStock,targets,normalizeSlaughterhouses,findSavedSlaughterhouses};
+  root.DBMTWorkOrderBlend={recipe,matchesStock,targets,normalizeSlaughterhouses,findSavedSlaughterhouses,normalizeTraceNo};
 })(globalThis);

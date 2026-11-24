@@ -22,6 +22,7 @@ for(const match of index.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new v
 const products=[{id:'p-a',name:'가상 삼겹살(작업)',brand:'가상 A',kind:'제품',origin:'스페인',storage:'냉동',shelfdays:365,grade:'1',itemno:'REPORT-A',meattype:'돼지고기',productCode:'QA001'},
  {id:'p-b',name:'가상 삼겹살(작업)',brand:'가상 B',kind:'제품',origin:'칠레',storage:'냉장',shelfdays:30,itemno:'REPORT-B',meattype:'돼지고기',productCode:'QA002',ingredientDetails:'삼겹살 95%, 지방 5%'},
  {id:'p-lamb',name:'양어깨살',brand:'THOMAS(토마스)',kind:'제품',origin:'호주산',storage:'냉동',shelfdays:730,meattype:'양고기',productCode:'QA003'},
+ {id:'p-blend',name:'우민찌(지방15%)',kind:'제품',origin:'미국산/국내산',storage:'냉동',grade:'가상 기존 등급',itemno:'QA-BLEND-REPORT',meattype:'소고기',ingredientDetails:'전각(미국산)85%, 우지방(국내산)15%'},
  {id:'raw',name:'가상 원료육',kind:'원료육',origin:'국내산',storage:'냉동'},
  {id:'stopped',name:'중지 제품',kind:'제품',isActive:false}];
 const server=http.createServer((req,res)=>{
@@ -57,7 +58,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(html=>{const t=document.createElement('template');t.innerHTML=html;for(const id of ['p-label','p-distribution-products','txn-product-picker-modal'])document.body.append(t.content.querySelector('#'+id));document.getElementById('p-label').classList.add('active');},index);
   await page.addStyleTag({url:base+'/styles/main.css'});await page.addStyleTag({url:base+'/styles/manual-label.css'});
   await page.addStyleTag({content:'body{padding:16px}#p-label{max-width:1120px;margin:auto}'});
-  for(const file of ['label-weight.js','label-product-selection.js','vendor/jsbarcode/JsBarcode.code128.min.js','label-layout.js','label-print-document.js'])await page.addScriptTag({url:base+'/'+file});
+  for(const file of ['label-weight.js','label-product-selection.js','work-order-blend.js','vendor/jsbarcode/JsBarcode.code128.min.js','label-layout.js','label-print-document.js'])await page.addScriptTag({url:base+'/'+file});
   await page.addScriptTag({content:`
     var labelProducts=${JSON.stringify(products)},workOrders=[],labelPrintLogs=[],userProduction=[],transactions=[];
     const LBL_DEFAULTS={licenseno:'가상 허가번호',prodtype:'포장육(비가열제품)',packaging:'내포장(PE), 외포장(종이)',manufacturer:'주식회사 동부엠티',phone:'032-766-1812',address:'인천광역시 검단구 소담2로 36, 2동 201호 (금곡동)'};
@@ -65,6 +66,8 @@ const server=http.createServer((req,res)=>{
     window.DBMTAuth={isPersonal:()=>loggedIn,can:()=>allowed,getSessionToken:()=>session};
     var distributionProducts=[{...labelProducts[1],id:'dist-b',itemno:'QA-DIST-REPORT',origin:'미국산',grade:'수정 등급',shelfdays:37},{...labelProducts[2],id:'dist-lamb'}];
     window.sbRpc=async(name)=>{if(name!=='dbmt_erp_get_distribution_products')throw Error('Unexpected RPC: '+name);return {ok:true,products:structuredClone(distributionProducts)}};
+    const traceLookups=[];
+    window.sbFunctionRequest=(name,payload)=>new Promise(resolve=>traceLookups.push({name,payload,resolve}));
     const normalizeOriginName=v=>v||'',nationalPartNameForCode=()=>'',normalizeLabelProductTaxType=()=> '면세';
     const labelProductSearchText=p=>Object.values(p).join(' '),samePriceText=(a,b)=>a===b,sameOriginText=samePriceText;
     const priceKey=v=>String(v||'').trim().toLowerCase();
@@ -78,7 +81,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#lbl-workorder-select').count(),0);assert.equal(await page.locator('#lbl-product').getAttribute('readonly'),'');
   await page.locator('#manual-label-print').click();assert.match(await page.evaluate(()=>alerts.at(-1)),/등록된 제품/);
   await page.locator('#lbl-product').click();assert.equal(await page.locator('#tpp-kind-product').getAttribute('aria-pressed'),'true');
-  assert.equal(await page.locator('#tpp-result-body tr').count(),3,'Only active registered products: '+errors.join(';'));
+  assert.equal(await page.locator('#tpp-result-body tr').count(),4,'Only active registered products: '+errors.join(';'));
   await page.locator('#tpp-search-brand').selectOption('가상 B');await page.locator('#tpp-result-body tr').dblclick();
   assert.equal(await page.locator('#lbl-product-id').inputValue(),'p-b');assert.equal(await page.locator('#lbl-origin').inputValue(),'칠레');
   assert.equal(await page.locator('#lbl-ingredients').inputValue(),'돼지고기 100% (삼겹살 95%, 지방 5%)');
@@ -229,6 +232,72 @@ const server=http.createServer((req,res)=>{
    await preview.locator('.dbmt-label-body').screenshot({path:path.join(artifacts,'lamb-'+size+'.png')});
   }
   console.log('PASS: lamb/pork/beef notice rules in office and station, lamb preview/print and footer fit at both sizes');
+  await maker.selectOption('default');
+  await page.evaluate(()=>DBMTManualLabel.selectProduct('p-blend'));
+  await page.locator('#lbl-size').selectOption('7x10');
+  await page.locator('#lbl-lot').fill('803000000071');
+  const fatLot=page.locator('#lbl-fat-lot'),slaughterhouse=page.locator('#lbl-slaughterhouse');
+  const lookup=page.locator('#lbl-slaughterhouse-lookup'),gradeField=page.locator('#lbl-grade-field');
+  assert(await gradeField.isHidden());
+  assert(await fatLot.isVisible());assert(await slaughterhouse.isVisible());
+  await preview.locator('.dl-slaughterhouse-row').waitFor();
+  assert.match(await preview.locator('.dl-slaughterhouse-row').innerText(),/도축장/);
+  assert.doesNotMatch(await preview.locator('.dl-slaughterhouse-row').innerText(),/성별및등급|가상 기존 등급/);
+  const beforeBlendPrint=await page.evaluate(()=>__printRequests.length);
+  await page.locator('#manual-label-print').click();
+  assert.match(await page.evaluate(()=>alerts.at(-1)),/한우지방.*이력번호/);
+  await fatLot.fill('123');
+  assert(await lookup.isDisabled());
+  await page.locator('#manual-label-print').click();
+  assert.match(await page.evaluate(()=>alerts.at(-1)),/한우지방.*이력번호/);
+  await fatLot.fill('0010-0000-0071');
+  await page.locator('#manual-label-print').click();
+  assert.match(await page.evaluate(()=>alerts.at(-1)),/도축장/);
+  assert.equal(await page.evaluate(()=>__printRequests.length),beforeBlendPrint);
+  await lookup.click();
+  await page.waitForFunction(()=>traceLookups.length===1);
+  await fatLot.fill('001000000072');
+  await lookup.click();
+  await page.waitForFunction(()=>traceLookups.length===2);
+  const requests=await page.evaluate(()=>traceLookups.map(({name,payload})=>({name,payload})));
+  assert.deepEqual(requests,['001000000071','001000000072'].map(traceNo=>({name:'livestock-trace-lookup',payload:{
+   sessionToken:'session-a',traceNo,speciesHint:'cattle',permissionAction:'create',purpose:'manual-label-slaughterhouse'
+  }})));
+  await page.evaluate(()=>traceLookups[1].resolve({traceNo:'001000000072',slaughterHouses:['가상 한우 도축장']}));
+  await page.waitForFunction(()=>document.getElementById('lbl-slaughterhouse').value==='가상 한우 도축장');
+  await page.evaluate(()=>traceLookups[0].resolve({traceNo:'001000000071',slaughterHouses:['지난 조회 도축장']}));
+  assert.equal(await slaughterhouse.inputValue(),'가상 한우 도축장','An earlier lookup cannot replace the current result');
+  await preview.locator('.dl-slaughterhouse-value').filter({hasText:'가상 한우 도축장'}).waitFor();
+  await page.locator('#lbl-preview-frame').evaluate(frame=>frame.contentWindow.DBMTLabelPrintReady);
+  const blendArtwork=await preview.locator('.dbmt-label-body').evaluate(node=>node.outerHTML);
+  assert.match(blendArtwork,/803000000071/);
+  assert.doesNotMatch(blendArtwork,/001000000072|지난 조회 도축장/);
+  await page.locator('#manual-label-print').click();
+  await page.waitForFunction(count=>__printRequests.length===count+1&&!document.getElementById('manual-label-print').disabled,beforeBlendPrint);
+  assert.equal(await page.evaluate(()=>__printRequests.at(-1).artwork),blendArtwork,'Manual print uses the same slaughterhouse and finished product LOT as preview');
+  await fatLot.fill('001000000073');
+  assert.equal(await slaughterhouse.inputValue(),'','Changing fat LOT clears the displayed slaughterhouse');
+  await lookup.click();
+  await page.waitForFunction(()=>traceLookups.length===3);
+  await page.evaluate(()=>traceLookups[2].resolve({traceNo:'001000000073',slaughterHouses:['가상 도축장 A','가상 도축장 B']}));
+  await page.locator('#lbl-slaughterhouse-status').filter({hasText:/가상 도축장 A.*가상 도축장 B/}).waitFor();
+  assert.equal(await slaughterhouse.inputValue(),'','Ambiguous lookup requires confirmation');
+  await slaughterhouse.fill('가상 도축장 B');
+  await preview.locator('.dl-slaughterhouse-value').filter({hasText:'가상 도축장 B'}).waitFor();
+  await page.evaluate(()=>DBMTManualLabel.selectProduct('p-b'));
+  assert(await fatLot.isHidden());assert(await slaughterhouse.isHidden());assert(await gradeField.isVisible());
+  await preview.locator('.dl-grade-row').filter({hasText:'성별및등급'}).waitFor();
+  await page.evaluate(()=>DBMTManualLabel.selectProduct('p-blend'));
+  assert.equal(await fatLot.inputValue(),'');assert.equal(await slaughterhouse.inputValue(),'');
+  await page.evaluate(async()=>{
+    distributionProducts.push({...labelProducts.find(row=>row.id==='p-blend'),id:'dist-blend',grade:'유통 전용 등급',itemno:'QA-DIST-BLEND'});
+    await DBMTDistributionProducts.refresh();
+  });
+  await maker.selectOption('dongbu_distribution');
+  await page.evaluate(()=>DBMTManualLabel.selectProduct('dist-blend'));
+  assert(await fatLot.isHidden());assert(await gradeField.isVisible());
+  await preview.locator('.dl-grade-row').filter({hasText:'유통 전용 등급'}).waitFor();
+  console.log('PASS: blend manual labels keep fat trace separate; guarded lookup, stale results, confirmation, matching print artwork, and catalog isolation');
   await page.evaluate(()=>DBMTManualLabel.reset());
   assert.equal(await maker.inputValue(),'default');assert.equal(await page.locator('#lbl-manufacturer').inputValue(),'주식회사 동부엠티');
   console.log('PASS: manufacturer-specific license/phone/address, MT report blocking, distribution custom reports, no HACCP, master-refresh isolation, both paper sizes and default restoration');

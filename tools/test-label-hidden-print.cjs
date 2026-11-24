@@ -15,13 +15,38 @@ const server=http.createServer((req,res)=>{
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}});
-    let saves=[],failSave=false,failImage=false,imageDelay=0;
+    let saves=[],innerSaves=[],blendOrder=null,blendReads=0,blendWeightDuringRead=null,failBlendRead=false,failSave=false,failImage=false,imageDelay=0;
     await context.route('https://**/*',async route=>{
+      if(route.request().url().endsWith('/dbmt_label_print_get_data')&&blendOrder){
+        assert.equal(route.request().postDataJSON().p_work_order_id,blendOrder.id);
+        blendReads++;
+        if(failBlendRead){await route.fulfill({status:503,contentType:'application/json',body:'{"message":"QA read failed"}'});return;}
+        if(blendWeightDuringRead!==null){
+          await page.evaluate(weight=>{
+            window.__originalTouchWeight=DBMTLabelTouch.weight;
+            DBMTLabelTouch.weight=()=>weight;
+          },blendWeightDuringRead);
+        }
+        const logs=await page.evaluate(id=>state.logs.filter(log=>log.workOrderId===id),blendOrder.id);
+        await route.fulfill({contentType:'application/json',body:JSON.stringify({
+          appData:{workOrders:[blendOrder],labelProducts:[],labelPrintLogs:logs},
+          logScope:{workOrderId:blendOrder.id},logSummaries:[],completions:[]
+        })});return;
+      }
+      if(route.request().url().endsWith('/dbmt_label_save_inner_prints')){
+        const {p_logs}=route.request().postDataJSON();
+        innerSaves.push(...p_logs);
+        await route.fulfill({contentType:'application/json',body:JSON.stringify({
+          ok:true,workOrderId:p_logs[0].workOrderId,totals:[],logs:innerSaves
+        })});return;
+      }
       if(route.request().url().endsWith('/dbmt_label_print_save_logs')){
         if(failSave){await route.fulfill({status:500,contentType:'application/json',body:'{"message":"QA save failed"}'});return;}
         saves.push(route.request().postDataJSON());
         const logs=await page.evaluate(()=>state.logs);
-        await route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,logs})});return;
+        const scope=blendOrder&&route.request().postDataJSON().p_work_order_id==='qa-blend'?
+          {logScope:{workOrderId:blendOrder.id},logSummaries:[]}:{};
+        await route.fulfill({contentType:'application/json',body:JSON.stringify({ok:true,logs,...scope})});return;
       }
       await route.abort();
     });
@@ -167,30 +192,63 @@ const server=http.createServer((req,res)=>{
     assert.match(await page.locator('#status').textContent(),/출력 요청 처리됨/);
     console.log('PASS: explicit preview preserved, no automatic preview printing, no page errors');
 
-    await page.evaluate(()=>{
-      state.workOrders.push({...state.workOrders[0],id:'qa-blend',product:'우민찌(지방15%)',origin:'미국산/국내산',
-        slaughterhouseLot:'002123456789',slaughterhouseName:''});
+    blendOrder={...(await page.evaluate(()=>state.workOrders[0])),id:'qa-blend',product:'우민찌(지방15%)',origin:'미국산/국내산',
+      slaughterhouseLot:'002123456789',slaughterhouseName:''};
+    await page.evaluate(order=>{
+      state.workOrders.push(order);
       state.selectedId='qa-blend';renderAll();
-    });
+    },blendOrder);
     await setOuter(page,5,1);
     const beforeMissingName=saves.length;
-    await page.locator('#print-btn').click();
+    await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading);
     assert.equal(saves.length,beforeMissingName);
     assert.match(await page.locator('#status').textContent(),/한우지방 이력번호와 도축장/);
 
-    await page.evaluate(()=>{selectedOrder().slaughterhouseName='최초 도축장';});
+    blendOrder.slaughterhouseName='확인된 도축장';
+    const beforeBlendPreview=await page.evaluate(()=>__requests.length);
+    await page.locator('#print-size').selectOption('10x10');
+    for(const preview of ['#preview-btn','#inner-preview-btn']){
+      await page.locator(preview).click();
+      const sample=page.frameLocator('#label-preview-frame').locator('.print-label');
+      await sample.waitFor();
+      assert.match(await sample.textContent(),/도축장:확인된 도축장/);
+      assert.doesNotMatch(await sample.textContent(),/성별및등급:/);
+      await page.locator('#label-preview-close').click();
+    }
+    assert.equal(await page.locator('#print-size').inputValue(),'10x10','Latest order lookup preserves the selected paper size');
+    assert.equal(await page.evaluate(()=>__requests.length),beforeBlendPreview);
+    assert.equal(saves.length,beforeMissingName);
+    assert.equal(blendReads,3);
+
+    failBlendRead=true;
     await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert.equal(saves.length,beforeMissingName);
+    assert.match(await page.locator('#status').textContent(),/작업지시 확인 실패/);
+    failBlendRead=false;
+    blendOrder.slaughterhouseName='최초 도축장';
+    blendWeightDuringRead=10;
+    await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading);
+    blendWeightDuringRead=null;
+    await page.evaluate(()=>{DBMTLabelTouch.weight=window.__originalTouchWeight;});
     const blendPrint=saves.at(-1).p_logs[0];
+    assert.equal(blendPrint.labelWeight,5,'A scale change during the latest order lookup cannot replace the weight at the print click');
+    assert.equal(blendPrint.sizeKey,'10x10');
     assert.equal(blendPrint.workOrderSnapshot.slaughterhouseName,'최초 도축장');
     assert.equal(blendPrint.workOrderSnapshot.slaughterhouseLot,'002123456789');
     assert.match(await page.evaluate(()=>__requests.at(-1).text),/도축장:최초 도축장/);
-    await page.evaluate(id=>{selectedOrder().slaughterhouseName='변경된 도축장';return reprintLog(id);},blendPrint.id);
+    blendOrder.slaughterhouseName='변경된 도축장';
+    await page.locator('#inner-print-btn').click();await page.waitForFunction(()=>!state.loading);
+    assert.equal(innerSaves.at(-1).workOrderSnapshot.slaughterhouseName,'변경된 도축장');
+    assert.match(await page.evaluate(()=>__requests.at(-1).text),/도축장:변경된 도축장/);
+    const beforeReprintReads=blendReads;
+    await page.evaluate(id=>reprintLog(id),blendPrint.id);
     const reprint=saves.at(-1).p_logs[0];
+    assert.equal(blendReads,beforeReprintReads,'Reprints read the original label snapshot, never the live slaughterhouse');
     assert.equal(reprint.code,blendPrint.code);
     assert.deepEqual(reprint.workOrderSnapshot,blendPrint.workOrderSnapshot);
     assert.match(await page.evaluate(()=>__requests.at(-1).text),/도축장:최초 도축장/);
     assert.doesNotMatch(await page.evaluate(()=>__requests.at(-1).text),/변경된 도축장|성별및등급:/);
     assert.deepEqual(errors,[]);
-    console.log('PASS: blend print requires verified slaughterhouse, historical reprint retains the original name and barcode');
+    console.log('PASS: both blend previews and new prints refresh the slaughterhouse, history reprints retain the original name and barcode');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

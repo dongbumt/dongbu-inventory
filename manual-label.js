@@ -2,7 +2,7 @@
 (function(global){
   'use strict';
   const el=id=>document.getElementById('lbl-'+id);
-  const state={initialized:false,barcode:'',token:'',timer:null,previewKey:'',printing:false,manufacturerKind:'default'};
+  const state={initialized:false,barcode:'',token:'',timer:null,previewKey:'',printing:false,manufacturerKind:'default',slaughterhouseRequest:null};
   const distributionProfile={manufacturer:'(주)동부축산유통',licenseno:'2014-0209300',phone:'032-579-3920',address:'인천광역시 서해구 가좌로96번길 11'};
   const fields=['origin','grade','mfgdate','expdate','weight','itemno','lot','ingredients','temptype','licenseno','prodtype','packaging','manufacturer','phone','address'];
   const value=id=>el(id)?.value.trim()||'';
@@ -15,6 +15,62 @@
   function permitted(action='view'){
     return Boolean(global.DBMTAuth?.isPersonal()&&DBMTAuth.can('label',action));
   }
+  function isBlendProduct(row=selectedProduct()){
+    return !isDistributionCatalog()&&Boolean(global.DBMTWorkOrderBlend?.recipe(row?.name));
+  }
+  function fatTraceNo(){
+    const traceNo=global.DBMTWorkOrderBlend?.normalizeTraceNo(value('fat-lot'))||'';
+    return /^[0-9A-Z]{12,30}$/.test(traceNo)?traceNo:'';
+  }
+  function clearSlaughterhouse(){
+    state.slaughterhouseRequest=null;
+    el('slaughterhouse').value='';
+    el('slaughterhouse-status').textContent='';
+  }
+  function clearBlendDraft(){
+    el('fat-lot').value='';
+    clearSlaughterhouse();
+  }
+  function syncBlendFields(active=isBlendProduct()){
+    el('grade-field').hidden=active;
+    el('fat-lot-field').hidden=!active;
+    el('slaughterhouse-field').hidden=!active;
+    el('slaughterhouse-lookup').disabled=!active||!permitted('create')||!fatTraceNo()||Boolean(state.slaughterhouseRequest);
+    el('slaughterhouse-lookup').textContent=state.slaughterhouseRequest?'조회 중…':'조회';
+  }
+  async function lookupSlaughterhouse(){
+    const traceNo=fatTraceNo(),sessionToken=global.DBMTAuth.getSessionToken();
+    if(!isBlendProduct()||!permitted('create')||!sessionToken||!traceNo||state.slaughterhouseRequest)return;
+    const request={};
+    state.slaughterhouseRequest=request;
+    const current=()=>state.slaughterhouseRequest===request&&sessionToken===DBMTAuth.getSessionToken()&&
+      traceNo===fatTraceNo()&&isBlendProduct();
+    const status=el('slaughterhouse-status');
+    status.textContent='한우지방 도축장을 조회하고 있습니다.';
+    syncBlendFields(true);
+    try{
+      const result=await sbFunctionRequest('livestock-trace-lookup',{
+        sessionToken,traceNo,speciesHint:'cattle',permissionAction:'create',purpose:'manual-label-slaughterhouse'
+      });
+      if(!current())return;
+      const names=global.DBMTWorkOrderBlend.normalizeSlaughterhouses(result?.slaughterHouses);
+      if(names.length===1){
+        el('slaughterhouse').value=names[0];
+        status.textContent='조회한 도축장명이 라벨에 표시됩니다.';
+      }else{
+        status.textContent=names.length?
+          `조회된 도축장 ${names.join(' / ')} · 원물 서류에서 확인한 이름을 입력해주세요.`:
+          '조회된 도축장이 없습니다. 원물 서류를 확인해 입력해주세요.';
+      }
+    }catch(error){
+      if(current())status.textContent=`조회 실패 · ${error.message||error} · 원물 서류를 확인해 입력해주세요.`;
+    }finally{
+      if(state.slaughterhouseRequest===request){
+        state.slaughterhouseRequest=null;
+        updatePreview();
+      }
+    }
+  }
   function randomBarcode(){
     const bytes=new Uint8Array(4);global.crypto.getRandomValues(bytes);
     return 'ML'+Date.now().toString(36).toUpperCase()+Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
@@ -22,6 +78,7 @@
   function clear(){
     clearTimeout(state.timer);state.initialized=false;state.barcode='';state.previewKey='';state.manufacturerKind='default';
     document.getElementById('manual-label-form').reset();el('product-id').value='';el('product').value='';
+    clearBlendDraft();syncBlendFields(false);
     el('product-meta').textContent='품목관리에서 등록한 제품을 선택하세요.';
     el('preview-frame').removeAttribute('srcdoc');
     el('preview-frame').hidden=true;el('preview-empty').hidden=false;
@@ -36,6 +93,7 @@
       print.textContent=state.printing?'출력 중…':'라벨 출력';
       print.setAttribute('aria-busy',String(state.printing));
     }
+    syncBlendFields();
   }
   function init(){
     applyPermissions();
@@ -69,6 +127,7 @@
     if(!permitted())return;
     const row=catalogProducts().find(item=>String(item.id)===String(id)&&item.isActive!==false);if(!row)return;
     if(!state.initialized)init();
+    if(value('product-id')!==String(row.id))clearBlendDraft();
     el('product-id').value=String(row.id);el('product').value=row.name||'';
     for(const key of ['origin','grade'])el(key).value=row[key]||'';
     el('itemno').value=row.itemno||'';
@@ -86,10 +145,13 @@
   function collect(){
     syncManufacturerChoice();
     const row=selectedProduct();
+    const blend=isBlendProduct(row);
+    syncBlendFields(blend);
     if(!row||value('product')!==String(row.name||''))return null;
     const data=Object.fromEntries(fields.map(key=>[key,value(key)]));
     const distribution=manufacturerKind()==='dongbu_distribution';
-    return {...data,itemno:distribution&&isMasterItemNo(data.itemno)?'':data.itemno,showHaccp:!distribution,
+    return {...data,...(blend?{slaughterhouseName:value('slaughterhouse')}:{}),
+      itemno:distribution&&isMasterItemNo(data.itemno)?'':data.itemno,showHaccp:!distribution,
       product:row.name,mfgdate:fmtLblDate(data.mfgdate),expdate:fmtLblDate(data.expdate),
       weight:DBMTLabelWeight.valid(data.weight)?Number(data.weight).toFixed(2):'',lotText:data.lot,
       productBarcode:state.barcode,crossFacilityNotice:labelCrossFacilityNoticeFromText(row.name,data.ingredients)};
@@ -111,6 +173,7 @@
     if(kind!==state.manufacturerKind){
       if((kind==='dongbu_distribution')!==(state.manufacturerKind==='dongbu_distribution')){
         for(const key of ['product-id','product','itemno','origin','grade','ingredients'])el(key).value='';
+        clearBlendDraft();
         el('product-meta').textContent=kind==='dongbu_distribution'?'동부축산유통 품목관리에서 등록한 제품을 선택하세요.':'품목관리에서 등록한 제품을 선택하세요.';
       }
       if(kind!=='custom'){
@@ -162,6 +225,10 @@
     const data=collect();
     if(!data){alert('품목관리에 등록된 제품을 선택해주세요.');return;}
     if(!data.manufacturer){alert('제조판매원을 입력해주세요.');el('manufacturer').closest('details').open=true;el('manufacturer').focus();return;}
+    if(isBlendProduct()){
+      if(!fatTraceNo()){alert('한우지방 이력번호를 확인해주세요.');el('fat-lot').focus();return;}
+      if(!data.slaughterhouseName){alert('한우지방 도축장명을 조회하거나 원물 서류를 확인해 입력해주세요.');el('slaughterhouse').focus();return;}
+    }
     if(manufacturerKind()==='dongbu_distribution'&&isMasterItemNo(value('itemno'))){alert('동부엠티에 등록된 품목보고번호는 동부축산유통 라벨에 사용할 수 없습니다. 동부축산유통 품목관리에서 번호를 수정해주세요.');el('itemno').focus();return;}
     if(!DBMTLabelWeight.valid(value('weight'))){alert('중량을 0보다 큰 값으로 소수 둘째 자리까지 입력해주세요.');el('weight').focus();return;}
     if(!el('mfgdate').checkValidity()||!value('mfgdate')||!el('expdate').checkValidity()||!value('expdate')||value('expdate')<value('mfgdate')){alert('제조일과 소비기한을 확인해주세요.');return;}
@@ -171,7 +238,18 @@
     try{return await printLabelData(data,value('size')||'7x10',copies);}
     finally{state.printing=false;applyPermissions();}
   }
-  document.getElementById('manual-label-form').addEventListener('input',()=>{clearTimeout(state.timer);state.timer=setTimeout(updatePreview,80);});
+  el('slaughterhouse-lookup').addEventListener('click',lookupSlaughterhouse);
+  document.getElementById('manual-label-form').addEventListener('input',event=>{
+    if(event.target===el('fat-lot')){
+      clearSlaughterhouse();
+      syncBlendFields();
+    }else if(event.target===el('slaughterhouse')){
+      state.slaughterhouseRequest=null;
+      el('slaughterhouse-status').textContent='';
+      syncBlendFields();
+    }
+    clearTimeout(state.timer);state.timer=setTimeout(updatePreview,80);
+  });
   document.getElementById('manual-label-form').addEventListener('change',event=>{
     if(event.target===el('manufacturer-choice'))selectManufacturer();
     if(event.target===el('mfgdate'))setExpiry();

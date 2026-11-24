@@ -2,8 +2,11 @@
 #p-label .manual-label-grid>.card{min-width:0;}
 #p-label .manual-label-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
 #p-label .manual-label-full{grid-column:1 / -1;}
+#p-label .manual-label-form .form-group[hidden]{display:none;}
 #p-label .manual-label-product{display:flex;gap:6px;}
 #p-label .manual-label-product input{min-width:0;flex:1;cursor:pointer;background:#f7f8f9;}
+#p-label .manual-label-trace{display:flex;gap:6px;}
+#p-label .manual-label-trace .btn{flex:none;}
 #p-label .manual-label-form input,#p-label .manual-label-form select,#p-label .manual-label-form textarea{width:100%;min-width:0;}
 #p-label .manual-label-guide,#lbl-product-meta{font-size:12px;line-height:1.6;color:#626970;}
 #lbl-product-meta{min-height:19px;margin-top:5px;overflow-wrap:anywhere;}

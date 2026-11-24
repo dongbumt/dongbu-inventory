@@ -518,9 +518,9 @@
 
   <script src="label-weight.js?v=20260910workorder1"></script>
   <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-  <script src="label-layout.js?v=20261124blend1"></script>
+  <script src="label-layout.js?v=20261124blend2"></script>
   <script src="label-print-document.js?v=20261118hidden1"></script>
-  <script src="work-order-blend.js?v=20261124blend1"></script>
+  <script src="work-order-blend.js?v=20261124blend2"></script>
   <script src="company-master.js?v=20260813m01"></script>
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -1107,31 +1107,76 @@
       return Number.isInteger(n) && n>=1 && n<=500 ? n : 0;
     }
 
+    async function refreshBlendPrintOrder(row){
+      const id = String(row.id || '');
+      if(!state.pin || !id){
+        setStatus('라벨전용 화면에 연결한 뒤 작업지시를 선택하세요.', 'warn');
+        return null;
+      }
+      const selectedSize = $('print-size').value;
+      setLoading(true);
+      setStatus('최신 작업지시의 도축장을 확인하는 중…', 'warn');
+      try{
+        const data = await sbRpc('dbmt_label_print_get_data', {p_pin:state.pin,p_work_order_id:id});
+        applyLabelData(data,id);
+        renderAll();
+        if(selectedSize) $('print-size').value = selectedSize;
+        const productError = window.DBMTLabelTouch?.productError();
+        if(productError) throw new Error(productError);
+        const latest = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
+        const fields = latest && blendLabelFields(latest);
+        if(!latest || String(latest.id)!==id || !fields) throw new Error('작업지시 품목이 변경되었습니다. 출력할 품목을 확인해주세요.');
+        if(latest.lot!==row.lot) throw new Error('작업지시의 출력 이력번호가 변경되었습니다. 화면의 이력번호를 확인해주세요.');
+        if(!fields.slaughterhouseLot || !fields.slaughterhouseName){
+          setStatus('우민찌 작업지시에서 한우지방 이력번호와 도축장을 확인하고 저장해주세요.', 'warn');
+          return null;
+        }
+        setStatus('작업지시 도축장 확인 완료', 'ok');
+        return latest;
+      }catch(error){
+        setStatus(`작업지시 확인 실패: ${error.message || error}`, 'err');
+        return null;
+      }finally{
+        setLoading(false);
+      }
+    }
+
+    function newLabelBlocked(row,kind){
+      if(row._carryoverTo){
+        setStatus('잔량을 이월한 작업입니다. 새 라벨은 다음 작업지시에서 출력해주세요. 기존 라벨은 재출력할 수 있습니다.', 'warn');
+        return true;
+      }
+      if(kind==='outer' && completionFor(row.id)){
+        setStatus('생산완료된 작업입니다. 기존 라벨은 출력이력에서 재출력하세요.', 'warn');
+        return true;
+      }
+      return false;
+    }
+
     async function printSelectedLabels(kind='outer'){
       if(kind!=='inner') kind='outer';
       if(state.loading) return;
       if(!orderLogsReady()){setStatus('출력이력을 먼저 불러와주세요. 새로고침하거나 작업을 다시 선택해주세요.', 'warn');return;}
-      const row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
-      if(row?._carryoverTo){setStatus('잔량을 이월한 작업입니다. 새 라벨은 다음 작업지시에서 출력해주세요. 기존 라벨은 재출력할 수 있습니다.','warn');return;}
+      let row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
       if(window.DBMTLabelTouch?.productError()){setStatus(window.DBMTLabelTouch.productError(),'warn');return;}
-      if(kind==='outer' && row && completionFor(row.id)){ setStatus('생산완료된 작업입니다. 기존 라벨은 출력이력에서 재출력하세요.', 'warn'); return; }
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
         return;
       }
       if(!state.pin){ setStatus('먼저 라벨전용 화면에 연결하세요.', 'warn'); return; }
-      const slaughterhouse = blendLabelFields(row);
-      if(slaughterhouse && (!slaughterhouse.slaughterhouseLot || !slaughterhouse.slaughterhouseName)){
-        setStatus('우민찌 작업지시의 한우지방 이력번호와 도축장을 확인한 뒤 새로고침해주세요.', 'warn');
-        return;
-      }
+      if(newLabelBlocked(row,kind)) return;
       const weight = window.DBMTLabelTouch?.weight(kind) ?? DBMTLabelWeight.value('print-weight');
       const weightOmitted = kind==='inner' && !!window.DBMTLabelTouch?.isWeightOmitted?.(kind);
       if(!weight&&!weightOmitted){ setStatus('라벨 1장 중량을 선택하거나 0보다 큰 값을 소수 둘째 자리까지 입력하세요.', 'warn'); return; }
       const size = $('print-size').value || row.labelSize || '7x10';
-      const printRow = {...row, weight, weightOmitted, labelSize:size};
       const count = window.DBMTLabelTouch?.copies(kind) ?? printCount();
       if(!count){ setStatus('출력 매수는 1~500 사이의 정수로 입력하세요.', 'warn'); return; }
+      if(blendLabelFields(row)){
+        // Capture the measured weight before reading fresh order metadata from the server.
+        row = await refreshBlendPrintOrder(row);
+        if(!row || newLabelBlocked(row,kind)) return;
+      }
+      const printRow = {...row, weight, weightOmitted, labelSize:size};
       const batchId = `LPB-${compactDateTime()}-${hashText(`${row.id}-${Date.now()}`).slice(0, 5)}`;
       const records = Array.from({length: count}, (_, index) => makePrintLog(printRow, batchId, index + 1));
       // Inner labels have their own ledger. Only outer logs enter production.
@@ -1176,7 +1221,7 @@
     async function previewSelectedLabel(kind='outer'){
       if(kind!=='inner') kind='outer';
       if(state.loading) return;
-      const row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
+      let row = window.DBMTLabelTouch?.printOrder() ?? selectedOrder();
       if(window.DBMTLabelTouch?.productError()){setStatus(window.DBMTLabelTouch.productError(),'warn');return;}
       if(!row){
         setStatus('작업지시를 선택하세요.', 'warn');
@@ -1186,6 +1231,10 @@
       const weightOmitted = kind==='inner' && !!window.DBMTLabelTouch?.isWeightOmitted?.(kind);
       if(!weight&&!weightOmitted){ setStatus('미리보기할 라벨 1장 중량을 선택하거나 입력하세요.', 'warn'); return; }
       const size = $('print-size').value || row.labelSize || '7x10';
+      if(blendLabelFields(row)){
+        row = await refreshBlendPrintOrder(row);
+        if(!row) return;
+      }
       const sample = makePrintLog({...row, weight, weightOmitted, labelSize:size}, 'PREVIEW', 1);
       sample.code = 'PREVIEW-0001';
       sample.untrackedLabel = kind==='inner';
