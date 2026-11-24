@@ -110,6 +110,7 @@
     byId('reprint-open').disabled=state.loading||!row||!orderLogsReady();
     byId('history-print').disabled=state.loading||!selected.size;
     byId('history-print').textContent=`선택 ${selected.size}장 재출력`;
+    byId('history-delete-selected').disabled=state.loading||!row||!orderLogsReady()||!selected.size||!!completionFor(row.id);
     byId('touch-output').textContent=byId('metric-output').textContent;
     byId('outer-total').textContent=byId('active-count').textContent;
     byId('metric-label-weight').textContent=weight('outer')?kg(weight('outer')):'—';
@@ -155,12 +156,12 @@
     const logs=row?logsForOrder(row.id):[],pages=Math.max(1,Math.ceil(logs.length/historyPageSize));
     const active=logs.filter(log=>log.status!=='void');
     historyPage=Math.min(historyPage,pages-1);
-    const valid=new Set(logs.filter(l=>l.status!=='void').map(l=>String(l.id)));
+    const valid=new Set(active.map(log=>String(log.id)));
     for(const key of selected)if(!valid.has(key))selected.delete(key);
     byId('history-count').textContent=`${logs.length}건`;
     byId('history-title').textContent=row?`${row.product||row.title} · 외포장 ${logs.length}건`:'외포장 출력이력';
     byId('history-meta').textContent=row?`${row.date||''} · LOT ${row.lot||row.sourceStock?.lot||'-'} · 정상 ${active.length}장 · 삭제 ${logs.length-active.length}장 · 과거 라벨 내용으로 재출력`:'';
-    byId('history-delete-all').disabled=state.loading||!row||!active.length||!!completionFor(row.id);
+    byId('history-delete-all').disabled=state.loading||!row||!orderLogsReady()||!active.length||!!completionFor(row.id);
     byId('history-body').innerHTML=logs.slice(historyPage*historyPageSize,(historyPage+1)*historyPageSize).map(log=>{
       const id=String(log.id),voided=log.status==='void';
       return `<div class="touch-history-row"><label class="history-choice"><input type="checkbox" data-log="${html(id)}" aria-label="${html(log.code||id)} 선택" ${selected.has(id)?'checked':''} ${voided||state.loading?'disabled':''}><span><strong>${html(log.workOrderSnapshot?.product||log.product||'품목 없음')}${log.workOrderSnapshot?.packunit?' / '+html(log.workOrderSnapshot.packunit):''}</strong><small>${html(log.code||id)}</small><small>${html(formatTime(log.printedAt))} · ${voided?'삭제됨':`재출력 ${toNumber(log.reprintCount)}회`}</small></span><b>${kg(log.labelWeight)}</b></label><div class="history-actions">${button('미리보기',`data-act="preview" data-id="${html(id)}"`)}${button('재출력',`data-act="reprint" data-id="${html(id)}" ${voided||state.loading?'disabled':''}`)}${button('삭제',`data-act="void" data-id="${html(id)}" ${voided||state.loading||completionFor(row.id)?'disabled':''}`)}</div></div>`;
@@ -230,7 +231,7 @@
     bottom.innerHTML='<div class="touch-history-open"><span>외포장 <b id="outer-total">0장</b></span>'+button('재출력','id="reprint-open"')+'</div><div class="touch-transfer"><span>생산량 <b id="touch-output">—</b></span></div>';
     bottom.querySelector('.touch-transfer').append(complete);bottom.querySelector('.touch-transfer').insertAdjacentHTML('beforeend',button('전송 취소 · 수정하기','id="cancel-transfer-open" hidden'));bottom.append(notice);bottom.querySelector('.touch-history-open').prepend(media);right.append(bottom);
     document.querySelector('.history-wrap').remove();
-    document.body.insertAdjacentHTML('beforeend',`<dialog id="history-dialog" class="touch-dialog history-dialog"><div class="history-heading"><h2 id="history-title">외포장 출력이력</h2>${button('전체삭제','id="history-delete-all"')}</div><p id="history-meta"></p><span id="history-count" hidden></span><div id="history-body"></div><nav class="history-pager">${button('이전','id="history-prev"')}<span id="history-page"></span>${button('다음','id="history-next"')}</nav><footer>${button('닫기','data-close="history-dialog"')}${button('선택 0장 재출력','id="history-print" class="dark"')}</footer><p class="dialog-notice" role="status"></p></dialog>
+    document.body.insertAdjacentHTML('beforeend',`<dialog id="history-dialog" class="touch-dialog history-dialog"><div class="history-heading"><h2 id="history-title">외포장 출력이력</h2>${button('전체삭제','id="history-delete-all"')}</div><p id="history-meta"></p><span id="history-count" hidden></span><div id="history-body"></div><nav class="history-pager">${button('이전','id="history-prev"')}<span id="history-page"></span>${button('다음','id="history-next"')}</nav><footer>${button('닫기','data-close="history-dialog"')}${button('선택삭제','id="history-delete-selected" title="체크한 외포장 라벨 삭제" disabled')}${button('선택 0장 재출력','id="history-print" class="dark"')}</footer><p class="dialog-notice" role="status"></p></dialog>
       <dialog id="label-preview-dialog" class="touch-dialog preview-dialog"><h2 id="label-preview-title"></h2><div class="preview-stage"><iframe id="label-preview-frame" title="실제 인쇄 라벨" sandbox="allow-same-origin"></iframe></div>${button('닫기','id="label-preview-close"')}</dialog>
       <dialog id="number-dialog" class="touch-dialog number-dialog"><h2 id="number-title"></h2><input id="number-input" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="라벨 숫자 입력"><div id="number-keys">${['7','8','9','4','5','6','1','2','3','.','0','⌫'].map(k=>button(k,`data-number="${k}"`)).join('')}</div><p id="number-error" role="alert"></p><footer>${button('취소','data-close="number-dialog"')}${button('적용','id="number-apply" class="dark"')}</footer></dialog>
       <dialog id="scale-dialog" class="touch-dialog"><h2>저울 연결</h2><p>A&amp;D FG-150KAL · COM2 / 2400 / 7E1</p><p>SM을 종료한 뒤 연결을 누르고 <b>COM2</b>를 선택하세요. 브라우저를 다시 열면 연결 버튼으로 재연결하세요.</p><p>저울 표시값을 그대로 사용합니다. 용기무게는 저울에서 설정하고, 첫 출력 전 표시 중량과 일치하는지 확인하세요.</p><p id="scale-dialog-status" role="status"></p><footer>${button('연결','id="scale-connect"')}${button('연결 해제','id="scale-disconnect"')}${button('닫기','data-close="scale-dialog"')}</footer></dialog>`);
@@ -284,16 +285,21 @@
       historyPage=Math.floor(first/historyPageSize);
       renderHistory();
     });
-    byId('history-delete-all').onclick=async()=>{
+    async function deleteHistoryLabels(all){
       const row=selectedOrder();
-      if(state.loading||!row||completionFor(row.id))return;
-      const count=activeLogsForOrder(row.id).length;
-      if(!count||!confirm(`${row.product||row.title||'현재 작업'}의 외포장 라벨 ${count}장을 모두 삭제 처리할까요?\n현재 페이지뿐 아니라 이 작업의 전체 출력이력에 적용됩니다.`))return;
-      const reason=prompt('전체삭제 사유', '잘못 출력');
+      if(state.loading||!row||!orderLogsReady()||completionFor(row.id))return;
+      const ids=all?null:[...selected];
+      const count=ids?ids.length:activeLogsForOrder(row.id).length;
+      if(!count||!confirm(all
+        ? `${row.product||row.title||'현재 작업'}의 외포장 라벨 ${count}장을 모두 삭제 처리할까요?\n현재 페이지뿐 아니라 이 작업의 전체 출력이력에 적용됩니다.`
+        : `체크한 외포장 라벨 ${count}장을 삭제 처리할까요?`))return;
+      const reason=prompt(all?'전체삭제 사유':'선택삭제 사유','잘못 출력');
       if(reason===null)return;
-      await voidAllLogsForOrder(row.id,reason);
+      await voidLogsForOrder(row.id,reason,ids);
       renderHistory();byId('history-dialog').querySelector('.dialog-notice').textContent=byId('status').textContent;fitHistoryPage();
-    };
+    }
+    byId('history-delete-all').onclick=()=>deleteHistoryLabels(true);
+    byId('history-delete-selected').onclick=()=>deleteHistoryLabels(false);
     byId('history-body').onchange=e=>{if(e.target.matches('[data-log]')){e.target.checked?selected.add(e.target.dataset.log):selected.delete(e.target.dataset.log);sync();}};
     byId('history-body').onclick=async e=>{
       const b=e.target.closest('button[data-act]');if(!b||b.disabled||state.loading)return;

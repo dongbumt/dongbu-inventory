@@ -1395,26 +1395,28 @@
       }
     }
 
-    async function voidAllLogsForOrder(orderId, reason){
+    async function voidLogsForOrder(orderId, reason, selectedIds=null){
       if(state.loading || !orderLogsReady() || String(selectedOrder()?.id) !== String(orderId)) return;
       if(completionFor(orderId)){ setStatus('생산완료된 라벨은 삭제할 수 없습니다.', 'warn'); return; }
       const active=activeLogsForOrder(orderId);
-      if(!active.length){ setStatus('삭제할 외포장 라벨이 없습니다.', 'warn'); return; }
-      const ids=new Set(active.map(log=>String(log.id)));
-      const previousLogs=state.logs;
+      const ids=selectedIds===null?null:new Set(selectedIds.map(String));
+      const targets=ids?active.filter(log=>ids.has(String(log.id))):active;
+      if(ids&&targets.length!==ids.size){
+        setStatus('선택한 라벨의 상태가 변경되었습니다. 출력이력을 확인해주세요.', 'warn');
+        return;
+      }
+      if(!targets.length){ setStatus('삭제할 외포장 라벨이 없습니다.', 'warn'); return; }
+      const action=ids?'선택삭제':'전체삭제';
       const voidedAt=new Date().toISOString();
-      state.logs=state.logs.map(log=>ids.has(String(log.id))
-        ? {...log,status:'void',voidedAt,voidReason:String(reason||'').trim()||'전체삭제'} : log);
-      renderAll();
+      const voidReason=String(reason||'').trim()||action;
+      const records=targets.map(log=>({...log,status:'void',voidedAt,voidReason}));
       setLoading(true);
-      setStatus(`외포장 라벨 ${active.length}장 삭제 처리 저장 중...`, 'warn');
+      setStatus(`외포장 라벨 ${records.length}장 삭제 처리 저장 중...`, 'warn');
       try{
-        await saveLogs(state.logs.filter(log=>ids.has(String(log.id))));
-        setStatus(`이 작업의 외포장 라벨 ${active.length}장 삭제 처리됨 · 이력은 보존됩니다.`, 'ok');
+        await saveLogs(records);
+        setStatus(`이 작업의 외포장 라벨 ${records.length}장 삭제 처리됨 · 이력은 보존됩니다.`, 'ok');
       }catch(err){
-        state.logs=previousLogs;
-        renderAll();
-        setStatus(`전체삭제 실패: ${err.message||err}`, 'err');
+        setStatus(`${action} 실패: ${err.message||err}`, 'err');
       }finally{
         setLoading(false);
       }
@@ -1605,7 +1607,7 @@
   <script src="label-fullscreen.js?v=20260916touch4"></script>
   <script src="label-lots.js?v=20261029lots1"></script>
   <script src="label-lot-ui.js?v=20261029lots1"></script>
-  <script src="label-touch.js?v=20261112scalerecovery1"></script>
+  <script src="label-touch.js?v=20261125selectiondelete1"></script>
   <link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
   <script src="label-weight-split.js?v=20261113split1"></script>
   <script>DBMTLabelWeightSplit.configure({auth:()=>({p_pin:state.pin,p_token:null})});</script>
