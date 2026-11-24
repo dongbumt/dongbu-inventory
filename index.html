@@ -1233,6 +1233,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="card-title" style="margin:0;">
         <div class="ct-bar" style="background:var(--orange);"></div>
         생산일보 목록
+        <button id="prod-refresh-btn" type="button" class="btn btn-secondary inventory-refresh-btn" onclick="refreshProductionList()" title="생산일보 새로고침: 서버의 최신 자료 불러오기" aria-label="생산일보 새로고침" aria-busy="false"><img src="vendor/lucide/refresh-cw.svg" alt="" aria-hidden="true"></button>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;max-width:100%;">
         <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap;">
@@ -8821,14 +8822,19 @@ function refreshInventoryStock(){
   return refreshInventoryData('stock');
 }
 
+function refreshProductionList(){
+  if(!validateProductionDateRange())return;
+  return refreshInventoryData('production');
+}
+
 async function refreshInventoryData(menu){
-  if(!['transactions','stock'].includes(menu))return;
+  if(!['transactions','stock','production'].includes(menu))return;
   if(typeof DBMTAuth!=='object'||!DBMTAuth.isPersonal()||!DBMTAuth.can(menu,'view')){toast('해당 메뉴의 조회 권한이 없습니다.');return;}
   if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1'){toast('서버에 연결한 상태에서 새로고침해주세요.');return;}
   if(inventoryRefreshPromise)return inventoryRefreshPromise;
   const blocked=inventoryRefreshBlocked();if(blocked){toast(blocked);return;}
   const token=DBMTAuth.getSessionToken(),revision=localCoreRevision;
-  const buttons=['txn-refresh-btn','stock-refresh-btn'].map(id=>document.getElementById(id)).filter(Boolean);
+  const buttons=['txn-refresh-btn','stock-refresh-btn','prod-refresh-btn'].map(id=>document.getElementById(id)).filter(Boolean);
   buttons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
   inventoryRefreshPromise=(async()=>{
     try{
@@ -8838,19 +8844,27 @@ async function refreshInventoryData(menu){
       if(localCoreRevision!==revision||inventoryRefreshBlocked()){
         toast('불러오는 동안 변경한 내용을 유지했습니다. 저장 완료 후 다시 새로고침해주세요.');return;
       }
-      if(!Array.isArray(data.transactions)||(data.prod!==null&&!Array.isArray(data.prod)))throw new Error('서버 자료 형식을 확인할 수 없습니다.');
-      userTransactions=data.transactions.map(row=>({...row,date:String(row.date||'').replace(/\//g,'-')}));
-      transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-      if(Array.isArray(data.prod))userProdEntries=data.prod;
+      const hasTransactions=Array.isArray(data.transactions), hasProduction=Array.isArray(data.prod);
+      if((!hasTransactions&&(menu!=='production'||data.transactions!==null)) ||
+         (!hasProduction&&(menu==='production'||data.prod!==null)))throw new Error('서버 자료 형식을 확인할 수 없습니다.');
+      if(hasTransactions){
+        userTransactions=data.transactions.map(row=>({...row,date:String(row.date||'').replace(/\//g,'-')}));
+        transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+        safeLocalStorageSet('dbmt_user_transactions',JSON.stringify(userTransactions),true);
+      }
+      if(hasProduction){
+        userProdEntries=data.prod;
+        safeLocalStorageSet('dbmt_user_prod',JSON.stringify(userProdEntries),true);
+      }
       markLocalCoreChanged();
-      safeLocalStorageSet('dbmt_user_transactions',JSON.stringify(userTransactions),true);
-      if(Array.isArray(data.prod))safeLocalStorageSet('dbmt_user_prod',JSON.stringify(userProdEntries),true);
       if(activePageId()==='p-transactions'){
         transactionListQueryActive=true;renderTransactions();
       }else if(activePageId()==='p-stock'){
         stockSearchActivated=true;renderStock();
+      }else if(activePageId()==='p-production'&&hasProduction&&validateProductionDateRange()){
+        productionListQueryActive=true;renderProduction();
       }
-      toast('서버의 최신 거래·재고 자료를 불러왔습니다.');
+      toast(menu==='production'?'서버의 최신 생산일보를 불러왔습니다.':'서버의 최신 거래·재고 자료를 불러왔습니다.');
     }catch(error){toast(`새로고침 실패: ${String(error?.message||error)}`);}
     finally{buttons.forEach(button=>{button.disabled=false;button.setAttribute('aria-busy','false');});inventoryRefreshPromise=null;}
   })();
@@ -12192,7 +12206,7 @@ function validateProductionDateRange(){
 
 async function runProductionSearch(){
   if(!validateProductionDateRange()) return;
-  await refreshLabelProductions();
+  await (inventoryRefreshPromise || refreshLabelProductions());
   productionListQueryActive = true;
   renderProduction();
 }
@@ -23302,6 +23316,6 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
 <script src="ledgers.js?v=20261112ledger1"></script>
-<script src="m02-auth.js?v=20261119distribution1"></script>
+<script src="m02-auth.js?v=20261124prodrefresh1"></script>
 </body>
 </html>

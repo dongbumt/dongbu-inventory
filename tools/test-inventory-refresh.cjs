@@ -2,13 +2,15 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),http=require('node:http'),os=require('node:os');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8'),artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-inventory-refresh-'));
-const names=['inventoryRefreshBlocked','refreshTransactionList','refreshInventoryStock','refreshInventoryData','saveTransactionRows','markLocalCoreChanged','assertPersonalServerResult'];
+const names=['inventoryRefreshBlocked','refreshTransactionList','refreshInventoryStock','refreshProductionList','refreshInventoryData','saveTransactionRows','markLocalCoreChanged','assertPersonalServerResult'];
 names.push('stockLedgerDateKey','normProdDate');
 names.push('stockManagementButtons','renderStockReceiptDetails','toggleStockReceiptDetails');
 names.push('localDateString','htmlEscape','jsArg','parseAppNumber','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','renderTransactions','getStockMap','getKnownStockLocations','stockLocationOptionsHtml','refreshStockLocationFilter','stockCanAdjustCurrent','stockPersonalCan','applyStockPermissionState','closeStockAdjust','closeStockBoxBaseline','setStockExportEnabled','getStockQueryFilters','stockQueryDescription','renderStock');
+names.push('renderProduction','setProductionListIdle','getFilteredProductionEntries','productionMatchesSearch','productionDisplayInputs','productionStockNoteHtml','productionStockNote','productionLegacySamsung','getProdJobType','getProdEntryNote','totalRecordedBoxes','validateProductionDateRange');
 const functions=names.map(name=>{const match=html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'));assert(match,name);return match[0];}).join('\n');new vm.Script(functions);
 const auth=fs.readFileSync(path.join(root,'m02-auth.js'),'utf8');
 assert.match(auth,/refreshTransactionList:\['transactions','view'\]/);assert.match(auth,/refreshInventoryStock:\['stock','view'\]/);
+assert.match(auth,/refreshProductionList:\['production','view'\]/);
 const server=http.createServer((req,res)=>{
   const pathname=new URL(req.url,'http://local').pathname;
   if(pathname==='/fixture'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><main></main>');return;}
@@ -24,7 +26,7 @@ const server=http.createServer((req,res)=>{
     await page.goto(`http://127.0.0.1:${server.address().port}/fixture`);
     await page.evaluate(markup=>{
       const template=document.createElement('template');template.innerHTML=markup;
-      for(const id of ['p-transactions','p-stock'])document.querySelector('main').append(template.content.querySelector('#'+id));
+      for(const id of ['p-transactions','p-stock','p-production'])document.querySelector('main').append(template.content.querySelector('#'+id));
       for(const id of ['stock-adjust-modal','stock-box-baseline-modal'])document.body.append(template.content.querySelector('#'+id));
     },html);
     await page.addStyleTag({content:fs.readFileSync(path.join(root,'styles/main.css'),'utf8')});
@@ -34,14 +36,16 @@ const server=http.createServer((req,res)=>{
     await page.addScriptTag({content:`
       const seed={id:'qa-old',date:'2026-11-11',type:'입고',product:'기존 품목',lot:'OLD',stockLocation:'가공장',stockRowId:'qa-old-stock',weight:10,boxCount:1,price:1000};
       const incoming={id:'qa-pda',date:'2026-11-11',type:'입고',product:'목전지',lot:'903024600808',stockLocation:'가공장',stockRowId:'qa-pda-stock',weight:349.89,boxCount:20,price:4400};
+      const finished={id:'qa-new-prod',date:'2026-11-11',job_no:7,inputs:[],outputs:[{product:'새 가상 생산품',lot:'QA-PROD',qty:40,price:1000,boxCount:4}]};
       let userTransactions=[{...seed}],transactions=[...userTransactions],userProdEntries=[{id:'qa-old-prod'}],EXCEL_TRANSACTIONS=[];
       let _editTxnId=null,_editProdId=null,transactionWritePending=0,productionWritePending=0,labelProductionRefreshPromise=null,inventoryRefreshPromise=null,localCoreRevision=0;
-      let transactionListQueryActive=false,stockSearchActivated=false,_stockMapCache=null;
+      let transactionListQueryActive=false,productionListQueryActive=false,stockSearchActivated=false,_stockMapCache=null;
+      const EXCEL_PROD=[],subMaterialUsages=[];
       const STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고',EXCEL_STOCK=[],labelProducts=[];
       let stockSortKey='product',stockSortDir='asc',stockSearchDirty=true,stockQuerySnapshot=null;
       const SUPABASE_ENABLED_KEY='qa-enabled';localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
-      const control={token:'qa-session',personal:true,allowed:true,delay:80,writeDelay:100,fail:false,shape:false,remote:[seed,incoming],prod:[{id:'qa-new-prod'}]};
-      const DBMTAuth={isPersonal:()=>control.personal,can:()=>control.allowed,getSessionToken:()=>control.token};
+      const control={token:'qa-session',personal:true,allowed:true,permittedMenu:'',delay:80,writeDelay:100,fail:false,shape:false,remote:[seed,incoming],prod:[{id:'qa-new-prod'}]};
+      const DBMTAuth={isPersonal:()=>control.personal,can:(menu,action)=>control.allowed&&(!control.permittedMenu||(menu===control.permittedMenu&&action==='view')),getSessionToken:()=>control.token};
       let active='p-transactions',calls=[],messages=[],cached={},rendered=[];
       const activePageId=()=>active,toast=value=>messages.push(value),safeLocalStorageSet=(key,value)=>cached[key]=value;
       const invalidateStockMap=()=>{_stockMapCache=null;},recordTransactionChange=()=>{},save=()=>{throw Error('Must not write a full ERP payload');};
@@ -72,6 +76,31 @@ const server=http.createServer((req,res)=>{
     await page.getByRole('button',{name:'재고현황 새로고침',exact:true}).click();await page.waitForFunction(()=>inventoryRefreshPromise===null);
     assert.equal(await page.locator('#stock-body tr').count(),1,await page.evaluate(()=>messages.at(-1)));assert.match(await page.locator('#stock-body').textContent(),/목전지/);assert.equal(await page.locator('#stock-body td').nth(11).textContent(),'340.0020 박스');assert.equal(await page.locator('#stock-as-of-date').inputValue(),'2026-11-11');assert.equal(await page.locator('#stock-search').inputValue(),'목전지');assert.equal(await page.locator('#stock-location-filter').inputValue(),'가공장');
     await page.locator('#p-stock .section-header').screenshot({path:path.join(artifacts,'stock-refresh.png')});
+    const productionFields={'prod-filter-from':'2026-11-10','prod-filter-to':'2026-11-12','prod-filter-product':'가상 생산품','prod-filter-lot':'QA-PROD','prod-date':'2026-11-13','prod-job-no':'9','prod-note':'저장하지 않은 생산일보'};
+    await page.evaluate(fields=>{
+      show('p-production');
+      for(const [id,value] of Object.entries(fields))document.getElementById(id).value=value;
+      control.prod=[finished,{...finished,id:'qa-filtered-out',date:'2026-11-15'}];
+      control.permittedMenu='production';control.remote=null;
+      renderProduction();
+    },productionFields);
+    assert.equal(await page.locator('#prod-body tr').count(),0);
+    const productionButton=page.getByRole('button',{name:'생산일보 새로고침',exact:true});
+    assert(await productionButton.getAttribute('title'));
+    await productionButton.click();
+    assert(await productionButton.isDisabled());assert.equal(await productionButton.getAttribute('aria-busy'),'true');
+    await page.waitForFunction(()=>inventoryRefreshPromise===null);
+    assert.deepEqual(await page.evaluate(()=>calls.at(-1)),{p_token:'qa-session',p_menu:'production'});
+    assert.match(await page.locator('#prod-filter-status').textContent(),/1건$/);
+    assert.match(await page.locator('#prod-body').textContent(),/새 가상 생산품/);
+    assert.doesNotMatch(await page.locator('#prod-body').textContent(),/2026-11-15/);
+    assert.equal(await page.evaluate(()=>userTransactions[1].weight),340,'Production-only refresh preserves inaccessible transaction cache');
+    for(const [id,value] of Object.entries(productionFields))assert.equal(await page.locator('#'+id).inputValue(),value);
+    assert.equal(await productionButton.getAttribute('aria-busy'),'false');
+    await page.evaluate(()=>{control.permittedMenu='transactions';});
+    const productionCalls=await page.evaluate(()=>calls.length);
+    await productionButton.click();assert.equal(await page.evaluate(()=>calls.length),productionCalls,'Production view permission is required');
+    await page.evaluate(()=>{control.permittedMenu='';control.remote=[seed,{...incoming,weight:340}];show('p-stock');});
     let count=await page.evaluate(()=>calls.length);
     for(const field of ['transactionWritePending','productionWritePending','labelProductionRefreshPromise','_editTxnId','_editProdId']){
       await page.evaluate(field=>{window.__setGuard=()=>{};eval(field+'=1');},field);await page.evaluate(()=>refreshInventoryStock());
@@ -85,7 +114,7 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(()=>Promise.all([__refresh,__write]));assert.equal(await page.evaluate(()=>userTransactions[1].weight),340);assert(await page.evaluate(()=>userTransactions.some(row=>row.id==='qa-local-write')));
     await page.evaluate(()=>{window.__refresh=refreshInventoryStock();control.token='new-session';});await page.evaluate(()=>__refresh);assert.equal(await page.evaluate(()=>userTransactions[1].weight),340);
     await page.evaluate(()=>{control.prod=null;control.remote=[];});await page.evaluate(()=>refreshInventoryStock());assert.equal(await page.evaluate(()=>userTransactions.length),0);assert.equal(await page.evaluate(()=>userProdEntries[0].id),'qa-new-prod');
-    for(const width of [1440,390]){await page.setViewportSize({width,height:900});for(const id of ['p-transactions','p-stock']){await page.evaluate(showId=>show(showId),id);const icon=page.locator('#'+(id==='p-stock'?'stock':'txn')+'-refresh-btn');const bounds=await icon.boundingBox();assert(bounds.width===30&&bounds.height===30&&bounds.x>=0&&bounds.x+bounds.width<=width);assert(await icon.locator('img').evaluate(img=>img.complete&&img.naturalWidth>0));await page.locator('#'+id+' .section-header').last().screenshot({path:path.join(artifacts,id+'-'+width+'.png')});}}
-    assert.deepEqual(errors,[]);console.log('PASS: both real refresh buttons, one scoped RPC, latest PDA rows/stock cache, filters/new drafts, production access, duplicate/loading states, edit/write/modal guards, concurrent-save/session protection, failure/empty responses and 1440/390px icons');console.log('Artifacts: '+artifacts);
+    for(const width of [1440,390]){await page.setViewportSize({width,height:900});for(const [id,buttonId] of [['p-transactions','txn-refresh-btn'],['p-stock','stock-refresh-btn'],['p-production','prod-refresh-btn']]){await page.evaluate(showId=>show(showId),id);const icon=page.locator('#'+buttonId);const bounds=await icon.boundingBox();assert(bounds.width===30&&bounds.height===30&&bounds.x>=0&&bounds.x+bounds.width<=width);assert(await icon.locator('img').evaluate(img=>img.complete&&img.naturalWidth>0));await page.locator('#'+id+' .section-header').last().screenshot({path:path.join(artifacts,id+'-'+width+'.png')});}}
+    assert.deepEqual(errors,[]);console.log('PASS: all three real refresh buttons, one scoped RPC, latest transactions/production/stock, filters/new drafts, distinct production permissions, loading/edit/write guards, concurrent-save/session protection, failure/empty responses and 1440/390px icons');console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

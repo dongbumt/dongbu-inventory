@@ -90,6 +90,7 @@
 
     addProdInputRow:['production','write','uiOnly'],
     addProdOutputRow:['production','write','uiOnly'],
+    refreshProductionList:['production','view'],
     saveProdEntry:['production','write'],
     openEditProdEntry:['production','update'],
     deleteProdEntry:['production','delete'],
