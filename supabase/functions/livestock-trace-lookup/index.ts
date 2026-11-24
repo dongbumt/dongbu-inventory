@@ -5,6 +5,7 @@ interface LookupRequest {
   traceNo?: string;
   speciesHint?: "cattle" | "pig";
   permissionAction?: "create" | "update";
+  purpose?: "work-order-slaughterhouse";
 }
 
 interface ErpSession {
@@ -17,6 +18,7 @@ interface ErpSession {
   };
   permissions?: Array<{
     menuCode?: string;
+    canView?: boolean;
     canCreate?: boolean;
     canUpdate?: boolean;
   }>;
@@ -146,8 +148,10 @@ async function fetchOptions(serviceKey: string, traceNo: string, optionNos: numb
   }
 }
 
-function permissionGranted(session: ErpSession, action: "create" | "update") {
-  const row = (session.permissions || []).find((item) => item?.menuCode === "transactions");
+function permissionGranted(session: ErpSession, action: "create" | "update", workOrder: boolean) {
+  const menu = workOrder ? "workorders" : "transactions";
+  const row = (session.permissions || []).find((item) => item?.menuCode === menu);
+  if (workOrder && row?.canView !== true) return false;
   return action === "update" ? row?.canUpdate === true : row?.canCreate === true;
 }
 
@@ -194,10 +198,15 @@ Deno.serve(async (req) => {
   } catch {
     return json(req, 400, { error: "요청 형식이 올바르지 않습니다." });
   }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)
+    || (payload.purpose !== undefined && payload.purpose !== "work-order-slaughterhouse")) {
+    return json(req, 400, { error: "요청 형식이 올바르지 않습니다." });
+  }
 
+  const workOrder = payload.purpose === "work-order-slaughterhouse";
   const sessionToken = String(payload.sessionToken || "").trim();
   const traceNo = cleanTraceNo(payload.traceNo);
-  const speciesHint = payload.speciesHint === "cattle" ? "cattle" : payload.speciesHint === "pig" ? "pig" : "";
+  const speciesHint = workOrder || payload.speciesHint === "cattle" ? "cattle" : payload.speciesHint === "pig" ? "pig" : "";
   const permissionAction = payload.permissionAction === "update" ? "update" : "create";
   if (!sessionToken) return json(req, 401, { error: "개인 사용자 로그인이 필요합니다." });
   if (!/^[0-9A-Z]{12,30}$/.test(traceNo)) {
@@ -224,8 +233,8 @@ Deno.serve(async (req) => {
   if (sessionError || session.ok !== true) {
     return json(req, 401, { error: "개인 사용자 로그인이 만료되었습니다. 다시 로그인해주세요." });
   }
-  if (!permissionGranted(session, permissionAction)) {
-    return json(req, 403, { error: "거래내역을 입력하거나 수정할 권한이 없습니다." });
+  if (!permissionGranted(session, permissionAction, workOrder)) {
+    return json(req, 403, { error: workOrder ? "작업지시를 등록하거나 수정할 권한이 없습니다." : "거래내역을 입력하거나 수정할 권한이 없습니다." });
   }
 
   let optionResults: OptionResult[];
@@ -301,6 +310,7 @@ Deno.serve(async (req) => {
       processEndDate: result.processEndDate,
       queriedAt,
       authMode: "personal_session",
+      ...(workOrder ? { purpose: payload.purpose } : {}),
       userId: user.id || "",
       loginId: user.loginId || "",
       displayName: user.displayName || "",
@@ -309,5 +319,5 @@ Deno.serve(async (req) => {
   });
   if (auditError) console.error("Livestock trace lookup audit failed", auditError.message);
 
-  return json(req, 200, result);
+  return json(req, 200, workOrder ? { ok: true, traceNo, slaughterHouses } : result);
 });

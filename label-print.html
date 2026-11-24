@@ -518,8 +518,9 @@
 
   <script src="label-weight.js?v=20260910workorder1"></script>
   <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-  <script src="label-layout.js?v=20261113suffix1"></script>
+  <script src="label-layout.js?v=20261124blend1"></script>
   <script src="label-print-document.js?v=20261118hidden1"></script>
+  <script src="work-order-blend.js?v=20261124blend1"></script>
   <script src="company-master.js?v=20260813m01"></script>
   <script>
     const SUPABASE_URL = 'https://hdwjwtmbsxfjrlvicgnn.supabase.co';
@@ -1119,6 +1120,11 @@
         return;
       }
       if(!state.pin){ setStatus('먼저 라벨전용 화면에 연결하세요.', 'warn'); return; }
+      const slaughterhouse = blendLabelFields(row);
+      if(slaughterhouse && (!slaughterhouse.slaughterhouseLot || !slaughterhouse.slaughterhouseName)){
+        setStatus('우민찌 작업지시의 한우지방 이력번호와 도축장을 확인한 뒤 새로고침해주세요.', 'warn');
+        return;
+      }
       const weight = window.DBMTLabelTouch?.weight(kind) ?? DBMTLabelWeight.value('print-weight');
       const weightOmitted = kind==='inner' && !!window.DBMTLabelTouch?.isWeightOmitted?.(kind);
       if(!weight&&!weightOmitted){ setStatus('라벨 1장 중량을 선택하거나 0보다 큰 값을 소수 둘째 자리까지 입력하세요.', 'warn'); return; }
@@ -1317,10 +1323,19 @@
       };
     }
 
+    function blendLabelFields(row){
+      if(!window.DBMTWorkOrderBlend?.recipe(row.product)) return null;
+      return {
+        slaughterhouseName: String(row.slaughterhouseName || '').trim(),
+        slaughterhouseLot: String(row.slaughterhouseLot || '').trim()
+      };
+    }
+
     function snapshotOrder(row){
       return {
         ...(row.productSelectionVersion===1?{productSelectionVersion:1}:{}),
         ...(row.outputLotSelectionVersion===1?{outputLotSelectionVersion:1,outputLots:row.outputLots,defaultOutputLot:row.defaultOutputLot}:{}),
+        ...blendLabelFields(row),
         id: row.id || '',
         date: row.date || '',
         title: row.title || '',
@@ -1393,6 +1408,7 @@
         product: row.product || log.product || '',
         origin: row.origin || '',
         grade: row.grade || '',
+        ...(typeof row.slaughterhouseName === 'string'?{slaughterhouseName:row.slaughterhouseName}:{}),
         mfgdate: formatDate(row.mfgdate || row.date || ''),
         expdate: formatDate(row.expdate || ''),
         weight: log.weightOmitted ? '' : toNumber(log.labelWeight || row.weight).toFixed(2),

@@ -52,6 +52,7 @@ const server=http.createServer(async(req,res)=>{
         const jsArg=v=>htmlEscape(JSON.stringify(v)),bulkOutboundSearchKey=v=>String(v).toLowerCase();
         const totalRecordedBoxes=()=>null,boxCountDisplay=()=>'',workOrderSourceInputs=r=>r.sourceInputs||[],workOrderSearchText=r=>Object.values(r).join(' ');
         const initWorkOrderForm=()=>{},workOrderSourceRows=()=>[],addWorkOrderSourceRow=()=>{},autoSetWorkOrderExpiry=()=>{},refreshWorkOrderPreview=()=>{},refreshLabelWorkOrderSelect=()=>{};
+        const configureWorkOrderBlend=()=>{},workOrderBlendRecipe=()=>null;
         const samePriceText=(a,b)=>a===b;
         let userTransactions=[],userProdEntries=[],prices=[],transactions=[],subMaterialUsages=[];
         const EXCEL_TRANSACTIONS=[],cleanupSupabaseLegacyCoreCache=()=>{},safeLocalStorageSet=()=>{},cacheAppDataValue=()=>{},invalidateStockMap=()=>{},scheduleProductionPickerWarmup=()=>{};

@@ -8,13 +8,14 @@
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
 <script src="work-order-stock-groups.js?v=20261119allocation1"></script>
+<script src="work-order-blend.js?v=20261124blend1"></script>
 <script src="stock-receipt-view.js?v=20261123receiptdate1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
 <script src="label-product-selection.js?v=20261023ingredients1"></script>
 <script src="label-lots.js?v=20261029lots1"></script>
 <link rel="stylesheet" href="styles/work-order-output-lots.css?v=20261029lots1">
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-<script src="label-layout.js?v=20261118manufacturer2"></script>
+<script src="label-layout.js?v=20261124blend1"></script>
 <script src="label-print-document.js?v=20261118hidden1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
@@ -3894,13 +3895,29 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
           <input id="wo-title" placeholder="예) 돈등심 라벨작업" oninput="refreshWorkOrderPreview()">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
+          <label for="wo-product">생산물 제품명</label>
+          <div class="txn-managed-product-field production-picker-field">
+            <input id="wo-product" data-picker-context="workorder-output" placeholder="생산물 제품명 검색" autocomplete="off" oninput="onWorkOrderProductInput()" onkeydown="handleWorkOrderPickerKeydown(event,'product')">
+            <button type="button" class="btn btn-secondary" onclick="openWorkOrderProductPicker()">검색</button>
+          </div>
+          <input type="hidden" id="wo-label-product-id">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
           <label>투입 원료육</label>
+          <div id="wo-blend-target" hidden>
+            <label for="wo-blend-target-weight">기준 총 투입량(KG)</label>
+            <div class="txn-managed-product-field production-picker-field">
+              <input id="wo-blend-target-weight" type="number" min="0.01" max="999999999" step="0.01" inputmode="decimal" placeholder="예) 100" oninput="updateWorkOrderBlendTargets()">
+              <button id="wo-blend-apply" type="button" class="btn btn-secondary" onclick="applyWorkOrderBlendTargets()" disabled>기준량 적용</button>
+            </div>
+            <div id="wo-blend-target-summary" class="work-order-source-help" aria-live="polite"></div>
+          </div>
           <div id="wo-source-rows"></div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;">
-            <button id="wo-add-source" type="button" class="btn btn-secondary btn-sm" onclick="addWorkOrderSourceRow()">+ 원료육 추가</button>
+            <span id="wo-add-source-wrap"><button id="wo-add-source" type="button" class="btn btn-secondary btn-sm" onclick="addWorkOrderSourceRow()">+ 원료육 추가</button></span>
             <span id="wo-input-total" style="font-size:12px;color:#555;">투입량 합계 0.00 KG</span>
           </div>
-          <div class="work-order-source-help">재고를 선택하면 중량·박스수가 입력됩니다. 실제 투입량으로 수정해주세요.</div>
+          <div id="wo-source-help" class="work-order-source-help">재고를 선택하면 중량·박스수가 입력됩니다. 실제 투입량으로 수정해주세요.</div>
         </div>
         <div class="form-group">
           <label>라벨 크기</label>
@@ -3909,21 +3926,25 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
             <option value="10x10">10 × 10cm</option>
           </select>
         </div>
-        <div class="form-group" style="grid-column:1/-1;">
-          <label>생산물 제품명</label>
-          <div class="txn-managed-product-field production-picker-field">
-            <input id="wo-product" data-picker-context="workorder-output" placeholder="생산물 제품명 검색" autocomplete="off" oninput="onWorkOrderProductInput()" onkeydown="handleWorkOrderPickerKeydown(event,'product')">
-            <button type="button" class="btn btn-secondary" onclick="openWorkOrderProductPicker()">검색</button>
-          </div>
-          <input type="hidden" id="wo-label-product-id">
-        </div>
         <div class="form-group">
           <label>원산지</label>
           <input id="wo-origin" placeholder="국내산" oninput="refreshWorkOrderPreview()">
         </div>
-        <div class="form-group">
-          <label>성별및등급</label>
-          <input id="wo-grade" placeholder="(선택)" oninput="refreshWorkOrderPreview()">
+        <div id="wo-grade-field">
+          <div class="form-group">
+            <label for="wo-grade">성별및등급</label>
+            <input id="wo-grade" placeholder="(선택)" oninput="refreshWorkOrderPreview()">
+          </div>
+        </div>
+        <div id="wo-blend-slaughterhouse-field" hidden>
+          <div class="form-group">
+            <label for="wo-blend-slaughterhouse">한우지방 도축장</label>
+            <div class="txn-managed-product-field production-picker-field">
+              <input id="wo-blend-slaughterhouse" type="text" maxlength="100" autocomplete="off" placeholder="한우지방 재고를 선택하세요" oninput="onWorkOrderSlaughterhouseInput()" disabled>
+              <button id="wo-blend-lookup" type="button" class="btn btn-secondary" onclick="lookupWorkOrderSlaughterhouse(true)" disabled>조회</button>
+            </div>
+            <div id="wo-blend-lookup-status" class="work-order-source-help" role="status"></div>
+          </div>
         </div>
         <div class="form-group">
           <label>제조일</label>
@@ -10164,6 +10185,7 @@ function bulkOutboundStockOptions(){
         stock: 0, stockBoxes:0,
         proddate,
         inboundDate:s.inboundDate || '',
+        factoryProductionDate:s.factoryProductionDate || '',
         stockLocation,
         source: s.source || '',
         price,
@@ -21595,6 +21617,173 @@ function workOrderSourceRows(){
   return [...document.querySelectorAll('#wo-source-rows .wo-source-row')];
 }
 
+function workOrderBlendRecipe(product=document.getElementById('wo-product')?.value){
+  return window.DBMTWorkOrderBlend?.recipe(product) || null;
+}
+
+function workOrderBlendStockMatches(role,stock){
+  return window.DBMTWorkOrderBlend?.matchesStock(role,stock,typeof labelProducts==='undefined'?[]:labelProducts) || false;
+}
+
+function markWorkOrderBlendSource(row,ingredient,required=false){
+  row.dataset.blendRole=ingredient?.role || '';
+  row.dataset.blendRequired=required?'1':'';
+  const input=row.querySelector('.wo-stock-search');
+  row.querySelector('.wo-source-stock label').textContent=ingredient?
+    `${ingredient.name} 재고 선택 (${ingredient.percent}%)`:'원료육 현재고 선택';
+  if(ingredient)input.setAttribute('aria-label',`${ingredient.name} 재고 검색`);
+  else input.removeAttribute('aria-label');
+  row.querySelector('.wo-remove').setAttribute('aria-label',required?`${ingredient.name} 재고 선택 취소`:'원료육 행 삭제');
+}
+
+function updateWorkOrderBlendTargets(){
+  const target=document.getElementById('wo-blend-target-weight');
+  const recipe=workOrderBlendRecipe();
+  if(!target||!recipe)return;
+  const amounts=window.DBMTWorkOrderBlend.targets(target.value);
+  const summary=document.getElementById('wo-blend-target-summary');
+  summary.textContent=recipe.ingredients.map(ingredient=>
+    `${ingredient.name} ${amounts?amounts[ingredient.role].toFixed(2)+' KG':ingredient.percent+'%'}`).join(' · ');
+  const roles=workOrderSourceRows().filter(row=>row._sourceStock&&row.dataset.blendRole).map(row=>row.dataset.blendRole);
+  document.getElementById('wo-blend-apply').disabled=target.disabled||!amounts||!roles.length||
+    new Set(roles).size!==roles.length;
+}
+
+function applyWorkOrderBlendTargets(){
+  const target=document.getElementById('wo-blend-target-weight');
+  const amounts=target&&!document.getElementById('wo-blend-apply')?.disabled&&window.DBMTWorkOrderBlend?.targets(target.value);
+  if(!amounts)return;
+  for(const row of workOrderSourceRows()){
+    const role=row.dataset.blendRole;
+    const weightInput=row.querySelector('.wo-input-weight');
+    if(role&&row._sourceStock&&!weightInput.disabled)weightInput.value=amounts[role].toFixed(2);
+  }
+  updateWorkOrderInputTotal();refreshWorkOrderPreview();
+}
+
+function workOrderBlendFatRows(){
+  return workOrderSourceRows().filter(row=>row.dataset.blendRole==='fat'&&row._sourceStock);
+}
+
+function workOrderBlendFatLot(){
+  const lots=new Set(workOrderBlendFatRows().map(row=>String(row._sourceStock.lot||'').trim()));
+  return lots.size===1?[...lots][0]:'';
+}
+
+function syncWorkOrderSlaughterhouse(restore=null){
+  const field=document.getElementById('wo-blend-slaughterhouse');
+  if(!field)return;
+  const lot=workOrderBlendRecipe()?workOrderBlendFatLot():'';
+  if(!restore&&field.dataset.fatLot===lot)return;
+  field._lookupRequest=null;
+  field.dataset.fatLot=lot;
+  field.value=lot&&restore?.slaughterhouseLot===lot?restore.slaughterhouseName||'':'';
+  field.disabled=!lot;
+  field.placeholder=lot?'도축장명 확인 또는 입력':'한우지방 재고를 선택하세요';
+  const button=document.getElementById('wo-blend-lookup');
+  button.disabled=!lot;button.textContent='조회';
+  document.getElementById('wo-blend-lookup-status').textContent=field.value?`한우지방 이력번호 ${lot}`:
+    (!lot&&workOrderBlendFatRows().length?'한우지방의 이력번호를 확인해주세요.':'');
+  if(lot&&!field.value)void lookupWorkOrderSlaughterhouse();
+}
+
+function onWorkOrderSlaughterhouseInput(){
+  const field=document.getElementById('wo-blend-slaughterhouse');
+  field._lookupRequest=null;
+  const button=document.getElementById('wo-blend-lookup');
+  button.disabled=!field.dataset.fatLot;button.textContent='조회';
+  document.getElementById('wo-blend-lookup-status').textContent=field.value.trim()?
+    '입력한 도축장명이 라벨에 표시됩니다.':'원물 라벨이나 입고 서류에서 도축장명을 확인해주세요.';
+  refreshWorkOrderPreview();
+}
+
+async function lookupWorkOrderSlaughterhouse(force=false){
+  const field=document.getElementById('wo-blend-slaughterhouse');
+  const lot=workOrderBlendFatLot();
+  if(!workOrderBlendRecipe()||!field||!lot||field.dataset.fatLot!==lot)return;
+  const status=document.getElementById('wo-blend-lookup-status');
+  const applyResult=names=>{
+    if(names.length===1){
+      field.value=names[0];
+      status.textContent=`한우지방 이력번호 ${lot}의 도축장명을 입력했습니다.`;
+      refreshWorkOrderPreview();
+    }else{
+      status.textContent=names.length?
+        `조회된 도축장 ${names.join(' / ')} · 원물 서류에서 확인한 이름을 입력해주세요.`:
+        '조회된 도축장명이 없습니다. 원물 라벨이나 입고 서류를 확인해주세요.';
+    }
+  };
+  const blend=window.DBMTWorkOrderBlend;
+  const receipts=typeof userTransactions!=='undefined'?userTransactions:typeof transactions!=='undefined'?transactions:[];
+  if(!force){
+    const recorded=blend.normalizeSlaughterhouses(workOrderBlendFatRows().flatMap(row=>
+      blend.findSavedSlaughterhouses(row._sourceStock,receipts)));
+    if(recorded.length){applyResult(recorded);return;}
+  }
+  const sessionToken=typeof DBMTAuth==='object'?DBMTAuth.getSessionToken():'';
+  if(!sessionToken){status.textContent='로그인 후 도축장을 조회하거나 원물 서류를 확인해 입력해주세요.';return;}
+  const button=document.getElementById('wo-blend-lookup');
+  const request={};field._lookupRequest=request;
+  button.disabled=true;button.textContent='조회 중…';
+  status.textContent=`한우지방 이력번호 ${lot}의 도축장 조회 중…`;
+  try{
+    const result=await sbFunctionRequest('livestock-trace-lookup',{sessionToken,traceNo:lot,speciesHint:'cattle',
+      purpose:'work-order-slaughterhouse',permissionAction:document.getElementById('wo-edit-id')?.value?'update':'create'});
+    if(field._lookupRequest===request)applyResult(blend.normalizeSlaughterhouses(result.slaughterHouses));
+  }catch(error){
+    if(field._lookupRequest===request)status.textContent=`도축장 조회 실패 · ${error.message||error} · 원물 서류 확인 후 이름을 입력해주세요.`;
+  }finally{
+    if(field._lookupRequest===request){
+      field._lookupRequest=null;
+      button.disabled=false;button.textContent='조회';
+    }
+  }
+}
+
+function configureWorkOrderBlend(product,restore=null){
+  const panel=document.getElementById('wo-blend-target');
+  if(!panel)return;
+  const recipe=workOrderBlendRecipe(product);
+  const wasBlend=!panel.hidden;
+  panel.hidden=!recipe;
+  document.getElementById('wo-blend-slaughterhouse-field').hidden=!recipe;
+  document.getElementById('wo-grade-field').hidden=!!recipe;
+  document.getElementById('wo-add-source-wrap').hidden=!!recipe;
+  document.getElementById('wo-source-help').textContent=recipe?
+    '기준량을 적용하거나 실제 투입량·박스수를 직접 입력하세요.':
+    '재고를 선택하면 중량·박스수가 입력됩니다. 실제 투입량으로 수정해주세요.';
+  const target=document.getElementById('wo-blend-target-weight');
+  if(!recipe){
+    target.value='';target.disabled=false;
+    if(wasBlend)workOrderSourceRows().forEach(row=>markWorkOrderBlendSource(row));
+    syncWorkOrderSlaughterhouse();
+    return;
+  }
+  if(wasBlend&&!restore)return;
+  const linked=restore||workOrders.find(row=>String(row.id)===document.getElementById('wo-edit-id')?.value);
+  const sources=restore?.sources||workOrderSourceRows().filter(row=>row._sourceStock).map(row=>({
+    sourceStock:row._sourceStock,sourceStockKey:row.querySelector('.wo-stock-key').value,
+    inputWeight:row.querySelector('.wo-input-weight').value,boxCount:row.querySelector('.wo-input-box-count').value,
+    _workOrderSourceInputs:row._sourceInputs
+  }));
+  const existing=new Set(sources);
+  document.getElementById('wo-source-rows').replaceChildren();
+  for(const ingredient of recipe.ingredients){
+    const matching=sources.filter(source=>existing.has(source)&&workOrderBlendStockMatches(ingredient.role,source.sourceStock));
+    for(const [i,source] of (matching.length?matching:[null]).entries()){
+      const row=addWorkOrderSourceRow(source);
+      if(row)markWorkOrderBlendSource(row,ingredient,i===0);
+      existing.delete(source);
+    }
+  }
+  if(restore||linked?._carryoverFrom)existing.forEach(source=>addWorkOrderSourceRow(source));
+  target.value=restore?.blendTargetWeight||'';
+  target.disabled=!!linked?._carryoverFrom;
+  if(linked?._carryoverFrom)window.DBMTWorkOrderCarryover?.applyEditor(linked);
+  syncWorkOrderSlaughterhouse(restore);
+  updateWorkOrderBlendTargets();
+}
+
 function updateWorkOrderInputTotal(){
   const rows=workOrderSourceRows();
   const total=rows.reduce((sum,row)=>sum+parseAppNumber(row.querySelector('.wo-input-weight')?.value),0);
@@ -21602,12 +21791,13 @@ function updateWorkOrderInputTotal(){
   const boxes=totalRecordedBoxes(rows.filter(row=>row.querySelector('.wo-stock-key')?.value).map(row=>({boxCount:row.querySelector('.wo-input-box-count')?.value})));
   const el=document.getElementById('wo-input-total');
   if(el) el.textContent=`선택 원료육 ${count}건 · 투입량 합계 ${total.toFixed(2)} KG${boxes===null?'':' · '+boxCountDisplay(boxes)+' 박스'}`;
+  updateWorkOrderBlendTargets();
 }
 
 function addWorkOrderSourceRow(source=null){
   const container=document.getElementById('wo-source-rows');
   if(!container) return null;
-  if(workOrderSourceRows().length>=30){alert('한 작업지시에 원료육은 최대 30건까지 입력할 수 있습니다.');return null;}
+  if(!source&&workOrderSourceRows().length>=30){alert('한 작업지시에 원료육은 최대 30건까지 입력할 수 있습니다.');return null;}
   const row=document.createElement('div');
   row.className='wo-source-row';
   row.innerHTML=`<div class="form-group wo-source-stock"><label>원료육 현재고 선택</label><div class="txn-managed-product-field production-picker-field"><input class="wo-stock-search" data-picker-context="workorder-input" placeholder="품목명·이력번호 검색" autocomplete="off" oninput="onWorkOrderStockInput(this)" onkeydown="handleWorkOrderPickerKeydown(event,'stock')"><button type="button" class="btn btn-secondary" onclick="openWorkOrderStockPicker(this)">검색</button></div><input type="hidden" class="wo-stock-key"></div><div class="form-group"><label>박스수(선택)</label><input class="wo-input-box-count" type="number" min="0" max="999999999" step="1" inputmode="numeric" placeholder="미기록" oninput="updateWorkOrderInputTotal()"></div><div class="form-group"><label>투입량(KG)</label><input class="wo-input-weight" type="number" min="0.01" step="0.01" placeholder="0.00" oninput="updateWorkOrderInputTotal()"></div><button type="button" class="btn btn-secondary wo-remove" onclick="removeWorkOrderSourceRow(this)" aria-label="원료육 행 삭제">×</button><div class="wo-source-summary">현재고에서 원료육을 선택하세요.</div>`;
@@ -21629,12 +21819,18 @@ function addWorkOrderSourceRow(source=null){
 function removeWorkOrderSourceRow(button){
   const row=button.closest('.wo-source-row');
   if(!row)return;
+  if(row.dataset.blendRequired==='1'){
+    const input=row.querySelector('.wo-stock-search');
+    input.value='';onWorkOrderStockInput(input);
+    return;
+  }
   if(workOrderSourceRows().length===1){
     row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-stock-search').value='';
     row.querySelector('.wo-input-weight').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
     row.querySelector('.wo-input-box-count').value='';
     row._sourceStock=null;row._sourceInputs=null;
   }else row.remove();
+  if(row.dataset.blendRole==='fat')syncWorkOrderSlaughterhouse();
   updateWorkOrderInputTotal();refreshWorkOrderPreview();
 }
 
@@ -21673,6 +21869,7 @@ function resetWorkOrderForm(force=false){
   document.getElementById('wo-lot').dataset.autoSourceLot='';
   const sourceRows=document.getElementById('wo-source-rows');
   if(sourceRows){sourceRows.innerHTML='';addWorkOrderSourceRow();}
+  configureWorkOrderBlend('');
   autoSetWorkOrderExpiry();
   refreshWorkOrderPreview();
 }
@@ -21710,11 +21907,14 @@ function onWorkOrderStockInput(input){
   if(previous && lotEl.dataset.autoSourceLot===lotEl.value && lotEl.value===previous.lot){lotEl.value='';lotEl.dataset.autoSourceLot='';}
   row.querySelector('.wo-stock-key').value='';row.querySelector('.wo-source-summary').textContent='현재고에서 원료육을 선택하세요.';
   row.querySelector('.wo-input-weight').value='';row.querySelector('.wo-input-box-count').value='';
-  row._sourceStock=null;row._sourceInputs=null;updateWorkOrderInputTotal();refreshWorkOrderPreview();
+  row._sourceStock=null;row._sourceInputs=null;
+  if(row.dataset.blendRole==='fat')syncWorkOrderSlaughterhouse();
+  updateWorkOrderInputTotal();refreshWorkOrderPreview();
 }
 
 function onWorkOrderProductInput(){
   document.getElementById('wo-label-product-id').value = '';
+  configureWorkOrderBlend(document.getElementById('wo-product').value);
   refreshWorkOrderPreview();
 }
 
@@ -21742,7 +21942,8 @@ function applyWorkOrderLabelProduct(product){
     if(el) el.value = value || '';
   };
   set('wo-product', p.name);
-  set('wo-origin', p.origin);
+  const recipe=workOrderBlendRecipe(p.name);
+  set('wo-origin', p.origin||(recipe?'미국산/국내산':''));
   set('wo-grade', p.grade);
   set('wo-itemno', p.itemno);
   set('wo-ingredients', DBMTLabelProducts.ingredients(p, `${inferLabelMeatType(p.name, '')} 100%`));
@@ -21752,6 +21953,7 @@ function applyWorkOrderLabelProduct(product){
   set('wo-mfgdate', workDate);
   const tempEl = document.getElementById('wo-temptype');
   if(tempEl && p.storage) tempEl.value = p.storage;
+  configureWorkOrderBlend(p.name);
   autoSetWorkOrderExpiry();
   refreshWorkOrderPreview();
 }
@@ -21772,7 +21974,9 @@ function autoSetWorkOrderExpiry(){
 }
 
 function workOrderStockOptions(targetInput=null){
-  const rows=excludeSelectedWorkOrderStock(bulkOutboundStockOptions().filter(isStockProductSelectable),targetInput);
+  const role=targetInput?.closest('.wo-source-row')?.dataset.blendRole;
+  const rows=excludeSelectedWorkOrderStock(bulkOutboundStockOptions().filter(isStockProductSelectable),targetInput)
+    .filter(stock=>!role||workOrderBlendStockMatches(role,stock));
   return window.DBMTWorkOrderStockGroups?DBMTWorkOrderStockGroups.group(rows,typeof transactions==='undefined'?[]:transactions):rows;
 }
 
@@ -21823,17 +22027,21 @@ function workOrderStockLabel(s){
 }
 
 function selectWorkOrderStock(key,targetInput){
-  const s = findWorkOrderStock(key,targetInput);
-  if(!s) return;
   const row=targetInput?.closest('.wo-source-row') || workOrderSourceRows()[0];
   if(!row)return;
+  const s = findWorkOrderStock(key,row.querySelector('.wo-stock-search'));
+  if(!s) return;
   row._sourceStock=s;
   row._sourceInputs=null;
   row.querySelector('.wo-stock-key').value=s.key;
   row.querySelector('.wo-stock-search').value=s.product || '';
   row.querySelector('.wo-source-summary').textContent=workOrderStockLabel(s);
-  row.querySelector('.wo-input-weight').value=parseAppNumber(s.stock).toFixed(2);
-  row.querySelector('.wo-input-box-count').value=workOrderStockBoxes(s)??'';
+  const role=row.dataset.blendRole;
+  const available=parseAppNumber(s.stock);
+  const amounts=role?window.DBMTWorkOrderBlend.targets(document.getElementById('wo-blend-target-weight')?.value):null;
+  const amount=role?amounts?.[role]:available;
+  row.querySelector('.wo-input-weight').value=amount==null?'':amount.toFixed(2);
+  row.querySelector('.wo-input-box-count').value=amount===available?workOrderStockBoxes(s)??'':'';
   const lotEl=document.getElementById('wo-lot');
   const selected=workOrderSourceRows().filter(item=>item.querySelector('.wo-stock-key').value);
   if(selected.length===1 && (!lotEl.value || lotEl.dataset.autoSourceLot===lotEl.value)){lotEl.value=s.lot || '';lotEl.dataset.autoSourceLot=lotEl.value;}
@@ -21845,6 +22053,7 @@ function selectWorkOrderStock(key,targetInput){
   if(!document.getElementById('wo-ingredients')?.value){
     document.getElementById('wo-ingredients').value=`${inferLabelMeatType(s.product, '')} 100%`;
   }
+  if(role==='fat')syncWorkOrderSlaughterhouse();
   updateWorkOrderInputTotal();refreshWorkOrderPreview();
 }
 
@@ -21865,6 +22074,10 @@ function collectWorkOrderForm(){
   const weight = parseAppNumber(val('wo-weight'));
   if(!date){ alert('작업일을 입력해주세요.'); return null; }
   if(!product){ alert('생산물 제품명을 입력해주세요.'); return null; }
+  const recipe=workOrderBlendRecipe(product);
+  const selectedProduct = selectedWorkOrderLabelProduct();
+  if(recipe&&!selectedProduct){alert('품목관리의 우민찌(지방15%)를 선택해주세요.');return null;}
+  const usedRoles=new Set();
   let sourceInputs=[];
   const usedKeys=new Set();
   for(const row of workOrderSourceRows()){
@@ -21875,10 +22088,18 @@ function collectWorkOrderForm(){
     if(!key && !search && !qtyText && !boxText)continue;
     const stock=key && (row._sourceStock?.key===key?row._sourceStock:findWorkOrderStock(key));
     if(!stock){alert('각 투입 원료육을 현재고 검색에서 선택해주세요.');return null;}
+    const role=row.dataset.blendRole;
+    if(recipe&&(!role||!workOrderBlendStockMatches(role,stock))){
+      alert('우민찌(지방15%)의 투입 원료는 미국산 전각과 한우지방을 선택해주세요.');return null;
+    }
     const qty=Number(qtyText);
     if(!qtyText || !Number.isFinite(qty) || qty<=0 || qty>999999999 || Math.abs(qty*100-Math.round(qty*100))>0.000001){
       alert('원료육마다 투입량을 0보다 크게, 소수 둘째 자리까지 입력해주세요.');return null;
     }
+    if(recipe&&qty>parseAppNumber(stock.stock)){
+      alert(`${stock.product}: 현재 재고 ${parseAppNumber(stock.stock).toFixed(2)} KG보다 투입량이 큽니다.`);return null;
+    }
+    if(recipe)usedRoles.add(role);
     const boxCount=parseOptionalBoxCount(boxText);
     if(Number.isNaN(boxCount) || (boxCount!==null && boxCount>999999999)){
       alert('박스수는 0 이상의 정수로 입력하거나 비워두세요.');return null;
@@ -21905,6 +22126,24 @@ function collectWorkOrderForm(){
     }
   }
   if(!sourceInputs.length){alert('투입 원료육을 하나 이상 선택해주세요.');return null;}
+  let blendFields={};
+  if(recipe){
+    if(!recipe.ingredients.every(ingredient=>usedRoles.has(ingredient.role))){
+      alert('미국산 전각과 한우지방을 각각 선택하고 투입량을 입력해주세요.');return null;
+    }
+    const slaughterhouseLot=workOrderBlendFatLot();
+    if(!slaughterhouseLot){alert('한우지방은 한 이력번호의 재고를 선택해주세요.');return null;}
+    const field=document.getElementById('wo-blend-slaughterhouse');
+    const slaughterhouseName=field?.dataset.fatLot===slaughterhouseLot?field.value.trim():'';
+    if(!slaughterhouseName){
+      alert('한우지방 도축장 조회 결과를 확인하거나 원물 서류의 도축장명을 입력해주세요.');return null;
+    }
+    const target=val('wo-blend-target-weight');
+    if(target&&!window.DBMTWorkOrderBlend.targets(target)){
+      alert('기준 총 투입량은 0보다 크게, 소수 둘째 자리까지 입력해주세요.');return null;
+    }
+    blendFields={slaughterhouseLot,slaughterhouseName,blendTargetWeight:target?Number(target):null};
+  }
   if(linked?._carryoverFrom)sourceInputs=workOrderSourceInputs(linked);
   if(sourceInputs.length>30){alert('원본 재고 기준으로 한 작업지시에 원료육은 최대 30건까지 입력할 수 있습니다. 투입량을 나누어 입력해주세요.');return null;}
   if(linked){
@@ -21913,9 +22152,9 @@ function collectWorkOrderForm(){
   }
   if(sourceInputs.length>1 && !val('wo-lot').trim()){alert('여러 원료육을 투입할 때는 생산물 이력번호를 입력해주세요.');return null;}
   const inputWeight=Math.round(sourceInputs.reduce((sum,item)=>sum+item.inputWeight,0)*100)/100;
-  const selectedProduct = selectedWorkOrderLabelProduct();
   return {
     ...(linked?._carryoverFrom?{_carryoverFrom:linked._carryoverFrom}:{}),
+    ...blendFields,
     id: val('wo-edit-id') || workOrderId(),
     date,
     title: val('wo-title').trim(),
@@ -21988,12 +22227,17 @@ function editWorkOrder(id){
   set('wo-edit-id', row.id);
   set('wo-date', row.date);
   set('wo-title', row.title);
+  set('wo-product', row.product);
   const sourceRows=document.getElementById('wo-source-rows');
-  if(sourceRows){sourceRows.innerHTML='';workOrderDisplaySourceInputs(workOrderSourceInputs(row)).forEach(source=>addWorkOrderSourceRow(source));if(!workOrderSourceRows().length)addWorkOrderSourceRow();}
+  const sources=workOrderDisplaySourceInputs(workOrderSourceInputs(row));
+  configureWorkOrderBlend(row.product,{...row,sources});
+  if(sourceRows&&!workOrderBlendRecipe(row.product)){
+    sourceRows.innerHTML='';sources.forEach(source=>addWorkOrderSourceRow(source));
+    if(!workOrderSourceRows().length)addWorkOrderSourceRow();
+  }
   const labelProductId = row.labelProductId || ((labelProducts || []).find(p => samePriceText(p.name || '', row.product || ''))?.id || '');
   set('wo-label-product-id', labelProductId);
   set('wo-label-size', row.labelSize || '7x10');
-  set('wo-product', row.product);
   set('wo-origin', row.origin);
   set('wo-grade', row.grade);
   set('wo-mfgdate', row.mfgdate);
@@ -22083,6 +22327,7 @@ function workOrderLabelData(row){
     product: row.product || '',
     origin: row.origin || '',
     grade: row.grade || '',
+    ...(workOrderBlendRecipe(row.product)?{slaughterhouseName:row.slaughterhouseName||''}:{}),
     mfgdate: fmtLblDate(row.mfgdate || ''),
     expdate: fmtLblDate(row.expdate || ''),
     weight: row.weight ? parseAppNumber(row.weight).toFixed(2) : '',
@@ -22120,6 +22365,7 @@ function collectWorkOrderFormForPreview(){
     product,
     origin: val('wo-origin').trim(),
     grade: val('wo-grade').trim(),
+    slaughterhouseName: val('wo-blend-slaughterhouse').trim(),
     mfgdate: val('wo-mfgdate'),
     expdate: val('wo-expdate'),
     weight: parseAppNumber(val('wo-weight')),
@@ -22212,6 +22458,9 @@ function printSelectedWorkOrderLabel(){
   const row = selectedLabelWorkOrder();
   if(!row){ alert('출력할 작업지시를 선택해주세요.'); return; }
   if(row._carryoverTo){alert('잔량을 이월한 작업입니다. 다음 작업지시에서 새 라벨을 출력해주세요.');return;}
+  if(workOrderBlendRecipe(row.product)&&!String(row.slaughterhouseName||'').trim()){
+    alert('작업지시에서 한우지방 도축장명을 확인해 저장한 뒤 라벨을 출력해주세요.');return;
+  }
   const weight = DBMTLabelWeight.value('lbl-weight');
   if(!weight){ alert('라벨 1장 중량을 0보다 큰 값으로 선택하거나 소수 둘째 자리까지 입력해주세요.'); return; }
   printLabelData(workOrderLabelData({...row, weight}), row.labelSize || '7x10', getLabelPrintCount());

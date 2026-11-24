@@ -29,14 +29,21 @@ const server=http.createServer((req,res)=>{
       ['wide','10x10',{}],['long-lot','10x10',{lot:'TEST-20260729-12345678901234567890'}],
       ['long-product','7x10',{product:'냉장돈등심(치즈돈까스용 10mm 슬라이스 특수규격)',weight:1000.12}],
       ['weight-omitted','7x10',{weightOmitted:true,weight:0}],['legacy-lot','7x10',{lot:'수기 LOT-123'}],
-      ['mixed-origin','7x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)'}],
-      ['mixed-origin-wide','10x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)'}]
+      ['legacy-mixed-origin','7x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)'}],
+      ['mixed-origin-wide','10x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)',
+        slaughterhouseLot:'002123456789',slaughterhouseName:'테스트 축산물공판장'}],
+      ['mixed-long-slaughterhouse','7x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)',
+        slaughterhouseLot:'002123456789',slaughterhouseName:'테스트축산농협 강원지역 축산물공판장'}]
     ]){
-      const doc=await page.evaluate(({fixture,size,patch})=>{
+      const doc=await page.evaluate(({fixture,size,patch,legacyMixed})=>{
         const log=makePrintLog({...fixture,...patch,labelSize:size},'QA',1);
+        if(legacyMixed){
+          delete log.workOrderSnapshot.slaughterhouseName;
+          delete log.workOrderSnapshot.slaughterhouseLot;
+        }
         const data=labelDataFromLog(log);
         return {code:log.code,barcode:data.productBarcode,restoredCode:DBMTLabelLayout.decodePrintCode(data.productBarcode),lot:data.lot,html:DBMTLabelPrint.createDocument({labelsHtml:`<section class="print-label">${buildLabelBody(data)}</section>`,sizeKey:size,autoPrint:false})};
-      },{fixture,size,patch});
+      },{fixture,size,patch,legacyMixed:name==='legacy-mixed-origin'});
       assert(!doc.html.includes('98110000002477'),'Mockup-only identity must never reach operational labels');
       assert.equal(doc.restoredCode,doc.code,'Numeric barcode must preserve the original saved identity');
       assert.match(doc.barcode,/^98\d{20}$/);
@@ -52,6 +59,8 @@ const server=http.createServer((req,res)=>{
       assert.equal(printedNumber,doc.barcode.slice(0,-6)+' '+doc.barcode.slice(-6),'Separate the final six display digits with exactly one space');
       assert.equal(printedNumber.replace(' ',''),doc.barcode,'Display spacing must never change the encoded identity');
       assert.equal(await print.locator('.dl-trace-code .dl-code-number').textContent(),doc.lot,'Traceability number stays unchanged');
+      assert.equal(await print.locator('.dl-grade-cell .dl-key').first().textContent(),patch.slaughterhouseName?'도축장:':'성별및등급:');
+      assert.equal(await print.locator('.dl-grade-value').textContent(),patch.slaughterhouseName||fixture.grade);
       const dateLine=await print.locator('.dl-date-row').evaluate(row=>{
         const key=row.querySelector('span'),value=row.querySelector('strong'),a=key.getBoundingClientRect(),b=value.getBoundingClientRect();
         const range=document.createRange();range.selectNodeContents(value);
@@ -129,7 +138,8 @@ print(json.dumps(results))`,
     for(const [name,size,patch] of [
       ['inner-frozen','7x10',{}],['inner-wide','10x10',{}],
       ['inner-chilled','7x10',{temptype:'냉장'}],['inner-weight-omitted','7x10',{weightOmitted:true,weight:0}],
-      ['inner-mixed-origin','7x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)'}],
+      ['inner-mixed-origin','7x10',{product:'우민찌(지방15%)',origin:'미국산/국내산',ingredients:'소고기 100% (전각(미국산) 85%, 우지방(국내산) 15%)',
+        slaughterhouseLot:'002123456789',slaughterhouseName:'테스트축산농협 강원지역 축산물공판장'}],
       ['inner-maximum-details','7x10',{ingredients:'소고기 100% ('+'추가원재료'.repeat(8)+')'}]
     ]){
       const doc=await page.evaluate(({fixture,size,patch})=>{
@@ -144,6 +154,10 @@ print(json.dumps(results))`,
       assert.doesNotMatch(await print.locator('.print-label').textContent(),/미발급/);
       assert.match(await print.locator('.il-trace').textContent(),/L12608194894027/,'Keep the LOT as text');
       assert((await print.locator('.il-product').textContent()).includes(patch.product||fixture.product));
+      if(patch.slaughterhouseName){
+        assert.match(await print.locator('.dbmt-inner-label').textContent(),/도축장:테스트축산농협 강원지역 축산물공판장/);
+        assert.doesNotMatch(await print.locator('.dbmt-inner-label').textContent(),/성별및등급:/);
+      }
       const innerDate=await print.locator('.il-date').evaluate(row=>{
         const key=row.querySelector('span').getBoundingClientRect(),value=row.querySelector('strong'),r=value.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(value);
         return range.getClientRects().length===1&&key.right<=r.left+0.5&&r.left-key.right<=1.5*96/25.4&&key.top<r.bottom&&r.top<key.bottom&&value.scrollWidth<=value.clientWidth+1;

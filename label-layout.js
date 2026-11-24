@@ -22,6 +22,8 @@
     .dbmt-label-body .dl-grade-cell { display:flex; align-items:center; gap:0.7mm; padding:0.4mm 0.5mm; min-width:0; }
     .dbmt-label-body .dl-grade-cell:first-child { border-right:0.3mm solid #000; }
     .dbmt-label-body .dl-grade-value { flex:1; min-width:0; text-align:center; font-size:8pt; }
+    .dbmt-label-body .dl-slaughterhouse-row { height:auto; min-height:4.5mm; }
+    .dbmt-label-body .dl-slaughterhouse-value { line-height:1.05; overflow-wrap:anywhere; }
     .dbmt-label-body .dl-origin-value { flex:1; min-width:0; text-align:center; font-size:10pt; }
     .dbmt-label-body .dl-date-row { height:4.8mm; display:flex; align-items:center; gap:0.6mm; }
     .dbmt-label-body .dl-date-value { flex:0 1 auto; min-width:0; font-size:7.5pt; font-weight:900; text-align:left; white-space:nowrap; }
@@ -72,6 +74,11 @@
   const escape = value => String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const textUnits=value=>Array.from(String(value||'')).reduce((sum,ch)=>sum+(ch.charCodeAt(0)>255?1:0.55),0);
   const originFont=(value,max=10,capacity=5.5)=>Math.max(6,Math.min(max,max*capacity/Math.max(capacity,textUnits(value))));
+  function gradeField(d){
+    if(typeof d.slaughterhouseName!=='string')return {title:'성별및등급:',value:d.grade};
+    const value=d.slaughterhouseName;
+    return {title:'도축장:',value,slaughterhouse:true,font:originFont(value,8,9)};
+  }
   function ingredientParts(value){
     const text=String(value||'').trim();
     const match=/^((?:소고기|돼지고기|가금류|닭고기|양고기|오리고기|기타 축종)\s*100\s*%)\s*(\([\s\S]*\))$/.exec(text);
@@ -120,11 +127,12 @@
     const badgeStyle='display:inline-block;background:#000;color:#fff;padding:0.7pt 2.2pt;margin-right:2pt;line-height:1.1;-webkit-print-color-adjust:exact;print-color-adjust:exact;box-shadow:inset 0 0 0 9999px #000;';
     const parts=ingredientParts(d.ingredients);
     const ingredients=escape(parts.base).replace(/(돼지고기|소고기)\s*/g,`<span style="${badgeStyle}">$1</span> `);
+    const grade=gradeField(d);
     return `<div class="dbmt-inner-label">
       <div class="il-product" style="${bb+pad+sh}min-height:22pt;display:flex;align-items:center;">
         <span style="font-size:6pt;font-weight:900;margin-right:5pt;">제품명: </span><strong style="font-size:${(d.product||'').length>8?'11':'13'}pt;">${escape(d.product||'　')}</strong></div>
       <div style="display:flex;${bb+sh}min-height:17pt;">
-        <div style="flex:11;${pad+br}font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">성별및등급:</span><span style="flex:1;text-align:center;font-size:9.1pt;">${escape(d.grade)}</span></div>
+        <div style="flex:11;${pad+br}font-size:6pt;display:flex;align-items:center;${grade.slaughterhouse?'min-width:0;':''}"><span style="font-weight:900;flex-shrink:0;">${grade.title}</span><span style="flex:1;text-align:center;font-size:${grade.font??9.1}pt;${grade.slaughterhouse?'min-width:0;line-height:1.05;overflow-wrap:anywhere;':''}">${escape(grade.value)}</span></div>
         <div style="flex:9;min-width:0;${pad}font-size:6pt;display:flex;align-items:center;"><span style="font-weight:900;flex-shrink:0;">원산지:</span> <strong style="font-size:${originFont(d.origin,10.4,4.5)}pt;margin-left:3pt;white-space:nowrap;">${escape(d.origin)}</strong></div></div>
       <div class="il-date" style="${bb+pad+sh}min-height:17pt;display:flex;align-items:center;gap:2pt;">
         <span style="font-size:6pt;font-weight:900;flex-shrink:0;white-space:nowrap;">제조 및 소비기한: </span><strong style="flex:0 1 auto;min-width:0;text-align:left;font-size:8.5pt;white-space:nowrap;">${escape(d.mfgdate)} ～ ${escape(d.expdate)}</strong></div>
@@ -168,11 +176,12 @@
     const parts=ingredientParts(d.ingredients);
     const ingredients=escape(parts.base).replace(/(돼지고기|소고기)\s*/g,'<span class="dl-meat">$1</span> ');
     const notice=d.crossNotice||d.crossFacilityNotice||'';
+    const grade=gradeField(d);
     return `<div class="dbmt-label-body${textUnits(d.ingredients)>18?' dl-long-ingredients':''}">
       <div class="dl-row dl-top-code"><div class="dl-code-body">${codeImage(productImage,code,'product','상단 제품 고유바코드')}<div class="dl-code-number${code?'':' dl-unissued'}">${escape(code.replace(/^(\d+)(\d{6})$/,'$1 $2'))||'미발급'}</div></div></div>
       <div class="dl-split-body"><div class="dl-main-fields">
         <div class="dl-row dl-product-row"><span class="dl-key">제품명:</span><strong class="dl-product-name" style="font-size:${productFont}pt;">${escape(product)}</strong></div>
-        <div class="dl-row dl-grade-row"><div class="dl-grade-cell"><span class="dl-key">성별및등급:</span><span class="dl-grade-value">${escape(d.grade)}</span></div><div class="dl-grade-cell"><span class="dl-key">원산지:</span><strong class="dl-origin-value" style="font-size:${originFont(d.origin)}pt;">${escape(d.origin)}</strong></div></div>
+        <div class="dl-row dl-grade-row${grade.slaughterhouse?' dl-slaughterhouse-row':''}"><div class="dl-grade-cell"><span class="dl-key">${grade.title}</span><span class="dl-grade-value${grade.slaughterhouse?' dl-slaughterhouse-value':''}"${grade.font?` style="font-size:${grade.font}pt;"`:''}>${escape(grade.value)}</span></div><div class="dl-grade-cell"><span class="dl-key">원산지:</span><strong class="dl-origin-value" style="font-size:${originFont(d.origin)}pt;">${escape(d.origin)}</strong></div></div>
         <div class="dl-row dl-date-row"><span class="dl-key">제조 및 소비기한:</span><strong class="dl-date-value">${escape(d.mfgdate)} ~ ${escape(d.expdate)}</strong></div>
         <div class="dl-row dl-weight-row"><div class="dl-weight-cell"><span class="dl-key">중량:</span><div class="dl-weight-value">${d.weightOmitted?'':`<strong style="font-size:${weightFont}pt;">${escape(weight)}</strong><span>Kg</span>`}</div></div><div class="dl-report-cell"><span class="dl-key">품목보고번호</span><strong class="dl-report-value">${escape(d.itemno)}</strong></div></div>
         <div class="dl-row dl-trace-code"><span class="dl-code-caption">이력번호</span><div class="dl-code-body">${codeImage(traceImage,lot,'trace','이력번호 바코드')}<div class="dl-code-number">${escape(lot)}</div></div></div>

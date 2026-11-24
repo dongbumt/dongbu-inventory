@@ -166,5 +166,31 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.evaluate(()=>state.logs.length),631);
     assert.match(await page.locator('#status').textContent(),/출력 요청 처리됨/);
     console.log('PASS: explicit preview preserved, no automatic preview printing, no page errors');
+
+    await page.evaluate(()=>{
+      state.workOrders.push({...state.workOrders[0],id:'qa-blend',product:'우민찌(지방15%)',origin:'미국산/국내산',
+        slaughterhouseLot:'002123456789',slaughterhouseName:''});
+      state.selectedId='qa-blend';renderAll();
+    });
+    await setOuter(page,5,1);
+    const beforeMissingName=saves.length;
+    await page.locator('#print-btn').click();
+    assert.equal(saves.length,beforeMissingName);
+    assert.match(await page.locator('#status').textContent(),/한우지방 이력번호와 도축장/);
+
+    await page.evaluate(()=>{selectedOrder().slaughterhouseName='최초 도축장';});
+    await page.locator('#print-btn').click();await page.waitForFunction(()=>!state.loading);
+    const blendPrint=saves.at(-1).p_logs[0];
+    assert.equal(blendPrint.workOrderSnapshot.slaughterhouseName,'최초 도축장');
+    assert.equal(blendPrint.workOrderSnapshot.slaughterhouseLot,'002123456789');
+    assert.match(await page.evaluate(()=>__requests.at(-1).text),/도축장:최초 도축장/);
+    await page.evaluate(id=>{selectedOrder().slaughterhouseName='변경된 도축장';return reprintLog(id);},blendPrint.id);
+    const reprint=saves.at(-1).p_logs[0];
+    assert.equal(reprint.code,blendPrint.code);
+    assert.deepEqual(reprint.workOrderSnapshot,blendPrint.workOrderSnapshot);
+    assert.match(await page.evaluate(()=>__requests.at(-1).text),/도축장:최초 도축장/);
+    assert.doesNotMatch(await page.evaluate(()=>__requests.at(-1).text),/변경된 도축장|성별및등급:/);
+    assert.deepEqual(errors,[]);
+    console.log('PASS: blend print requires verified slaughterhouse, historical reprint retains the original name and barcode');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

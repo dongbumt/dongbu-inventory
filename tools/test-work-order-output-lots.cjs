@@ -7,27 +7,131 @@ const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-workorders-'));
 for(const name of ['index.html','label-print.html'])for(const match of fs.readFileSync(path.join(repo,name),'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(match[1],{filename:name});
 new vm.Script(fs.readFileSync(path.join(repo,'label-weight.js'),'utf8'));
 const block=(start,end)=>index.slice(index.indexOf(start),index.indexOf(end,index.indexOf(start)));
-const source=name=>{const match=index.match(new RegExp(`function ${name}\\([^]*?\\n\\}`));assert(match,name);return match[0]};
+const source=name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,name);return match[0]};
 const server=http.createServer((req,res)=>{
   const file=path.resolve(repo,new URL(req.url,'http://localhost').pathname.slice(1)||'label-print.html');
   if(!file.startsWith(repo+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
   const mime={'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'};
   res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));
 });
+
+async function testBlendOrder(page){
+  const product='우민찌(지방15%)';
+  const firstFat='009999999991',secondFat='009999999992',chuckLot='QA-US-LOT';
+  const slaughterhouseName='가상축산물공판장';
+  const requests=[];
+  let releaseFirst;
+  const firstGate=new Promise(resolve=>{releaseFirst=resolve});
+  await page.route('**/functions/v1/livestock-trace-lookup',async route=>{
+    const payload=route.request().postDataJSON();
+    requests.push(payload);
+    if(payload.traceNo===firstFat)await firstGate;
+    await route.fulfill({json:{ok:true,traceNo:payload.traceNo,slaughterHouses:[
+      payload.traceNo===firstFat?'이전 선택 가상도축장':slaughterhouseName
+    ]}});
+  });
+  await page.evaluate(({product,firstFat,secondFat,chuckLot})=>{
+    resetWorkOrderForm();
+    labelProducts.push({id:'qa-blend',name:product,kind:'제품',origin:'미국산/국내산',
+      meattype:'소고기',storage:'냉동',itemno:'QA-REPORT',ingredientDetails:'전각(미국산) 85%, 우지방(국내산) 15%'});
+    const base={stock:100,stockBoxes:0,price:5000,stockLocation:'가공장',source:'입고'};
+    stocks.push(
+      {...base,key:'qa-blend-chuck',product:'전각',lot:chuckLot,origin:'미국산'},
+      {...base,key:'qa-blend-chuck-other',product:'전각',lot:'QA-AU-LOT',origin:'호주산'},
+      {...base,key:'qa-blend-fat-a',stockRowId:'qa-fat-receipt-a',product:'한우지방',lot:firstFat,origin:'국내산'},
+      {...base,key:'qa-blend-fat-b',stockRowId:'qa-fat-receipt-b',product:'한우지방',lot:secondFat,origin:'국내산'},
+      {...base,key:'qa-blend-fat-other',product:'한우지방',lot:'QA-FAT-OTHER',origin:'미국산'}
+    );
+    selectWorkOrderLabelProduct('qa-blend');
+  },{product,firstFat,secondFat,chuckLot});
+
+  const sourceRow=role=>page.locator(`.wo-source-row[data-blend-role="${role}"]`);
+  const target=page.locator('#wo-blend-target-weight');
+  const slaughterhouse=page.locator('#wo-blend-slaughterhouse');
+  const pickerRows=page.locator('#tsp-result-body tr[data-tsp-index]');
+  const shownLots=()=>page.evaluate(()=>txnStockPickerRows.map(stock=>stock.lot).sort());
+  const openStock=role=>sourceRow(role).getByRole('button',{name:'검색',exact:true}).click();
+  const selectStock=async lot=>{
+    await pickerRows.filter({hasText:lot}).click();
+    await page.locator('#tsp-confirm').click();
+  };
+  const weight=async role=>Number(await sourceRow(role).locator('.wo-input-weight').inputValue());
+
+  try{
+    assert.equal(await page.locator('.wo-source-row').count(),2);
+    assert.match(await sourceRow('chuck').innerText(),/미국산 전각/);
+    assert.match(await sourceRow('fat').innerText(),/한우지방/);
+    assert(await page.locator('#wo-grade-field').isHidden());
+    assert(await target.isVisible());
+    await target.fill('100');
+    assert.match(await page.locator('#wo-blend-target-summary').innerText(),/85\.00 KG.*15\.00 KG/);
+
+    await openStock('chuck');
+    assert.deepEqual(await shownLots(),[chuckLot]);
+    await selectStock(chuckLot);
+    assert.equal(await weight('chuck'),85);
+    assert.equal(requests.length,0,'Imported chuck never supplies the slaughterhouse lookup');
+
+    await openStock('fat');
+    assert.deepEqual(await shownLots(),[firstFat,secondFat]);
+    const initialRequest=page.waitForRequest(request=>request.url().endsWith('/livestock-trace-lookup')&&request.postDataJSON()?.traceNo===firstFat);
+    await selectStock(firstFat);
+    await initialRequest;
+    assert.equal(await weight('fat'),15);
+    await openStock('fat');
+    const finalResponse=page.waitForResponse(response=>response.url().endsWith('/livestock-trace-lookup')&&response.request().postDataJSON()?.traceNo===secondFat);
+    await selectStock(secondFat);
+    await finalResponse;
+    await page.waitForFunction(expected=>document.getElementById('wo-blend-slaughterhouse').value===expected,slaughterhouseName);
+    const firstResponse=page.waitForResponse(response=>response.url().endsWith('/livestock-trace-lookup')&&response.request().postDataJSON()?.traceNo===firstFat);
+    releaseFirst();
+    await (await firstResponse).finished();
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    assert.equal(await slaughterhouse.inputValue(),slaughterhouseName,'A late lookup for the previous fat lot cannot overwrite the current lot');
+    assert.deepEqual(requests,[firstFat,secondFat].map(traceNo=>({
+      sessionToken:'qa-personal-session',traceNo,speciesHint:'cattle',permissionAction:'create',purpose:'work-order-slaughterhouse'
+    })));
+
+    await sourceRow('chuck').locator('.wo-input-weight').fill('84.25');
+    await sourceRow('fat').locator('.wo-input-weight').fill('15.50');
+    await page.locator('#wo-save-btn').click();
+    await page.waitForFunction(name=>workOrders.some(order=>order.product===name)&&!workOrderSaving,product);
+    const saved=await page.evaluate(name=>workOrders.find(order=>order.product===name),product);
+    assert.deepEqual(saved.sourceInputs.map(input=>[input.sourceStock.lot,input.inputWeight]),[[chuckLot,84.25],[secondFat,15.5]]);
+    assert.equal(saved.inputWeight,99.75);
+    assert.equal(saved.blendTargetWeight,100);
+    assert.equal(saved.slaughterhouseLot,secondFat);
+    assert.equal(saved.slaughterhouseName,slaughterhouseName);
+    await page.evaluate(id=>editWorkOrder(id),saved.id);
+    assert.equal(Number(await target.inputValue()),100);
+    assert.equal(await weight('chuck'),84.25);
+    assert.equal(await weight('fat'),15.5);
+    assert.equal(await slaughterhouse.inputValue(),slaughterhouseName);
+    assert.equal(requests.length,2,'Editing restores saved slaughterhouse without an unnecessary lookup');
+    assert.equal(await page.evaluate(()=>workOrderLabelData(collectWorkOrderFormForPreview()).slaughterhouseName),slaughterhouseName);
+    await page.locator('#wo-editor').screenshot({path:path.join(artifacts,'blend-work-order.png')});
+    console.log('PASS: blend stock filters, 85/15 targets and editable actual weights, scoped fat trace lookup, stale response protection, save and reopen.');
+  }finally{releaseFirst();}
+}
+
 (async()=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base=`http://127.0.0.1:${server.address().port}`;
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
-    const page=await browser.newPage({viewport:{width:1440,height:1000}});await page.route('**/*',r=>r.fulfill({contentType:'text/html',body:'<main></main>'}));
+    const page=await browser.newPage({viewport:{width:1440,height:1000}}),officeErrors=[];
+    page.on('pageerror',error=>officeErrors.push(error.message));
+    await page.route('**/*',r=>r.fulfill({contentType:'text/html',body:'<main></main>'}));
     await page.goto(base+'/fixture');
     await page.evaluate(html=>{
       const template=document.createElement('template');template.innerHTML=html;
+      document.head.append(...template.content.querySelectorAll('style'));
       for(const id of ['p-workorders','p-label','txn-product-picker-modal','txn-stock-picker-modal'])document.body.append(template.content.querySelector('#'+id));
       document.getElementById('p-workorders').classList.add('active');
     },index);
     await page.addStyleTag({content:fs.readFileSync(path.join(repo,'styles/main.css'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-weight.js'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-product-selection.js'),'utf8')});
+    await page.addScriptTag({content:fs.readFileSync(path.join(repo,'work-order-blend.js'),'utf8')});
     await page.addScriptTag({content:`
       const STOCK_LOCATION_DEFAULT='가공장';let workOrders=[];
       const labelProducts=[{id:'raw',name:'돈등심 원료',kind:'원료육',brand:'원료',origin:'국내산'},
@@ -54,6 +158,11 @@ const server=http.createServer((req,res)=>{
       const fmtLblDate=v=>v,buildLabelBody=d=>'<div>'+htmlEscape(d.product)+' / '+htmlEscape(d.weight)+'</div>';
       const labelSizeConfigByKey=()=>({widthCm:7,previewW:264,previewH:378,scale:1,label:'7x10'});
       const workOrderId=()=> 'qa-workorder',toast=()=>{},showPage=()=>{};
+      const SUPABASE_URL=${JSON.stringify(base)},SUPABASE_PUBLISHABLE_KEY='qa-public-key';
+      const DBMTAuth={isPersonal:()=>true,getSessionToken:()=> 'qa-personal-session',
+        canAction:(menu,action)=>menu==='workorders'&&['create','update'].includes(action),
+        requireAction:(menu,action)=>DBMTAuth.canAction(menu,action)};
+      ${source('sbFunctionRequest')}
       ${block('window.workOrderEditVersion=null;','function inferLabelMeatType(')}
       window.DBMTWorkOrders={versionFor:()=> 'fixture-version',refresh:()=>Promise.resolve(),write:async row=>{
         const i=workOrders.findIndex(item=>item.id===row.id);if(i<0)workOrders.unshift(row);else workOrders[i]=row;renderWorkOrders();
@@ -97,6 +206,8 @@ ${block('function workOrderSourceInputs(order){','// 📦 품목관리 (labelPro
     await page.evaluate(()=>{editWorkOrder('qa-workorder');document.getElementById('wo-list-date').value='2026-09-10';renderWorkOrders();});
     assert.match(await page.locator('#wo-list-wrap').textContent(),/LOT-111/);
     await page.locator('#p-workorders').screenshot({path:path.join(artifacts,'output-lots-office.png')});
+    await testBlendOrder(page);
+    assert.deepEqual(officeErrors,[]);
     await page.close();
 
     const context=await browser.newContext({viewport:{width:1280,height:1024}}),label=await context.newPage(),errors=[];
