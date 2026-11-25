@@ -195,6 +195,7 @@
 
     saveLabelProduct:['label_products','write'],
     editLabelProduct:['label_products','update'],
+    copyLabelProduct:['label_products','create'],
     saveInlineLabelProduct:['label_products','update'],
     deleteLabelProduct:['label_products','delete'],
     saveWorkOrder:['workorders','write'],

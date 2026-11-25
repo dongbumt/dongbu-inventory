@@ -39,8 +39,16 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
       const DBMTAuth={getSessionToken:()=> 'qa'};
       const bulkOutboundStockOptions=()=>stocks,getTxnStockSearchOptions=()=>stocks;
       const getStockMap=()=>Object.fromEntries(stocks.map(s=>[s.key,s]));
-      const sbRpc=async(name,args)=>{requests.push({name,args});if(failSave)throw Error('QA failure');const products=labelProducts.map(p=>p.id===args.p_record.id?structuredClone(args.p_record):p);return {ok:true,products,product:args.p_record};};
-      ${['htmlEscape','labelProductSearchText','labelProductSortValue','labelProductSortMark','labelProductSortHeader','renderLabelProducts','sameLabelProduct','applyLabelProductServerResult','saveLabelProduct','editLabelProduct','resetLabelProductForm','refreshTxnManagedProductControls','getManagedProductNames','getStockOptions','labelProductPackUnitText','findLabelProductForProduction','renderProdOutProductSuggestions','selectProdOutProduct','onBulkProductSearch','bulkProductWrap','bulkInboundProductInputValue','updateBulkInboundProductMeta'].map(source).join('\n')}
+      const sbRpc=async(name,args)=>{
+        requests.push({name,args});
+        if(failSave)throw Error('QA failure');
+        const index=labelProducts.findIndex(p=>p.id===args.p_record.id);
+        const product={...args.p_record,productCode:args.p_record.productCode||'Q100099'};
+        const products=[...labelProducts];
+        if(index<0)products.push(product);else products[index]=product;
+        return {ok:true,products,product};
+      };
+      ${['htmlEscape','labelProductSearchText','labelProductSortValue','labelProductSortMark','labelProductSortHeader','renderLabelProducts','sameLabelProduct','applyLabelProductServerResult','saveLabelProduct','editLabelProduct','copyLabelProduct','fillLabelProductForm','resetLabelProductForm','refreshTxnManagedProductControls','getManagedProductNames','getStockOptions','labelProductPackUnitText','findLabelProductForProduction','renderProdOutProductSuggestions','selectProdOutProduct','onBulkProductSearch','bulkProductWrap','bulkInboundProductInputValue','updateBulkInboundProductMeta'].map(source).join('\n')}
       ${block('let txnProductPickerKind =','function handleManagedProductInputKeydown(')}
       ${source('isStockProductSelectable')}
       let txnStockPickerTargetInput=null;
@@ -167,7 +175,54 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Scr
     });
     assert.match(await page.locator('.bulk-in-product-results').textContent(),/우둔/);
     assert.doesNotMatch(await page.locator('.bulk-in-product-results').textContent(),/홍두깨/,'Bulk inbound suggestions use the same exclusion');
+
+    const copySource={id:'copy-source',productCode:'Q100098',name:'가상 품목',isActive:false,brand:'기존 브랜드',
+      factoryNo:'QA-FACTORY',origin:'미국산',kind:'제품',taxType:'과세',meattype:'가금류',storage:'냉장',shelfdays:29,
+      packunit:'3KG',itemno:'QA-REPORT',grade:'A',ingredientDetails:'가상 원재료 100%'};
+    const requestsBeforeCopy=await page.evaluate(product=>{
+      labelProducts.push(product);
+      renderLabelProducts();
+      return requests.length;
+    },copySource);
+    await page.locator('#lp-search').fill(copySource.productCode);
+    const sourceRow=page.locator('#lp-list-wrap tbody tr');
+    assert.equal(await sourceRow.count(),1);
+    const buttons=sourceRow.getByRole('button');
+    assert.deepEqual(await buttons.allTextContents(),['수정','복사','삭제']);
+    const bounds=await buttons.evaluateAll(elements=>elements.map(element=>element.getBoundingClientRect().toJSON()));
+    assert(bounds.every((button,index)=>button.y===bounds[0].y&&(!index||button.left>=bounds[index-1].right)),'Actions appear in order on the same line');
+    await sourceRow.getByRole('button',{name:'수정',exact:true}).click();
+    assert.equal(await page.locator('#lp-edit-id').inputValue(),copySource.id);
+    assert.equal(await page.locator('#lp-product-code').inputValue(),copySource.productCode);
+    await registrationToggle.click();
+    await sourceRow.getByRole('button',{name:'복사',exact:true}).click();
+    assert.equal(await registration.evaluate(card=>card.open),true,'Copying opens the registration form');
+    assert.match(await registrationToggle.innerText(),/품목 등록/);
+    assert.doesNotMatch(await page.locator('#lp-save-btn').innerText(),/수정/);
+    const copiedValues={'edit-id':'','product-code':'',name:copySource.name,'is-active':'false',brand:copySource.brand,
+      'factory-no':copySource.factoryNo,origin:copySource.origin,kind:copySource.kind,'tax-type':copySource.taxType,
+      meattype:copySource.meattype,storage:copySource.storage,shelfdays:String(copySource.shelfdays),packunit:copySource.packunit,
+      itemno:copySource.itemno,grade:copySource.grade,'ingredient-details':copySource.ingredientDetails};
+    for(const [field,value] of Object.entries(copiedValues))assert.equal(await page.locator('#lp-'+field).inputValue(),value,field);
+    assert.equal(await page.evaluate(()=>requests.length),requestsBeforeCopy,'Copying only prepares a draft');
+    await page.locator('#lp-save-btn').click();
+    assert.match(await page.evaluate(()=>alerts.at(-1)),/이미 같은 품목이 등록/);
+    assert.equal(await page.evaluate(()=>requests.length),requestsBeforeCopy,'An identical draft is blocked');
+    await page.locator('#lp-brand').fill('신규 브랜드');
+    await page.locator('#lp-save-btn').click();
+    assert.equal(await page.evaluate(()=>requests.length),requestsBeforeCopy+1);
+    const savedCopy=await page.evaluate(()=>requests.at(-1));
+    assert.equal(savedCopy.name,'dbmt_erp_save_label_product');
+    assert.equal(savedCopy.args.p_record.id,'new');
+    assert.equal(savedCopy.args.p_record.productCode,'','The server assigns the new product code');
+    assert.deepEqual(await page.evaluate(id=>labelProducts.find(p=>p.id===id),copySource.id),copySource);
+    const newProduct=await page.evaluate(()=>labelProducts.find(p=>p.id==='new'));
+    assert.equal(newProduct.productCode,'Q100099');
+    assert.equal(newProduct.brand,'신규 브랜드');
+    assert.equal(newProduct.isActive,copySource.isActive);
+    assert.equal(newProduct.ingredientDetails,copySource.ingredientDetails);
     assert.deepEqual(errors,[]);
+    console.log('PASS: copy action order, registration draft from filtered row, copied fields, duplicate guard, independent ID and code on save');
     console.log('PASS: product status UI/save/failure/reactivation, master/raw-stock choices, historical selection; inbound raw/product popup and bulk suggestions exclude literal/mapped part codes while item codes, names, brands, factory numbers, grades and filters remain searchable');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

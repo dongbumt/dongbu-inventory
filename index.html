@@ -22761,8 +22761,9 @@ function renderLabelProducts({preserveDraft=false}={}){
       <td style="font-size:11px;">${htmlEscape(p.packunit||'')}</td>
       <td style="font-size:11px;">${htmlEscape(p.grade||'')}</td>
       <td style="font-size:11px;">${htmlEscape(p.itemno||'')}</td>
-      <td style="text-align:center;">
+      <td style="text-align:center;white-space:nowrap;">
         <button class="btn btn-sm" onclick="editLabelProduct(${i})" style="background:#2980b9;color:#fff;padding:2px 8px;font-size:11px;">수정</button>
+        <button type="button" class="btn btn-sm" onclick="copyLabelProduct(${i})" style="padding:2px 8px;font-size:11px;margin-left:2px;">복사</button>
         <button class="btn btn-sm" onclick="deleteLabelProduct(${i})" style="background:#e74c3c;color:#fff;padding:2px 8px;font-size:11px;margin-left:2px;">삭제</button>
       </td>
     </tr>`;
@@ -23048,14 +23049,22 @@ function migrateLabelProducts(){
 }
 
 function editLabelProduct(idx){
-  const p = labelProducts[idx];
+  fillLabelProductForm(labelProducts[idx], true);
+}
+
+function copyLabelProduct(idx){
+  if(document.getElementById('lp-save-btn')?.disabled) return;
+  fillLabelProductForm(labelProducts[idx], false);
+}
+
+function fillLabelProductForm(p, editing){
   if(!p) return;
   const set = (id, value) => {
     const el = document.getElementById(id);
     if(el) el.value = value ?? '';
   };
-  set('lp-edit-id', p.id || '');
-  set('lp-product-code', p.productCode || '');
+  set('lp-edit-id', editing ? p.id : '');
+  set('lp-product-code', editing ? p.productCode : '');
   set('lp-name', p.name || '');
   set('lp-brand', p.brand || '');
   set('lp-factory-no', p.factoryNo || '');
@@ -23072,9 +23081,9 @@ function editLabelProduct(idx){
   set('lp-grade', p.grade || '');
   set('lp-ingredient-details', p.ingredientDetails || '');
   const title = document.getElementById('lp-form-title');
-  if(title) title.innerHTML = '<span class="ct-bar" style="background:#e67e22;"></span>✏️ 품목 수정';
+  if(title) title.innerHTML = '<span class="ct-bar" style="background:#e67e22;"></span>' + (editing ? '✏️ 품목 수정' : '📦 품목 등록');
   const saveButton = document.getElementById('lp-save-btn');
-  if(saveButton) saveButton.textContent = '💾 수정 저장';
+  if(saveButton) saveButton.textContent = editing ? '💾 수정 저장' : '💾 저장';
   const formCard = document.getElementById('lp-form-card');
   if(formCard){
     formCard.open = true;
@@ -23356,6 +23365,6 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="document-request-detail.js?v=20261026delivery1"></script>
 <script src="outbound-price-save.js?v=20261028save1"></script>
 <script src="ledgers.js?v=20261112ledger1"></script>
-<script src="m02-auth.js?v=20261124prodrefresh1"></script>
+<script src="m02-auth.js?v=20261125productcopy1"></script>
 </body>
 </html>
