@@ -129,6 +129,7 @@ async function testBlendOrder(page){
       document.getElementById('p-workorders').classList.add('active');
     },index);
     await page.addStyleTag({content:fs.readFileSync(path.join(repo,'styles/main.css'),'utf8')});
+    await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-layout.js'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-weight.js'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-product-selection.js'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'work-order-blend.js'),'utf8')});

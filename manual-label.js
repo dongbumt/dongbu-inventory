@@ -133,7 +133,6 @@
     el('itemno').value=row.itemno||'';
     el('temptype').value=row.storage==='냉장'?'냉장':'냉동';
     el('ingredients').value=DBMTLabelProducts.ingredients(row,inferLabelMeatType(row.name,'')+' 100%');
-    el('product-meta').textContent=[row.productCode,row.brand&&'브랜드 '+row.brand,row.packunit&&'포장 '+row.packunit].filter(Boolean).join(' · ')||'등록 품목';
     setExpiry();updatePreview();
   }
   function setExpiry(){
@@ -148,11 +147,13 @@
     const blend=isBlendProduct(row);
     syncBlendFields(blend);
     if(!row||value('product')!==String(row.name||''))return null;
+    el('product-meta').textContent=[row.productCode,row.brand&&'브랜드 '+row.brand,row.packunit&&'포장 '+row.packunit].filter(Boolean).join(' · ')||'등록 품목';
     const data=Object.fromEntries(fields.map(key=>[key,value(key)]));
     const distribution=manufacturerKind()==='dongbu_distribution';
     return {...data,...(blend?{slaughterhouseName:value('slaughterhouse')}:{}),
       itemno:distribution&&isMasterItemNo(data.itemno)?'':data.itemno,showHaccp:!distribution,
-      product:row.name,mfgdate:fmtLblDate(data.mfgdate),expdate:fmtLblDate(data.expdate),
+      product:row.name,deliveryDestination:DBMTLabelLayout.deliveryDestination(row.name,row.brand),
+      mfgdate:fmtLblDate(data.mfgdate),expdate:fmtLblDate(data.expdate),
       weight:DBMTLabelWeight.valid(data.weight)?Number(data.weight).toFixed(2):'',lotText:data.lot,
       productBarcode:state.barcode,crossFacilityNotice:labelCrossFacilityNoticeFromText(row.name,data.ingredients)};
   }
@@ -257,6 +258,7 @@
     updatePreview();
   });
   document.addEventListener('dbmt-company-master-changed',()=>{if(state.initialized)updatePreview();});
+  document.addEventListener('dbmt-product-catalog-changed',()=>{if(state.initialized&&!isDistributionCatalog())updatePreview();});
   document.addEventListener('dbmt-distribution-products-changed',()=>{if(state.initialized&&isDistributionCatalog())updatePreview();});
   let resizeTimer;global.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(document.getElementById('p-label').classList.contains('active'))updatePreview();},100);});
   global.DBMTManualLabel={init,reset,openPicker,pickerKey,selectProduct,updatePreview,print,applyPermissions,catalogProducts,isDistributionCatalog};
