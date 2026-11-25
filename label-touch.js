@@ -1,7 +1,7 @@
 /* Selected touch layout 2. Shares production log/print functions with label-print.html. */
 (function(){
   'use strict';
-  let ready=false,current='',historyPage=0,historyPageSize=1,historyOrder='',lastFocus=null,previewReturn=false;
+  let ready=false,current='',historyPage=0,historyPageSize=6,historyOrder='',lastFocus=null,previewReturn=false;
   const jobs=new Map(),selected=new Set();
   const productStorage='dbmt_label_output_products_v1';
   let productChoices=new Map(),pendingProduct='',productPage=0;
