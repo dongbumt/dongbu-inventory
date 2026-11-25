@@ -232,7 +232,20 @@
     bottom.innerHTML='<div class="touch-history-open"><span>외포장 <b id="outer-total">0장</b></span>'+button('재출력','id="reprint-open"')+'</div><div class="touch-transfer"><span>생산량 <b id="touch-output">—</b></span></div>';
     bottom.querySelector('.touch-transfer').append(complete);bottom.querySelector('.touch-transfer').insertAdjacentHTML('beforeend',button('전송 취소 · 수정하기','id="cancel-transfer-open" hidden'));bottom.append(notice);bottom.querySelector('.touch-history-open').prepend(media);right.append(bottom);
     document.querySelector('.history-wrap').remove();
-    document.body.insertAdjacentHTML('beforeend',`<dialog id="history-dialog" class="touch-dialog history-dialog"><div class="history-heading"><h2 id="history-title">외포장 출력이력</h2>${button('전체삭제','id="history-delete-all"')}</div><p id="history-meta"></p><span id="history-count" hidden></span><div id="history-body"></div><nav class="history-pager">${button('이전','id="history-prev"')}<span id="history-page"></span>${button('다음','id="history-next"')}</nav><footer>${button('닫기','data-close="history-dialog"')}${button('선택삭제','id="history-delete-selected" title="체크한 외포장 라벨 삭제" disabled')}${button('선택 0장 재출력','id="history-print" class="dark"')}</footer><p class="dialog-notice" role="status"></p></dialog>
+    document.body.insertAdjacentHTML('beforeend',`<dialog id="history-dialog" class="touch-dialog history-dialog">
+      <div class="history-heading">
+        <h2 id="history-title">외포장 출력이력</h2>
+        <div class="history-delete-actions">
+          ${button('선택삭제','id="history-delete-selected" title="체크한 외포장 라벨 삭제" disabled')}
+          ${button('전체삭제','id="history-delete-all"')}
+        </div>
+      </div>
+      <p id="history-meta"></p><span id="history-count" hidden></span>
+      <div id="history-body"></div>
+      <nav class="history-pager">${button('이전','id="history-prev"')}<span id="history-page"></span>${button('다음','id="history-next"')}</nav>
+      <footer>${button('닫기','data-close="history-dialog"')}${button('선택 0장 재출력','id="history-print" class="dark"')}</footer>
+      <p class="dialog-notice" role="status"></p>
+    </dialog>
       <dialog id="label-preview-dialog" class="touch-dialog preview-dialog"><h2 id="label-preview-title"></h2><div class="preview-stage"><iframe id="label-preview-frame" title="실제 인쇄 라벨" sandbox="allow-same-origin"></iframe></div>${button('닫기','id="label-preview-close"')}</dialog>
       <dialog id="number-dialog" class="touch-dialog number-dialog"><h2 id="number-title"></h2><input id="number-input" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="라벨 숫자 입력"><div id="number-keys">${['7','8','9','4','5','6','1','2','3','.','0','⌫'].map(k=>button(k,`data-number="${k}"`)).join('')}</div><p id="number-error" role="alert"></p><footer>${button('취소','data-close="number-dialog"')}${button('적용','id="number-apply" class="dark"')}</footer></dialog>
       <dialog id="scale-dialog" class="touch-dialog"><h2>저울 연결</h2><p>A&amp;D FG-150KAL · COM2 / 2400 / 7E1</p><p>SM을 종료한 뒤 연결을 누르고 <b>COM2</b>를 선택하세요. 브라우저를 다시 열면 연결 버튼으로 재연결하세요.</p><p>저울 표시값을 그대로 사용합니다. 용기무게는 저울에서 설정하고, 첫 출력 전 표시 중량과 일치하는지 확인하세요.</p><p id="scale-dialog-status" role="status"></p><footer>${button('연결','id="scale-connect"')}${button('연결 해제','id="scale-disconnect"')}${button('닫기','data-close="scale-dialog"')}</footer></dialog>`);

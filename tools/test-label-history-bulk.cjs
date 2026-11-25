@@ -55,6 +55,12 @@ const server=http.createServer((request,response)=>{
     assert.match(await page.locator('#history-meta').textContent(),/정상 13장 · 삭제 1장/);
     assert(await page.locator('#history-delete-all').isEnabled());
     const deleteSelected=page.locator('#history-delete-selected');
+    const deleteButtonsAreAligned=()=>page.locator('#history-dialog .history-heading').evaluate(heading=>{
+      const selected=heading.querySelector('#history-delete-selected')?.getBoundingClientRect();
+      const all=heading.querySelector('#history-delete-all')?.getBoundingClientRect();
+      return !!selected&&!!all&&selected.top===all.top&&selected.right<=all.left;
+    });
+    assert(await deleteButtonsAreAligned(),'Selected delete sits to the left of delete all in the heading');
     assert(await deleteSelected.isDisabled(),'Select at least one label before deleting');
     const seen=new Set();
     for(;;){
@@ -157,6 +163,7 @@ const server=http.createServer((request,response)=>{
     await page.locator('#history-body input[data-log]:enabled').first().check();
     assert(await deleteSelected.isDisabled(),'Completed production permits choosing reprints only');
     await page.setViewportSize({width:360,height:700});
+    assert(await deleteButtonsAreAligned(),'Both delete buttons stay on the same line on narrow screens');
     const mobileCount=await page.locator('#history-body .touch-history-row').count();
     assert(mobileCount<desktopCount,'Smaller screens show fewer labels');
     assert(await page.locator('#history-dialog footer').evaluate(element=>element.getBoundingClientRect().bottom<=innerHeight));

@@ -117,7 +117,7 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label .history-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .touch-label .history-heading h2{margin:0;font-size:22px;overflow-wrap:anywhere}
 .touch-label #history-dialog button{min-height:42px;padding:4px 8px;font-size:16px}
-.touch-label #history-delete-all{flex-shrink:0}
+.touch-label .history-delete-actions{display:flex;flex-shrink:0;gap:6px;margin-inline-start:auto}
 .touch-label #history-meta{margin:0;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
 .touch-label #history-body{display:grid;gap:4px;min-height:0;flex:0 1 auto;overflow-y:auto;overscroll-behavior:contain}
 .touch-label .touch-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border:1px solid var(--line);border-radius:7px;padding:5px 8px}
@@ -191,6 +191,7 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 @media(max-width:570px){.touch-label .shell{padding:8px}.touch-label .touch-left{grid-template-columns:1fr;grid-template-rows:auto 410px}.touch-label .touch-job-head,.touch-label .summary-grid,.touch-label .touch-bottom{grid-template-columns:1fr}.touch-label .summary-grid{grid-template-columns:1fr 1fr}.touch-label #selected-name{font-size:24px}.touch-label .touch-pack{grid-template-columns:1fr;grid-template-rows:auto auto auto}.touch-label .pack-actions{grid-column:1;grid-row:3}.touch-label .pack-fields{grid-template-columns:1fr}.touch-label .weight-modes{grid-column:1}.touch-label #completion-status{grid-column:1}.touch-label .touch-dialog{padding:12px}.touch-label #label-preview-frame{zoom:.85}.touch-label .connect{justify-content:flex-start}.touch-label .preview-stage{justify-content:flex-start} .touch-label .work-order-dialog .order-title{padding-right:0}.touch-label .work-order-dialog .order-badge{position:static;justify-self:start}}
 @media(max-width:570px){
   .touch-label #history-dialog{padding:10px}
+  .touch-label .history-heading{flex-wrap:wrap}
   .touch-label .touch-history-row{grid-template-columns:minmax(0,1fr);gap:4px}
   .touch-label .history-actions button{flex:1}
 }

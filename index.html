@@ -429,7 +429,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">🏭 생산일보</div>
       <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders">📝 작업지시</div>
       <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label">🏷️ 라벨출력</div>
-      <div class="nav-tab" onclick="window.open('label-print.html?v=20261125historycompact2','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
+      <div class="nav-tab" onclick="window.open('label-print.html?v=20261125historyactions1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
       <div class="nav-tab" onclick="showPage('p-product-specs',this)" id="nav-product-specs">📐 제품스펙</div>
       <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산로스율</div>
       <div class="nav-tab" onclick="DBMTAuth.openProductionBoard()" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
@@ -22430,7 +22430,7 @@ function refreshLabelWorkOrderSelect(){
 
 function selectLabelWorkOrder(id){
   if(window.DBMTAuth && !DBMTAuth.can('label_print','view')){toast('라벨전용 화면을 조회할 권한이 없습니다.');return;}
-  const url=new URL('label-print.html?v=20261125historycompact2',document.baseURI);url.searchParams.set('workOrderId',String(id));
+  const url=new URL('label-print.html?v=20261125historyactions1',document.baseURI);url.searchParams.set('workOrderId',String(id));
   window.open(url.href,'_blank');
 }
 
