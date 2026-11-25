@@ -13,12 +13,12 @@ const source=name=>{const match=html.match(new RegExp('(?:async )?function '+nam
     await page.evaluate(markup=>{const template=document.createElement('template');template.innerHTML=markup;const panel=template.content.querySelector('#p-transactions');panel.classList.add('active');document.querySelector('main').append(panel);},html);
     await page.addStyleTag({content:fs.readFileSync(path.join(root,'styles/main.css'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'stock-ledger.js'),'utf8')});
+    await page.addScriptTag({content:fs.readFileSync(path.join(root,'pda-transaction-summary.js'),'utf8')});
     await page.addScriptTag({content:`
       const seed={id:'qa-receipt',stockRowId:'qa-stock',stockTrackingVersion:'1',date:'2026-11-06',type:'입고',product:'가상 제품',origin:'미국산',lot:'QA-LOT',packunit:'5KG',stockLocation:'가공장',weight:20,boxCount:4,price:5000,amount:100000,_isUser:true};
       let userTransactions=[{...seed}],transactions=[...userTransactions],EXCEL_TRANSACTIONS=[],labelProducts=[],_editTxnId=null,_stockMapCache=null;
       let tablePrice=9000,notices=[],saved=[],transactionListQueryActive=true;
       const transactionPricePendingIds=new Set(),STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고';
-      const DBMTPdaTransactionSummary={isOutboundBox:()=>false};
       const getTProduct=()=>seed.product,getTOrigin=()=>seed.origin,getTStorage=()=>'',getTPackunit=()=>seed.packunit,getTLabelProductId=()=>'';
       const getTStockLocation=()=>seed.stockLocation,getTMoveFromLocation=()=>seed.stockLocation,getTMoveToLocation=()=>STOCK_LOCATION_SECONDARY;
       const getTxnStockLocation=t=>t.stockLocation||STOCK_LOCATION_DEFAULT,normalizeStockLocation=v=>v||STOCK_LOCATION_DEFAULT;

@@ -4,7 +4,7 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-shipment-edit-'));
 const names=['htmlEscape','jsArg','parseAppNumber','parseOptionalBoxCount','boxCountDisplay','parseTransactionUnitPrice','updateTxnAmtPreview','autoFillTxnPrice','addTransaction','savePdaShipmentFromForm','setPdaRawReceiptEditControls',
-  'loadTxnToForm','clearTransactionForm','showTransactionSaveStatus','supabaseSaveTransactionRows','assertPersonalServerResult','personalServerWriteToken','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions'];
+  'loadTxnToForm','clearTransactionForm','showTransactionSaveStatus','supabaseSaveTransactionRows','assertPersonalServerResult','personalServerWriteToken','readTransactionSearchFilters','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions'];
 const functions=names.map(name=>{const match=html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'));assert(match,name);return match[0];}).join('\n');new vm.Script(functions);
 for(const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))new vm.Script(match[1]);
 const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><main></main>');});
@@ -24,6 +24,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
       let userTransactions=Array.from({length:34},(_,i)=>({...seed,id:'qa-out-'+i,_pdaLabelId:'qa-label-'+i,_pdaCode:'qa-barcode-'+i})),transactions=[...userTransactions],EXCEL_TRANSACTIONS=[];
       const originals=structuredClone(userTransactions);
       let _editTxnId=null,pdaShipmentEditRows=[],transactionListQueryActive=true,requests=[],messages=[],failed=false,allowUpdate=true;
+      let transactionAppliedFilters=null;
       const SUPABASE_ENABLED_KEY='qa-enabled',today='2026-11-11',STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고',labelProducts=[],transactionPricePendingIds=new Set();
       localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
       const DBMTAuth={isPersonal:()=>true,can:()=>allowUpdate,getSessionToken:()=> 'qa-token'};

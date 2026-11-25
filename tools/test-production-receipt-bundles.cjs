@@ -80,8 +80,8 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
       ${section('let prodInputRowCount = 0;','// ─── 생산일보 ─')}
       ${section('async function supabaseSaveProductionRows(','async function supabaseLoadSubMaterialUsages(')}
       ${section('let txnStockPickerRows =','function selectTxnStock(')}
-      let transactionListQueryActive=true;
-      ${['getFilteredTransactions','transactionDisplayRows','renderTransactions'].map(source).join('\n')}
+      let transactionListQueryActive=true,transactionAppliedFilters=null;
+      ${['readTransactionSearchFilters','getFilteredTransactions','transactionDisplayRows','renderTransactions'].map(source).join('\n')}
       document.getElementById('prod-filter-date').value='2026-10-20';
       document.getElementById('t-filter-type').value='사용';renderTransactions();renderProduction();openEditProdEntry(seedEntry.id);
     `});

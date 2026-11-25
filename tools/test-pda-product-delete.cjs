@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),http=require('node:http'),os=require('node:os');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8'),artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-product-delete-'));
-const names=['htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','deleteTransaction'];
+const names=['htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','readTransactionSearchFilters','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','deleteTransaction'];
 const functions=names.map(name=>{const match=html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'));assert(match,name);return match[0];}).join('\n');new vm.Script(functions);
 const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><main></main>');});
 (async()=>{
@@ -20,6 +20,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
       const source={...base,id:'qa-source-tx',type:'생산입고',weight:500,boxCount:40,price:5000,_prodId:'qa-production'};
       const boxes=Array.from({length:34},(_,i)=>({...base,id:'qa-ship-'+i,type:'출고',stockUnitPrice:5000,_pdaRequestId:'qa-request',_pdaLabelId:'qa-label-'+i,_pdaCode:'DB2611111200-ABC1'+String(i).padStart(2,'0'),_pdaAction:'ship'}));
       let userTransactions=[source,...structuredClone(boxes)],transactions=[...userTransactions],EXCEL_TRANSACTIONS=[],transactionListQueryActive=true,pdaTransactionDetailIds=[];
+      let transactionAppliedFilters=null;
       let _editTxnId=null,pdaShipmentEditRows=[],requests=[],messages=[],failed=false,allowDelete=true,cleared=0;
       const SUPABASE_ENABLED_KEY='qa-enabled',transactionPricePendingIds=new Set();localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
       const DBMTAuth={can:(menu,action)=>action!=='delete'||allowDelete};

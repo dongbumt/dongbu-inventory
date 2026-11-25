@@ -5,9 +5,11 @@ const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'ind
 const names=['inventoryRefreshBlocked','refreshTransactionList','refreshInventoryStock','refreshProductionList','refreshInventoryData','saveTransactionRows','markLocalCoreChanged','assertPersonalServerResult'];
 names.push('stockLedgerDateKey','normProdDate');
 names.push('stockManagementButtons','renderStockReceiptDetails','toggleStockReceiptDetails');
-names.push('localDateString','htmlEscape','jsArg','parseAppNumber','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','renderTransactions','getStockMap','getKnownStockLocations','stockLocationOptionsHtml','refreshStockLocationFilter','stockCanAdjustCurrent','stockPersonalCan','applyStockPermissionState','closeStockAdjust','closeStockBoxBaseline','setStockExportEnabled','getStockQueryFilters','stockQueryDescription','renderStock');
+names.push('localDateString','htmlEscape','jsArg','parseAppNumber','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','transactionDisplayRows','renderTransactions','exportTransactionsCSV','printFilteredTransactions','getStockMap','getKnownStockLocations','stockLocationOptionsHtml','refreshStockLocationFilter','stockCanAdjustCurrent','stockPersonalCan','applyStockPermissionState','closeStockAdjust','closeStockBoxBaseline','setStockExportEnabled','getStockQueryFilters','stockQueryDescription','renderStock');
 names.push('renderProduction','setProductionListIdle','getFilteredProductionEntries','productionMatchesSearch','productionDisplayInputs','productionStockNoteHtml','productionStockNote','productionLegacySamsung','getProdJobType','getProdEntryNote','totalRecordedBoxes','validateProductionDateRange');
-const functions=names.map(name=>{const match=html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'));assert(match,name);return match[0];}).join('\n');new vm.Script(functions);
+const searchSource=html.slice(html.indexOf('let transactionListQueryActive = false;'),html.indexOf('function renderTransactions(){'));
+assert.match(searchSource,/function runTransactionSearch\(/);
+const functions=names.map(name=>{const match=html.match(new RegExp('(?:async )?function '+name+'\\([^]*?\\n\\}'));assert(match,name);return match[0];}).concat(searchSource).join('\n');new vm.Script(functions);
 const auth=fs.readFileSync(path.join(root,'m02-auth.js'),'utf8');
 assert.match(auth,/refreshTransactionList:\['transactions','view'\]/);assert.match(auth,/refreshInventoryStock:\['stock','view'\]/);
 assert.match(auth,/refreshProductionList:\['production','view'\]/);
@@ -22,7 +24,7 @@ const server=http.createServer((req,res)=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const browser=await chromium.launch({headless:true,executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
-    const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+    const page=await browser.newPage({viewport:{width:1440,height:1000},timezoneId:'Asia/Seoul'}),errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/fixture`);
     await page.evaluate(markup=>{
       const template=document.createElement('template');template.innerHTML=markup;
@@ -39,28 +41,31 @@ const server=http.createServer((req,res)=>{
       const finished={id:'qa-new-prod',date:'2026-11-11',job_no:7,inputs:[],outputs:[{product:'새 가상 생산품',lot:'QA-PROD',qty:40,price:1000,boxCount:4}]};
       let userTransactions=[{...seed}],transactions=[...userTransactions],userProdEntries=[{id:'qa-old-prod'}],EXCEL_TRANSACTIONS=[];
       let _editTxnId=null,_editProdId=null,transactionWritePending=0,productionWritePending=0,labelProductionRefreshPromise=null,inventoryRefreshPromise=null,localCoreRevision=0;
-      let transactionListQueryActive=false,productionListQueryActive=false,stockSearchActivated=false,_stockMapCache=null;
+      let productionListQueryActive=false,stockSearchActivated=false,_stockMapCache=null;
       const EXCEL_PROD=[],subMaterialUsages=[];
       const STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고',EXCEL_STOCK=[],labelProducts=[];
       let stockSortKey='product',stockSortDir='asc',stockSearchDirty=true,stockQuerySnapshot=null;
       const SUPABASE_ENABLED_KEY='qa-enabled';localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
       const control={token:'qa-session',personal:true,allowed:true,permittedMenu:'',delay:80,writeDelay:100,fail:false,shape:false,remote:[seed,incoming],prod:[{id:'qa-new-prod'}]};
       const DBMTAuth={isPersonal:()=>control.personal,can:(menu,action)=>control.allowed&&(!control.permittedMenu||(menu===control.permittedMenu&&action==='view')),getSessionToken:()=>control.token};
-      let active='p-transactions',calls=[],messages=[],cached={},rendered=[];
+      const today='2026-11-23';
+      let active='p-transactions',calls=[],messages=[],cached={},rendered=[],printed=null,csv=null;
       const activePageId=()=>active,toast=value=>messages.push(value),safeLocalStorageSet=(key,value)=>cached[key]=value;
+      const openA4ListPrint=(title,filters,count,table)=>printed={title,filters,count,table},downloadCSV=rows=>csv=rows;
       const invalidateStockMap=()=>{_stockMapCache=null;},recordTransactionChange=()=>{},save=()=>{throw Error('Must not write a full ERP payload');};
       async function supabaseSaveTransactionRows(){await new Promise(resolve=>setTimeout(resolve,control.writeDelay));}
       async function sbRpc(name,body){
         if(name!=='dbmt_erp_get_inventory_snapshot')throw Error('Unexpected RPC: '+name);
         calls.push(structuredClone(body));const remote=structuredClone(control.remote),prod=structuredClone(control.prod);
-        await new Promise(resolve=>setTimeout(resolve,control.delay));
+        if(control.hold){control.hold=false;await new Promise(resolve=>{control.release=resolve;});}
+        else await new Promise(resolve=>setTimeout(resolve,control.delay));
         if(control.fail)throw Error('QA refresh network error');return control.shape?{ok:true}:{ok:true,transactions:remote,prod};
       }
       function show(id){active=id;document.querySelectorAll('.tab-panel').forEach(el=>el.classList.toggle('active',el.id===id));}
       ${functions}
       show('p-transactions');
       for(const [id,value] of Object.entries({'t-search-date':'2026-11-11','t-search-product':'목전지','t-search-lot':'903024600808','t-filter-type':'입고','t-weight':'123.45','t-note':'저장하지 않은 새 입력','t-product-managed':'새 품목'}))document.getElementById(id).value=value;
-      transactionListQueryActive=true;renderTransactions();
+      prepareTransactionList();
     `});
     assert.equal(await page.locator('#t-count').textContent(),'(0건)');
     const button=page.getByRole('button',{name:'거래내역 새로고침',exact:true});assert(await button.getAttribute('title'));
@@ -114,7 +119,90 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(()=>Promise.all([__refresh,__write]));assert.equal(await page.evaluate(()=>userTransactions[1].weight),340);assert(await page.evaluate(()=>userTransactions.some(row=>row.id==='qa-local-write')));
     await page.evaluate(()=>{window.__refresh=refreshInventoryStock();control.token='new-session';});await page.evaluate(()=>__refresh);assert.equal(await page.evaluate(()=>userTransactions[1].weight),340);
     await page.evaluate(()=>{control.prod=null;control.remote=[];});await page.evaluate(()=>refreshInventoryStock());assert.equal(await page.evaluate(()=>userTransactions.length),0);assert.equal(await page.evaluate(()=>userProdEntries[0].id),'qa-new-prod');
+
+    // A long-running tab must search a fresh snapshot without losing the rows it already displayed.
+    await page.clock.setFixedTime(new Date('2026-11-25T12:00:00+09:00'));
+    await page.evaluate(()=>{
+      show('p-transactions');
+      control.remote=[seed,{...incoming,product:'11월 24일 최신 입고',date:'2026-11-24'}];
+      userTransactions=[seed];transactions=[seed];
+      for(const id of ['t-search-product','t-search-lot','t-search-from','t-search-to','t-filter-type'])document.getElementById(id).value='';
+      document.getElementById('t-search-date').value='2026-11-11';
+    });
+    const transactionsPanel=page.locator('#p-transactions');
+    const exactSearch=transactionsPanel.getByRole('button',{name:'특정일 조회',exact:true});
+    const conditionSearch=transactionsPanel.getByRole('button',{name:'조건 조회',exact:true});
+    const rows=page.locator('#t-body');
+    const date=page.locator('#t-search-date');
+    const searchStatus=page.locator('#t-search-status');
+    await exactSearch.click();
+    await page.waitForFunction(()=>inventoryRefreshPromise===null);
+    assert.match(await rows.textContent(),/기존 품목/);
+    await date.fill('2026-11-24');
+    assert.match(await rows.textContent(),/기존 품목/,'Changing the date keeps the last successful result');
+    assert.match(await searchStatus.textContent(),/조회 버튼/);
+    const initialCalls=await page.evaluate(()=>calls.length);
+    await page.evaluate(()=>{control.hold=true;});
+    await exactSearch.click();
+    await page.waitForFunction(()=>typeof control.release==='function');
+    assert.equal(await page.evaluate(()=>calls.length),initialCalls+1);
+    assert.deepEqual(await page.evaluate(()=>calls.at(-1)),{p_token:'new-session',p_menu:'transactions'});
+    assert(await exactSearch.isDisabled());
+    assert(await conditionSearch.isDisabled());
+    assert.match(await searchStatus.textContent(),/불러오는 중/);
+    assert.match(await rows.textContent(),/기존 품목/,'The prior result remains visible until the server responds');
+    await page.evaluate(()=>{void runTransactionExactDateSearch();});
+    assert.equal(await page.evaluate(()=>calls.length),initialCalls+1,'Identical in-flight search does not make a second server request');
+    await date.fill('2026-11-25');
+    assert.match(await rows.textContent(),/기존 품목/);
+    await page.evaluate(()=>{control.release();control.release=null;});
+    await rows.getByText('11월 24일 최신 입고',{exact:true}).waitFor();
+    assert.equal(await date.inputValue(),'2026-11-25','A response never overwrites a newer date draft');
+    assert.doesNotMatch(await rows.textContent(),/기존 품목/,'Apply the submitted date after a successful response');
+    await button.click();
+    await page.waitForFunction(()=>inventoryRefreshPromise===null);
+    assert.match(await rows.textContent(),/11월 24일 최신 입고/,'Manual refresh keeps the applied date rather than submitting the draft');
+
+    await transactionsPanel.getByRole('button',{name:'인쇄',exact:true}).click();
+    assert.match(await page.evaluate(()=>printed.filters),/2026-11-24/);
+    assert.doesNotMatch(await page.evaluate(()=>printed.filters),/2026-11-25/,'Print uses the applied criteria while the user edits the draft');
+    assert.match(await page.evaluate(()=>printed.table),/11월 24일 최신 입고/);
+    await transactionsPanel.getByRole('button',{name:'CSV 저장',exact:true}).click();
+    const previousCSV=await page.evaluate(()=>csv);
+
+    await page.locator('#t-search-product').fill('25일');
+    assert.equal(await date.inputValue(),'2026-11-25','Adding a product condition preserves the date draft');
+    assert.match(await rows.textContent(),/11월 24일 최신 입고/);
+    await page.evaluate(()=>{
+      control.fail=true;
+      control.remote=[{...incoming,product:'11월 25일 추가 입고',date:'2026-11-25'}];
+    });
+    await conditionSearch.click();
+    await page.waitForFunction(()=>inventoryRefreshPromise===null);
+    assert.match(await rows.textContent(),/11월 24일 최신 입고/,'Server failure preserves previous results');
+    assert.doesNotMatch(await rows.textContent(),/조회 결과가 없습니다/,'A failed request is not a valid empty result');
+    assert.match(await searchStatus.textContent(),/불러오지 못했습니다/);
+    await transactionsPanel.getByRole('button',{name:'인쇄',exact:true}).click();
+    assert.match(await page.evaluate(()=>printed.filters),/2026-11-24/);
+    await transactionsPanel.getByRole('button',{name:'CSV 저장',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>csv),previousCSV,'A failed conditional search does not replace CSV data');
+    await page.evaluate(()=>{control.fail=false;});
+    await page.locator('#t-search-product').press('Enter');
+    await rows.getByText('11월 25일 추가 입고',{exact:true}).waitFor();
+    assert.doesNotMatch(await rows.textContent(),/11월 24일 최신 입고/);
+
+    let conditionCalls=await page.evaluate(()=>calls.length);
+    await page.evaluate(()=>{control.remote=[];});
+    await conditionSearch.click();
+    await page.waitForFunction(()=>inventoryRefreshPromise===null);
+    assert.equal(await page.evaluate(()=>calls.length),conditionCalls+1,'Submitting the same criteria after completion fetches a new snapshot');
+    assert.match(await rows.textContent(),/조회 결과가 없습니다/,'An empty successful response replaces the prior result');
+    await page.evaluate(()=>{control.remote=[{...incoming,product:'오늘 입고',date:'2026-11-25'}];document.getElementById('t-search-product').value='';});
+    await transactionsPanel.getByRole('button',{name:/최근 15일/}).click();
+    await rows.getByText('오늘 입고',{exact:true}).waitFor();
+    assert.equal(await page.locator('#t-search-to').inputValue(),'2026-11-25','Recent-day search reads today at click time after a tab crosses midnight');
+
     for(const width of [1440,390]){await page.setViewportSize({width,height:900});for(const [id,buttonId] of [['p-transactions','txn-refresh-btn'],['p-stock','stock-refresh-btn'],['p-production','prod-refresh-btn']]){await page.evaluate(showId=>show(showId),id);const icon=page.locator('#'+buttonId);const bounds=await icon.boundingBox();assert(bounds.width===30&&bounds.height===30&&bounds.x>=0&&bounds.x+bounds.width<=width);assert(await icon.locator('img').evaluate(img=>img.complete&&img.naturalWidth>0));await page.locator('#'+id+' .section-header').last().screenshot({path:path.join(artifacts,id+'-'+width+'.png')});}}
-    assert.deepEqual(errors,[]);console.log('PASS: all three real refresh buttons, one scoped RPC, latest transactions/production/stock, filters/new drafts, distinct production permissions, loading/edit/write guards, concurrent-save/session protection, failure/empty responses and 1440/390px icons');console.log('Artifacts: '+artifacts);
+    assert.deepEqual(errors,[]);console.log('PASS: server-fresh date/condition searches, draft and result separation, duplicate lookup guard, failure preserving print/CSV, empty result, date rollover, and all three scoped refresh controls');console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

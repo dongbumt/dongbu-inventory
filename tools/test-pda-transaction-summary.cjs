@@ -55,10 +55,12 @@ const mixedReceipt=group([rawReceipts[0],{...rawReceipts[1],stockLocation:'물�
 assert.equal(mixedReceipt.stockLocation,'가공장 / 물류창고');assert.equal(mixedReceipt.brand,'SWIFT / 다른 브랜드');
 assert.equal(pure.window.DBMTPdaTransactionSummary.note(mixedReceipt),'수기 메모');
 console.log('PASS: exact weight/box/amount totals, identity boundaries, manual/receipt isolation, original row preservation and per-box rounding');
-const names=['localDateString','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','setTransactionListIdle','prepareTransactionList','markTransactionSearchPending','markTransactionKeywordSearchPending','validateTransactionDateRange','runTransactionSearch','runTransactionExactDateSearch','runTransactionAllSearch','exportTransactionsCSV','printFilteredTransactions'];
+const names=['localDateString','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','normalizeStockLocation','getTxnStockLocation','transactionDisplayRows','findPdaTransactionSummary','renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','updateTxnPrice','exportTransactionsCSV','printFilteredTransactions'];
 names.push('parseTransactionUnitPrice');
 names.push('deleteTransaction');
-const functions=names.map(name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,`Missing ${name}`);return match[0];}).join('\n');
+const searchSource=index.slice(index.indexOf('let transactionListQueryActive = false;'),index.indexOf('function renderTransactions(){'));
+assert.match(searchSource,/function runTransactionSearch\(/);
+const functions=names.map(name=>{const match=index.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,`Missing ${name}`);return match[0];}).concat(searchSource).join('\n');
 const template=index.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
 const server=http.createServer((req,res)=>{
   const url=new URL(req.url,'http://local');
@@ -90,7 +92,21 @@ const server=http.createServer((req,res)=>{
     });
     page.on('pageerror',error=>errors.push(error.message));await page.goto(base+'fixture.html');
     for(const file of ['pda-transaction-summary.js','label-layout.js'])await page.addScriptTag({url:assets+file});
-    await page.addScriptTag({content:`var userTransactions=[],transactions=[],EXCEL_TRANSACTIONS=[],transactionListQueryActive=false,pdaTransactionDetailIds=[],today='2026-10-20',STOCK_LOCATION_DEFAULT='가공장',SUPABASE_ENABLED_KEY='qa_enabled';const transactionPricePendingIds=new Set();\n${functions}`});
+    await page.addScriptTag({content:`
+      var userTransactions=[],transactions=[],EXCEL_TRANSACTIONS=[],pdaTransactionDetailIds=[],today='2026-10-20',STOCK_LOCATION_DEFAULT='가공장',SUPABASE_ENABLED_KEY='qa_enabled';
+      const transactionPricePendingIds=new Set();
+      let inventoryRefreshPromise=null;
+      // The inventory refresh suite exercises the actual RPC. Keep this grouping fixture on its in-memory ledger.
+      async function refreshInventoryData(menu,filters){
+        if(menu!=='transactions')throw Error('Unexpected refresh menu');
+        transactionAppliedFilters=filters;
+        transactionListQueryActive=true;
+        updateTransactionSearchStatus();
+        renderTransactions();
+        return true;
+      }
+      ${functions}
+    `});
     await page.addScriptTag({url:assets+'m02-auth.js'});await page.waitForFunction(()=>DBMTAuth.isPersonal());
     await page.evaluate(rows=>{userTransactions=structuredClone(rows);transactions=[...userTransactions];showPage('p-transactions');prepareTransactionList();},boxes);
     assert.equal(await page.locator('#t-search-date').inputValue(),'2026-10-20');
@@ -135,24 +151,31 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(sample=>{
       userTransactions=[{...sample,id:'today-entry',date:'2026-10-20',product:'TODAY-ENTRY'},
         {...sample,id:'previous-entry',date:'2026-10-19',product:'PREVIOUS-ENTRY'}];
-      transactions=[...userTransactions];transactionListQueryActive=false;
+      transactions=[...userTransactions];transactionListQueryActive=false;transactionAppliedFilters=null;
       ['t-search-date','t-search-from','t-search-to','t-search-product','t-search-lot','t-filter-type'].forEach(id=>document.getElementById(id).value='');
       prepareTransactionList();
     },manual);
     assert.match(await page.locator('#t-body').textContent(),/TODAY-ENTRY/);
     assert.doesNotMatch(await page.locator('#t-body').textContent(),/PREVIOUS-ENTRY/);
-    await page.evaluate(()=>{document.getElementById('t-search-date').value='2026-10-19';prepareTransactionList();});
+    await page.locator('#t-search-date').fill('2026-10-19');
+    await page.evaluate(()=>prepareTransactionList());
+    assert.match(await page.locator('#t-body').textContent(),/TODAY-ENTRY/,'Returning to the list does not apply unsent edits');
+    await page.locator('#p-transactions').getByRole('button',{name:'특정일 조회',exact:true}).click();
     assert.match(await page.locator('#t-body').textContent(),/PREVIOUS-ENTRY/);
     assert.doesNotMatch(await page.locator('#t-body').textContent(),/TODAY-ENTRY/);
-    await page.evaluate(()=>{runTransactionAllSearch();prepareTransactionList();});
+    await page.evaluate(async()=>{await runTransactionAllSearch();prepareTransactionList();});
     assert.equal(await page.locator('#t-search-date').inputValue(),'','Returning to an all-dates query keeps that choice');
     assert.equal(await page.locator('#t-body tr').count(),2);
-    await page.locator('#t-search-product').fill('PREVIOUS');await page.evaluate(()=>prepareTransactionList());
+    await page.locator('#t-search-product').fill('PREVIOUS');
+    assert.equal(await page.locator('#t-body tr').count(),2,'Typing a keyword leaves the previous list intact');
+    await page.locator('#p-transactions').getByRole('button',{name:'조건 조회',exact:true}).click();
     assert.equal(await page.locator('#t-search-date').inputValue(),'','A keyword query must not be restricted to today');
     assert.match(await page.locator('#t-body').textContent(),/PREVIOUS-ENTRY/);
-    await page.evaluate(()=>{
+    await page.evaluate(async()=>{
       document.getElementById('t-search-product').value='';document.getElementById('t-search-from').value='2026-10-19';
-      document.getElementById('t-search-to').value='2026-10-20';transactionListQueryActive=false;prepareTransactionList();
+      document.getElementById('t-search-to').value='2026-10-20';
+      await runTransactionRangeSearch();
+      prepareTransactionList();
     });
     assert.equal(await page.locator('#t-body tr').count(),2,'Explicit range survives menu reentry');
     await page.evaluate(()=>{transactions=[];renderTransactions();});
@@ -179,12 +202,12 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.evaluate(()=>__saves.length),beforeDelete+1);assert.deepEqual(await page.evaluate(()=>__saves.at(-1).deleted),[receipt.id]);
     assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('dbmt_user_transactions'))),[]);
     // Existing source notes remain visible even when receipts are outside the date/type filter.
-    await page.evaluate(({rows,sources})=>{
+    await page.evaluate(async({rows,sources})=>{
       userTransactions=[...sources.map((source,i)=>({...source,id:'source-'+i,date:'2026-10-19',product:'돈사태(작업)'})),...rows];
       transactions=[...userTransactions];
       for(const id of ['t-search-product','t-search-lot','t-search-from','t-search-to'])document.getElementById(id).value='';
       document.getElementById('t-search-date').value='2026-10-20';document.getElementById('t-filter-type').value='출고';
-      transactionListQueryActive=true;renderTransactions();
+      await runTransactionSearch();
     },{rows:separate,sources:receipts});
     assert.equal(await page.locator('#t-body tr').count(),2);
     const groupA=page.locator('#t-body tr').filter({hasText:'3mm / A업체'}),groupB=page.locator('#t-body tr').filter({hasText:'5mm / B업체'});
@@ -201,9 +224,9 @@ const server=http.createServer((req,res)=>{
     await page.locator('#p-transactions').getByRole('button',{name:'CSV 저장',exact:true}).click();
     assert.deepEqual(await page.evaluate(()=>__csv.rows.filter(row=>row[1]==='출고').map(row=>row[11]).sort()),['3mm / A업체','5mm / B업체']);
     // Ten independent receipts become one display row without losing their 101 barcodes.
-    await page.evaluate(rows=>{
+    await page.evaluate(async rows=>{
       userTransactions=structuredClone(rows);transactions=[...userTransactions];
-      document.getElementById('t-filter-type').value='입고';renderTransactions();
+      document.getElementById('t-filter-type').value='입고';await runTransactionSearch();
     },rawReceipts);
     assert.equal(await page.locator('#t-body tr').count(),1);assert.match(await page.locator('#t-count').innerText(),/1건.*101박스/);
     assert.equal(await page.locator('#t-body .txn-col-weight').innerText(),'2313.93');assert.equal(await page.locator('#t-body .txn-col-boxes').innerText(),'101');

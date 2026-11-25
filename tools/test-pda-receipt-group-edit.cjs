@@ -8,7 +8,7 @@ const source=name=>{const match=html.match(new RegExp('(?:async )?function '+nam
 const names=['htmlEscape','jsArg','parseAppNumber','parseOptionalBoxCount','boxCountDisplay','parseTransactionUnitPrice',
   'allocatePdaRawReceiptWeights','updateTxnAmtPreview','autoFillTxnPrice','addTransaction','savePdaRawReceiptFromForm',
   'setPdaRawReceiptEditControls','loadTxnToForm','clearTransactionForm','showTransactionSaveStatus','supabaseSaveTransactionRows',
-  'assertPersonalServerResult','personalServerWriteToken','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary',
+  'assertPersonalServerResult','personalServerWriteToken','readTransactionSearchFilters','getFilteredTransactions','transactionDisplayRows','findPdaTransactionSummary',
   'renderTransactions','openPdaTransactionDetails','closePdaTransactionDetails','renderPdaTransactionDetails','deleteTransaction'];
 const functions=names.map(source).join('\n');new vm.Script(functions);
 const allocate=vm.runInNewContext(source('allocatePdaRawReceiptWeights')+'\nallocatePdaRawReceiptWeights;');
@@ -42,7 +42,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
     await page.addScriptTag({content:`
       const originals=${JSON.stringify(seed)};
       let userTransactions=structuredClone(originals),transactions=[...userTransactions],EXCEL_TRANSACTIONS=[],_editTxnId=null,
-        pdaRawReceiptEditRows=[],pdaRawReceiptEditNote='',pdaShipmentEditRows=[],pdaTransactionDetailIds=[],transactionListQueryActive=true;
+        pdaRawReceiptEditRows=[],pdaRawReceiptEditNote='',pdaShipmentEditRows=[],pdaTransactionDetailIds=[],transactionListQueryActive=true,transactionAppliedFilters=null;
       let requests=[],messages=[],failed=false,allowUpdate=true,allowConfirm=true,confirmations=[];
       const SUPABASE_ENABLED_KEY='qa-enabled',today='2026-10-20',STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고',labelProducts=[],transactionPricePendingIds=new Set();
       localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
