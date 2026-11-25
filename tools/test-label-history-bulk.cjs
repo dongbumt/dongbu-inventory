@@ -13,7 +13,7 @@ const server=http.createServer((request,response)=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   try{
-    const context=await browser.newContext({viewport:{width:1280,height:960}}),page=await context.newPage(),errors=[];
+    const context=await browser.newContext({viewport:{width:1280,height:900}}),page=await context.newPage(),errors=[];
     const order={id:'a',title:'작업 A',product:'품목 A',date:'2026-09-28',lot:'LOT-A',inputWeight:100,weight:1};
     const other={...order,id:'b',title:'작업 B',product:'품목 B',lot:'LOT-B'};
     const make=(workOrderId,index,status='active')=>({id:`${workOrderId}-${index}`,code:`LABEL-${workOrderId}-${index}`,workOrderId,status,
@@ -49,7 +49,8 @@ const server=http.createServer((request,response)=>{
     await page.waitForFunction(()=>!state.loading&&state.workOrders.length===2);
     await page.locator('#reprint-open').click();
     const desktopCount=await page.locator('#history-body .touch-history-row').count();
-    assert(desktopCount>4&&desktopCount<=6,'Show more than four labels only while they fit');
+    assert(desktopCount>=10,'Show at least twice the original five rows on the label PC');
+    assert.equal(await page.locator('#history-dialog').evaluate(element=>element.offsetWidth),1104,'Popup is 120% of the original desktop width');
     assert.equal(await page.locator('#history-page').textContent(),`1 / ${Math.ceil(14/desktopCount)}`);
     assert.match(await page.locator('#history-meta').textContent(),/정상 13장 · 삭제 1장/);
     assert(await page.locator('#history-delete-all').isEnabled());
@@ -68,7 +69,7 @@ const server=http.createServer((request,response)=>{
     const firstSelected=await page.locator('#history-body input[data-log]:enabled').first().getAttribute('data-log');
     await page.locator('#history-body input[data-log]:enabled').first().check();
     await page.locator('#history-next').click();
-    assert.equal(await page.locator('#history-body .touch-history-row').count(),desktopCount);
+    assert.equal(await page.locator('#history-body .touch-history-row').count(),Math.min(desktopCount,14-desktopCount));
     const secondSelected=await page.locator('#history-body input[data-log]:enabled').first().getAttribute('data-log');
     await page.locator('#history-body input[data-log]:enabled').first().check();
     assert.match(await page.locator('#history-print').textContent(),/선택 2장/,'Selection survives pagination');
@@ -93,6 +94,7 @@ const server=http.createServer((request,response)=>{
     assert.deepEqual(lastSubmitted.map(log=>log.id).sort(),selectedIds);
     assert.deepEqual(logs,initial,'A rejected request leaves all persisted history unchanged');
     assert.equal(await page.locator('#active-count').textContent(),'13장');
+    assert(await page.locator('#history-body').evaluate(element=>element.scrollHeight<=element.clientHeight+1),'The failure notice leaves the full page visible');
     assert(await page.locator(`#history-body input[data-log="${firstSelected}"]`).isChecked());
     await page.locator('#history-next').click();
     assert(await page.locator(`#history-body input[data-log="${secondSelected}"]`).isChecked());
@@ -162,7 +164,7 @@ const server=http.createServer((request,response)=>{
     assert(await page.locator('#history-body').evaluate(element=>element.scrollHeight<=element.clientHeight+1),'Mobile page needs no list scroll');
     await page.locator('#history-dialog').screenshot({path:path.join(artifacts,'history-mobile.png')});
     assert.deepEqual(errors,[]);
-    console.log('PASS: viewport-fitting pages without list scroll, cross-page selected deletion, cancel/failure/retry, all-record deletion, other-work isolation, completion lock, mobile layout');
+    console.log(`PASS: ${desktopCount} visible rows at 1280×900, ${mobileCount} at 360×700, cross-page selected deletion, cancel/failure/retry, all-record deletion, other-work isolation, completion lock`);
     console.log('Artifacts: '+artifacts);
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

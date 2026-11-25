@@ -113,12 +113,25 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label .dark{background:#343a40;color:#fff}
 .touch-label .history-dialog{width:min(94vw,920px)}
 .touch-label .history-dialog[open]{display:flex;flex-direction:column;max-height:94dvh;overflow:hidden;gap:6px}
-.touch-label .history-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.touch-label .history-heading h2{margin:0}
-.touch-label #history-body{max-height:640px;min-height:0;flex:0 1 auto;overflow-y:auto;overscroll-behavior:contain}
-.touch-label .history-dialog .history-pager{margin-top:0}
-.touch-label .history-dialog footer{margin-top:4px}
-.touch-label .history-dialog .dialog-notice{margin:0}
+.touch-label #history-dialog{width:min(96vw,1104px);max-height:96dvh;padding:14px 16px;gap:4px}
+.touch-label .history-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.touch-label .history-heading h2{margin:0;font-size:22px;overflow-wrap:anywhere}
+.touch-label #history-dialog button{min-height:42px;padding:4px 8px;font-size:16px}
+.touch-label #history-delete-all{flex-shrink:0}
+.touch-label #history-meta{margin:0;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.touch-label #history-body{display:grid;gap:4px;min-height:0;flex:0 1 auto;overflow-y:auto;overscroll-behavior:contain}
+.touch-label .touch-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border:1px solid var(--line);border-radius:7px;padding:5px 8px}
+.touch-label .history-choice{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:42px;cursor:pointer}
+.touch-label .history-choice input{width:24px;height:24px;min-height:24px;margin:0;accent-color:#343a40}
+.touch-label .history-choice strong{display:block;font-size:17px;overflow-wrap:anywhere}
+.touch-label .history-choice small{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.touch-label .history-choice b{font-size:21px;font-weight:500;white-space:nowrap}
+.touch-label .history-actions{display:flex;gap:4px}
+.touch-label .history-actions button{min-width:64px}
+.touch-label #history-dialog .history-pager,.touch-label #history-dialog footer,.touch-label #history-dialog .dialog-notice{margin:0}
+.touch-label #history-dialog footer{gap:6px}
+.touch-label #history-dialog footer button{min-height:46px}
+.touch-label #history-dialog .dialog-notice:empty{display:none}
 .touch-label .work-order-dialog{width:min(94vw,920px)}
 .touch-label .work-order-dialog[open]{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;height:min(850px,94dvh);overflow:hidden}
 .touch-label .work-order-dialog>p{margin:0 0 12px;font-size:16px}
@@ -131,16 +144,6 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
 .touch-label .work-order-dialog .order-row.active{border:2px solid #343a40;background:#e8ebed}
 .touch-label #cancel-transfer-dialog li{margin:10px 0;line-height:1.5}
 .touch-label #cancel-transfer-error{font-size:16px;color:#b42318}
-.touch-label #history-meta{font-size:15px;color:var(--muted)}
-.touch-label #history-body{display:grid;gap:8px}
-.touch-label .touch-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border:1px solid var(--line);border-radius:7px;padding:8px}
-.touch-label .history-choice{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:64px;cursor:pointer}
-.touch-label .history-choice input{width:28px;height:28px;min-height:28px;margin:0;accent-color:#343a40}
-.touch-label .history-choice strong{font-size:17px;display:block;overflow-wrap:anywhere}
-.touch-label .history-choice small{display:block;font-size:13px;margin-top:5px;color:var(--muted)}
-.touch-label .history-choice b{font-size:24px;font-weight:500;white-space:nowrap}
-.touch-label .history-actions{display:flex;gap:6px;align-items:stretch}
-.touch-label .history-actions button{font-size:16px;min-width:64px;padding:5px}
 .touch-label .history-pager{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
 .touch-label .history-pager button{min-width:100px}
 .touch-label .dialog-notice{font-size:14px}
@@ -185,4 +188,9 @@ body.touch-label{--bg:#eff0f2;--line:#bec4ca;--text:#282d32;--muted:#535b63;--bl
   .touch-label .touch-calc{padding:8px;gap:6px;grid-template-rows:auto 50px minmax(0,1fr)}
 }
 @media(max-width:900px){body.touch-label{height:auto;min-height:100dvh;display:block}.touch-label .shell{overflow:visible;grid-template-columns:1fr}.touch-label .touch-left{grid-template-columns:1fr 1fr;grid-template-rows:440px}.touch-label .right{grid-template-rows:auto auto auto}.touch-label .touch-pack{min-height:268px}.touch-label .touch-pack-area{grid-template-rows:auto auto}.touch-label .touch-bottom{grid-template-columns:1fr 1fr}.touch-label #completion-status{grid-column:1/-1}}
-@media(max-width:570px){.touch-label .shell{padding:8px}.touch-label .touch-left{grid-template-columns:1fr;grid-template-rows:auto 410px}.touch-label .touch-job-head,.touch-label .summary-grid,.touch-label .touch-bottom{grid-template-columns:1fr}.touch-label .summary-grid{grid-template-columns:1fr 1fr}.touch-label #selected-name{font-size:24px}.touch-label .touch-pack{grid-template-columns:1fr;grid-template-rows:auto auto auto}.touch-label .pack-actions{grid-column:1;grid-row:3}.touch-label .pack-fields{grid-template-columns:1fr}.touch-label .weight-modes{grid-column:1}.touch-label #completion-status{grid-column:1}.touch-label .touch-dialog{padding:12px}.touch-label .touch-history-row{grid-template-columns:1fr}.touch-label .history-choice{grid-template-columns:28px minmax(0,1fr)}.touch-label .history-choice b{grid-column:2}.touch-label .history-actions{justify-content:stretch}.touch-label .history-actions button{flex:1}.touch-label #label-preview-frame{zoom:.85}.touch-label .connect{justify-content:flex-start}.touch-label .preview-stage{justify-content:flex-start} .touch-label .work-order-dialog .order-title{padding-right:0}.touch-label .work-order-dialog .order-badge{position:static;justify-self:start}}
+@media(max-width:570px){.touch-label .shell{padding:8px}.touch-label .touch-left{grid-template-columns:1fr;grid-template-rows:auto 410px}.touch-label .touch-job-head,.touch-label .summary-grid,.touch-label .touch-bottom{grid-template-columns:1fr}.touch-label .summary-grid{grid-template-columns:1fr 1fr}.touch-label #selected-name{font-size:24px}.touch-label .touch-pack{grid-template-columns:1fr;grid-template-rows:auto auto auto}.touch-label .pack-actions{grid-column:1;grid-row:3}.touch-label .pack-fields{grid-template-columns:1fr}.touch-label .weight-modes{grid-column:1}.touch-label #completion-status{grid-column:1}.touch-label .touch-dialog{padding:12px}.touch-label #label-preview-frame{zoom:.85}.touch-label .connect{justify-content:flex-start}.touch-label .preview-stage{justify-content:flex-start} .touch-label .work-order-dialog .order-title{padding-right:0}.touch-label .work-order-dialog .order-badge{position:static;justify-self:start}}
+@media(max-width:570px){
+  .touch-label #history-dialog{padding:10px}
+  .touch-label .touch-history-row{grid-template-columns:minmax(0,1fr);gap:4px}
+  .touch-label .history-actions button{flex:1}
+}

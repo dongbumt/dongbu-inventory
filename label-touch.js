@@ -1,7 +1,7 @@
 /* Selected touch layout 2. Shares production log/print functions with label-print.html. */
 (function(){
   'use strict';
-  let ready=false,current='',historyPage=0,historyPageSize=6,historyOrder='',lastFocus=null,previewReturn=false;
+  let ready=false,current='',historyPage=0,historyPageSize=1,historyOrder='',lastFocus=null,previewReturn=false;
   const jobs=new Map(),selected=new Set();
   const productStorage='dbmt_label_output_products_v1';
   let productChoices=new Map(),pendingProduct='',productPage=0;
@@ -136,8 +136,9 @@
   function openDialog(id){lastFocus=document.activeElement;byId(id).showModal();if(id==='history-dialog')fitHistoryPage();}
   function estimatedHistoryPageSize(){
     const mobile=window.innerWidth<=570;
-    const available=Math.min(window.innerHeight*.94,900)-(mobile?300:285);
-    return Math.max(1,Math.min(6,Math.floor(available/(mobile?170:94))));
+    // Reserve space for the heading, pager and footer. Wrapped content is checked after rendering.
+    const available=window.innerHeight*.96-(mobile?210:190);
+    return Math.max(1,Math.floor(available/(mobile?104:58)));
   }
   function fitHistoryPage(){
     const dialog=byId('history-dialog'),body=byId('history-body');
@@ -164,7 +165,7 @@
     byId('history-delete-all').disabled=state.loading||!row||!orderLogsReady()||!active.length||!!completionFor(row.id);
     byId('history-body').innerHTML=logs.slice(historyPage*historyPageSize,(historyPage+1)*historyPageSize).map(log=>{
       const id=String(log.id),voided=log.status==='void';
-      return `<div class="touch-history-row"><label class="history-choice"><input type="checkbox" data-log="${html(id)}" aria-label="${html(log.code||id)} 선택" ${selected.has(id)?'checked':''} ${voided||state.loading?'disabled':''}><span><strong>${html(log.workOrderSnapshot?.product||log.product||'품목 없음')}${log.workOrderSnapshot?.packunit?' / '+html(log.workOrderSnapshot.packunit):''}</strong><small>${html(log.code||id)}</small><small>${html(formatTime(log.printedAt))} · ${voided?'삭제됨':`재출력 ${toNumber(log.reprintCount)}회`}</small></span><b>${kg(log.labelWeight)}</b></label><div class="history-actions">${button('미리보기',`data-act="preview" data-id="${html(id)}"`)}${button('재출력',`data-act="reprint" data-id="${html(id)}" ${voided||state.loading?'disabled':''}`)}${button('삭제',`data-act="void" data-id="${html(id)}" ${voided||state.loading||completionFor(row.id)?'disabled':''}`)}</div></div>`;
+      return `<div class="touch-history-row"><label class="history-choice"><input type="checkbox" data-log="${html(id)}" aria-label="${html(log.code||id)} 선택" ${selected.has(id)?'checked':''} ${voided||state.loading?'disabled':''}><span><strong>${html(log.workOrderSnapshot?.product||log.product||'품목 없음')}${log.workOrderSnapshot?.packunit?' / '+html(log.workOrderSnapshot.packunit):''}</strong><small>${html(log.code||id)} · ${html(formatTime(log.printedAt))} · ${voided?'삭제됨':`재출력 ${toNumber(log.reprintCount)}회`}</small></span><b>${kg(log.labelWeight)}</b></label><div class="history-actions">${button('미리보기',`data-act="preview" data-id="${html(id)}"`)}${button('재출력',`data-act="reprint" data-id="${html(id)}" ${voided||state.loading?'disabled':''}`)}${button('삭제',`data-act="void" data-id="${html(id)}" ${voided||state.loading||completionFor(row.id)?'disabled':''}`)}</div></div>`;
     }).join('')||'<p class="empty">이 작업의 외포장 출력이력이 없습니다.</p>';
     byId('history-page').textContent=`${historyPage+1} / ${pages}`;
     byId('history-prev').disabled=historyPage===0||state.loading;
