@@ -18,7 +18,6 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
   try{
     const context=await browser.newContext({viewport:{width:1280,height:1024}}),page=await context.newPage(),errors=[];
     const order={id:'wo-a',title:'원료 돈등심 작업',date:'2026-09-15',product:'돈등심(기본)',labelProductId:'p0',weight:5,inputWeight:100,origin:'국내산',grade:'1등급',lot:'RAW-LOT',mfgdate:'2026-09-15',expdate:'2027-09-14',itemno:'ORIGINAL',ingredients:'돼지고기 100%',temptype:'냉동',sourceStock:{key:'raw',product:'돈등심',origin:'국내산',lot:'RAW-LOT',stock:100,price:5000}};
-    let otherOrder={...order,id:'wo-b',lot:'OTHER-LOT'};
     const p1={id:'p1',name:'돈등심(돈까스 10mm)',productCode:'P001',packunit:'2KG',origin:'국내산',storage:'냉장',kind:'제품',meattype:'돼지고기',shelfdays:30,itemno:'REPORT-10',brand:'DBMT',nationalPartCode:'CUT-001',nationalPartName:'삼겹살',ingredientDetails:'돈등심(국내산) 100%'};
     const p2={...p1,id:'p2',name:'돈등심(잡채 3mm)',productCode:'P002',packunit:'5KG',storage:'냉동',shelfdays:60,itemno:'REPORT-3'};
     let products=[{...p1,id:'p0',name:order.product},p1,p2,{...p1,id:'belly-1',name:'냉장삼겹살',brand:'가상 브랜드 A'},{...p1,id:'belly-2',name:'삼겹살(작업)',brand:'가상 브랜드 B'},...Array.from({length:15},(_,i)=>({...p1,id:'extra-'+i,name:'추가 품목 '+i}))];
@@ -28,7 +27,7 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
     await context.route('https://**/*',async route=>{
       if(await innerFixture(route))return;
       const name=route.request().url().split('/').pop(),body=route.request().postDataJSON();let data={};
-      if(name==='dbmt_label_print_get_data')data={appData:{workOrders:[order,otherOrder],labelProducts:products,labelPrintLogs:logs},completions:completions()};
+      if(name==='dbmt_label_print_get_data')data={appData:{workOrders:[order,{...order,id:'wo-b',lot:'OTHER-LOT'}],labelProducts:products,labelPrintLogs:logs},completions:completions()};
       if(name==='dbmt_label_print_save_logs'){
         if(fail){await route.fulfill({status:400,body:JSON.stringify({message:'품목 기준정보 변경. 새로고침해주세요.'})});return;}
         saves++;
@@ -90,48 +89,9 @@ const server=http.createServer((req,res)=>{const file=path.resolve(repo,new URL(
       const bad=await page.evaluate(()=>[...document.querySelectorAll('.shell button,.pack-fields small')].filter(e=>e.getClientRects().length).filter(e=>{const r=e.getBoundingClientRect(),p=e.closest('.panel')?.getBoundingClientRect();return r.right>innerWidth+1||r.left<0||(p&&r.bottom>p.bottom+1);}).map(e=>e.id||e.textContent));assert.deepEqual(bad,[],`layout ${width}`);
     }
     await page.setViewportSize({width:1280,height:1024});await page.screenshot({path:path.join(dir,'operating-1280.png'),fullPage:true});
-    const deliveryProduct={...p1,id:'p-delivery',name:'돈전지(작업)',brand:'  가상 납품처 A&B  '};
-    const similarProduct={...deliveryProduct,id:'p-delivery-similar',name:'돈전지(작업) 샘플'};
-    products.push(deliveryProduct,similarProduct);
-    otherOrder={...otherOrder,product:deliveryProduct.name,labelProductId:deliveryProduct.id,brand:'과거 작업지시 브랜드'};
-    const legacyDelivery={id:'delivery-legacy',code:'DBMTLEGACY',product:otherOrder.product,workOrderId:otherOrder.id,
-      labelWeight:5,status:'active',printedAt:'2026-09-15T00:00:00.000Z',sizeKey:'7x10',workOrderSnapshot:{...otherOrder,brand:deliveryProduct.brand.trim()}};
-    logs.push(legacyDelivery);
     await page.goto(`http://127.0.0.1:${server.address().port}/label-print.html?workOrderId=wo-b`);await connect();
     assert.equal(await page.evaluate(()=>state.selectedId),'wo-b','The work-order list opens the selected order in the dedicated label screen');
-    const initialDestination=/납품처:\s*가상 납품처 A&B/;
-    const changedDestination=/납품처:\s*가상 납품처 B/;
-    const originalGrade=/성별및등급:\s*1등급/;
-    const checkPreview=async(selector,expected)=>{
-      await page.locator(selector).click();
-      await label.filter({hasText:expected}).waitFor();
-      await page.locator('#label-preview-close').click();
-    };
-    await checkPreview('#preview-btn',initialDestination);
-    await checkPreview('#inner-preview-btn',initialDestination);
-    await page.locator('#print-btn').click();await wait();
-    const originalDelivery=logs.at(-1);
-    assert.equal(originalDelivery.workOrderSnapshot.deliveryDestination,'가상 납품처 A&B');
-    const liveArtwork=()=>page.evaluate(()=>__prints.at(-1)?.[0]);
-    assert.match(await liveArtwork(),initialDestination);
-
-    deliveryProduct.brand='가상 납품처 B';
-    await page.locator('#reload-btn').click();await wait();
-    await checkPreview('#preview-btn',changedDestination);
-    await page.locator('#reprint-open').click();
-    await checkPreview(`[data-act=preview][data-id="${legacyDelivery.id}"]`,originalGrade);
-    await page.locator(`[data-act=reprint][data-id="${originalDelivery.id}"]`).click();await wait();
-    assert.match(await liveArtwork(),initialDestination,'Historical reprints use the destination recorded on first print');
-    assert.doesNotMatch(await liveArtwork(),changedDestination);
-    assert.equal(logs.find(log=>log.id===originalDelivery.id).workOrderSnapshot.deliveryDestination,'가상 납품처 A&B');
-    await page.locator('[data-close=history-dialog]').click();
-
-    deliveryProduct.brand='   ';
-    await page.locator('#reload-btn').click();await wait();
-    await checkPreview('#preview-btn',originalGrade);
-    await choose('돈전지',similarProduct.id);
-    await checkPreview('#preview-btn',originalGrade);
     assert.deepEqual(errors,[]);assert.equal(context.pages().length,1);
-    console.log('PASS: product picker, original input and history, inner exclusion, multi-product totals, original reprint, per-work selection/reload, completion lock, touch layouts, exact product delivery destination, current/blank brand and historical reprint.');console.log('Artifacts: '+dir);
+    console.log('PASS: product picker pending/apply/search/pages/reset, metadata/expiry, original input and history, inner exclusion, multi-product totals, original reprint, per-work selection/reload, deleted master protection, failure, completion lock, touch layouts.');console.log('Artifacts: '+dir);
   }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;server.close();});

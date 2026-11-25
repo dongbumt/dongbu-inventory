@@ -298,23 +298,6 @@ const server=http.createServer((req,res)=>{
   assert(await fatLot.isHidden());assert(await gradeField.isVisible());
   await preview.locator('.dl-grade-row').filter({hasText:'유통 전용 등급'}).waitFor();
   console.log('PASS: blend manual labels keep fat trace separate; guarded lookup, stale results, confirmation, matching print artwork, and catalog isolation');
-  await maker.selectOption('default');
-  await page.evaluate(()=>{
-    labelProducts.push({id:'p-delivery',name:'돈전지(작업)',kind:'제품',brand:'  가상 A&B 납품처  ',origin:'국내산',grade:'가상 등급',storage:'냉동',meattype:'돼지고기'});
-    DBMTManualLabel.selectProduct('p-delivery');
-  });
-  await preview.locator('.dl-grade-row').filter({hasText:/납품처:\s*가상 A&B 납품처/}).waitFor();
-  await page.locator('#lbl-preview-frame').evaluate(frame=>frame.contentWindow.DBMTLabelPrintReady);
-  const deliveryArtwork=await preview.locator('.dbmt-label-body').evaluate(node=>node.outerHTML);
-  const beforeDeliveryPrint=await page.evaluate(()=>__printRequests.length);
-  await page.locator('#manual-label-print').click();
-  await page.waitForFunction(count=>__printRequests.length===count+1&&!document.getElementById('manual-label-print').disabled,beforeDeliveryPrint);
-  assert.equal(await page.evaluate(()=>__printRequests.at(-1).artwork),deliveryArtwork,'Manual print uses the same delivery destination as preview');
-  await page.evaluate(()=>{labelProducts.find(row=>row.id==='p-delivery').brand='   ';DBMTManualLabel.updatePreview();});
-  await preview.locator('.dl-grade-row').filter({hasText:/성별및등급:\s*가상 등급/}).waitFor();
-  await page.evaluate(()=>DBMTManualLabel.selectProduct('p-a'));
-  await preview.locator('.dl-grade-row').filter({hasText:/성별및등급:\s*1/}).waitFor();
-  console.log('PASS: the exact delivery product uses the current brand in manual preview and print, while blank and other brands retain the grade');
   await page.evaluate(()=>DBMTManualLabel.reset());
   assert.equal(await maker.inputValue(),'default');assert.equal(await page.locator('#lbl-manufacturer').inputValue(),'주식회사 동부엠티');
   console.log('PASS: manufacturer-specific license/phone/address, MT report blocking, distribution custom reports, no HACCP, master-refresh isolation, both paper sizes and default restoration');

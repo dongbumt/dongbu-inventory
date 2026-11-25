@@ -15,7 +15,7 @@
 <script src="label-lots.js?v=20261029lots1"></script>
 <link rel="stylesheet" href="styles/work-order-output-lots.css?v=20261029lots1">
 <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-<script src="label-layout.js?v=20261125destination1"></script>
+<script src="label-layout.js?v=20261124blend2"></script>
 <script src="label-print-document.js?v=20261118hidden1"></script>
 <script>
 // The main ERP is server-only. Remove browser data caches before application
@@ -429,7 +429,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="showPage('p-production',this)" id="nav-production">🏭 생산일보</div>
       <div class="nav-tab" onclick="showPage('p-workorders',this)" id="nav-workorders">📝 작업지시</div>
       <div class="nav-tab" onclick="showPage('p-label',this)" id="nav-label">🏷️ 라벨출력</div>
-      <div class="nav-tab" onclick="window.open('label-print.html?v=20261125destination1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
+      <div class="nav-tab" onclick="window.open('label-print.html?v=20261125historyactions1','_blank');" id="nav-label-print-standalone">🧾 라벨전용</div>
       <div class="nav-tab" onclick="showPage('p-product-specs',this)" id="nav-product-specs">📐 제품스펙</div>
       <div class="nav-tab" onclick="showPage('p-prod-loss',this)" id="nav-prod-loss">📉 생산로스율</div>
       <div class="nav-tab" onclick="DBMTAuth.openProductionBoard()" id="nav-production-board-standalone">🖥️ 생산현황 전용</div>
@@ -22386,12 +22386,10 @@ function renderWorkOrders(){
 
 function workOrderLabelData(row){
   if(!row) return null;
-  const product = row.labelProductId && (labelProducts || []).find(p => String(p.id) === String(row.labelProductId));
   return {
     product: row.product || '',
     origin: row.origin || '',
     grade: row.grade || '',
-    deliveryDestination: DBMTLabelLayout.deliveryDestination(row.product, product ? product.brand : row.brand),
     ...(workOrderBlendRecipe(row.product)?{slaughterhouseName:row.slaughterhouseName||''}:{}),
     mfgdate: fmtLblDate(row.mfgdate || ''),
     expdate: fmtLblDate(row.expdate || ''),
@@ -22428,7 +22426,6 @@ function collectWorkOrderFormForPreview(){
   if(!product) return null;
   return {
     product,
-    brand: selectedWorkOrderLabelProduct()?.brand || '',
     origin: val('wo-origin').trim(),
     grade: val('wo-grade').trim(),
     slaughterhouseName: val('wo-blend-slaughterhouse').trim(),
@@ -22473,7 +22470,7 @@ function refreshLabelWorkOrderSelect(){
 
 function selectLabelWorkOrder(id){
   if(window.DBMTAuth && !DBMTAuth.can('label_print','view')){toast('라벨전용 화면을 조회할 권한이 없습니다.');return;}
-  const url=new URL('label-print.html?v=20261125destination1',document.baseURI);url.searchParams.set('workOrderId',String(id));
+  const url=new URL('label-print.html?v=20261125historyactions1',document.baseURI);url.searchParams.set('workOrderId',String(id));
   window.open(url.href,'_blank');
 }
 
@@ -23353,7 +23350,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="work-order-output-lots.js?v=20261029lots1"></script>
 <script src="work-order-carryover.js?v=20261019carry1"></script>
 <script src="distribution-products.js?v=20261119catalog1"></script>
-<script src="manual-label.js?v=20261125destination1"></script>
+<script src="manual-label.js?v=20261124blend2"></script>
 <link rel="stylesheet" href="styles/label-weight-split.css?v=20261113split1">
 <script src="label-weight-split.js?v=20261113split1"></script>
 <script src="document-request-detail.js?v=20261026delivery1"></script>

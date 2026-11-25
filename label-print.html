@@ -518,7 +518,7 @@
 
   <script src="label-weight.js?v=20260910workorder1"></script>
   <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1"></script>
-  <script src="label-layout.js?v=20261125destination1"></script>
+  <script src="label-layout.js?v=20261124blend2"></script>
   <script src="label-print-document.js?v=20261118hidden1"></script>
   <script src="work-order-blend.js?v=20261124blend2"></script>
   <script src="company-master.js?v=20260813m01"></script>
@@ -1453,13 +1453,10 @@
     }
 
     function snapshotOrder(row){
-      const product = row.productSelectionVersion===1 ? null : state.labelProducts.find(p=>String(p.id)===String(row.labelProductId));
-      const deliveryDestination = DBMTLabelLayout.deliveryDestination(row.product, product ? product.brand : row.brand);
       return {
         ...(row.productSelectionVersion===1?{productSelectionVersion:1}:{}),
         ...(row.outputLotSelectionVersion===1?{outputLotSelectionVersion:1,outputLots:row.outputLots,defaultOutputLot:row.defaultOutputLot}:{}),
         ...blendLabelFields(row),
-        ...(deliveryDestination?{deliveryDestination}:{}),
         id: row.id || '',
         date: row.date || '',
         title: row.title || '',
@@ -1471,7 +1468,7 @@
         nationalPartCode: row.nationalPartCode || '',
         nationalPartName: row.nationalPartName || '',
         taxType: row.taxType || '면세',
-        packunit: row.productSelectionVersion===1?(row.packunit||''):(product?.packunit || row.packunit || ''),
+        packunit: row.productSelectionVersion===1?(row.packunit||''):(state.labelProducts.find(p=>String(p.id)===String(row.labelProductId))?.packunit || row.packunit || ''),
         origin: row.origin || '',
         grade: row.grade || '',
         mfgdate: row.mfgdate || row.date || '',
@@ -1533,7 +1530,6 @@
         origin: row.origin || '',
         grade: row.grade || '',
         ...(typeof row.slaughterhouseName === 'string'?{slaughterhouseName:row.slaughterhouseName}:{}),
-        deliveryDestination: row.deliveryDestination,
         mfgdate: formatDate(row.mfgdate || row.date || ''),
         expdate: formatDate(row.expdate || ''),
         weight: log.weightOmitted ? '' : toNumber(log.labelWeight || row.weight).toFixed(2),
