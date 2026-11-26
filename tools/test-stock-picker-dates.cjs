@@ -32,7 +32,7 @@ const helpers=['parseAppNumber','normProdDate','priceKey','priceProductKey','sam
   'bulkOutboundSourceKey','bulkOutboundRawAvailability','bulkOutboundAvailableGroup','bulkOutboundSearchKey','bulkOutboundSearchText','bulkOutboundStockLabel','getEditingTransaction','stockOptionFromTransaction','sameBulkOutboundStockOption','outboundStockOptionsForEdit','availableStockForEdit','availableBoxesForEdit','getTxnStockSearchOptions','selectTxnStock','workOrderStockOptions'];
 const pickerStart=html.indexOf('let txnStockPickerRows ='),pickerEnd=html.indexOf('function selectTxnStock(',pickerStart);
 const setup=`
-var userTransactions=${JSON.stringify(tx)},transactions=[...userTransactions],EXCEL_STOCK=[],labelProducts=[],STOCK_LOCATION_DEFAULT='가공장',_stockMapCache=null,_editTxnId=null;
+var userTransactions=${JSON.stringify(tx)},transactions=[...userTransactions],EXCEL_STOCK=[],labelProducts=[],STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고',_stockMapCache=null,_editTxnId=null;
 var bulkOutboundStockOptionsCacheMap=null,bulkOutboundStockOptionsCacheRows=null,bulkOutboundShipmentOptionsSource=null,bulkOutboundShipmentOptionsCache=null,notices=[];
 function getTMoveFromLocation(){return ''}
 function autoFillTxnPrice(){}

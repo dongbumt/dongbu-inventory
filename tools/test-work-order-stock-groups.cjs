@@ -100,7 +100,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
     await page.addScriptTag({content:`
       const seed=${JSON.stringify(receipts)};
       let transactions=structuredClone(seed),userTransactions=transactions,workOrders=[],stockMap=DBMTStockLedger.calculate(transactions),busy=false;
-      const STOCK_LOCATION_DEFAULT='가공장',labelProducts=[],LBL_DEFAULTS={},EXCEL_TRANSACTIONS=[];
+      const STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고',labelProducts=[],LBL_DEFAULTS={},EXCEL_TRANSACTIONS=[];
       const normalizeStockLocation=v=>v||STOCK_LOCATION_DEFAULT,stockLocationKey=v=>String(v||STOCK_LOCATION_DEFAULT),normalizeOriginName=v=>v||'';
       const parseAppNumber=v=>Number(v)||0,stockDateKey=v=>v||'',bulkOutboundKeyFromValues=(p,l,o,pack,date,price,loc,id)=>['row',encodeURIComponent(id),loc].join('|');
       const getStockMap=()=>stockMap;

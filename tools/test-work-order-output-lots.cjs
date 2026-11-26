@@ -133,7 +133,7 @@ async function testBlendOrder(page){
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-product-selection.js'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'work-order-blend.js'),'utf8')});
     await page.addScriptTag({content:`
-      const STOCK_LOCATION_DEFAULT='가공장';let workOrders=[];
+      const STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고';let workOrders=[];
       const labelProducts=[{id:'raw',name:'돈등심 원료',kind:'원료육',brand:'원료',origin:'국내산'},
         {id:'prod-a',name:'냉장돈등심(치즈용)',kind:'제품',brand:'A',origin:'국내산',meattype:'돼지고기',storage:'냉장',shelfdays:30,itemno:'202502930935',grade:'1',packunit:'5KG'},
         {id:'prod-b',name:'냉장돈등심(치즈용)',kind:'제품',brand:'B',origin:'국내산',meattype:'돼지고기',storage:'냉장',shelfdays:30,itemno:'202502930936',grade:'2',packunit:'10KG'}];

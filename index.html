@@ -22201,7 +22201,9 @@ function autoSetWorkOrderExpiry(){
 
 function workOrderStockOptions(targetInput=null){
   const role=targetInput?.closest('.wo-source-row')?.dataset.blendRole;
+  const warehouseKey=stockLocationKey(STOCK_LOCATION_SECONDARY);
   const rows=excludeSelectedWorkOrderStock(bulkOutboundStockOptions().filter(isStockProductSelectable),targetInput)
+    .filter(stock=>stockLocationKey(stock.stockLocation)!==warehouseKey)
     .filter(stock=>!role||workOrderBlendStockMatches(role,stock));
   return window.DBMTWorkOrderStockGroups?DBMTWorkOrderStockGroups.group(rows,typeof transactions==='undefined'?[]:transactions):rows;
 }

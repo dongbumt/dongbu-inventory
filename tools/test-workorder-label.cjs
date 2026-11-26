@@ -15,6 +15,7 @@ async function checkWorkOrderStockChoices(page){
     stocks=[{...base,key:'choice-a',stockRowId:'source-a',proddate:'2026-10-01'},
       {...base,key:'choice-b',stockRowId:'source-b',proddate:'2026-10-02'},
       {...base,key:'choice-c',proddate:'2026-10-03'},
+      {...base,key:'choice-a-logistics',stockRowId:'source-a',stockLocation:'물류창고',proddate:'2026-10-01'},
       {...base,key:'choice-a-external',stockRowId:'source-a',stockLocation:'외부창고',proddate:'2026-10-01'},
       {...base,key:'choice-other',lot:'LOT-OTHER',proddate:'2026-10-04'}];
     resetWorkOrderForm();addWorkOrderSourceRow();addWorkOrderSourceRow();
@@ -32,6 +33,11 @@ async function checkWorkOrderStockChoices(page){
   await open(1);
   assert.ok(!(await shown()).includes('choice-a'),'The next input hides an already selected stock');
   assert.ok((await shown()).includes('choice-b')&&(await shown()).includes('choice-c'),'Other receipts with the same product and LOT stay selectable');
+  const location=page.locator('#tsp-search-location');
+  assert.equal(await location.locator('option[value="물류창고"]').count(),0);
+  await location.selectOption('');
+  assert.ok(!(await shown()).includes('choice-a-logistics'),'All locations excludes logistics stock even when the product and LOT match');
+  assert.equal(await page.evaluate(()=>findWorkOrderStock('choice-a-logistics')),null);
   await page.locator('#tsp-search-location').selectOption('외부창고');
   assert.ok((await shown()).includes('choice-a-external'),'Another location remains selectable');
   await page.evaluate(()=>closeTxnStockPicker(false));
@@ -69,6 +75,32 @@ async function checkWorkOrderStockChoices(page){
   assert.equal(await page.locator('#tsp-confirm').isDisabled(),true);
   await page.evaluate(()=>{closeTxnStockPicker(false);openTxnStockPicker('2026-10-01');});
   assert.ok((await shown()).includes('choice-a'),'Single transaction choices remain independent of the work-order draft');
+  assert.ok((await shown()).includes('choice-a-logistics'),'Logistics stock remains available for shipment');
+  await page.evaluate(()=>{
+    closeTxnStockPicker(false);
+    const sourceStock=stocks.find(stock=>stock.key==='choice-a-logistics');
+    const existing={...workOrders[0],id:'qa-historical-logistics',sourceStock,
+      sourceInputs:[{sourceStock,sourceStockKey:sourceStock.key,inputWeight:10,boxCount:1}]};
+    workOrders.push(existing);editWorkOrder(existing.id);
+  });
+  assert.match(await row(0).locator('.wo-source-summary').innerText(),/물류창고/);
+  assert.equal((await page.evaluate(()=>collectWorkOrderForm())).sourceInputs[0].sourceStock.stockLocation,'물류창고');
+  await page.evaluate(()=>{
+    workOrders=workOrders.filter(order=>order.id!=='qa-historical-logistics');
+    resetWorkOrderForm();
+    stocks=['가공장','물류창고'].flatMap(stockLocation=>[
+      {product:'전각',origin:'미국산',lot:'CHUCK',key:'chuck-'+stockLocation,stockLocation,stock:85},
+      {product:'한우지방',origin:'국내산',lot:'FAT',key:'fat-'+stockLocation,stockLocation,stock:15}
+    ]);
+    document.getElementById('wo-product').value='우민찌(지방15%)';onWorkOrderProductInput();
+  });
+  for(const [index,role] of ['chuck','fat'].entries()){
+    await open(index);
+    await location.selectOption('');
+    assert.deepEqual(await shown(),[role+'-가공장']);
+    assert.equal(await location.locator('option[value="물류창고"]').count(),0);
+    await page.evaluate(()=>closeTxnStockPicker(false));
+  }
   await page.evaluate(()=>{closeTxnStockPicker(false);stocks=stockChoiceBackup;workOrders=workOrders.filter(order=>order.id!=='qa-stock-choice-edit');resetWorkOrderForm();});
   console.log('PASS: work-order popup excludes chosen raw stock, current row and same-LOT alternatives, locations/legacy stock, kg/boxes, delete/replace/clear/final-row release, restored orders and stale confirmation');
 }
@@ -92,8 +124,9 @@ const server=http.createServer((req,res)=>{
     await page.addStyleTag({content:fs.readFileSync(path.join(repo,'styles/main.css'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-weight.js'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(repo,'label-product-selection.js'),'utf8')});
+    await page.addScriptTag({content:fs.readFileSync(path.join(repo,'work-order-blend.js'),'utf8')});
     await page.addScriptTag({content:`
-      const STOCK_LOCATION_DEFAULT='가공장';let workOrders=[];
+      const STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고';let workOrders=[];
       const labelProducts=[{id:'raw',name:'돈등심 원료',kind:'원료육',brand:'원료',origin:'국내산'},
         {id:'prod-a',name:'냉장돈등심(치즈용)',kind:'제품',brand:'A',origin:'국내산',meattype:'돼지고기',storage:'냉장',shelfdays:30,itemno:'202502930935',grade:'1',packunit:'5KG'},
         {id:'prod-b',name:'냉장돈등심(치즈용)',kind:'제품',brand:'B',origin:'국내산',meattype:'돼지고기',storage:'냉장',shelfdays:30,itemno:'202502930936',grade:'2',packunit:'10KG'}];
