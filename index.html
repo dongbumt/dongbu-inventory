@@ -7,7 +7,7 @@
 <script src="stock-ledger.js?v=20261123factorydate1"></script>
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
-<script src="work-order-stock-groups.js?v=20261119allocation1"></script>
+<script src="work-order-stock-groups.js?v=20261126bulk1"></script>
 <script src="work-order-blend.js?v=20261124blend2"></script>
 <script src="stock-receipt-view.js?v=20261123receiptdate1"></script>
 <script src="label-weight.js?v=20260910workorder1"></script>
@@ -1058,7 +1058,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
         <button class="btn btn-secondary" onclick="addBulkOutboundRows(5)">+ 5행</button>
         <button class="btn btn-secondary" onclick="clearBulkOutbound()">전체 비우기</button>
         <button id="bulk-out-save-price-btn" type="button" class="btn btn-secondary" onclick="saveOutboundPrices('bulk')" title="입력된 품목·원산지·거래처별 출고 단가를 단가표에 저장">단가표에 일괄 저장</button>
-        <button class="btn btn-primary" onclick="saveBulkOutbound()" style="margin-left:auto;">💾 출고 일괄 저장</button>
+        <button id="bulk-out-save-btn" class="btn btn-primary" onclick="saveBulkOutbound()" style="margin-left:auto;">💾 출고 일괄 저장</button>
       </div>
       <div id="bulk-out-price-save-status" role="status" style="font-size:12px;color:#555;margin-top:8px;" hidden></div>
     </div>
@@ -8189,6 +8189,7 @@ let txnStockPickerIndex = -1;
 let txnStockPickerReturnFocus = null;
 let txnStockPickerBodyOverflow = '';
 let txnStockPickerTargetInput = null;
+let txnStockPickerOpenVersion = 0;
 
 // Only filter new choices. Never remove inactive masters from history/stock calculation.
 function isStockProductSelectable(stock){
@@ -8243,10 +8244,15 @@ function excludeSelectedBulkOutboundStock(rows, targetInput){
   const currentRow = targetInput?.closest('#bulk-outbound-tbody > tr');
   if(!currentRow) return rows;
   const selectedKeys = new Set();
+  const selectedSources = new Set();
   document.querySelectorAll('#bulk-outbound-tbody .bulk-out-key').forEach(input=>{
-    if(input.closest('tr') !== currentRow && input.value) selectedKeys.add(input.value);
+    const row=input.closest('tr');
+    if(row === currentRow || !input.value) return;
+    selectedKeys.add(input.value);
+    for(const stock of row._bulkStockGroup?._workOrderStockRows||[]) selectedSources.add(stock.key);
   });
-  return selectedKeys.size ? rows.filter(stock=>!selectedKeys.has(stock.key)) : rows;
+  return selectedKeys.size ? rows.filter(stock=>!selectedKeys.has(stock.key) &&
+    !(stock._workOrderStockRows||[stock]).some(source=>selectedKeys.has(source.key)||selectedSources.has(source.key))) : rows;
 }
 
 function excludeSelectedWorkOrderStock(rows, targetInput){
@@ -8265,10 +8271,11 @@ function excludeSelectedWorkOrderStock(rows, targetInput){
 
 function getTxnStockPickerOptions(){
   if(txnStockPickerTargetInput?.dataset?.pickerContext==='workorder-input')return workOrderStockOptions(txnStockPickerTargetInput);
+  if(txnStockPickerTargetInput?.closest('#bulk-outbound-tbody > tr')){
+    return excludeSelectedBulkOutboundStock(bulkOutboundShipmentStockOptions().filter(isStockProductSelectable),txnStockPickerTargetInput);
+  }
   const rows = (txnStockPickerTargetInput ? bulkOutboundStockOptions() : getTxnStockSearchOptions()).filter(isStockProductSelectable);
-  const available = excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput);
-  const outbound = excludeSelectedBulkOutboundStock(available, txnStockPickerTargetInput);
-  const remaining=excludeSelectedWorkOrderStock(outbound, txnStockPickerTargetInput);
+  const remaining = excludeSelectedProductionInputStock(rows, txnStockPickerTargetInput);
   return txnStockPickerTargetInput?.dataset?.pickerContext==='production-input'&&window.DBMTWorkOrderStockGroups
     ? DBMTWorkOrderStockGroups.group(remaining,typeof transactions==='undefined'?[]:transactions) : remaining;
 }
@@ -8407,6 +8414,7 @@ function closeTxnStockPicker(restoreFocus=true){
   const modal = document.getElementById('txn-stock-picker-modal');
   if(!modal || modal.classList.contains('hidden')) return;
   const returnFocus = txnStockPickerReturnFocus;
+  txnStockPickerOpenVersion++;
   modal.classList.add('hidden');
   document.body.style.overflow = txnStockPickerBodyOverflow;
   txnStockPickerTargetInput = null;
@@ -8508,15 +8516,17 @@ function moveTxnStockPickerSelection(delta){
   setTxnStockPickerIndex(current + delta);
 }
 
+function stockGroupFingerprint(stock){
+  return JSON.stringify((stock?._workOrderStockRows||[]).map(item=>[item.key,item.stock,item.stockBoxes]));
+}
+
 function confirmTxnStockPicker(){
   const stock = txnStockPickerRows[txnStockPickerIndex];
-  if(stock && !getTxnStockPickerOptions().some(option=>option.key === stock.key)){ renderTxnStockPicker(true); return; }
-  if(stock?._workOrderStockRows){
-    const latest=getTxnStockPickerOptions().find(option=>option.key===stock.key);
-    const fingerprint=row=>JSON.stringify((row?._workOrderStockRows||[]).map(item=>[item.key,item.stock,item.stockBoxes]));
-    if(fingerprint(stock)!==fingerprint(latest)){renderTxnStockPicker(true);return;}
-  }
   if(!stock) return;
+  const latest=getTxnStockPickerOptions().find(option=>option.key===stock.key);
+  if(!latest || (stock._workOrderStockRows && stockGroupFingerprint(stock)!==stockGroupFingerprint(latest))){
+    renderTxnStockPicker(true);return;
+  }
   const targetInput = txnStockPickerTargetInput;
   if(targetInput){
     if(targetInput.dataset?.pickerContext === 'workorder-input'){
@@ -8543,7 +8553,11 @@ function confirmTxnStockPicker(){
       return;
     }
     const row = targetInput.closest('tr');
-    selectBulkOutboundStock(targetInput, stock.key);
+    if(latest._workOrderStockRows){
+      void confirmBulkOutboundStockGroup(targetInput,stock,latest);
+      return;
+    }
+    selectBulkOutboundStock(targetInput, latest.key, latest);
     closeTxnStockPicker(false);
     requestAnimationFrame(()=>row?.querySelector('.bulk-out-trader')?.focus());
     return;
@@ -10203,6 +10217,8 @@ function bulkOutboundSearchKey(value){
 
 let bulkOutboundStockOptionsCacheMap = null;
 let bulkOutboundStockOptionsCacheRows = null;
+let bulkOutboundShipmentOptionsSource = null;
+let bulkOutboundShipmentOptionsCache = null;
 
 function bulkOutboundStockOptions(){
   const stockMap = getStockMap();
@@ -10267,6 +10283,49 @@ function bulkOutboundStockOptions(){
   bulkOutboundStockOptionsCacheMap = stockMap;
   bulkOutboundStockOptionsCacheRows = rows;
   return rows;
+}
+
+function bulkOutboundShipmentStockOptions(){
+  const rows=bulkOutboundStockOptions();
+  if(bulkOutboundShipmentOptionsSource!==rows){
+    bulkOutboundShipmentOptionsCache=DBMTWorkOrderStockGroups.group(rows,userTransactions);
+    bulkOutboundShipmentOptionsSource=rows;
+  }
+  return bulkOutboundShipmentOptionsCache;
+}
+
+function bulkOutboundSourceKey(source){
+  return JSON.stringify([source.stockRowId,normalizeStockLocation(source.stockLocation)]);
+}
+
+async function bulkOutboundRawAvailability(groups){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY)!=='1')return null;
+  const sources=new Map();
+  for(const group of groups){
+    for(const source of group._workOrderStockRows){
+      sources.set(bulkOutboundSourceKey(source),{stockRowId:source.stockRowId,stockLocation:normalizeStockLocation(source.stockLocation)});
+    }
+  }
+  if(sources.size>500)throw new Error('재고 원본이 500건을 넘습니다. 출고 항목을 나눠 저장해주세요.');
+  const result=assertPersonalServerResult(await sbRpc('dbmt_erp_get_bulk_outbound_raw_stock',{
+    p_token:personalServerWriteToken('transactions','create'),p_sources:[...sources.values()]
+  }),'출고 가능한 재고를 확인하지 못했습니다. 다시 선택해주세요.');
+  return new Map((result.rows||[]).map(row=>[bulkOutboundSourceKey(row),row]));
+}
+
+function bulkOutboundAvailableGroup(group,balances){
+  if(!balances)return group;
+  const sources=group._workOrderStockRows.map(source=>{
+    const balance=balances.get(bulkOutboundSourceKey(source));
+    if(!Number.isFinite(balance?.availableWeight)||!Number.isSafeInteger(balance?.reservedBoxes)){
+      throw new Error('묶음의 재고 원본이 변경되었습니다. 재고를 새로고침한 뒤 다시 선택해주세요.');
+    }
+    return {...source,stock:Math.min(source.stock,balance.availableWeight),
+      stockBoxes:source.stockBoxes===null?null:Math.max(0,source.stockBoxes-balance.reservedBoxes)};
+  }).filter(source=>source.stock>0);
+  return {...group,_workOrderStockRows:sources,
+    stock:sources.reduce((sum,source)=>sum+Math.round(source.stock*100),0)/100,
+    stockBoxes:sources.some(source=>source.stockBoxes===null)?null:sources.reduce((sum,source)=>sum+source.stockBoxes,0)};
 }
 
 let productionPickerWarmupScheduled = false;
@@ -10400,6 +10459,7 @@ function bulkOutboundSearchText(s){
 
 function clearBulkOutboundStockSelection(tr){
   if(!tr) return;
+  delete tr._bulkStockGroup;
   ['key','product','origin','lot','packunit','proddate','stock','stock-price','location'].forEach(name=>{
     const el = tr.querySelector(`.bulk-out-${name}`);
     if(el) el.value = '';
@@ -10409,7 +10469,7 @@ function clearBulkOutboundStockSelection(tr){
   const stockEl = tr.querySelector('.bulk-out-stock-cell');
   if(originEl) originEl.textContent = '-';
   if(lotEl) lotEl.textContent = '-';
-  if(stockEl) stockEl.textContent = '-';
+  if(stockEl){stockEl.textContent = '-';stockEl.title='';}
   const priceEl = tr.querySelector('.bulk-out-price-input');
   if(priceEl && priceEl.dataset.autofilled === '1'){
     priceEl.value = '';
@@ -10434,11 +10494,33 @@ function openBulkOutboundStockPicker(inp){
   openTxnStockPicker(undefined, inp);
 }
 
-function selectBulkOutboundStock(inp, key){
-  const s = bulkOutboundStockOptions().find(x=>x.key === key);
+async function confirmBulkOutboundStockGroup(input,selected,group){
+  const button=document.getElementById('tsp-confirm');
+  if(button?.disabled)return;
+  if(button)button.disabled=true;
+  const version=txnStockPickerOpenVersion;
+  try{
+    const balances=await bulkOutboundRawAvailability([group]);
+    if(version!==txnStockPickerOpenVersion||txnStockPickerRows[txnStockPickerIndex]!==selected||!input.isConnected)return;
+    const current=getTxnStockPickerOptions().find(stock=>stock.key===group.key);
+    if(stockGroupFingerprint(group)!==stockGroupFingerprint(current)){renderTxnStockPicker(true);return;}
+    const available=bulkOutboundAvailableGroup(current,balances);
+    if(available.stock<=0){toast('이 묶음의 바코드 관리 박스는 PDA에서 출고해주세요.');return;}
+    selectBulkOutboundStock(input,current.key,available,current);
+    closeTxnStockPicker(false);
+    requestAnimationFrame(()=>input.closest('tr')?.querySelector('.bulk-out-trader')?.focus());
+  }catch(error){
+    if(version===txnStockPickerOpenVersion)toast(error.message||'출고 가능한 재고를 확인하지 못했습니다. 다시 선택해주세요.');
+  }finally{
+    if(version===txnStockPickerOpenVersion)syncTxnStockPickerSelection(false);
+  }
+}
+
+function selectBulkOutboundStock(inp, key, s=bulkOutboundStockOptions().find(x=>x.key === key), group=null){
   if(!s) return;
   const tr = inp.closest('tr');
   if(!tr) return;
+  tr._bulkStockGroup=group;
   if(tr.querySelector('.bulk-out-key')?.value && tr.querySelector('.bulk-out-key').value !== s.key){
     const boxEl = tr.querySelector('.bulk-out-box-count');
     if(boxEl){ boxEl.value = ''; boxEl.title = ''; }
@@ -10462,7 +10544,11 @@ function selectBulkOutboundStock(inp, key){
   const stockEl = tr.querySelector('.bulk-out-stock-cell');
   if(originEl) originEl.textContent = s.origin || '-';
   if(lotEl) lotEl.textContent = s.lot || 'LOT 없음';
-  if(stockEl) stockEl.textContent = `${Number(s.stock||0).toFixed(2)} KG`;
+  if(stockEl){
+    const reserved=group&&s.stock<group.stock;
+    stockEl.textContent = `${reserved?'출고 가능 ':''}${Number(s.stock||0).toFixed(2)} KG`;
+    stockEl.title=reserved?`현재고 ${group.stock.toFixed(2)} KG · 바코드 관리 박스는 PDA에서 출고해주세요.`:'';
+  }
   const weightEl = tr.querySelector('.bulk-out-weight');
   if(weightEl && !weightEl.value) weightEl.value = Number(s.stock||0).toFixed(2);
   const boxEl = tr.querySelector('.bulk-out-box-count');
@@ -10572,15 +10658,44 @@ function applyBulkOutboundTrader(){
 
 
 
+function buildBulkOutboundTransactions(staged,date,balances){
+  return staged.flatMap(row=>{
+    const group=row.stockInfo._workOrderStockRows;
+    const allocations=group
+      ? DBMTWorkOrderStockGroups.allocate(bulkOutboundAvailableGroup(row.stockInfo,balances),row.weight,row.boxCount,'출고')
+      : [{stock:row.stockInfo,inputWeight:row.weight,boxCount:row.boxCount}];
+    let weightCents=0,postedAmount=0;
+    return allocations.map(({stock:s,inputWeight,boxCount})=>{
+      weightCents+=Math.round(inputWeight*100);
+      const totalAmount=Math.round(row.price*(group?weightCents/100:inputWeight));
+      const amount=totalAmount-postedAmount;
+      postedAmount=totalAmount;
+      return {
+        id:makeAppId('tx'), date, type:'출고', product:s.product, origin:s.origin, storage:'', packunit:s.packunit||'',
+        labelProductId:s.labelProductId||'', productCode:s.productCode||'', brand:s.brand||'', factoryNo:s.factoryNo||'',
+        nationalPartCode:s.nationalPartCode||'', nationalPartName:s.nationalPartName||nationalPartNameForCode(s.nationalPartCode),
+        taxType:normalizeLabelProductTaxType(s.taxType), trader:row.trader, lot:s.lot, proddate:s.proddate||'',
+        weight:inputWeight, boxCount, price:row.price, amount, note:'', stockUnitPrice:parseAppNumber(s.price),
+        stockProddate:s.proddate||'', stockLocation:s.stockLocation||STOCK_LOCATION_DEFAULT,
+        sourceStockKey:s.key, stockRowId:s.stockRowId||'', stockNote:s.stockNote||'',
+        _isUser:true, _isProdUse:false, _isProdOut:false, _prodId:''
+      };
+    });
+  });
+}
+
 async function saveBulkOutbound(){
+  const saveButton=document.getElementById('bulk-out-save-btn');
+  if(saveButton?.disabled) return;
   const date = document.getElementById('bulk-out-date')?.value || '';
   if(!date){ toast('출고일자를 선택하세요.'); return; }
   const stockByKey = {};
-  bulkOutboundStockOptions().forEach(s=>{ stockByKey[s.key] = s; });
+  bulkOutboundShipmentStockOptions().forEach(s=>{ stockByKey[s.key] = s; });
   const rows = document.querySelectorAll('#bulk-outbound-tbody tr');
   const requested = {};
   const requestedBoxes = {};
   const staged = [];
+  const groupSources=new Set();
   let errorMsg = '';
   rows.forEach((tr, idx)=>{
     if(errorMsg) return;
@@ -10593,6 +10708,15 @@ async function saveBulkOutbound(){
     if(!key){ errorMsg = `${idx+1}번째 행: 재고 품목을 검색 목록에서 선택하세요.`; return; }
     const stockInfo = stockByKey[key];
     if(!stockInfo){ errorMsg = `${idx+1}번째 행: 현재 재고에서 선택한 항목을 찾을 수 없습니다. 다시 선택하세요.`; return; }
+    if(stockInfo._workOrderStockRows || tr._bulkStockGroup){
+      if(!stockInfo._workOrderStockRows || stockGroupFingerprint(stockInfo)!==stockGroupFingerprint(tr._bulkStockGroup)){
+        errorMsg=`${idx+1}번째 행: 묶음의 현재 재고가 변경되었습니다. 재고를 다시 선택해주세요.`;return;
+      }
+      for(const source of stockInfo._workOrderStockRows){
+        if(groupSources.has(source.key)){errorMsg=`${idx+1}번째 행: 같은 재고 묶음은 한 행에 입력해주세요.`;return;}
+        groupSources.add(source.key);
+      }
+    }
     if(weight <= 0){ errorMsg = `${idx+1}번째 행: 출고중량을 입력하세요.`; return; }
     if(Number.isNaN(boxCount)){ errorMsg = `${idx+1}번째 행: 박스수는 0 이상의 정수로 입력하세요.`; return; }
     const price = parseTransactionUnitPrice(tr.querySelector('.bulk-out-price-input'));
@@ -10601,7 +10725,6 @@ async function saveBulkOutbound(){
     requested[key] = (requested[key] || 0) + weight;
     if(boxCount !== null) requestedBoxes[key] = (requestedBoxes[key] || 0) + boxCount;
     staged.push({
-      idx,
       key,
       stockInfo,
       trader,
@@ -10611,6 +10734,9 @@ async function saveBulkOutbound(){
     });
   });
   if(errorMsg){ toast(errorMsg); return; }
+  if(staged.some(row=>!row.stockInfo._workOrderStockRows&&groupSources.has(row.key))){
+    toast('같은 재고가 여러 행에 선택되었습니다. 재고를 다시 선택해주세요.');return;
+  }
   Object.keys(requested).some(key=>{
     const stockInfo = stockByKey[key];
     if(stockInfo && requested[key] > Number(stockInfo.stock||0) + 0.01){
@@ -10629,53 +10755,49 @@ async function saveBulkOutbound(){
   });
   if(errorMsg){ toast(errorMsg); return; }
   if(!staged.length){ toast('저장할 출고 항목이 없습니다.'); return; }
-  if(!confirm(`출고 ${staged.length}건을 일괄 저장할까요?`)) return;
-  const addedRows = [];
-  staged.forEach(row=>{
-    const s = row.stockInfo;
-    const newTxn = {
-      id: Date.now() + Math.random(),
-      date,
-      type:'출고',
-      product: s.product,
-      origin: s.origin,
-      storage: '',
-      packunit: s.packunit || '',
-      labelProductId: s.labelProductId || '',
-      productCode: s.productCode || '',
-      brand: s.brand || '',
-      factoryNo: s.factoryNo || '',
-      nationalPartCode: s.nationalPartCode || '',
-      nationalPartName: s.nationalPartName || nationalPartNameForCode(s.nationalPartCode),
-      taxType: normalizeLabelProductTaxType(s.taxType),
-      trader: row.trader,
-      lot: s.lot,
-      proddate: s.proddate || '',
-      weight: row.weight,
-      boxCount: row.boxCount,
-      price: row.price,
-      amount: Math.round(row.price * row.weight),
-      note: '',
-      stockUnitPrice: parseAppNumber(s.price),
-      stockProddate: s.proddate || '',
-      stockLocation: s.stockLocation || STOCK_LOCATION_DEFAULT,
-      sourceStockKey: s.key,
-      stockRowId:s.stockRowId || '', stockNote:s.stockNote || '',
-      _isUser:true,
-      _isProdUse:false,
-      _isProdOut:false,
-      _prodId:''
-    };
-    userTransactions.push(newTxn);
-    addedRows.push(newTxn);
-  });
-  transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
-  _stockMapCache = null;
+  const groups=staged.map(row=>row.stockInfo).filter(stock=>stock._workOrderStockRows);
+  const draftSnapshot=()=>JSON.stringify([...document.querySelectorAll('#bulk-outbound-tbody tr')].map(tr=>
+    [...tr.querySelectorAll('input')].map(input=>input.value)));
+  const before=groups.length?draftSnapshot():null;
+  const panel=document.getElementById('bulk-outbound-body');
+  const panelWasInert=panel?.inert;
+  if(saveButton) saveButton.disabled=true;
+  let addedRows=[];
   try{
+    const balances=groups.length?await bulkOutboundRawAvailability(groups):null;
+    if(groups.length){
+      const latest=bulkOutboundShipmentStockOptions();
+      for(const group of groups){
+        if(stockGroupFingerprint(group)!==stockGroupFingerprint(latest.find(stock=>stock.key===group.key))){
+          throw new Error('묶음의 현재 재고가 변경되었습니다. 재고를 다시 선택해주세요.');
+        }
+      }
+      if(date!==document.getElementById('bulk-out-date')?.value || before!==draftSnapshot()){
+        throw new Error('출고 입력이 변경되었습니다. 입력 내용을 확인한 뒤 다시 저장해주세요.');
+      }
+    }
+    const planned=buildBulkOutboundTransactions(staged,date,balances);
+    if(planned.length>500)throw new Error('거래 원본이 500건을 넘습니다. 출고 항목을 나눠 저장해주세요.');
+    if(!confirm(`출고 ${staged.length}건을 일괄 저장할까요?`)) return;
+    if(panel)panel.inert=true;
+    addedRows=planned;
+    userTransactions.push(...addedRows);
+    transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
+    _stockMapCache = null;
     await saveTransactionRows(addedRows);
   }catch(err){
+    if(addedRows.length){
+      // Server recovery may already have replaced the optimistic objects.
+      const failed=new Set(addedRows);
+      userTransactions=userTransactions.filter(row=>!failed.has(row));
+      transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+      _stockMapCache=null;
+    }
     toast(String(err?.message || err || '출고 일괄 저장에 실패했습니다.'));
     return;
+  }finally{
+    if(panel)panel.inert=panelWasInert;
+    if(saveButton) saveButton.disabled=false;
   }
   renderTransactions(); updateProductList(); updateOutProductList();
   clearBulkOutbound();

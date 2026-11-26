@@ -13,11 +13,13 @@ const source=name=>{const match=html.match(new RegExp('(?:async )?function '+nam
     await page.evaluate(markup=>{const template=document.createElement('template');template.innerHTML=markup;const panel=template.content.querySelector('#p-transactions');panel.classList.add('active');document.querySelector('main').append(panel);},html);
     await page.addStyleTag({content:fs.readFileSync(path.join(root,'styles/main.css'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'stock-ledger.js'),'utf8')});
+    await page.addScriptTag({content:fs.readFileSync(path.join(root,'work-order-stock-groups.js'),'utf8')});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'pda-transaction-summary.js'),'utf8')});
     await page.addScriptTag({content:`
       const seed={id:'qa-receipt',stockRowId:'qa-stock',stockTrackingVersion:'1',date:'2026-11-06',type:'입고',product:'가상 제품',origin:'미국산',lot:'QA-LOT',packunit:'5KG',stockLocation:'가공장',weight:20,boxCount:4,price:5000,amount:100000,_isUser:true};
       let userTransactions=[{...seed}],transactions=[...userTransactions],EXCEL_TRANSACTIONS=[],labelProducts=[],_editTxnId=null,_stockMapCache=null;
-      let tablePrice=9000,notices=[],saved=[],transactionListQueryActive=true;
+      let tablePrice=9000,notices=[],saved=[],transactionListQueryActive=true,appIdSeq=0;
+      let bulkOutboundShipmentOptionsSource=null,bulkOutboundShipmentOptionsCache=null;
       const transactionPricePendingIds=new Set(),STOCK_LOCATION_DEFAULT='가공장',STOCK_LOCATION_SECONDARY='물류창고';
       const getTProduct=()=>seed.product,getTOrigin=()=>seed.origin,getTStorage=()=>'',getTPackunit=()=>seed.packunit,getTLabelProductId=()=>'';
       const getTStockLocation=()=>seed.stockLocation,getTMoveFromLocation=()=>seed.stockLocation,getTMoveToLocation=()=>STOCK_LOCATION_SECONDARY;
@@ -31,13 +33,13 @@ const source=name=>{const match=html.match(new RegExp('(?:async )?function '+nam
       const samePriceText=(a,b)=>a===b,sameOriginText=samePriceText,stockLocationKey=v=>v;
       const parseAppNumber=v=>Number(v)||0,normalizeLabelProductTaxType=()=> '면세',nationalPartNameForCode=()=>'';
       const toast=message=>notices.push(message);window.alert=toast;window.confirm=()=>true;
-      const makeAppId=()=>crypto.randomUUID(),transactionDisplayRows=rows=>rows,getFilteredTransactions=()=>({rows:transactions});
+      const transactionDisplayRows=rows=>rows,getFilteredTransactions=()=>({rows:transactions});
       const findPdaTransactionSummary=()=>null,renderPdaTransactionDetails=()=>{},updateOutProductList=()=>{},updateProductList=()=>{},invalidateStockMap=()=>{};
       const updateTransactionForm=()=>{},ensureOutProductOption=()=>{},onOutProductChange=()=>{},showTxnStockFromTransaction=()=>{},showTransactionSaveStatus=()=>{};
       function clearTransactionForm(){_editTxnId=null;}
       function clearBulkOutbound(){document.getElementById('bulk-outbound-tbody').innerHTML='';}
       async function saveTransactionRows(rows){saved.push(structuredClone(Array.isArray(rows)?rows:[rows]));}
-      ${['htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','parseTransactionUnitPrice','autoFillTxnPrice','updateTxnAmtPreview','addTransaction','loadTxnToForm','updateTxnPrice','renderTransactions','addBulkOutboundRow','refreshBulkOutboundPrice','updateBulkOutboundAmount','saveBulkOutbound'].map(source).join('\n')}
+      ${['htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay','parseTransactionUnitPrice','autoFillTxnPrice','updateTxnAmtPreview','addTransaction','loadTxnToForm','updateTxnPrice','renderTransactions','addBulkOutboundRow','refreshBulkOutboundPrice','updateBulkOutboundAmount','makeAppId','bulkOutboundShipmentStockOptions','buildBulkOutboundTransactions','saveBulkOutbound'].map(source).join('\n')}
       function prepareSingle(){
         for(const [id,value] of Object.entries({'t-date':'2026-11-06','t-type':'출고','t-trader':'가상 거래처','t-lot':seed.lot,'t-weight':'5','t-box-count':'1','t-stock-key':bulkOutboundStockOptions()[0].key}))document.getElementById(id).value=value;
         document.getElementById('t-product-select').innerHTML='<option selected>가상 제품</option>';

@@ -4,7 +4,8 @@ const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=r
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const ledger=fs.readFileSync(path.join(root,'stock-ledger.js'),'utf8');
-const source=name=>{const match=html.match(new RegExp(`function ${name}\\([^]*?\\n\\}`));assert(match,name);return match[0]};
+const stockGroups=fs.readFileSync(path.join(root,'work-order-stock-groups.js'),'utf8');
+const source=name=>{const match=html.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`));assert(match,name);return match[0]};
 const base={product:'가상 냉장돈안심',lot:'L12610121938001',origin:'국내산',packunit:'벌크',proddate:'2026-09-01',stockLocation:'가공장'};
 const tx=[
   {...base,id:'raw1',stockRowId:'raw1',type:'입고',date:'2026-10-10',price:7300,weight:27.86,boxCount:3},
@@ -17,21 +18,32 @@ const tx=[
   {...base,id:'oldmove',type:'재고이동',date:'2026-10-16',product:'가상 과거 원료',fromLocation:'가공장',toLocation:'외부창고',weight:5,price:900},
   {...base,id:'unknown',type:'재고조정',date:'2026-10-16',product:'가상 날짜 미기록',proddate:'',weight:3,price:100}
 ];
+const pdaBase={...base,product:'QA PDA 돈등심',lot:'QA-PDA-LOT',origin:'미국산',labelProductId:'qa-pda-product',
+  brand:'SWIFT',type:'입고',date:'2026-11-24',price:5300,trader:'QA 공급처',traderId:'qa-supplier',_pdaAction:'receive'};
+const pdaReceipt=(id,weight,boxCount,overrides={})=>({...pdaBase,id,stockRowId:id,_pdaRawRequestId:`request-${id}`,weight,boxCount,...overrides});
+const pdaReceipts=[
+  pdaReceipt('pda-a',25.54,1),pdaReceipt('pda-b',4.88,0,{proddate:'2026-09-03'}),pdaReceipt('pda-c',6.91,2),
+  pdaReceipt('pda-other-date',1,1,{date:'2026-11-25'}),pdaReceipt('pda-other-cost',2,1,{price:5361}),
+  pdaReceipt('pda-other-branch',3,1,{stockLocation:'물류창고'}),
+  pdaReceipt('regular',4,1,{_pdaRawRequestId:undefined,_pdaAction:undefined})
+];
 const helpers=['parseAppNumber','normProdDate','priceKey','priceProductKey','samePriceText','samePriceProductText','normalizeOriginName','originKey','sameOriginText','normalizeStockLocation','stockLocationKey','getTxnStockLocation','stockPriceKey','stockDateKey','stockMapKey','sameStockIdentity','getStockMap','htmlEscape','jsArg','parseOptionalBoxCount','boxCountDisplay',
-  'bulkOutboundIdentityKey','bulkOutboundKeyFromValues','bulkOutboundStockOptions','bulkOutboundSearchKey','bulkOutboundSearchText','bulkOutboundStockLabel','getEditingTransaction','stockOptionFromTransaction','sameBulkOutboundStockOption','outboundStockOptionsForEdit','availableStockForEdit','availableBoxesForEdit','getTxnStockSearchOptions','selectTxnStock','workOrderStockOptions'];
+  'bulkOutboundIdentityKey','bulkOutboundKeyFromValues','bulkOutboundStockOptions','bulkOutboundShipmentStockOptions',
+  'bulkOutboundSourceKey','bulkOutboundRawAvailability','bulkOutboundAvailableGroup','bulkOutboundSearchKey','bulkOutboundSearchText','bulkOutboundStockLabel','getEditingTransaction','stockOptionFromTransaction','sameBulkOutboundStockOption','outboundStockOptionsForEdit','availableStockForEdit','availableBoxesForEdit','getTxnStockSearchOptions','selectTxnStock','workOrderStockOptions'];
 const pickerStart=html.indexOf('let txnStockPickerRows ='),pickerEnd=html.indexOf('function selectTxnStock(',pickerStart);
 const setup=`
-var userTransactions=${JSON.stringify(tx)},EXCEL_STOCK=[],labelProducts=[],STOCK_LOCATION_DEFAULT='가공장',_stockMapCache=null,_editTxnId=null;
-var bulkOutboundStockOptionsCacheMap=null,bulkOutboundStockOptionsCacheRows=null,notices=[];
+var userTransactions=${JSON.stringify(tx)},transactions=[...userTransactions],EXCEL_STOCK=[],labelProducts=[],STOCK_LOCATION_DEFAULT='가공장',_stockMapCache=null,_editTxnId=null;
+var bulkOutboundStockOptionsCacheMap=null,bulkOutboundStockOptionsCacheRows=null,bulkOutboundShipmentOptionsSource=null,bulkOutboundShipmentOptionsCache=null,notices=[];
 function getTMoveFromLocation(){return ''}
 function autoFillTxnPrice(){}
 function ensureOutProductOption(){}
 function toast(message){notices.push(message)}
 ${ledger}
+${stockGroups}
 ${helpers.map(source).join('\n')}
 ${html.slice(pickerStart,pickerEnd)}
 `;
-const context=vm.createContext({});vm.runInContext(setup,context);
+const context=vm.createContext({});context.window=context;vm.runInContext(setup,context);
 const rows=Object.values(context.getStockMap());
 const find=(id,place='가공장')=>rows.find(r=>r.stockRowId===id&&r.stockLocation===place);
 assert.equal(find('raw1').inboundDate,'2026-10-10');assert.equal(find('raw2').inboundDate,'2026-10-11');assert.equal(find('raw3').inboundDate,'2026-10-12');
@@ -50,7 +62,7 @@ assert.equal(JSON.stringify(context.userTransactions),before,'Read-only display 
 
 async function checkBulkOutboundChoices(page){
   await page.evaluate(rows=>{
-    closeTxnStockPicker(false);_editTxnId=null;userTransactions=rows;_stockMapCache=null;
+    closeTxnStockPicker(false);_editTxnId=null;userTransactions=rows;transactions=[...rows];_stockMapCache=null;
     document.getElementById('p-transactions').classList.add('active');
     document.getElementById('bulk-outbound-body').style.display='block';
     document.getElementById('bulk-outbound-tbody').innerHTML='';
@@ -122,6 +134,144 @@ async function checkBulkOutboundChoices(page){
   assert.ok(has(await shown(),'raw2'));
   await page.evaluate(()=>closeTxnStockPicker(false));
   console.log('PASS: actual bulk outbound popup hides chosen stock, current-row editing, exact receipt/location and legacy keys, kg/boxes autofill, delete/replace/clear/all-clear release, stale confirmation and independent single entry');
+}
+
+async function checkPdaBulkOutbound(page){
+  await page.addScriptTag({content:`
+    var EXCEL_TRANSACTIONS=[],appIdSeq=0,transactionWritePending=0,rpcCalls=[],remoteReceipts=[],rawAvailability={};
+    const SUPABASE_ENABLED_KEY='qa-enabled';
+    const DBMTAuth={isPersonal:()=>true,can:()=>true,getSessionToken:()=> 'qa-token'};
+    localStorage.setItem(SUPABASE_ENABLED_KEY,'1');
+    window.confirm=()=>true;
+    function nationalPartNameForCode(){return '';}
+    function normalizeLabelProductTaxType(){return '면세';}
+    function gsShowSync(){}
+    function renderTransactions(){}
+    function updateProductList(){}
+    function updateOutProductList(){}
+    function markLocalCoreChanged(){invalidateStockMap();}
+    function invalidateStockMap(){_stockMapCache=null;}
+    function safeLocalStorageSet(){}
+    function recordTransactionChange(){}
+    async function refreshProtectedCoreAfterFailure(){throw Error('Unexpected save recovery');}
+    async function sbRpc(name,body){
+      rpcCalls.push({name,body:structuredClone(body)});
+      if(name==='dbmt_erp_get_bulk_outbound_raw_stock'){
+        return {ok:true,rows:body.p_sources.map(({stockRowId,stockLocation})=>{
+          const source=remoteReceipts.find(row=>row.stockRowId===stockRowId&&row.stockLocation===stockLocation&&row._pdaRawRequestId);
+          if(!source)throw Error('Availability lookup must use an original PDA source');
+          return {stockRowId,stockLocation,availableWeight:source.weight,reservedBoxes:0,...rawAvailability[stockRowId]};
+        })};
+      }
+      if(name!=='dbmt_erp_save_transactions')throw Error('Unexpected RPC '+name);
+      for(const row of body.p_rows){
+        const source=remoteReceipts.find(receipt=>receipt.stockRowId===row.stockRowId&&receipt.stockLocation===row.stockLocation);
+        if(!source||row.stockUnitPrice!==source.price||row.stockProddate!==source.proddate)throw Error('Original stock identity changed');
+      }
+      return {ok:true};
+    }
+    ${['asArray','makeAppId','ensureUniqueRowIds','normalizeRowsForUpsert','personalServerWriteToken','assertPersonalServerResult','confirmBulkOutboundStockGroup',
+      'supabaseSaveTransactionRows','saveTransactionRows','parseTransactionUnitPrice','buildBulkOutboundTransactions','saveBulkOutbound'].map(source).join('\n')}
+  `});
+  async function reset(){
+    await page.evaluate(rows=>{
+      closeTxnStockPicker(false);remoteReceipts=rows;userTransactions=structuredClone(rows);transactions=[...userTransactions];
+      invalidateStockMap();rawAvailability={};rpcCalls=[];notices=[];clearBulkOutbound();
+      document.getElementById('bulk-out-date').value='2026-11-26';
+    },pdaReceipts);
+  }
+  const row=i=>page.locator('#bulk-outbound-tbody > tr').nth(i);
+  const choices=page.locator('#tsp-result-body tr[data-tsp-index]');
+  const bundle=choices.filter({hasText:'37.33 KG'});
+  async function open(i){
+    await row(i).locator('.bulk-out-stock-search button').click();
+    await page.locator('#tsp-search-all').fill('QA-PDA-LOT');
+  }
+  async function selectBundle(i){
+    await open(i);await bundle.click();await page.locator('#tsp-confirm').click();
+    await page.waitForFunction(index=>Boolean(document.querySelectorAll('.bulk-out-weight')[index]?.value),i,{timeout:5000});
+  }
+  const calls=()=>page.evaluate(()=>rpcCalls);
+  const writes=async()=>(await calls()).filter(call=>call.name==='dbmt_erp_save_transactions');
+  await reset();
+  await open(0);
+  assert.equal(await choices.count(),5,'Only the matching PDA receipts collapse into a single picker row');
+  assert.deepEqual(await choices.evaluateAll(rows=>rows.map(row=>Array.from(row.cells).slice(4,9).map(cell=>cell.innerText)).sort()),[
+    ['2026-11-24','5,300원','가공장','37.33 KG','3 박스'],['2026-11-24','5,300원','가공장','4.00 KG','1 박스'],
+    ['2026-11-24','5,300원','물류창고','3.00 KG','1 박스'],['2026-11-24','5,361원','가공장','2.00 KG','1 박스'],
+    ['2026-11-25','5,300원','가공장','1.00 KG','1 박스']
+  ].sort());
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  // Single-entry selection keeps its individual source rows.
+  await page.evaluate(()=>openTxnStockPicker('QA-PDA-LOT'));
+  assert.equal(await choices.count(),7);
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await selectBundle(0);
+  assert.equal(await row(0).locator('.bulk-out-weight').inputValue(),'37.33');
+  assert.equal(await row(0).locator('.bulk-out-box-count').inputValue(),'3');
+  const reads=await calls();
+  assert.equal(reads.length,1);
+  assert.equal(reads[0].name,'dbmt_erp_get_bulk_outbound_raw_stock');
+  assert.deepEqual(reads[0].body.p_sources.map(row=>[row.stockRowId,row.stockLocation]).sort(),[
+    ['pda-a','가공장'],['pda-b','가공장'],['pda-c','가공장']
+  ]);
+  await open(1);assert.equal(await choices.count(),4,'Another draft row already selected the bundle');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await open(0);assert.equal(await bundle.count(),1,'The current draft row retains its bundle');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+  await row(0).locator('button.btn-danger').click();await open(1);assert.equal(await bundle.count(),1,'Removing the row releases the bundle');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+
+  // The picker cannot apply a stale bundle to two rows.
+  await open(1);await page.locator('#tsp-search-all').fill('37.33');
+  await page.evaluate(()=>{
+    const selected=txnStockPickerRows[txnStockPickerIndex];
+    selectBulkOutboundStock(document.querySelector('.bulk-out-stock-input'),selected.key,selected,selected);
+  });
+  await page.locator('#tsp-confirm').click();
+  assert.equal(await row(1).locator('.bulk-out-key').inputValue(),'');
+  await page.evaluate(()=>closeTxnStockPicker(false));
+
+  await reset();await selectBundle(0);
+  await row(0).locator('.bulk-out-trader').fill('QA 거래처');
+  await row(0).locator('.bulk-out-price-input').fill('7553');
+  await page.evaluate(()=>{rawAvailability={'pda-a':{availableWeight:19.99,reservedBoxes:1}};});
+  await page.evaluate(()=>saveBulkOutbound());
+  assert.equal((await writes()).length,0,'A fresh availability check blocks excess draft weight before any write');
+  assert.equal(await row(0).locator('.bulk-out-weight').inputValue(),'37.33','A rejected save retains the draft');
+  assert.equal((await calls()).filter(call=>call.name==='dbmt_erp_get_bulk_outbound_raw_stock').length,2);
+
+  await reset();
+  await page.evaluate(()=>{rawAvailability={'pda-a':{availableWeight:19.99,reservedBoxes:1}};});
+  await selectBundle(0);
+  assert.equal(await row(0).locator('.bulk-out-weight').inputValue(),'31.78','Autofill accounts for current barcode-reserved weight');
+  assert.equal(await row(0).locator('.bulk-out-box-count').inputValue(),'2');
+  await row(0).locator('.bulk-out-trader').fill('QA 거래처');
+  await row(0).locator('.bulk-out-price-input').fill('7553');
+  await page.evaluate(()=>saveBulkOutbound());
+  const reservedWrites=await writes();
+  assert.equal(reservedWrites.length,1,'A reserved bundle still saves its free part once');
+  const freeRows=reservedWrites[0].body.p_rows;
+  assert.equal(freeRows.reduce((sum,tx)=>sum+Math.round(tx.weight*100),0),3178);
+  assert.equal(freeRows.reduce((sum,tx)=>sum+tx.boxCount,0),2);
+  assert.equal(freeRows.find(tx=>tx.stockRowId==='pda-a')?.weight,19.99);
+  assert.notEqual(freeRows.find(tx=>tx.stockRowId==='pda-a')?.boxCount,1,'A reserved barcode box stays on its original stock');
+
+  await reset();await selectBundle(0);
+  await row(0).locator('.bulk-out-trader').fill('QA 거래처');
+  await row(0).locator('.bulk-out-price-input').fill('7553');
+  await page.evaluate(()=>saveBulkOutbound());
+  const saved=await writes();
+  assert.equal(saved.length,1,'All original sources go through one existing bulk write RPC');
+  assert.deepEqual(saved[0].body.p_delete_ids,[]);
+  const savedRows=saved[0].body.p_rows;
+  assert.deepEqual(savedRows.map(row=>[row.stockRowId,row.weight,row.boxCount]).sort(),[['pda-a',25.54,1],['pda-b',4.88,0],['pda-c',6.91,2]]);
+  assert.equal(new Set(savedRows.map(row=>row.id)).size,3);
+  assert(savedRows.every(row=>row.price===7553&&row.trader==='QA 거래처'&&row.type==='출고'&&row.stockLocation==='가공장'));
+  assert.equal(savedRows.reduce((sum,row)=>sum+row.amount,0),281953,'Split sales amounts add up to the form amount');
+  const remaining=await page.evaluate(()=>Object.values(getStockMap()).filter(row=>row.stockRowId?.startsWith('pda-')&&['pda-a','pda-b','pda-c'].includes(row.stockRowId)).map(row=>[row.stock,row.stockBoxes]));
+  assert.deepEqual(remaining,[[0,0],[0,0],[0,0]],'The ledger deducts the submitted original sources exactly');
+  console.log('PASS: PDA outbound groups, boundaries, picker reservations, fresh barcode availability, exact per-source bulk write with mocked RPC');
 }
 
 async function checkProductionInputChoices(page){
@@ -216,8 +366,10 @@ async function checkProductionInputChoices(page){
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'});
   const artifacts=fs.mkdtempSync(path.join(os.tmpdir(),'dbmt-stock-picker-dates-'));
   try{
-    const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',route=>route.abort());
-    await page.setContent('<!doctype html><html lang="ko"><meta charset="utf-8"><body></body></html>');
+    const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.route('**/*',route=>route.request().url()==='https://dbmt-qa.invalid/'
+      ? route.fulfill({contentType:'text/html',body:'<!doctype html><html lang="ko"><meta charset="utf-8"><body></body></html>'}) : route.abort());
+    await page.goto('https://dbmt-qa.invalid/');
     await page.evaluate(markup=>{const t=document.createElement('template');t.innerHTML=markup;document.body.append(t.content.querySelector('#txn-stock-picker-modal'));document.body.append(t.content.querySelector('#p-transactions'));},html);
     await page.addStyleTag({content:fs.readFileSync(path.join(root,'styles/main.css'),'utf8')});await page.addScriptTag({content:setup});
     await page.evaluate(()=>{document.getElementById('t-type').value='출고';openTxnStockPicker('가상 냉장돈안심');document.getElementById('tsp-search-location').value='가공장';renderTxnStockPicker(true)});
@@ -240,6 +392,7 @@ async function checkProductionInputChoices(page){
     assert.equal(await page.locator('#tsp-result-head th').nth(7).innerText(),'입고(생산)일');assert.ok((await page.locator('#tsp-result-body').innerText()).includes('2026-10-10'));
     await checkProductionInputChoices(page);
     await checkBulkOutboundChoices(page);
+    await checkPdaBulkOutbound(page);
     assert.deepEqual(errors,[]);
     console.log('PASS: separate raw receipt dates, preserved production dates/identities, transfers, legacy aggregates, unknown dates, date search, raw selection weight/boxes and fully consumed edit restoration');
     console.log('Artifacts: '+artifacts);

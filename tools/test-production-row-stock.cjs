@@ -215,12 +215,14 @@ async function testTransactionFlows(page, artifacts) {
     'bulkOutboundIdentityKey', 'bulkOutboundKeyFromValues', 'bulkOutboundStockOptions', 'sameBulkOutboundStockOption',
     'outboundStockOptionsForEdit', 'availableStockForEdit', 'availableBoxesForEdit', 'ensureOutProductOption', 'bulkOutboundStockLabel',
     'parseTransactionUnitPrice', 'selectTxnStock', 'addTransaction', 'addBulkOutboundRow', 'addBulkOutboundRows', 'clearBulkOutbound',
-    'selectBulkOutboundStock', 'refreshBulkOutboundPrice', 'updateBulkOutboundAmount', 'saveBulkOutbound',
+    'selectBulkOutboundStock', 'refreshBulkOutboundPrice', 'updateBulkOutboundAmount',
+    'bulkOutboundShipmentStockOptions', 'buildBulkOutboundTransactions', 'saveBulkOutbound',
     'openStockAdjust', 'closeStockAdjust', 'calcStockAdjustDiff', 'saveStockAdjust',
     'openStockBoxBaseline', 'closeStockBoxBaseline', 'saveStockBoxBaseline'
   ];
   await page.addScriptTag({content: `
     var _editTxnId=null, bulkOutboundStockOptionsCacheMap=null, bulkOutboundStockOptionsCacheRows=null;
+    var bulkOutboundShipmentOptionsSource=null, bulkOutboundShipmentOptionsCache=null;
     var savedTransactionCalls=[], adjustCalls=[], DBMTAuth={getSessionToken:()=> 'isolated-token',can:()=>true};
     function getTxnStockSearchOptions(){return outboundStockOptionsForEdit(getEditingTransaction());}
     function autoFillTxnPrice(){}
@@ -501,6 +503,7 @@ async function testBrowser() {
       document.getElementById('p-production').classList.add('active');
     }, html);
     await page.addStyleTag({content: fs.readFileSync(path.join(repo, 'styles/main.css'), 'utf8')});
+    await page.addScriptTag({content: fs.readFileSync(path.join(repo, 'work-order-stock-groups.js'), 'utf8')});
     const extraFunctions = ['autoSetJobNo', 'getProdEntryNote', 'getProdJobType', 'makeProductionTxnId', 'getWeightedTxnPrice', 'getPriceFromLot'];
     if (html.includes('function normalizeSamsungMeta(')) extraFunctions.push('normalizeSamsungMeta');
     await page.addScriptTag({content: `

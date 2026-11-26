@@ -1,4 +1,4 @@
-/* Shared receipt bundles for work orders and production. Ledger sources stay intact. */
+/* Shared PDA receipt bundles. Ledger sources stay intact. */
 (function(global){
   'use strict';
   const text=value=>String(value??'').trim();
@@ -80,26 +80,26 @@
     const seen=new Set();
     return rows.flatMap(row=>{const display=mapped.get(row)||row;if(seen.has(display))return [];seen.add(display);return [display];});
   }
-  function allocate(stock,weight,boxCount){
+  function allocate(stock,weight,boxCount,action='투입'){
     const sources=members(stock).filter(source=>cents(source.stock)>0).sort((a,b)=>text(a.proddate||'9999').localeCompare(text(b.proddate||'9999'))||text(a.key).localeCompare(text(b.key)));
     const target=cents(weight);
     if(!Number.isSafeInteger(target)||target<=0||Math.abs(Number(weight)*100-target)>.000001)
-      throw new Error('투입량은 0보다 크게, 소수 둘째 자리까지 입력해주세요.');
-    if(boxCount!==null&&boxes(boxCount)===null)throw new Error('투입 박스수는 0 이상의 정수로 입력해주세요.');
+      throw new Error(`${action}량은 0보다 크게, 소수 둘째 자리까지 입력해주세요.`);
+    if(boxCount!==null&&boxes(boxCount)===null)throw new Error(`${action} 박스수는 0 이상의 정수로 입력해주세요.`);
     const availableWeight=sources.reduce((sum,source)=>sum+cents(source.stock),0);
     if(!Number.isSafeInteger(availableWeight)||target>availableWeight)
-      throw new Error('묶음 원료육의 현재 재고보다 투입량이 큽니다. 재고를 다시 선택해주세요.');
+      throw new Error(`묶음 원료육의 사용 가능한 재고보다 ${action}량이 큽니다. 재고를 다시 선택해주세요.`);
     if(boxCount>0){
       let remainingBoxes=boxCount;
       const selected=new Map();
       for(const source of sources){
         const available=boxes(source.stockBoxes);
-        if(available===null)throw new Error('원본 재고의 박스수가 미기록입니다. 투입 박스수를 비워두거나 원본별로 확인해주세요.');
+        if(available===null)throw new Error(`원본 재고의 박스수가 미기록입니다. ${action} 박스수를 비워두거나 원본별로 확인해주세요.`);
         const take=Math.min(remainingBoxes,available);
         if(take){selected.set(source,{stock:source,boxCount:take});remainingBoxes-=take;}
         if(!remainingBoxes)break;
       }
-      if(remainingBoxes)throw new Error('현재 재고보다 투입 박스수가 큽니다. 재고를 다시 선택해주세요.');
+      if(remainingBoxes)throw new Error(`사용 가능한 재고보다 ${action} 박스수가 큽니다. 재고를 다시 선택해주세요.`);
       // Select weight sources independently, including unboxed remainders. A
       // zero-box source must not disappear merely because boxes were entered.
       let remainingWeight=target;
@@ -112,7 +112,7 @@
       // Saved source inputs require positive KG. Reserve one cent of a KG per
       // selected source, then apportion the rest within each source's capacity.
       // Integer cents and largest remainders keep both entered totals exact.
-      if(target<selectedRows.length)throw new Error('선택한 박스수에 비해 투입 중량이 작습니다. 중량과 박스수를 확인해주세요.');
+      if(target<selectedRows.length)throw new Error(`선택한 박스수에 비해 ${action} 중량이 작습니다. 중량과 박스수를 확인해주세요.`);
       const remaining=target-selectedRows.length;
       const capacity=selectedRows.reduce((sum,row)=>sum+cents(row.stock.stock)-1,0);
       const parts=selectedRows.map((row,index)=>{
@@ -131,7 +131,7 @@
       if(qty>0){allocations.push({stock:source,inputWeight:qty/100,boxCount:null});remaining-=qty;}
       if(!remaining)break;
     }
-    if(remaining)throw new Error('묶음 원료육의 현재 재고보다 투입량이 큽니다. 재고를 다시 선택해주세요.');
+    if(remaining)throw new Error(`묶음 원료육의 사용 가능한 재고보다 ${action}량이 큽니다. 재고를 다시 선택해주세요.`);
     if(boxCount===0)allocations.forEach(row=>row.boxCount=0);
     return allocations;
   }
