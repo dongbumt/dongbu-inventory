@@ -6,15 +6,15 @@
   <meta name="robots" content="noindex,nofollow">
   <title>동부엠티 ERP · PDA 원료육 입출고</title>
   <link rel="stylesheet" href="styles/pda.css?v=20261110correct1">
-  <link rel="stylesheet" href="styles/pda-kind.css?v=20261126transfer1">
+  <link rel="stylesheet" href="styles/pda-kind.css?v=20261126transfer2">
   <script src="vendor/gs1-parser/BarcodeParser.min.js?v=9989caa6" defer></script>
   <script src="pda-sound.js?v=20261014sound2" defer></script>
   <script src="vendor/jsbarcode/JsBarcode.code128.min.js?v=3.12.1" defer></script>
   <script src="pda-search.js?v=20261124initials1" defer></script>
-  <script src="pda-raw.js?v=20261126transfer1" defer></script>
+  <script src="pda-raw.js?v=20261126transfer2" defer></script>
 </head>
 <body>
-  <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><a href="pda.html?v=20261126transfer1">제품</a><span aria-current="page">원료육</span></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
+  <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><a href="pda.html?v=20261126transfer2">제품</a><span aria-current="page">원료육</span></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
   <main>
     <div id="status" role="status" aria-live="polite"></div>
     <form id="login-form" class="login-form">
@@ -27,7 +27,7 @@
       <fieldset class="mode-tabs raw-mode-tabs"><legend class="sr-only">작업구분</legend><label><input type="radio" name="mode" value="inbound" checked><span>입고</span></label><label><input type="radio" name="mode" value="outbound"><span>출고</span></label><label><input type="radio" name="mode" value="transfer"><span>재고이동</span></label></fieldset>
       <details id="settings-panel" open><summary id="settings-summary">작업 설정</summary><div class="settings">
         <label>작업일<input type="date" id="work-date" required></label><label id="location-field">재고 지점<select id="location" required></select></label>
-        <div id="transfer-route" class="raw-transfer-route" hidden><span>이동 경로</span><strong>물류창고 → 가공장</strong></div>
+        <label id="transfer-route" hidden>이동 방향<select id="transfer-direction"><option value="물류창고">물류창고 → 가공장</option><option value="가공장">가공장 → 물류창고</option></select></label>
         <div class="partner-fields" id="partner-fields"><label><span id="partner-label">입고 거래처</span><input type="search" id="partner-search" placeholder="거래처명·초성 검색" autocomplete="off"></label><select id="partner" aria-label="거래처"><option value="">거래처 선택</option></select></div>
         <div class="raw-wide raw-format-setting"><label>바코드 구분<select id="rule"><option value="">자동</option><option value="gs1">규격(GS1)</option><option value="sm">비규격</option></select></label><button id="rule-reset" type="button" title="다음 비규격 스캔의 판독형식 다시 선택" aria-label="판독형식 다시 선택">↻</button><span id="rule-meta" class="raw-help"></span></div>
         <div id="inbound-fields" class="raw-wide settings">

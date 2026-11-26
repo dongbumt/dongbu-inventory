@@ -1,4 +1,4 @@
-"""PDA warehouse-to-factory raw transfer. All fixtures and DDL roll back."""
+"""PDA raw transfer in both directions. All fixtures and DDL roll back."""
 import ast
 import os
 import uuid
@@ -9,7 +9,7 @@ import psycopg
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = next((ROOT / 'supabase/migrations').glob('*_pda_raw_manual_warehouse_transfer.sql'))
+MIGRATION = next((ROOT / 'supabase/migrations').glob('*_pda_raw_bidirectional_transfer.sql'))
 
 
 def transfer_checks(conn, fixture):
@@ -25,11 +25,11 @@ def transfer_checks(conn, fixture):
         assert rpc('dbmt_erp_save_transactions', token, [raw], [])['ok']
         return raw['id']
 
-    def transfer(items, source_id=source, source_lot=lot, request=None, date='2026-11-10', note='QA 이동'):
-        return rpc('dbmt_pda_raw_transfer', token, request or uuid.uuid4(), date, items, pid, source_lot, source_id, note)
+    def transfer(items, source_id=source, source_lot=lot, request=None, date='2026-11-10', note='QA 이동', route=()):
+        return rpc('dbmt_pda_raw_transfer', token, request or uuid.uuid4(), date, items, pid, source_lot, source_id, note, *route)
 
-    def sources():
-        return {row['id']: row for row in rpc('dbmt_pda_raw_transfer_sources', token, pid)['rows']}
+    def sources(location=None):
+        return {row['id']: row for row in rpc('dbmt_pda_raw_transfer_sources', token, pid, *([location] if location else []))['rows']}
 
     def balance(source_id=source):
         return conn.execute("select pda_private.balance(%s,'물류창고'),pda_private.balance(%s,'가공장')",
@@ -135,6 +135,90 @@ def transfer_checks(conn, fixture):
         reject(sources, '권한')
     assert not conn.execute("select has_function_privilege('anon','pda_private.raw_manual_warehouse_receipts(text)','EXECUTE')").fetchone()[0]
     print('PASS: existing-only scan, known box count, historical balance and authorization guards')
+
+    outbound_route = ('가공장', '물류창고')
+    inbound_route = ('물류창고', '가공장')
+    assert source in sources('가공장') and factory_source in sources('가공장')
+    assert factory_source not in sources('물류창고')
+    assert sources('물류창고') == sources(), 'The legacy call defaults to the same departure site'
+    reject(lambda: transfer(batch, request=request, route=outbound_route), '같은 요청번호')
+    assert transfer(batch, request=request, route=inbound_route)['transactionId'] == tx_id
+
+    reverse_box = scan(prior_code)
+    reverse_request = uuid.uuid4()
+    reverse = transfer([reverse_box], request=reverse_request, route=outbound_route)
+    assert reverse['count'] == 1 and reverse['weight'] == 17.07
+    assert balance() == (Decimal('43.54'), Decimal('39.39'))
+    assert (lookup(prior_code)['location'], lookup(prior_code)['revision']) == ('물류창고', 3)
+    assert transfer([reverse_box], request=reverse_request, route=outbound_route)['alreadySaved']
+    reject(lambda: transfer([reverse_box], request=reverse_request, route=inbound_route), '같은 요청번호')
+    history = rpc('dbmt_pda_raw_history', token)
+    route_record = next(row['request'] for row in history['rows'] if row['id'] == str(reverse_request))
+    assert (route_record['location'], route_record['toLocation']) == outbound_route
+    assert transfer([scan(prior_code)], route=inbound_route)['items'][0]['newlyLinked'] is False
+    assert balance() == (Decimal('26.47'), Decimal('56.46'))
+    assert lookup(prior_code)['location'] == '가공장'
+    print('PASS: a registered box can return to its original branch and move again; both directions are recorded and retries are exact')
+
+    factory_box = manual()
+    reject(lambda: transfer([factory_box, scan(prior_code)], factory_source, 'QA-FACTORY', route=outbound_route), '선택한')
+    assert not conn.execute('select exists(select 1 from pda_private.raw_manual_labels where barcode=%s)',
+                            (factory_box['barcode'],)).fetchone()[0]
+    assert balance(factory_source) == (Decimal('0'), Decimal('100'))
+    factory_move = transfer([scan(blocked_code), factory_box], factory_source, 'QA-FACTORY', route=outbound_route)
+    assert factory_move['count'] == 2 and factory_move['weight'] == 39.39
+    assert all(item['newlyLinked'] for item in factory_move['items'])
+    assert balance(factory_source) == (Decimal('39.39'), Decimal('60.61'))
+    for code in [blocked_code, factory_box['barcode']]:
+        assert lookup(code)['location'] == '물류창고' and lookup(code)['stockRowId'] == factory_source
+    row = conn.execute('select type,from_location,to_location,price,raw from public.transactions where id=%s',
+                       (factory_move['transactionId'],)).fetchone()
+    assert row[:4] == ('재고이동', *outbound_route, Decimal('4400'))
+    assert (row[4]['boxCount'], row[4]['stockRowId']) == (2, factory_source)
+    assert conn.execute("select count(*) from public.transactions where raw->>'stockRowId'=%s and type='입고'", (factory_source,)).fetchone()[0] == 1
+
+    pda_source = fixture['source']
+    pda_code = fixture['codes'][0]
+    assert pda_source in sources('가공장') and pda_source not in sources('물류창고')
+    pda_move = transfer([scan(pda_code)], pda_source, 'QA-RECEIPT', route=outbound_route)
+    assert pda_move['items'][0]['newlyLinked'] is False
+    assert balance(pda_source) == (Decimal('17.07'), Decimal('324.33'))
+    assert lookup(pda_code)['location'] == '물류창고'
+    shipped = rpc('dbmt_pda_raw_commit', token, uuid.uuid4(), 'outbound', '물류창고', partner, '2026-11-10',
+                  [scan(pda_code)], None, '', None, 0, 'QA ship from warehouse')
+    assert shipped['count'] == 1 and balance(pda_source) == (Decimal('0'), Decimal('324.33'))
+    print('PASS: factory receipt source is preserved when moving newly scanned, manual, or already registered PDA boxes')
+
+    relocated = 'stock_qa_relocated_' + uuid.uuid4().hex
+    original = receipt(relocated, 'QA-ERP-TRANSFER', location='가공장', weight=60, boxes=3)
+    raw = conn.execute('select raw from public.transactions where id=%s', (original,)).fetchone()[0]
+    erp_move = dict(raw, id='tx_qa_' + uuid.uuid4().hex, date='2026-11-10', type='재고이동',
+                    weight=30, boxCount=2, amount=132000, stockUnitPrice=4400,
+                    stockLocation='가공장', fromLocation='가공장', toLocation='물류창고')
+    assert rpc('dbmt_erp_save_transactions', token, [erp_move], [])['ok']
+    assert balance(relocated) == (Decimal('30'), Decimal('30'))
+    assert sources('물류창고')[relocated]['unlinkedWeight'] == 30
+    box_after_erp_move = manual()
+    pda_return = transfer([box_after_erp_move], relocated, 'QA-ERP-TRANSFER', route=inbound_route)
+    assert pda_return['items'][0]['newlyLinked'] and balance(relocated) == (Decimal('7.68'), Decimal('52.32'))
+    assert lookup(box_after_erp_move['barcode'])['location'] == '가공장'
+    assert conn.execute("select count(*) from public.transactions where raw->>'stockRowId'=%s and type='입고'", (relocated,)).fetchone()[0] == 1
+    print('PASS: a PDA scan attaches to the selected source at its current site after an ordinary ERP transfer')
+
+    late_factory = 'stock_qa_factory_late_' + uuid.uuid4().hex
+    receipt(late_factory, 'QA-FACTORY-LATE', location='가공장', weight=10)
+    conn.execute("""insert into public.transactions(id,date,type,product,lot,weight,stock_location,raw)
+        values(%s,'2026-11-12','재고조정',%s,'QA-FACTORY-LATE',30,'가공장',jsonb_build_object('stockRowId',%s::text,'boxCount',1))""",
+        ('tx_qa_' + uuid.uuid4().hex, fixture['product']['name'], late_factory))
+    reject(lambda: transfer([manual()], late_factory, 'QA-FACTORY-LATE', route=outbound_route), '이동일 이후')
+    reject(lambda: transfer([manual()], factory_source, 'QA-FACTORY', route=('가공장', '가공장')), '')
+    reject(lambda: sources('QA-OTHER-LOCATION'), '')
+    with conn.transaction(force_rollback=True):
+        conn.execute("update public.erp_role_permissions set can_create=false where role_id=%s and menu_code='pda'", (role,))
+        assert factory_source in sources('가공장')
+        reject(lambda: transfer([manual()], factory_source, 'QA-FACTORY', route=outbound_route), '권한')
+    assert balance(factory_source) == (Decimal('39.39'), Decimal('60.61'))
+    print('PASS: both branch names, historical stock, and PDA write permissions are validated before moving stock')
 
 
 with psycopg.connect('', sslmode='require', connect_timeout=20, application_name='dbmt_raw_transfer_qa') as connection:

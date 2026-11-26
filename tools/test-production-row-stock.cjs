@@ -90,6 +90,12 @@ function testLogic() {
   const pdaTransfer=harness([warehouseReceipt,factoryShipment,stagedTransfer]);
   assert.deepEqual([row(pdaTransfer,'warehouse-source','물류창고').stock,row(pdaTransfer,'warehouse-source','물류창고').stockBoxes],[10,2]);
   assert.deepEqual([row(pdaTransfer,'warehouse-source').stock,row(pdaTransfer,'warehouse-source').stockBoxes],[5,1]);
+  const pdaReturn={...stagedTransfer,stockLocation:'가공장',fromLocation:'가공장',toLocation:'물류창고',
+    weight:5,boxCount:1,_serverAudit:{savedAt:'2026-09-14T03:00:00Z'}};
+  pdaTransfer.userTransactions=[pdaReturn,warehouseReceipt,factoryShipment,stagedTransfer];
+  pdaTransfer.invalidateStockMap();
+  assert.deepEqual([row(pdaTransfer,'warehouse-source','물류창고').stock,row(pdaTransfer,'warehouse-source','물류창고').stockBoxes],[15,3]);
+  assert.deepEqual([row(pdaTransfer,'warehouse-source').stock,row(pdaTransfer,'warehouse-source').stockBoxes],[0,0]);
 
   const unknownWarehouseBoxes=harness([
     {...warehouseReceipt,weight:0.01,boxCount:null},
@@ -99,7 +105,7 @@ function testLogic() {
   assert.equal(row(unknownWarehouseBoxes,'warehouse-source','물류창고').stockBoxes,null);
   assert.equal(row(unknownWarehouseBoxes,'warehouse-source').stock,0.01);
   assert.equal(row(unknownWarehouseBoxes,'warehouse-source').stockBoxes,1,'The scanner confirms the transferred box even when the receipt count is missing');
-  console.log('PASS: PDA warehouse transfers preserve source KG, scanned boxes and same-day factory shipments');
+  console.log('PASS: PDA transfers in both directions preserve source KG, scanned boxes and same-day shipments');
 
   const startedLegacy = harness([
     trackedInbound('old-stock', 100, 5000),

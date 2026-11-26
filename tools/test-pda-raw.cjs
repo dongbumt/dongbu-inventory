@@ -26,13 +26,20 @@ const server=http.createServer((req,res)=>{
     const smKey='sm2:v1:mt:130:qa';for(const item of cases.filter(item=>item.ruleKey!=='gs1')){item.ruleKey=smKey;item.rule='SM [130] 탑미트 / 동부엠티';}
     const registered=new Map(),saved=new Map(),calls=[],commits=[],lookups=[],errors=[],blocked=[];
     const warehouseSource={id:'qa-warehouse',date:'2026-10-20',lot:'QA-WAREHOUSE',proddate:'2026-10-10',price:4400};
+    const factorySource={id:'qa-factory',date:'2026-10-21',lot:'QA-FACTORY',proddate:'2026-10-11',price:4500};
     const warehouseScan={...cases[0],id:'qa-warehouse-new',code:cases[0].code.slice(0,-1)+'7'};
     const warehouseTracked={...cases[0],id:'qa-warehouse-tracked',code:cases[0].code.slice(0,-1)+'8'};
-    cases.push(warehouseScan,warehouseTracked);
-    registered.set(warehouseTracked.id,{registered:true,state:'in_stock',revision:1,location:'물류창고',stockRowId:warehouseSource.id,
-      product:product.name,productId:product.id,lot:warehouseSource.lot,weight:warehouseTracked.weight,origin:product.origin});
+    const warehouseOnly={...cases[0],id:'qa-warehouse-only',code:cases[0].code.slice(0,-1)+'5'};
+    const factoryScan={...cases[0],id:'qa-factory-new',code:cases[0].code.slice(0,-1)+'4'};
+    const factoryTracked={...cases[0],id:'qa-factory-tracked',code:cases[0].code.slice(0,-1)+'6'};
+    cases.push(warehouseScan,warehouseTracked,warehouseOnly,factoryScan,factoryTracked);
+    for(const [item,location,source] of [[warehouseTracked,'물류창고',warehouseSource],[warehouseOnly,'물류창고',warehouseSource],[factoryTracked,'가공장',factorySource]]){
+      registered.set(item.id,{registered:true,state:'in_stock',revision:1,location,stockRowId:source.id,
+        product:product.name,productId:product.id,lot:source.lot,weight:item.weight,origin:product.origin});
+    }
+    const inventory=new Map([[warehouseSource.id,{'물류창고':65.5,'가공장':0}],[factorySource.id,{'물류창고':0,'가공장':50}]]);
     const transferSources=[],transfers=[];
-    let warehouseWeight=65.5,factoryWeight=0;
+    const balances=source=>['물류창고','가공장'].map(location=>inventory.get(source.id)[location]);
     let canSave=true,loseResponse=false,denyCommit=false,lookupDelay=0,commitDelay=0;
     page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
     await context.route('**/*',async route=>{
@@ -52,9 +59,16 @@ const server=http.createServer((req,res)=>{
       else if(name==='dbmt_pda_raw_sources')data={ok:true,rows:[{id:'qa-existing',date:'2026-10-20',lot:'QA-EXISTING',available:100}]};
       else if(name==='dbmt_pda_raw_transfer_sources'){
         transferSources.push(body);
-        const linkedWeight=registered.get(warehouseTracked.id).location==='물류창고'?warehouseTracked.weight:0;
-        data={ok:true,rows:body.p_product_id===product.id?[{...warehouseSource,available:warehouseWeight,
-          unlinkedWeight:Math.round((warehouseWeight-linkedWeight)*100)/100,linkedWeight,linkedBoxes:linkedWeight?1:0}]:[]};
+        const from=body.p_from_location??'물류창고';
+        assert(['물류창고','가공장'].includes(from));
+        const rows=[warehouseSource,factorySource].flatMap(source=>{
+          const available=inventory.get(source.id)[from];
+          if(available<=0)return [];
+          const linked=[...registered.values()].filter(box=>box.stockRowId===source.id&&box.location===from&&box.state==='in_stock');
+          const linkedWeight=Math.round(linked.reduce((sum,box)=>sum+box.weight,0)*100)/100;
+          return [{...source,available,unlinkedWeight:Math.round((available-linkedWeight)*100)/100,linkedWeight,linkedBoxes:linked.length}];
+        });
+        data={ok:true,rows:body.p_product_id===product.id?rows:[]};
       }
       else if(name==='dbmt_pda_raw_resolve'){
         lookups.push(body);if(lookupDelay)await new Promise(resolve=>setTimeout(resolve,lookupDelay));
@@ -88,11 +102,15 @@ const server=http.createServer((req,res)=>{
           assert.deepEqual(body,previous.transferBody,'Retry reuses the original transfer');
           data={...previous.result,alreadySaved:true};
         }else{
-          assert.equal(body.p_source_id,warehouseSource.id);
+          const stockSource=[warehouseSource,factorySource].find(row=>row.id===body.p_source_id);
+          assert(stockSource,'Only the selected ERP stock source can move');
           assert.equal(body.p_product_id,product.id);
-          assert.equal(body.p_lot,warehouseSource.lot);
+          assert.equal(body.p_lot,stockSource.lot);
+          const from=body.p_from_location??'물류창고',to=body.p_to_location??'가공장';
+          assert([from,to].sort().join(',')==='가공장,물류창고');
+          const quantities=inventory.get(stockSource.id);
           const weight=Math.round(body.p_items.reduce((sum,scan)=>sum+scan.labelWeight,0)*100)/100;
-          if(weight>warehouseWeight)return fail('물류창고 재고가 부족합니다.');
+          if(weight>quantities[from])return fail(`${from} 재고가 부족합니다.`);
           const items=body.p_items.map(scan=>{
             let source=cases.find(item=>item.code===scan.barcode);
             if(!source&&scan.rule==='manual:v1'){
@@ -102,17 +120,18 @@ const server=http.createServer((req,res)=>{
             }
             assert(source,'Only staged fictional boxes may be transferred');
             const existing=registered.get(source.id);
-            registered.set(source.id,{registered:true,state:'in_stock',revision:(existing?.revision||0)+1,location:'가공장',
-              stockRowId:warehouseSource.id,product:product.name,productId:product.id,lot:warehouseSource.lot,
+            if(existing){assert.equal(existing.location,from);assert.equal(existing.stockRowId,stockSource.id);}
+            registered.set(source.id,{registered:true,state:'in_stock',revision:(existing?.revision||0)+1,location:to,
+              stockRowId:stockSource.id,product:product.name,productId:product.id,lot:stockSource.lot,
               weight:scan.labelWeight,origin:product.origin});
-            return {id:source.id,product:product.name,lot:warehouseSource.lot,weight:scan.labelWeight,action:'transfer',
+            return {id:source.id,product:product.name,lot:stockSource.lot,weight:scan.labelWeight,action:'transfer',
               newlyLinked:!existing,transactionId:'qa_move_'+body.p_request_id,barcode:source.code,
               ...(scan.rule==='manual:v1'?{entryKind:'manual',manualWeight:scan.manualWeight,manualUnit:scan.manualUnit}:{})};
           });
-          warehouseWeight=Math.round((warehouseWeight-weight)*100)/100;
-          factoryWeight=Math.round((factoryWeight+weight)*100)/100;
-          data={ok:true,requestId:body.p_request_id,count:items.length,weight,items,savedAt:new Date().toISOString()};
-          saved.set(body.p_request_id,{body:{...body,p_mode:'transfer',p_location:'물류창고',toLocation:'가공장'},transferBody:body,result:data});
+          quantities[from]=Math.round((quantities[from]-weight)*100)/100;
+          quantities[to]=Math.round((quantities[to]+weight)*100)/100;
+          data={ok:true,requestId:body.p_request_id,count:items.length,weight,items,fromLocation:from,toLocation:to,savedAt:new Date().toISOString()};
+          saved.set(body.p_request_id,{body:{...body,p_mode:'transfer',p_location:from,toLocation:to},transferBody:body,result:data});
         }
         if(loseResponse){loseResponse=false;return route.abort();}
       }else if(name==='dbmt_pda_raw_history')data={ok:true,rows:[...saved].map(([id,value])=>({id,created_at:value.result.savedAt,request:{mode:value.body.p_mode,date:value.body.p_date,location:value.body.p_location,toLocation:value.body.toLocation,sourceId:value.body.p_source_id},result:value.result}))};
@@ -304,8 +323,10 @@ const server=http.createServer((req,res)=>{
 
     const beforeTransfer=commits.length;
     const transferMode=page.locator('[name="mode"][value="transfer"]');
+    const transferDirection=page.locator('#transfer-direction');
     await page.setViewportSize({width:480,height:800});
     await transferMode.check();
+    assert.equal(await transferDirection.inputValue(),'물류창고','Keep the original movement direction as the default');
     assert.match(await page.locator('#settings-panel').innerText(),/물류창고[\s\S]*가공장/);
     assert(await partner.isHidden(),'Internal movement needs no sale or purchase partner');
     await scan(warehouseScan.code);await idle();
@@ -315,6 +336,8 @@ const server=http.createServer((req,res)=>{
     const warehouseOption=sourceSelect.locator('option[value="qa-warehouse"]');
     await warehouseOption.waitFor({state:'attached'});
     assert.equal(transferSources.at(-1).p_product_id,product.id);
+    assert.equal(transferSources.at(-1).p_from_location,'물류창고');
+    assert.equal(await sourceSelect.locator('option[value="qa-factory"]').count(),0,'Factory-only stock stays out of the warehouse source list');
     assert.match(await warehouseOption.textContent(),/QA-WAREHOUSE.*65\.50/);
     await sourceSelect.selectOption(warehouseSource.id);
     assert.equal(await page.locator('#lot').inputValue(),warehouseSource.lot);
@@ -335,6 +358,7 @@ const server=http.createServer((req,res)=>{
     assert.equal(await page.locator('#items li').count(),2);
     assert.match(await page.locator('#items').innerText(),/이력번호 QA-WAREHOUSE/);
     assert(await sourceSelect.isDisabled(),'Lock movement source while boxes are queued');
+    assert(await transferDirection.isDisabled(),'Queued boxes stay in their selected direction');
     await scan(warehouseScan.code);await idle();
     assert.equal(await page.locator('#items li').count(),2,'Ignore a duplicate scanned box');
     await page.locator('#damaged-open').click();
@@ -363,7 +387,8 @@ const server=http.createServer((req,res)=>{
     await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
     assert.equal(transfers.length,1);
     const movement=transfers[0];
-    assert.deepEqual(Object.keys(movement).sort(),['p_token','p_request_id','p_date','p_items','p_product_id','p_lot','p_source_id','p_note'].sort());
+    assert.deepEqual(Object.keys(movement).sort(),['p_token','p_request_id','p_date','p_items','p_product_id','p_lot','p_source_id','p_note','p_from_location','p_to_location'].sort());
+    assert.deepEqual([movement.p_from_location,movement.p_to_location],['물류창고','가공장']);
     assert.equal(movement.p_source_id,warehouseSource.id);
     assert.equal(movement.p_lot,warehouseSource.lot);
     assert.equal(movement.p_note,'물류창고에서 가공장으로 이동');
@@ -374,11 +399,12 @@ const server=http.createServer((req,res)=>{
     assert.deepEqual([rawLookup.p_mode,rawLookup.p_product_id,rawLookup.p_trader_id],['inbound',product.id,null]);
     await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
     assert(await transferMode.isChecked(),'Pending movement restores the transfer mode');
+    assert.equal(await transferDirection.inputValue(),'물류창고');
     assert.match(await page.locator('#total').innerText(),/3박스 · 44\.27 KG/);
     await page.locator('#save').click();
     await page.waitForFunction(()=>document.getElementById('items').children.length===0);
     assert.deepEqual(transfers,[movement,movement],'Lost response retries exactly once with the same movement UUID and payload');
-    assert.deepEqual([warehouseWeight,factoryWeight],[21.23,44.27],'Retry does not move the same stock a second time');
+    assert.deepEqual(balances(warehouseSource),[21.23,44.27],'Retry does not move the same stock a second time');
     await page.waitForFunction(()=>document.querySelector('#source option[value="qa-warehouse"]')?.textContent.includes('21.23'));
     assert.equal(commits.length,beforeTransfer);
     await page.locator('#manual-labels-open').click();
@@ -397,6 +423,92 @@ const server=http.createServer((req,res)=>{
     assert.match(await page.locator('#items').innerText(),/QA-WAREHOUSE.*17\.26|17\.26[\s\S]*QA-WAREHOUSE/);
     await page.locator('#clear-items').click();
     console.log('PASS: warehouse manual receipt selected in PDA, exact tracked/new/manual scans, movement-only RPC, idempotent reload/retry, destination scan and history, 320/390/480/1280px');
+
+    await transferMode.check();
+    await warehouseOption.waitFor({state:'attached'});
+    await sourceSelect.selectOption(warehouseSource.id);
+    await transferDirection.selectOption('가공장');
+    const factoryOption=sourceSelect.locator('option[value="qa-factory"]');
+    await factoryOption.waitFor({state:'attached'});
+    assert.equal(transferSources.at(-1).p_from_location,'가공장');
+    assert.match(await warehouseOption.textContent(),/QA-WAREHOUSE.*44\.27/,'A previous destination is an eligible new source');
+    assert.match(await factoryOption.textContent(),/QA-FACTORY.*50\.00/);
+    assert.equal(await sourceSelect.inputValue(),'','A direction change requires reselecting the source at that branch');
+    assert.equal(await page.locator('#lot').inputValue(),'');
+    await page.setViewportSize({width:320,height:800});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'The direction selector fits on a narrow PDA');
+    await page.locator('#settings-panel').screenshot({path:path.join(artifacts,'reverse-transfer-settings-320.png')});
+    await sourceSelect.selectOption(factorySource.id);
+    assert.equal(await page.locator('#lot').inputValue(),factorySource.lot);
+    await scan(warehouseOnly.code);await idle();
+    assert.equal(await page.locator('#items li').count(),0,'A box still at the warehouse cannot move out of the factory');
+    assert.match(await page.locator('#status').innerText(),/현재 재고 지점은 물류창고/);
+    await scan(warehouseTracked.code);await idle();
+    assert.equal(await page.locator('#items li').count(),0,'Another receipt at the factory cannot be moved under the selected source');
+    await scan(factoryTracked.code);await idle();await scan(factoryScan.code);await idle();
+    assert.match(await page.locator('#total').innerText(),/2박스 · 34\.52 KG/);
+    assert(await transferDirection.isDisabled());
+    assert.equal(transfers.length,2,'Reverse box staging does not update the inventory');
+    await page.locator('#save').click();await page.locator('#confirm-dialog').waitFor({state:'visible'});
+    assert.match(await page.locator('#confirm-summary').innerText(),/가공장[\s\S]*물류창고/);
+    const reverseBox=await page.locator('#confirm-dialog').boundingBox();
+    assert(reverseBox.x>=0&&reverseBox.x+reverseBox.width<=320);
+    await page.locator('#confirm-dialog').screenshot({path:path.join(artifacts,'reverse-transfer-confirm-320.png')});
+    loseResponse=true;
+    await page.locator('#confirm-checked').check();await page.locator('#confirm-save').click();
+    await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
+    const reverse=transfers.at(-1);
+    assert.notEqual(reverse.p_request_id,movement.p_request_id);
+    assert.deepEqual([reverse.p_source_id,reverse.p_lot,reverse.p_from_location,reverse.p_to_location],[factorySource.id,factorySource.lot,'가공장','물류창고']);
+    assert.deepEqual(reverse.p_items.map(({revision,labelWeight})=>[revision,labelWeight]),[[1,17.26],[0,17.26]]);
+    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
+    assert(await transferMode.isChecked());
+    assert.equal(await transferDirection.inputValue(),'가공장','Refresh restores the unsettled direction');
+    assert(await transferDirection.isDisabled(),'Pending retry cannot change the direction');
+    await page.locator('#save').click();
+    await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.deepEqual(transfers.slice(-2),[reverse,reverse]);
+    assert.deepEqual(balances(factorySource),[34.52,15.48]);
+    assert.deepEqual(balances(warehouseSource),[21.23,44.27]);
+    assert.equal(registered.get(factoryScan.id).location,'물류창고');
+    await factoryOption.waitFor({state:'attached'});
+    assert.match(await factoryOption.textContent(),/15\.48/);
+    await sourceSelect.selectOption(warehouseSource.id);
+    await scan(warehouseScan.code);await idle();await confirm();
+    await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.deepEqual(balances(warehouseSource),[38.49,27.01],'Moving a box back changes the balances of its original receipt only');
+    assert.equal(registered.get(warehouseScan.id).location,'물류창고');
+    assert.equal(commits.length,beforeTransfer,'Both directions use the internal movement journal only');
+    await page.locator('#history-open').click();
+    const reverseHistory=page.locator('#history-list details').filter({has:page.locator('summary',{hasText:/재고이동.*2박스.*34\.52/})});
+    await reverseHistory.waitFor({state:'visible'});
+    await reverseHistory.locator('summary').click();
+    assert.match(await reverseHistory.innerText(),/가공장[\s\S]*물류창고/);
+    await page.locator('#history-close').click();
+    await page.locator('[name="mode"][value="outbound"]').check();
+    await page.locator('#location').selectOption('물류창고');
+    await scan(factoryScan.code);await idle();
+    assert.match(await page.locator('#items').innerText(),/17\.26[\s\S]*QA-FACTORY|QA-FACTORY[\s\S]*17\.26/);
+    await page.locator('#clear-items').click();
+    console.log('PASS: reverse direction scoped source/box validation, same UUID/direction after reload, move a box back by original source, warehouse rescan/history and narrow layout');
+
+    const legacyBody={p_request_id:'10000000-0000-4000-8000-000000000001',p_date:movement.p_date,
+      p_items:[movement.p_items[0]],p_product_id:product.id,p_lot:warehouseSource.lot,p_source_id:warehouseSource.id,p_note:'구버전 재시도 테스트'};
+    const legacyResult={ok:true,requestId:legacyBody.p_request_id,count:1,weight:17.26,
+      items:[saved.get(movement.p_request_id).result.items[0]],savedAt:new Date().toISOString()};
+    const legacyRequest={...legacyBody,p_token:movement.p_token};
+    saved.set(legacyBody.p_request_id,{body:{...legacyBody,p_mode:'transfer',p_location:'물류창고',toLocation:'가공장'},transferBody:legacyRequest,result:legacyResult});
+    await page.evaluate(draft=>sessionStorage.setItem('dbmt_pda_raw_pending_batch_'+draft.userId,JSON.stringify(draft)),{
+      userId:user.id,body:{...legacyBody,p_mode:'transfer'},source:warehouseSource,
+      items:[{...warehouseTracked,product:product.name,labelWeight:17.26,lot:warehouseSource.lot}]
+    });
+    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
+    assert(await transferMode.isChecked());
+    assert.equal(await transferDirection.inputValue(),'물류창고','An old pending request restores the original fixed direction');
+    await page.locator('#save').click();
+    await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.deepEqual(transfers.at(-1),legacyRequest,'Resend the exact old request shape without injecting direction fields');
+    assert.deepEqual(balances(warehouseSource),[38.49,27.01]);
 
     canSave=false;await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#status').innerText(),/조회만/);
     assert(await page.locator('#damaged-open').isDisabled());
