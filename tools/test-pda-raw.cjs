@@ -25,6 +25,14 @@ const server=http.createServer((req,res)=>{
     ];
     const smKey='sm2:v1:mt:130:qa';for(const item of cases.filter(item=>item.ruleKey!=='gs1')){item.ruleKey=smKey;item.rule='SM [130] 탑미트 / 동부엠티';}
     const registered=new Map(),saved=new Map(),calls=[],commits=[],lookups=[],errors=[],blocked=[];
+    const warehouseSource={id:'qa-warehouse',date:'2026-10-20',lot:'QA-WAREHOUSE',proddate:'2026-10-10',price:4400};
+    const warehouseScan={...cases[0],id:'qa-warehouse-new',code:cases[0].code.slice(0,-1)+'7'};
+    const warehouseTracked={...cases[0],id:'qa-warehouse-tracked',code:cases[0].code.slice(0,-1)+'8'};
+    cases.push(warehouseScan,warehouseTracked);
+    registered.set(warehouseTracked.id,{registered:true,state:'in_stock',revision:1,location:'물류창고',stockRowId:warehouseSource.id,
+      product:product.name,productId:product.id,lot:warehouseSource.lot,weight:warehouseTracked.weight,origin:product.origin});
+    const transferSources=[],transfers=[];
+    let warehouseWeight=65.5,factoryWeight=0;
     let canSave=true,loseResponse=false,denyCommit=false,lookupDelay=0,commitDelay=0;
     page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
     await context.route('**/*',async route=>{
@@ -42,8 +50,14 @@ const server=http.createServer((req,res)=>{
       else if(name==='dbmt_erp_logout')data={ok:true};
       else if(name==='dbmt_pda_raw_bootstrap')data={ok:true,canSave,locations:['가공장','물류창고'],products:[product],partners:[{id:'qa-partner',name:'테스트 거래처',tradeType:'매입/매출'},{id:'sales-only',name:'매출 전용',tradeType:'매출'}],rules:[{key:cases[1].ruleKey,label:'사진 검증 국내산',length:26}]};
       else if(name==='dbmt_pda_raw_sources')data={ok:true,rows:[{id:'qa-existing',date:'2026-10-20',lot:'QA-EXISTING',available:100}]};
+      else if(name==='dbmt_pda_raw_transfer_sources'){
+        transferSources.push(body);
+        const linkedWeight=registered.get(warehouseTracked.id).location==='물류창고'?warehouseTracked.weight:0;
+        data={ok:true,rows:body.p_product_id===product.id?[{...warehouseSource,available:warehouseWeight,
+          unlinkedWeight:Math.round((warehouseWeight-linkedWeight)*100)/100,linkedWeight,linkedBoxes:linkedWeight?1:0}]:[]};
+      }
       else if(name==='dbmt_pda_raw_resolve'){
-        lookups.push(body.p_code);if(lookupDelay)await new Promise(resolve=>setTimeout(resolve,lookupDelay));
+        lookups.push(body);if(lookupDelay)await new Promise(resolve=>setTimeout(resolve,lookupDelay));
         const source=cases.find(item=>item.code===body.p_code);if(!source)return fail('검증된 원료육 박스 바코드가 아닙니다.');
         const candidate=(mid,weight,enabled=true)=>({key:mid===130?smKey:`sm2:v1:mt:${mid}:qa`,source:body.p_source,manuId:mid,name:mid===130?'탑미트':'농협안심',shortName:'형식',length:26,start:mid===266?0:17,digits:4,decimals:2,factor:1,rounding:mid===76?1:3,min:.01,max:200,weight,smWeight:weight,enabled,reason:enabled?null:'원본 시작위치 확인 필요'});
         if(source.ruleKey!=='gs1'&&!body.p_rule&&!registered.has(source.id))data={ok:true,needsRule:true,code:source.code,candidates:[candidate(76,Math.round(source.weight*10)/10),candidate(130,source.weight),candidate(266,null,false)]};
@@ -67,7 +81,41 @@ const server=http.createServer((req,res)=>{
           }),negativeStock:body.p_mode==='outbound'?[{product:product.name,lot:registered.get(cases.find(item=>item.code===body.p_items[0].barcode).id)?.lot,weight:-1.4}]:[],savedAt:new Date().toISOString()};saved.set(body.p_request_id,{body,result});
         }
         if(loseResponse){loseResponse=false;return route.abort();}data=saved.get(body.p_request_id).result;
-      }else if(name==='dbmt_pda_raw_history')data={ok:true,rows:[...saved].map(([id,value])=>({id,created_at:value.result.savedAt,request:{mode:value.body.p_mode,date:value.body.p_date,location:value.body.p_location,sourceId:value.body.p_source_id},result:value.result}))};
+      }else if(name==='dbmt_pda_raw_transfer'){
+        transfers.push(body);
+        const previous=saved.get(body.p_request_id);
+        if(previous){
+          assert.deepEqual(body,previous.transferBody,'Retry reuses the original transfer');
+          data={...previous.result,alreadySaved:true};
+        }else{
+          assert.equal(body.p_source_id,warehouseSource.id);
+          assert.equal(body.p_product_id,product.id);
+          assert.equal(body.p_lot,warehouseSource.lot);
+          const weight=Math.round(body.p_items.reduce((sum,scan)=>sum+scan.labelWeight,0)*100)/100;
+          if(weight>warehouseWeight)return fail('물류창고 재고가 부족합니다.');
+          const items=body.p_items.map(scan=>{
+            let source=cases.find(item=>item.code===scan.barcode);
+            if(!source&&scan.rule==='manual:v1'){
+              source={id:'qa-transfer-'+scan.barcode,code:scan.barcode,ruleKey:'manual:v1',rule:'수기입고',weight:scan.labelWeight,
+                calculatedWeight:scan.labelWeight,manualWeight:scan.manualWeight,manualUnit:scan.manualUnit};
+              cases.push(source);
+            }
+            assert(source,'Only staged fictional boxes may be transferred');
+            const existing=registered.get(source.id);
+            registered.set(source.id,{registered:true,state:'in_stock',revision:(existing?.revision||0)+1,location:'가공장',
+              stockRowId:warehouseSource.id,product:product.name,productId:product.id,lot:warehouseSource.lot,
+              weight:scan.labelWeight,origin:product.origin});
+            return {id:source.id,product:product.name,lot:warehouseSource.lot,weight:scan.labelWeight,action:'transfer',
+              newlyLinked:!existing,transactionId:'qa_move_'+body.p_request_id,barcode:source.code,
+              ...(scan.rule==='manual:v1'?{entryKind:'manual',manualWeight:scan.manualWeight,manualUnit:scan.manualUnit}:{})};
+          });
+          warehouseWeight=Math.round((warehouseWeight-weight)*100)/100;
+          factoryWeight=Math.round((factoryWeight+weight)*100)/100;
+          data={ok:true,requestId:body.p_request_id,count:items.length,weight,items,savedAt:new Date().toISOString()};
+          saved.set(body.p_request_id,{body:{...body,p_mode:'transfer',p_location:'물류창고',toLocation:'가공장'},transferBody:body,result:data});
+        }
+        if(loseResponse){loseResponse=false;return route.abort();}
+      }else if(name==='dbmt_pda_raw_history')data={ok:true,rows:[...saved].map(([id,value])=>({id,created_at:value.result.savedAt,request:{mode:value.body.p_mode,date:value.body.p_date,location:value.body.p_location,toLocation:value.body.toLocation,sourceId:value.body.p_source_id},result:value.result}))};
       else{blocked.push(name);return route.abort();}
       return route.fulfill({headers,contentType:'application/json',body:JSON.stringify(data)});
     });
@@ -253,6 +301,103 @@ const server=http.createServer((req,res)=>{
     await confirm();await page.waitForFunction(()=>document.getElementById('items').children.length===0);assert.equal(commits.at(-1).p_mode,'outbound');
     assert(!('manualUnit' in commits.at(-1).p_items[0]),'Outbound uses the registered weight, never another manual receipt');
     console.log('PASS: mixed manual/scanned one-click receipt, KG/LB exact rounding, no reason entry, pending reload/retry, committed label printing/history, internal barcode outbound and PDA/mobile/desktop layout');
+
+    const beforeTransfer=commits.length;
+    const transferMode=page.locator('[name="mode"][value="transfer"]');
+    await page.setViewportSize({width:480,height:800});
+    await transferMode.check();
+    assert.match(await page.locator('#settings-panel').innerText(),/물류창고[\s\S]*가공장/);
+    assert(await partner.isHidden(),'Internal movement needs no sale or purchase partner');
+    await scan(warehouseScan.code);await idle();
+    assert.equal(await page.locator('#items li').count(),0,'Movement requires a selected ERP stock source');
+    await productSearch.fill('DE123');await productSelect.selectOption(product.id);
+    const sourceSelect=page.locator('#source');
+    const warehouseOption=sourceSelect.locator('option[value="qa-warehouse"]');
+    await warehouseOption.waitFor({state:'attached'});
+    assert.equal(transferSources.at(-1).p_product_id,product.id);
+    assert.match(await warehouseOption.textContent(),/QA-WAREHOUSE.*65\.50/);
+    await sourceSelect.selectOption(warehouseSource.id);
+    assert.equal(await page.locator('#lot').inputValue(),warehouseSource.lot);
+    assert(!(await page.locator('#lot').isEditable()),'The selected stock LOT cannot be overridden');
+    await page.locator('#damaged-open').click();
+    await page.locator('#damaged-weight').fill('52');await page.locator('#damaged-add').click();
+    assert.match(await page.locator('#damaged-error').innerText(),/미연결 재고/);
+    await page.locator('#damaged-close').click();
+    await scan(mixed.code);await idle();
+    assert.equal(await page.locator('#items li').count(),0,'A registered factory box cannot move out of the warehouse');
+    const warehouseBarcode=registered.get(warehouseTracked.id);
+    registered.set(warehouseTracked.id,{...warehouseBarcode,stockRowId:'qa-other-warehouse-source'});
+    await scan(warehouseTracked.code);await idle();
+    assert.equal(await page.locator('#items li').count(),0,'A warehouse box linked to another receipt cannot be reassigned');
+    registered.set(warehouseTracked.id,warehouseBarcode);
+    await scan(warehouseTracked.code);await idle();
+    await scan(warehouseScan.code);await idle();
+    assert.equal(await page.locator('#items li').count(),2);
+    assert.match(await page.locator('#items').innerText(),/이력번호 QA-WAREHOUSE/);
+    assert(await sourceSelect.isDisabled(),'Lock movement source while boxes are queued');
+    await scan(warehouseScan.code);await idle();
+    assert.equal(await page.locator('#items li').count(),2,'Ignore a duplicate scanned box');
+    await page.locator('#damaged-open').click();
+    await page.locator('#damaged-weight').fill('40');await page.locator('#damaged-add').click();
+    assert.match(await page.locator('#damaged-error').innerText(),/물류창고 현재 재고/);
+    await page.locator('#damaged-weight').fill('9.75');
+    await page.locator('#damaged-add').click();
+    assert.match(await page.locator('#total').innerText(),/3박스 · 44\.27 KG/);
+    assert.equal(transfers.length,0,'Scans and manual box staging do not write inventory');
+    assert.equal(commits.length,beforeTransfer,'Movement never creates an extra inbound or outbound journal');
+    await page.locator('#save').click();
+    assert(await page.locator('#confirm-dialog').isVisible());
+    assert.match(await page.locator('#confirm-summary').innerText(),/물류창고[\s\S]*가공장/);
+    assert(await page.locator('#confirm-save').isDisabled());
+    for(const width of [320,390,480,1280]){
+      await page.setViewportSize({width,height:800});
+      const box=await page.locator('#confirm-dialog').boundingBox();
+      assert(box.x>=0&&box.x+box.width<=width,`Movement confirmation must fit at ${width}px`);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await page.locator('#confirm-dialog').screenshot({path:path.join(artifacts,`warehouse-transfer-${width}.png`)});
+    }
+    await page.setViewportSize({width:480,height:800});
+    await page.locator('#confirm-cancel').click();assert.equal(transfers.length,0);
+    await page.locator('#note').fill('물류창고에서 가공장으로 이동');
+    loseResponse=true;await confirm();
+    await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
+    assert.equal(transfers.length,1);
+    const movement=transfers[0];
+    assert.deepEqual(Object.keys(movement).sort(),['p_token','p_request_id','p_date','p_items','p_product_id','p_lot','p_source_id','p_note'].sort());
+    assert.equal(movement.p_source_id,warehouseSource.id);
+    assert.equal(movement.p_lot,warehouseSource.lot);
+    assert.equal(movement.p_note,'물류창고에서 가공장으로 이동');
+    assert.deepEqual(movement.p_items.map(({revision,labelWeight})=>[revision,labelWeight]),[[1,17.26],[0,17.26],[0,9.75]]);
+    assert.match(movement.p_items[2].barcode,/^DR1\d{26}$/);
+    assert.equal(movement.p_items[2].manualUnit,'KG');
+    const rawLookup=lookups.findLast(query=>query.p_code===warehouseScan.code);
+    assert.deepEqual([rawLookup.p_mode,rawLookup.p_product_id,rawLookup.p_trader_id],['inbound',product.id,null]);
+    await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
+    assert(await transferMode.isChecked(),'Pending movement restores the transfer mode');
+    assert.match(await page.locator('#total').innerText(),/3박스 · 44\.27 KG/);
+    await page.locator('#save').click();
+    await page.waitForFunction(()=>document.getElementById('items').children.length===0);
+    assert.deepEqual(transfers,[movement,movement],'Lost response retries exactly once with the same movement UUID and payload');
+    assert.deepEqual([warehouseWeight,factoryWeight],[21.23,44.27],'Retry does not move the same stock a second time');
+    await page.waitForFunction(()=>document.querySelector('#source option[value="qa-warehouse"]')?.textContent.includes('21.23'));
+    assert.equal(commits.length,beforeTransfer);
+    await page.locator('#manual-labels-open').click();
+    assert.deepEqual(await page.locator('#manual-label-list svg').evaluateAll(nodes=>nodes.map(node=>node.dataset.code)),[movement.p_items[2].barcode]);
+    await page.locator('#manual-labels-close').click();
+    await page.locator('#history-open').click();
+    const historyMove=page.locator('#history-list details').filter({hasText:/재고이동|재고 이동/}).last();
+    await historyMove.waitFor({state:'visible'});
+    assert.match(await historyMove.locator('summary').innerText(),/3박스.*44\.27/);
+    await historyMove.locator('summary').click();
+    assert.match(await historyMove.innerText(),/물류창고[\s\S]*가공장/);
+    await page.locator('#history-close').click();
+    await page.locator('[name="mode"][value="outbound"]').check();
+    await page.locator('#location').selectOption('가공장');
+    await scan(warehouseScan.code);await idle();
+    assert.match(await page.locator('#items').innerText(),/QA-WAREHOUSE.*17\.26|17\.26[\s\S]*QA-WAREHOUSE/);
+    await page.locator('#clear-items').click();
+    console.log('PASS: warehouse manual receipt selected in PDA, exact tracked/new/manual scans, movement-only RPC, idempotent reload/retry, destination scan and history, 320/390/480/1280px');
+
     canSave=false;await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.match(await page.locator('#status').innerText(),/조회만/);
     assert(await page.locator('#damaged-open').isDisabled());
     await page.locator('#product').selectOption(product.id);await page.locator('#lot').fill('QA-READONLY');await scan(extra.code);await choose();

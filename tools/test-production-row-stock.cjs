@@ -78,6 +78,29 @@ function testLogic() {
   assert.equal(row(boxLedger, 'boxes-A').stockBoxes, 7);
   assert.equal(row(boxLedger, 'boxes-A', '물류창고').stockBoxes, 1);
 
+  // The server orders same-day rows by ID, which can put an outbound scan before its transfer.
+  const warehouseReceipt={...trackedInbound('warehouse-source',20,6000),date:'2026-09-14',stockLocation:'물류창고',boxCount:4};
+  const stagedTransfer=consume('warehouse-source',10,'재고이동',{
+    stockLocation:'물류창고',fromLocation:'물류창고',toLocation:'가공장',boxCount:2,_pdaAction:'transfer',
+    _serverAudit:{savedAt:'2026-09-14T01:00:00Z'}
+  });
+  const factoryShipment=consume('warehouse-source',5,'출고',{
+    boxCount:1,_serverAudit:{savedAt:'2026-09-14T02:00:00Z'}
+  });
+  const pdaTransfer=harness([warehouseReceipt,factoryShipment,stagedTransfer]);
+  assert.deepEqual([row(pdaTransfer,'warehouse-source','물류창고').stock,row(pdaTransfer,'warehouse-source','물류창고').stockBoxes],[10,2]);
+  assert.deepEqual([row(pdaTransfer,'warehouse-source').stock,row(pdaTransfer,'warehouse-source').stockBoxes],[5,1]);
+
+  const unknownWarehouseBoxes=harness([
+    {...warehouseReceipt,weight:0.01,boxCount:null},
+    {...stagedTransfer,weight:0.01,boxCount:1}
+  ]);
+  assert.equal(row(unknownWarehouseBoxes,'warehouse-source','물류창고').stock,0);
+  assert.equal(row(unknownWarehouseBoxes,'warehouse-source','물류창고').stockBoxes,null);
+  assert.equal(row(unknownWarehouseBoxes,'warehouse-source').stock,0.01);
+  assert.equal(row(unknownWarehouseBoxes,'warehouse-source').stockBoxes,1,'The scanner confirms the transferred box even when the receipt count is missing');
+  console.log('PASS: PDA warehouse transfers preserve source KG, scanned boxes and same-day factory shipments');
+
   const startedLegacy = harness([
     trackedInbound('old-stock', 100, 5000),
     consume('old-stock', 20),

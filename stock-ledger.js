@@ -239,16 +239,31 @@ function calculate(transactions, options={}){
     return bucket;
   };
 
+  const txnDay=t=>cutoff?stockLedgerDateKey(t.date):String(t.date||'').replace(/\//g,'-');
+  const transferDayKey=(t,date)=>JSON.stringify([t.stockRowId,date]);
+  const pdaTransferDays=new Set(userTransactions.filter(t=>t.type==='재고이동'&&t._pdaAction==='transfer'&&t.stockRowId)
+    .map(t=>transferDayKey(t,txnDay(t))));
   const stockTxns = userTransactions
-    .map((t, idx)=>({t, idx, date:cutoff ? stockLedgerDateKey(t.date) : ''}))
+    .map((t, idx)=>{
+      const date=txnDay(t);
+      const transferDay=pdaTransferDays.size>0&&t.stockRowId&&pdaTransferDays.has(transferDayKey(t,date));
+      return {t,idx,date,transferDay:Boolean(transferDay)};
+    })
     .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동','박스기준'].includes(x.t.type))
     .filter(x=>!cutoff || (x.date && x.date <= cutoff))
     .sort((a,b)=>{
-      const ad = cutoff ? a.date : String(a.t.date||'').replace(/\//g,'-');
-      const bd = cutoff ? b.date : String(b.t.date||'').replace(/\//g,'-');
-      const d = ad.localeCompare(bd);
-      if(!d && Boolean(a.t._labelWeightSplitId)!==Boolean(b.t._labelWeightSplitId))return a.t._labelWeightSplitId?-1:1;
-      return d || (a.idx - b.idx);
+      const d=a.date.localeCompare(b.date);
+      if(d)return d;
+      if(a.transferDay!==b.transferDay)return a.transferDay?-1:1;
+      // The server loads same-day rows by ID. For a PDA transfer source, its
+      // receipt and actual posting order determine the destination box balance.
+      if(a.transferDay){
+        const inbound=Number(b.t.type==='입고')-Number(a.t.type==='입고');
+        const savedAt=row=>Date.parse(row.t._serverAudit?.savedAt)||0;
+        return inbound||savedAt(a)-savedAt(b)||a.idx-b.idx;
+      }
+      if(Boolean(a.t._labelWeightSplitId)!==Boolean(b.t._labelWeightSplitId))return a.t._labelWeightSplitId?-1:1;
+      return a.idx-b.idx;
     });
 
   stockTxns.forEach(({t})=>{
@@ -323,11 +338,13 @@ function calculate(transactions, options={}){
       const fromLocation = normalizeStockLocation(t.fromLocation || stockLocation);
       const toLocation = normalizeStockLocation(t.toLocation || '');
       const movePrice = selectedStockPrice || unitPrice;
+      const pdaTransfer = t._pdaAction==='transfer'&&Boolean(stockRowId);
+      const tolerance = pdaTransfer ? 0.005 : 0.01;
       let remaining = weight;
       const movedBuckets = [];
       let candidates = Object.values(map)
         .filter(s=>matchesRow(s) && (stockRowId ? stockLocationKey(s.stockLocation) === stockLocationKey(fromLocation) : sameStockIdentity(s, product, lot, origin, packunit, movePrice, stockProddate, fromLocation)))
-        .filter(s=>s.stock>0.01)
+        .filter(s=>s.stock>tolerance)
         .sort((a,b)=>String(a.proddate||'').localeCompare(String(b.proddate||'')) || (a.price||0)-(b.price||0));
       candidates.forEach(s=>{
         if(remaining <= 0) return;
@@ -337,14 +354,16 @@ function calculate(transactions, options={}){
         movedBuckets.push(s);
         remaining -= moved;
       });
-      if(remaining > 0.01){
+      const hasOrigin = movedBuckets.length===1&&remaining<=tolerance;
+      if(remaining > tolerance){
         const fallback = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, fromLocation, stockRowId);
         applyBucketProductMeta(fallback, t);
         fallback.total_adjust -= remaining;
         fallback.stock -= remaining;
         movedBuckets.push(fallback);
       }
-      const moveBoxesKnown = movedBuckets.length === 1 && remaining <= 0.01 && movedBuckets[0].stockBoxes !== null && parseOptionalBoxCount(t.boxCount) !== null;
+      const recordedBoxes=parseOptionalBoxCount(t.boxCount);
+      const moveBoxesKnown = hasOrigin && movedBuckets[0].stockBoxes !== null && recordedBoxes !== null;
       movedBuckets.forEach(s=>{ if(moveBoxesKnown) applyStockBoxes(s, t.boxCount, -1); else s.stockBoxes = null; });
       const dest = ensureBucket(product, lot, origin, movePrice, packunit, stockProddate, toLocation, stockRowId);
       applyBucketProductMeta(dest, t);
@@ -356,7 +375,7 @@ function calculate(transactions, options={}){
       }
       dest.total_adjust += weight;
       dest.stock += weight;
-      if(moveBoxesKnown && movedBuckets[0].stockBoxes !== null) applyStockBoxes(dest, t.boxCount);
+      if((pdaTransfer && hasOrigin && Number.isSafeInteger(recordedBoxes)) || (moveBoxesKnown && movedBuckets[0].stockBoxes !== null)) applyStockBoxes(dest, t.boxCount);
       else dest.stockBoxes = null;
       if(!dest.source) dest.source = '재고이동';
     } else {

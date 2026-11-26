@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>동부엠티 ERP 시스템</title>
-<script src="stock-ledger.js?v=20261123factorydate1"></script>
+<script src="stock-ledger.js?v=20261126transfer1"></script>
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
 <script src="work-order-stock-groups.js?v=20261126bulk1"></script>
@@ -415,7 +415,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="nav-tab" onclick="showPage('p-customer-ledger',this)" id="nav-customer-ledger">📒 거래처원장</div>
       <div class="nav-tab" onclick="showPage('p-product-ledger',this)" id="nav-product-ledger">📑 상품원장</div>
       <div class="nav-tab" onclick="showPage('p-stock',this)" id="nav-stock">📊 재고현황</div>
-      <div class="nav-tab" onclick="window.open('pda.html?v=20261124initials1','_blank');" id="nav-pda">📲 PDA 입출고</div>
+      <div class="nav-tab" onclick="window.open('pda.html?v=20261126transfer1','_blank');" id="nav-pda">📲 PDA 입출고</div>
       <div class="nav-tab" onclick="showPage('p-invoice',this)" id="nav-invoice">🧾 거래명세서</div>
       <div class="nav-tab" onclick="showPage('p-submaterials',this);" id="nav-submaterials">📦 부자재 관리</div>
       <div class="nav-tab" onclick="showPage('p-cold-storage-request',this)" id="nav-cold-storage-request">📠 냉동창고 요청</div>
@@ -11020,7 +11020,7 @@ function renderTransactions(){
     <td class="txn-col-note">${note}</td>
     <td class="txn-col-manage"><span class="txn-list-actions">
       ${!isPdaSummary&&DBMTPdaTransactionSummary.isRawReceipt(t) ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button> ` : ''}${t._receiptUseRows?`<button type="button" class="btn btn-secondary btn-sm" onclick="openEditProdEntry(${jsArg(t._prodId)})">생산일보</button>`:isPdaSummary ? `${t._pdaLabelId||t._pdaReceiptSummary?`<button class="btn btn-sm btn-primary" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button> `:''}<button type="button" class="btn btn-secondary btn-sm" onclick="openPdaTransactionDetails(${jsArg(t.id)})">박스별</button>` : t._isUser
-         ? `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`
+         ? (isStockMove && t._pdaAction==='transfer' ? '<span style="font-size:11px;color:#666;">PDA 이동</span>' : `${isStockAdjust || isBoxBaseline ? '' : `<button class="btn btn-sm" style="background:#2980b9;color:#fff;" onclick="loadTxnToForm(${jsArg(t.id)})">수정</button>`}<button class="btn btn-sm btn-danger" onclick="deleteTransaction(${jsArg(t.id)})">삭제</button>`)
         : '<span style="font-size:10px;color:#aaa">원본</span>'}
     </span></td>
   </tr>`;
@@ -11098,6 +11098,7 @@ async function deleteTransaction(id){
   if(String(id).startsWith('pda-summary:')&&!summary){toast('삭제할 합계 행을 다시 조회해주세요.');return;}
   const linked = summary||userTransactions.find(txn=>String(txn.id)===String(id));
   if(linked?.stockRowId && linked?._prodId){ toast('생산일보에서 생성된 재고입니다. 해당 생산일보에서 삭제해주세요.'); return; }
+  if(linked?.type==='재고이동'&&linked._pdaAction==='transfer'){toast('PDA 이동은 바코드 지점과 함께 기록되어 거래내역에서 삭제할 수 없습니다.');return;}
   const productShipment=linked?.type==='출고'&&linked?._pdaRequestId&&linked?._pdaLabelId;
   const rawReceipt=DBMTPdaTransactionSummary.isRawReceipt(linked||{});
   if(summary&&!productShipment&&!rawReceipt){toast('이 PDA 합계의 삭제는 지원하지 않습니다.');return;}
@@ -11141,6 +11142,7 @@ function saveEditTxn(){ return addTransaction(); }
 function loadTxnToForm(id){
   const t=(String(id).startsWith('pda-summary:')?findPdaTransactionSummary(id):null)||userTransactions.find(x=>String(x.id)===String(id));
   if(!t) return;
+  if(t.type==='재고이동'&&t._pdaAction==='transfer'){toast('PDA 이동은 바코드 지점과 함께 기록되어 거래내역에서 수정할 수 없습니다.');return;}
   if(t._pdaSummaryRows&&!t._pdaLabelId&&!t._pdaReceiptSummary)return;
   if(typeof setPdaRawReceiptEditControls==='function')setPdaRawReceiptEditControls(false);
   pdaRawReceiptEditRows=t._pdaReceiptSummary?t._pdaSummaryRows.map(row=>structuredClone(row)):[];
