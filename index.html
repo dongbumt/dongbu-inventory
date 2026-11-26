@@ -7,6 +7,7 @@
 <script src="stock-ledger.js?v=20261126transfer1"></script>
 <script src="ledger-model.js?v=20261112ledger1"></script>
 <script src="pda-transaction-summary.js?v=20261116receipt1"></script>
+<script src="manual-split-outbound.js?v=20261126splitout1"></script>
 <script src="work-order-stock-groups.js?v=20261126bulk1"></script>
 <script src="work-order-blend.js?v=20261124blend2"></script>
 <script src="stock-receipt-view.js?v=20261123receiptdate1"></script>
@@ -779,6 +780,16 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
      거래내역
 ══════════════════════════════════════════ -->
 <div class="tab-panel" id="p-transactions">
+  <dialog id="manual-split-outbound-dialog" class="edit-modal" aria-labelledby="manual-split-outbound-title" style="max-width:620px;margin:auto;border:0;">
+    <h3 id="manual-split-outbound-title">분할 박스 선택</h3>
+    <p style="margin-bottom:12px;font-size:13px;color:#555;">실제로 출고하는 분할 박스의 라벨 번호를 확인하고 선택하세요.</p>
+    <div data-split-outbound-list></div>
+    <p data-split-outbound-status role="status" style="margin:8px 0 0;color:#8b2424;font-size:12px;"></p>
+    <div class="em-btns">
+      <button type="button" class="btn btn-secondary" data-split-outbound-cancel>취소</button>
+      <button type="button" class="btn btn-primary" data-split-outbound-submit>출고 저장</button>
+    </div>
+  </dialog>
   <div class="card">
     <div class="card-title">
       <div class="ct-bar" style="background:var(--blue);"></div>
@@ -6264,6 +6275,15 @@ async function refreshProtectedCoreAfterFailure(){
   }
 }
 
+async function prepareManualSplitOutbound(rows){
+  if(localStorage.getItem(SUPABASE_ENABLED_KEY) !== '1') return true;
+  return DBMTManualSplitOutbound.prepare(rows, async sources => {
+    const token = personalServerWriteToken('transactions', 'create');
+    const result = await sbRpc('dbmt_erp_get_manual_split_stock', {p_token:token,p_sources:sources});
+    return assertPersonalServerResult(result, '분할 박스 재고를 확인하지 못했습니다.').rows;
+  });
+}
+
 async function supabaseSaveTransactionRows(rows, deletedIds, options={}){
   const upsertRows = normalizeRowsForUpsert(rows, 'tx');
   const deleteIds = asArray(deletedIds).map(id => String(id)).filter(Boolean);
@@ -6284,9 +6304,14 @@ async function supabaseSaveTransactionRows(rows, deletedIds, options={}){
   });
   assertPersonalServerResult(result, '거래내역을 저장할 권한이 없습니다.');
   const correctedRows=[...(result.updatedRawReceipts||[]),...(result.updatedPdaShipments||[])];
-  if(correctedRows.length){
+  const splitShipments=result.splitShipments||[];
+  if(splitShipments.length){
+    userTransactions=DBMTManualSplitOutbound.applySavedRows(userTransactions,splitShipments,correctedRows);
+  }else if(correctedRows.length){
     const corrected=new Map(correctedRows.map(row=>[String(row.id),row]));
     userTransactions=userTransactions.map(row=>corrected.get(String(row.id))||row);
+  }
+  if(correctedRows.length || splitShipments.length){
     transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
     invalidateStockMap();
   }
@@ -9631,20 +9656,31 @@ async function addTransaction(){
       stockNote:selectedStock?.stockNote || '',
       _isUser:true
     };
-    userTransactions.push(newItem);
     savedTxn = newItem;
   }
-  transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
-  _stockMapCache=null;
   const wasEditTxn = !!_editTxnId;
   const savedProduct = product;
+  const needsSplitReview = !wasEditTxn && savedTxn?.type === '출고' && savedTxn.stockRowId && typeof prepareManualSplitOutbound === 'function';
+  const outButton = needsSplitReview ? document.getElementById('t-add-btn') : null;
+  const outCard = outButton?.closest?.('.card');
+  const wasInert = outCard?.inert;
+  if(outButton?.disabled) return;
+  if(outButton) outButton.disabled = true;
+  if(outCard) outCard.inert = true;
   try{
+    if(needsSplitReview && !await prepareManualSplitOutbound([savedTxn])) return;
+    if(!wasEditTxn) userTransactions.push(savedTxn);
+    transactions=[...EXCEL_TRANSACTIONS,...userTransactions];
+    _stockMapCache=null;
     await saveTransactionRows(savedTxn, null, null, {action: wasEditTxn ? '수정' : '저장'});
   }catch(err){
     const reason = String(err?.message || err || '잠시 후 다시 시도해주세요.');
     showTransactionSaveStatus(`거래내역 저장 실패 — ${reason}`, true);
     toast(reason);
     return;
+  }finally{
+    if(outButton) outButton.disabled = false;
+    if(outCard) outCard.inert = wasInert;
   }
   clearTransactionForm({resetType:true});
   renderTransactions(); updateProductList();
@@ -10780,6 +10816,7 @@ async function saveBulkOutbound(){
     if(planned.length>500)throw new Error('거래 원본이 500건을 넘습니다. 출고 항목을 나눠 저장해주세요.');
     if(!confirm(`출고 ${staged.length}건을 일괄 저장할까요?`)) return;
     if(panel)panel.inert=true;
+    if(typeof prepareManualSplitOutbound === 'function' && !await prepareManualSplitOutbound(planned)) return;
     addedRows=planned;
     userTransactions.push(...addedRows);
     transactions = [...EXCEL_TRANSACTIONS, ...userTransactions];
