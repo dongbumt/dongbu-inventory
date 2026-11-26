@@ -55,6 +55,61 @@ function row(ctx, id, location = '가공장', asOf = '') {
   assert.equal(found.length, 1, `Expected one bucket for row ${id || '(legacy)'} at ${location}`);
   return found[0];
 }
+
+function testSameDayStockOrder() {
+  const date = '2026-09-14';
+  const source = 'same-day-production';
+  const receipt = {...incoming(source, 507.78, '가상 제품'), id:'tx_prod_label_qa_out_0', date, boxCount:51};
+  const shipment = {...consume(source, 85), id:'tx_manual_qa', boxCount:8};
+  const splits = [1,2,3].map(number=>({...consume(source, 0, '재고조정'),
+    id:`tx_label_split_qa_${number}`, _labelWeightSplitId:`qa-${number}`, boxCount:1}));
+  const neighbor = {...incoming('independent-production', 25, '다른 재고행'), boxCount:5};
+  const legacy = {...trackedInbound('', 40, 6000), boxCount:8};
+  const legacyShipment = {...consume('', 10), boxCount:2};
+  const ctx = harness();
+  function setRows(entries){
+    ctx.userTransactions = entries;
+    ctx.invalidateStockMap();
+  }
+  function assertStock(id, weight, boxes, asOf = ''){
+    const stock = row(ctx, id, '가공장', asOf);
+    assert.deepEqual([Number(stock.stock.toFixed(2)),stock.stockBoxes],[weight,boxes]);
+  }
+  function testOrder(prefix, remaining){
+    if(remaining.length){
+      remaining.forEach((entry,index)=>testOrder([...prefix,entry],remaining.filter((_,i)=>i!==index)));
+      return;
+    }
+    const [first,second,...rest] = prefix;
+    setRows([first,legacyShipment,second,neighbor,...rest,legacy]);
+    assertStock(source,422.78,46);
+    assertStock('independent-production',25,5);
+    assertStock('',30,6);
+  }
+  // Different same-day payload orders, including the server's date/ID order.
+  testOrder([], [...splits,shipment,receipt]);
+  assertStock(source,422.78,46,date);
+  assert.equal(buckets(ctx,'2026-09-13').some(stock=>stock.stockRowId===source),false);
+
+  for(const count of [null, undefined, '']){
+    setRows([...splits,{...shipment,boxCount:count},receipt]);
+    assertStock(source,422.78,null);
+  }
+  setRows([...splits,shipment,{...receipt,boxCount:null}]);
+  assertStock(source,422.78,null);
+
+  // Put the receipt first without shuffling a same-day physical count across movements.
+  const baselineSource = 'same-day-baseline';
+  setRows([
+    consume(baselineSource,20),
+    {...consume(baselineSource,0,'박스기준'),boxCountAfter:8},
+    {...consume(baselineSource,10),boxCount:1},
+    {...incoming(baselineSource,100,''),date,boxCount:10}
+  ]);
+  assertStock(baselineSource,70,7);
+  console.log('PASS: same-day production receipt and box split before deductions, all payload permutations, true missing counts, source isolation, cutoff and physical baseline');
+}
+
 function testLogic() {
   const provisional = harness([
     {...consume('pending-original',10),_pdaProvisional:true,stockUnitPrice:null},
@@ -96,6 +151,15 @@ function testLogic() {
   pdaTransfer.invalidateStockMap();
   assert.deepEqual([row(pdaTransfer,'warehouse-source','물류창고').stock,row(pdaTransfer,'warehouse-source','물류창고').stockBoxes],[15,3]);
   assert.deepEqual([row(pdaTransfer,'warehouse-source').stock,row(pdaTransfer,'warehouse-source').stockBoxes],[0,0]);
+
+  const finishedReceipt={...incoming('finished-transfer',20,''),date:'2026-09-14',boxCount:4,
+    _serverAudit:{savedAt:'2026-09-14T03:00:00Z'}};
+  const finishedTransfer={...stagedTransfer,stockRowId:'finished-transfer',stockLocation:'가공장',
+    fromLocation:'가공장',toLocation:'물류창고'};
+  const finishedShipment={...factoryShipment,stockRowId:'finished-transfer',stockLocation:'물류창고'};
+  const finished=harness([finishedShipment,finishedTransfer,finishedReceipt]);
+  assert.deepEqual([row(finished,'finished-transfer').stock,row(finished,'finished-transfer').stockBoxes],[10,2]);
+  assert.deepEqual([row(finished,'finished-transfer','물류창고').stock,row(finished,'finished-transfer','물류창고').stockBoxes],[5,1]);
 
   const unknownWarehouseBoxes=harness([
     {...warehouseReceipt,weight:0.01,boxCount:null},
@@ -641,6 +705,7 @@ async function testBrowser() {
 
 async function main() {
   for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) new vm.Script(match[1]);
+  testSameDayStockOrder();
   testLogic();
   testPublicStockPresentation();
   const ctx={console};vm.createContext(ctx);

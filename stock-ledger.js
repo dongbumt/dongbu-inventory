@@ -240,14 +240,15 @@ function calculate(transactions, options={}){
   };
 
   const txnDay=t=>cutoff?stockLedgerDateKey(t.date):String(t.date||'').replace(/\//g,'-');
-  const transferDayKey=(t,date)=>JSON.stringify([t.stockRowId,date]);
+  const sourceDayKey=(t,date)=>JSON.stringify([String(t.stockRowId),date]);
+  const isReceipt=t=>t.type==='입고'||t.type==='생산입고';
   const pdaTransferDays=new Set(userTransactions.filter(t=>t.type==='재고이동'&&t._pdaAction==='transfer'&&t.stockRowId)
-    .map(t=>transferDayKey(t,txnDay(t))));
+    .map(t=>sourceDayKey(t,txnDay(t))));
   const stockTxns = userTransactions
     .map((t, idx)=>{
       const date=txnDay(t);
-      const transferDay=pdaTransferDays.size>0&&t.stockRowId&&pdaTransferDays.has(transferDayKey(t,date));
-      return {t,idx,date,transferDay:Boolean(transferDay)};
+      const sourceDay=t.stockRowId&&date?sourceDayKey(t,date):null;
+      return {t,idx,date,sourceDay,transferDay:pdaTransferDays.has(sourceDay)};
     })
     .filter(x=>['입고','생산입고','출고','사용','재고조정','재고이동','박스기준'].includes(x.t.type))
     .filter(x=>!cutoff || (x.date && x.date <= cutoff))
@@ -258,13 +259,34 @@ function calculate(transactions, options={}){
       // The server loads same-day rows by ID. For a PDA transfer source, its
       // receipt and actual posting order determine the destination box balance.
       if(a.transferDay){
-        const inbound=Number(b.t.type==='입고')-Number(a.t.type==='입고');
         const savedAt=row=>Date.parse(row.t._serverAudit?.savedAt)||0;
-        return inbound||savedAt(a)-savedAt(b)||a.idx-b.idx;
+        return savedAt(a)-savedAt(b)||a.idx-b.idx;
       }
       if(Boolean(a.t._labelWeightSplitId)!==Boolean(b.t._labelWeightSplitId))return a.t._labelWeightSplitId?-1:1;
       return a.idx-b.idx;
     });
+
+  // Same-day transaction IDs don't express posting order. A receipt must establish
+  // its exact stock source before its movements, even if the server returns it last.
+  // Keep other sources in their positions and preserve movement order within a source.
+  const receiptGroups=new Map();
+  for(const entry of stockTxns){
+    if(!entry.sourceDay || entry.t._pdaProvisional===true || !isReceipt(entry.t)) continue;
+    if(!receiptGroups.has(entry.sourceDay)) receiptGroups.set(entry.sourceDay,{positions:[],receipts:[],movements:[]});
+    receiptGroups.get(entry.sourceDay).receipts.push(entry);
+  }
+  stockTxns.forEach((entry,index)=>{
+    if(entry.t._pdaProvisional===true) return;
+    const group=receiptGroups.get(entry.sourceDay);
+    if(!group) return;
+    group.positions.push(index);
+    if(!isReceipt(entry.t)) group.movements.push(entry);
+  });
+  for(const group of receiptGroups.values()){
+    if(!group.movements.length) continue;
+    const ordered=group.receipts.concat(group.movements);
+    group.positions.forEach((position,index)=>{stockTxns[position]=ordered[index];});
+  }
 
   stockTxns.forEach(({t})=>{
     if(t._pdaProvisional === true) return;
