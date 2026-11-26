@@ -49,6 +49,12 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     await page.addScriptTag({content:pickerFunctions});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'product-specs.js'),'utf8')});
     await page.evaluate(()=>DBMTProductSpecs.init());
+    const stockInput=page.locator('#spec-stock-qty');
+    const stockCell=id=>page.locator(`#spec-rows tr[data-id="${id}"] td`).nth(9);
+    assert.equal(await stockInput.inputValue(),'','Stock starts blank');
+    const headings=await page.locator('.spec-table .spec-sort').evaluateAll(buttons=>buttons.map(button=>button.dataset.sort));
+    const stockColumn=headings.indexOf('stock_qty');
+    assert.deepEqual(headings.slice(stockColumn-1,stockColumn+2),['monthly_usage','stock_qty','price_kg'],'Stock precedes the price columns and follows monthly usage');
     assert.deepEqual(await page.locator('#spec-distribution-choice option').allTextContents(),['선택','삼성웰스토리','동원홈푸드','CJ프레시웨이','동부축산유통','직납','직접입력']);
     for(const value of ['삼성웰스토리','동원홈푸드','CJ프레시웨이','동부축산유통','직납']){
       await page.locator('#spec-distribution-choice').selectOption(value);
@@ -97,6 +103,16 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     await page.locator('#spec-price-box').fill('120000');
     await page.locator('#spec-note').fill('납품용');
     await page.locator('#spec-monthly-usage').fill('1000.25');
+    const callsBeforeInvalidStock=await page.evaluate(()=>qaCalls.length);
+    for(const value of ['-0.000001','999999999.000001','0.0000001']){
+      await stockInput.fill(value);
+      assert.equal(await stockInput.evaluate(input=>input.validity.valid),false,`Reject stock ${value}`);
+      await page.locator('#spec-save').click();
+      assert.equal(await page.evaluate(()=>qaCalls.length),callsBeforeInvalidStock,'Invalid stock never reaches the server');
+    }
+    await stockInput.fill('999999999');
+    assert.equal(await stockInput.evaluate(input=>input.validity.valid),true,'Accept the inclusive stock limit');
+    await stockInput.fill('321.123456');
     await page.locator('#spec-save').click();
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),1);
     assert.match(await page.locator('#spec-rows').textContent(),/1KG 진공포장/);
@@ -104,6 +120,9 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     assert.deepEqual(await page.evaluate(()=>[qaRows[0].inner_packaging_spec,qaRows[0].outer_packaging_spec]),['1KG 진공포장','5KG × 2팩 / 박스']);
     assert.equal(await page.evaluate(()=>qaRows[0].distribution),'삼성웰스토리');
     assert.equal(await page.evaluate(()=>qaRows[0].monthly_usage),1000.25);
+    assert.equal(await page.evaluate(()=>qaRows[0].stock_qty),321.123456,'Save six decimal places of reference stock');
+    assert.equal(await stockCell('qa-1').textContent(),'321.123456');
+    assert.equal(await stockInput.inputValue(),'','Successful save resets stock');
     assert.equal(await page.evaluate(()=>qaRows[0].material_product_id),'p1');
     assert.equal(await page.evaluate(()=>qaRows[0].brand),'브랜드A');
     assert.equal(await page.locator('#spec-rows tr[data-id="qa-1"] td').nth(3).textContent(),'브랜드A','Brand appears immediately after material');
@@ -126,11 +145,13 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.material==='우둔살').price_kg),null);
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.material==='우둔살').distribution),'지역 급식유통');
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.material==='우둔살').monthly_usage),null);
-    const sortFields=['trader','distribution','material','brand','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','monthly_usage','price_kg','price_box','note'];
+    assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-2').stock_qty),null,'Blank stock is nullable');
+    assert.equal(await stockCell('qa-2').textContent(),'—');
+    const sortFields=['trader','distribution','material','brand','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','monthly_usage','stock_qty','price_kg','price_box','note'];
     const rowIds=()=>page.locator('#spec-rows tr[data-id]').evaluateAll(rows=>rows.map(row=>row.dataset.id));
     await page.evaluate(keys=>{
       window.qaOriginalRows=structuredClone(qaRows);
-      qaRows=[10,2,1,null].map(number=>({id:'sort-'+number,revision:1,...Object.fromEntries(keys.map(key=>[key,number===null?null:key.startsWith('price_')||key==='monthly_usage'?String(number===1?0:number===10?10000:number):'테스트 '+number]))}));
+      qaRows=[10,2,1,null].map(number=>({id:'sort-'+number,revision:1,...Object.fromEntries(keys.map(key=>[key,number===null?null:key.startsWith('price_')||key==='monthly_usage'||key==='stock_qty'?String(number===1?0:number===10?10000:number):'테스트 '+number]))}));
       qaRows[1].packaging_spec=qaRows[1].inner_packaging_spec;
       delete qaRows[1].inner_packaging_spec;
       return DBMTProductSpecs.load();
@@ -185,6 +206,8 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),2);
     await page.locator('[data-id="qa-1"] [data-action="edit"]').click();
     assert.equal(await page.locator('#spec-distribution-choice').inputValue(),'삼성웰스토리');
+    assert.equal(await stockInput.inputValue(),'321.123456','Editing restores the existing stock amount');
+    await stockInput.fill('987.654321');
     await page.locator('#spec-distribution-choice').selectOption('CJ프레시웨이');
     assert.equal(await page.locator('#spec-inner-packaging').inputValue(),'1KG 진공포장');
     assert.equal(await page.locator('#spec-outer-packaging').inputValue(),'5KG × 2팩 / 박스');
@@ -195,6 +218,7 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     assert.match(await page.locator('#spec-rows tr[data-id="qa-1"]').textContent(),/12,500.5/);
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-1').outer_packaging_spec),'6KG 박스');
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-1').distribution),'CJ프레시웨이');
+    assert.equal(await stockCell('qa-1').textContent(),'987.654321');
     assert.equal(await page.locator('th:has([data-sort="price_kg"])').getAttribute('aria-sort'),'descending','Saving preserves the selected sort');
     assert.deepEqual(await rowIds(),['qa-1','qa-2'],'Saved numeric values remain sorted with blanks last');
     await page.evaluate(()=>DBMTProductSpecs.load());
@@ -206,7 +230,11 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     assert.equal(await page.locator('#spec-distribution-choice').inputValue(),'__custom__');
     assert.equal(await page.locator('#spec-distribution').isVisible(),true);
     assert.equal(await page.locator('#spec-distribution').inputValue(),'지역 급식유통','Custom value survives reload and edit');
+    assert.equal(await stockInput.inputValue(),'');
+    await stockInput.fill('45.25');await page.locator('#spec-save').click();
+    assert.equal(await stockCell('qa-2').textContent(),'45.25');
     await page.locator('[data-id="qa-1"] [data-action="edit"]').click();
+    assert.equal(await stockInput.inputValue(),'987.654321','Updated stock survives reload');
     await page.evaluate(()=>{qaRows.find(row=>row.id==='qa-1').revision++;});
     await page.locator('#spec-save').click();
     assert.match(await page.locator('#spec-message').textContent(),/다른 사용자/);
@@ -230,30 +258,38 @@ const pickerFunctions=['htmlEscape',...pickerNames].map(name=>{const m=markup.ma
     assert.equal(await page.locator('#spec-outer-packaging').inputValue(),'10KG 박스');
     assert.equal(await page.locator('#spec-price-kg').inputValue(),'');
     assert.equal(await page.locator('#spec-price-box').inputValue(),'');
+    assert.equal(await stockInput.inputValue(),'45.25','Copy carries stock to the new draft');
     assert.deepEqual(await page.evaluate(()=>qaRows),beforeCopy.rows,'Copy cannot modify the source row');
     assert.equal(await page.evaluate(()=>qaCalls.length),beforeCopy.calls,'Copy only fills the form');
     await page.locator('#spec-trader').fill('복사 신규 거래처');
     await page.locator('#spec-price-kg').fill('0');
     await page.locator('#spec-monthly-usage').fill('0');
+    await stockInput.fill('0');
     await page.evaluate(()=>{qaFailure=true;});await page.locator('#spec-save').click();
     assert.match(await page.locator('#spec-message').textContent(),/QA 서버 오류/);
     assert.equal(await page.locator('#spec-trader').inputValue(),'복사 신규 거래처','Failed create preserves the copied draft');
+    assert.equal(await stockInput.inputValue(),'0','Failed create preserves an explicit zero');
     await page.evaluate(()=>{qaFailure=false;});await page.locator('#spec-save').click();
     const copiedSave=await page.evaluate(()=>qaCalls.filter(call=>call.name==='dbmt_erp_save_product_spec').at(-1));
     assert.equal(copiedSave.params.p_id,null,'Create a new record instead of overwriting the copied row');
     assert.equal(copiedSave.params.p_revision,null,'Copied source revision must never be reused');
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-3').price_kg),0);
     assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-3').monthly_usage),0,'Copied drafts preserve an explicit zero monthly quantity');
+    assert.equal(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-3').stock_qty),0,'Zero stock is distinct from blank');
+    assert.equal(await stockCell('qa-3').textContent(),'0');
     assert.deepEqual(await page.evaluate(()=>qaRows.find(row=>row.id==='qa-2')),beforeCopy.rows.find(row=>row.id==='qa-2'));
     await page.locator('[data-id="qa-3"] [data-action="delete"]').click();
     await page.locator('[data-id="qa-2"] [data-action="delete"]').click();
     assert.equal(await page.locator('#spec-rows tr[data-id]').count(),1);
     await page.evaluate(()=>{qaRows.push({id:'qa-legacy',trader:'기존 거래처',material:'기존 원재료',revision:1,packaging_spec:'기존 포장규격',price_kg:0,price_box:null});return DBMTProductSpecs.load();});
     await page.locator('[data-id="qa-legacy"] [data-action="edit"]').click();
+    assert.equal(await stockInput.inputValue(),'','Legacy records remain blank on edit');
+    assert.equal(await stockCell('qa-legacy').textContent(),'—');
     assert.equal(await page.locator('#spec-distribution-choice').inputValue(),'','Existing records start with no distribution');
     assert.equal(await page.locator('#spec-distribution').inputValue(),'');
     assert.equal(await page.locator('#spec-distribution').isVisible(),false);
     await page.locator('[data-id="qa-legacy"] [data-action="copy"]').click();
+    assert.equal(await stockInput.inputValue(),'','Legacy records remain blank on copy');
     assert.equal(await page.locator('#spec-editor-title').textContent(),'제품스펙 등록');
     assert.equal(await page.locator('#spec-inner-packaging').inputValue(),'기존 포장규격');
     assert.equal(await page.locator('#spec-price-kg').inputValue(),'0','Preserve explicitly recorded zero prices');

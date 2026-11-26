@@ -39,7 +39,7 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
       };
     `});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'product-specs.js'),'utf8')});
-    const base={distribution:'삼성웰스토리',origin:'미국산',cutting_spec:'15×30×40mm 슬라이스',inner_packaging_spec:'1KG 진공포장',outer_packaging_spec:'1KG×10PAC/BOX',price_kg:6700,price_box:67000,note:'납품 요청사항'};
+    const base={distribution:'삼성웰스토리',origin:'미국산',cutting_spec:'15×30×40mm 슬라이스',inner_packaging_spec:'1KG 진공포장',outer_packaging_spec:'1KG×10PAC/BOX',stock_qty:432.765432,price_kg:6700,price_box:67000,note:'납품 요청사항'};
     const rows=[
       {...base,id:'a',trader:'검색업체2',material:'목전지',brand:'브랜드A',price_kg:0,inner_packaging_spec:null,packaging_spec:'기존 포장스펙'},
       {...base,id:'b',trader:'검색업체10',material:'목전지',price_kg:null,price_box:null},
@@ -73,8 +73,10 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     assert.equal(await page.locator('.spec-table th').filter({hasText:'유통'}).count(),1,'Distributor remains on screen');
     assert.equal(await page.locator('.spec-table th').filter({hasText:'비고'}).count(),1,'Notes remain on screen');
     assert.doesNotMatch(await popup.locator('body').textContent(),/단가|12,000|67,000/,'Neither price column nor price-unit guide is printed');
-    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(9).textContent(),'0','Screen prices remain available');
-    assert.equal(await page.locator('#spec-rows tr[data-id="b"] td').nth(9).textContent(),'—');
+    assert.doesNotMatch(await popup.locator('body').textContent(),/재고량|432\.765432/,'Reference stock is omitted from detail print');
+    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(9).textContent(),'432.765432','Reference stock remains visible on the list');
+    assert.equal(await page.locator('#spec-rows tr[data-id="a"] td').nth(10).textContent(),'0','Screen prices remain available');
+    assert.equal(await page.locator('#spec-rows tr[data-id="b"] td').nth(10).textContent(),'—');
     assert.match(await popup.locator('tbody').textContent(),/기존 포장스펙/);
     assert.equal(await popup.locator('img,script,button,input,select').count(),0,'No injected HTML, editor or management buttons');
     assert.ok(!(await popup.locator('body').textContent()).includes('출력제외업체'));
@@ -166,6 +168,7 @@ const output=process.env.SPEC_PRINT_QA_DIR||path.join(os.tmpdir(),'dbmt-product-
     popup=await openPrint('#spec-usage-print');
     assert.equal(await popup.locator('tbody tr').count(),4,'Only three entered groups and the total are printed');
     assert.deepEqual(await popup.locator('thead th').allTextContents(),['품목(원재료)','브랜드','원산지','월사용량 합계(KG)']);
+    assert.doesNotMatch(await popup.locator('body').textContent(),/재고량|432\.765432/,'Reference stock is omitted from usage print and sums');
     assert.equal(await popup.locator('tbody tr').filter({hasText:'돈등심'}).locator('td').nth(1).textContent(),'브랜드A');
     assert.doesNotMatch(await popup.locator('tbody').textContent(),/앞다리/);
     assert.equal(await popup.locator('tbody tr').filter({hasText:'돈등심'}).filter({hasText:'국내산'}).locator('td').last().textContent(),'300.3');

@@ -39,24 +39,30 @@ def tests(conn):
     conn.execute('update public.erp_role_permissions set can_create=false where role_id=%s',(role,))
     assert not save(payload)['ok']
     conn.execute('update public.erp_role_permissions set can_create=true where role_id=%s',(role,))
-    created=save(payload)['spec'];spec_id=uuid.UUID(created['id'])
+    created=save(dict(payload,stock_qty=31.123456))['spec'];spec_id=uuid.UUID(created['id'])
     assert created['material']=='QA 돈등심' and created['material_product_id']=='qa-product'
     assert created['brand']=='QA A','Older clients default new brands from the exact catalog ID'
     assert created['monthly_usage']==1000.123456 and created['price_kg']==0
+    assert created['stock_qty']==31.123456
     assert conn.execute("select payload->'after'->'monthly_usage' from public.change_logs where entity='제품스펙' and entity_id=%s",(created['id'],)).fetchone()[0]==1000.123456
     assert conn.execute("select payload->'after'->>'brand' from public.change_logs where entity='제품스펙' and entity_id=%s",(created['id'],)).fetchone()[0]=='QA A'
+    assert conn.execute("select payload->'after'->'stock_qty' from public.change_logs where entity='제품스펙' and entity_id=%s",(created['id'],)).fetchone()[0]==31.123456
     fetched=rpc('dbmt_erp_get_product_specs',token)
     assert next(row for row in fetched['specs'] if row['id']==created['id'])['monthly_usage']==1000.123456
     assert next(row for row in fetched['specs'] if row['id']==created['id'])['brand']=='QA A'
+    assert next(row for row in fetched['specs'] if row['id']==created['id'])['stock_qty']==31.123456
     # A tab predating this release cannot erase monthly usage or the product identity.
     old_payload={key:value for key,value in payload.items() if key not in ('monthly_usage','material_product_id')}
     updated=save(old_payload,spec_id,created['revision'])['spec']
     assert updated['monthly_usage']==1000.123456 and updated['material_product_id']=='qa-product'
     assert updated['brand']=='QA A','Old client edits preserve brand snapshots'
+    assert updated['stock_qty']==31.123456,'Old client edits preserve stock quantity'
     assert updated['distribution']=='삼성웰스토리' and updated['outer_packaging_spec']=='10KG/BOX'
     reject(lambda:save(payload,spec_id,created['revision']),'다른 사용자')
-    zero=save(dict(payload,monthly_usage=0),spec_id,updated['revision'])['spec'];assert zero['monthly_usage']==0
-    cleared=save(dict(payload,monthly_usage=None),spec_id,zero['revision'])['spec'];assert cleared['monthly_usage'] is None
+    zero=save(dict(payload,monthly_usage=0,stock_qty=0),spec_id,updated['revision'])['spec']
+    assert zero['monthly_usage']==0 and zero['stock_qty']==0
+    cleared=save(dict(payload,monthly_usage=None,stock_qty=None),spec_id,zero['revision'])['spec']
+    assert cleared['monthly_usage'] is None and cleared['stock_qty'] is None
     brand_changed=save(dict(payload,brand='  별도 브랜드  '),spec_id,cleared['revision'])['spec'];assert brand_changed['brand']=='별도 브랜드'
     blank_brand=save(dict(payload,brand=None),spec_id,brand_changed['revision'])['spec'];assert blank_brand['brand']==''
     retained_brand=save(payload,spec_id,blank_brand['revision'])['spec'];assert retained_brand['brand']==''
@@ -65,9 +71,14 @@ def tests(conn):
     assert save(dict(payload,brand='가'*200))['spec']['brand']=='가'*200
     for value in [-1,1000000000,0.1234567]:reject(lambda value=value:save(dict(payload,monthly_usage=value)),'월사용량은 0 이상')
     reject(lambda:save(dict(payload,monthly_usage='10')),'월사용량은 숫자')
+    for value in [-1,1000000000,0.1234567]:
+        reject(lambda value=value:save(dict(payload,stock_qty=value)),'재고량은 0 이상')
+    for value in ['10',True,[]]:
+        reject(lambda value=value:save(dict(payload,stock_qty=value)),'재고량은 숫자')
+    assert save(dict(payload,stock_qty=999999999))['spec']['stock_qty']==999999999
     raw_payload=dict(payload,material_product_id='qa-raw')
     raw=save(raw_payload)['spec'];assert raw['material']=='QA 원료육' and raw['material_product_id']=='qa-raw'
-    assert raw['brand']=='QA 원료브랜드'
+    assert raw['brand']=='QA 원료브랜드' and raw['stock_qty'] is None
     raw_updated=save(dict(raw_payload,monthly_usage=12.5),uuid.UUID(raw['id']),raw['revision'])['spec']
     assert raw_updated['monthly_usage']==12.5 and raw_updated['material']=='QA 원료육'
     raw_copy=save(dict(raw_payload,trader='QA 원료육 복사'))['spec'];assert raw_copy['id']!=raw['id']
@@ -92,19 +103,19 @@ def tests(conn):
     assert not rpc('dbmt_erp_get_product_specs',token)['ok']
     assert conn.execute("select relrowsecurity from pg_class where oid='public.product_specs'::regclass").fetchone()[0]
     assert not conn.execute("select has_table_privilege('anon','public.product_specs','select')").fetchone()[0]
-    print('PASS: brand create/read/edit/clear/copy/length and old-client retention; raw meat, KG usage, material identity, revisions, audit and permissions')
+    print('PASS: stock quantity validation, zero, null and old-client retention; brand, raw meat, KG usage, material identity, revisions, audit and permissions')
 
 
 def main():
     if 'hdwjwtmbsxfjrlvicgnn' not in os.environ.get('PGUSER',''):raise RuntimeError('Wrong project')
-    migration,=(ROOT/'supabase/migrations').glob('*_product_spec_brand.sql')
+    migration,=(ROOT/'supabase/migrations').glob('*_product_spec_stock_qty.sql')
     with psycopg.connect(sslmode='require',connect_timeout=20,autocommit=True,application_name='dbmt_spec_usage_qa') as conn:
         conn.execute('set role postgres')
         with conn.transaction(force_rollback=True):
             conn.execute("set local lock_timeout='8s'");conn.execute("set local statement_timeout='40s'")
-            before=conn.execute("select coalesce(jsonb_agg(to_jsonb(s)-'brand' order by id),'[]'::jsonb) from public.product_specs s").fetchone()[0]
+            before=conn.execute("select coalesce(jsonb_agg(to_jsonb(s)-'stock_qty' order by id),'[]'::jsonb) from public.product_specs s").fetchone()[0]
             if os.environ.get('DBMT_SPEC_USAGE_DEPLOYED')!='1':conn.execute(migration.read_text(encoding='utf-8'))
-            assert conn.execute("select coalesce(jsonb_agg(to_jsonb(s)-'brand' order by id),'[]'::jsonb) from public.product_specs s").fetchone()[0]==before
+            assert conn.execute("select coalesce(jsonb_agg(to_jsonb(s)-'stock_qty' order by id),'[]'::jsonb) from public.product_specs s").fetchone()[0]==before
             tests(conn)
         assert not conn.execute("select 1 from public.erp_users where login_id like 'qa_spec_%'").fetchone()
     print('PASS: original records unchanged; all QA schema, catalog, role, spec and audit changes rolled back')

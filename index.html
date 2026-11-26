@@ -37,7 +37,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
 <link rel="stylesheet" href="styles/distribution-products.css?v=20261119catalog1">
 <link rel="stylesheet" href="styles/document-request-detail.css?v=20261020content1">
 <link rel="stylesheet" href="styles/production-schedule.css?v=20261020workorders1">
-<link rel="stylesheet" href="styles/product-specs.css?v=20261117usage2">
+<link rel="stylesheet" href="styles/product-specs.css?v=20261126stock1">
 <link rel="stylesheet" href="styles/ledgers.css?v=20261112ledger1">
 <link rel="stylesheet" href="styles/label-stock-split.css?v=20261113pda1">
 <link rel="stylesheet" href="styles/work-order-carryover.css?v=20261019carry1">
@@ -576,7 +576,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="card-title" style="margin:0;"><div class="ct-bar" style="background:#666;"></div>제품스펙</div>
       <button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.load()">새로고침</button>
     </div>
-    <p class="spec-guide">거래처별 유통, 원재료, 세절·내포장·외포장 규격과 단가를 등록합니다. 단가는 원/KG, 원/BOX 기준입니다.</p>
+    <p class="spec-guide">거래처별 유통, 원재료, 세절·내포장·외포장 규격과 단가를 등록합니다. 재고량은 스펙별 참고값으로 직접 입력합니다. 단가는 원/KG, 원/BOX 기준입니다.</p>
     <form id="spec-editor" class="spec-editor" onsubmit="event.preventDefault();DBMTProductSpecs.save()" hidden>
       <div class="spec-editor-heading"><strong id="spec-editor-title">제품스펙 등록</strong><button type="button" class="btn btn-secondary btn-sm" onclick="DBMTProductSpecs.reset()">입력 초기화</button></div>
       <div class="form-group"><label for="spec-trader">거래처</label><input id="spec-trader" list="sales-trader-list" maxlength="200" required autocomplete="off" placeholder="거래처명"></div>
@@ -588,6 +588,7 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <div class="form-group"><label for="spec-inner-packaging">내포장 스펙</label><input id="spec-inner-packaging" maxlength="300" placeholder="예: 1KG 진공포장"></div>
       <div class="form-group"><label for="spec-outer-packaging">외포장 스펙</label><input id="spec-outer-packaging" maxlength="300" placeholder="예: 5KG × 2팩 / 박스"></div>
       <div class="form-group"><label for="spec-monthly-usage">월사용량(KG)</label><input id="spec-monthly-usage" type="number" min="0" max="999999999" step="0.000001" inputmode="decimal" placeholder="미입력"></div>
+      <div class="form-group"><label for="spec-stock-qty">재고량(KG)</label><input id="spec-stock-qty" type="number" min="0" max="999999999" step="0.000001" inputmode="decimal" placeholder="미입력"></div>
       <div class="form-group"><label for="spec-price-kg">단가(KG)</label><input id="spec-price-kg" type="number" min="0" max="999999999" step="0.01" inputmode="decimal" placeholder="미입력"></div>
       <div class="form-group"><label for="spec-price-box">단가(BOX)</label><input id="spec-price-box" type="number" min="0" max="999999999" step="0.01" inputmode="decimal" placeholder="미입력"></div>
       <div class="form-group spec-note"><label for="spec-note">비고</label><input id="spec-note" maxlength="1000" placeholder="추가 요청사항"></div>
@@ -627,7 +628,8 @@ try{sessionStorage.removeItem('dbmt_company_master_session');}catch(_){}
       <th scope="col"><button type="button" class="spec-sort" data-sort="cutting_spec" data-label="세절스펙">세절스펙<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
       <th scope="col"><button type="button" class="spec-sort" data-sort="inner_packaging_spec" data-label="내포장 스펙">내포장 스펙<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
       <th scope="col"><button type="button" class="spec-sort" data-sort="outer_packaging_spec" data-label="외포장 스펙">외포장 스펙<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
-      <th scope="col" class="spec-qty"><button type="button" class="spec-sort" data-sort="monthly_usage" data-label="월사용량(KG)">월사용량(KG)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col" class="spec-qty spec-monthly-qty"><button type="button" class="spec-sort" data-sort="monthly_usage" data-label="월사용량(KG)">월사용량(KG)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
+      <th scope="col" class="spec-qty"><button type="button" class="spec-sort" data-sort="stock_qty" data-label="재고량(KG)">재고량(KG)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
       <th scope="col" class="spec-money"><button type="button" class="spec-sort" data-sort="price_kg" data-label="단가(KG)">단가(KG)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
       <th scope="col" class="spec-money"><button type="button" class="spec-sort" data-sort="price_box" data-label="단가(BOX)">단가(BOX)<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
       <th scope="col"><button type="button" class="spec-sort" data-sort="note" data-label="비고">비고<span class="spec-sort-indicator" aria-hidden="true"></span></button></th>
@@ -23350,7 +23352,7 @@ let samsungVendors = JSON.parse(localStorage.getItem('dbmt_samsung_vendors') || 
 <script src="driver-temperature-office.js?v=20260908temp1"></script>
 <script src="driver-place-label.js?v=20261105place1"></script>
 <script src="production-schedule.js?v=20261020workorders1"></script>
-<script src="product-specs.js?v=20261117usage2"></script>
+<script src="product-specs.js?v=20261126stock1"></script>
 <script src="expense-stores.js?v=20261013store1"></script>
 <script src="shiplog-print.js?v=20261015fit2"></script>
 <script src="label-stock-split.js?v=20261113pda1"></script>

@@ -6,12 +6,13 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const normalize=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
   const money=value=>value===null || value===undefined?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:2});
-  const fields=['trader','distribution','material','brand','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','monthly_usage','price_kg','price_box','note'];
+  const fields=['trader','distribution','material','brand','origin','cutting_spec','inner_packaging_spec','outer_packaging_spec','monthly_usage','stock_qty','price_kg','price_box','note'];
+  const numericFields=new Set(['monthly_usage','stock_qty','price_kg','price_box']);
   const collator=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
-  const inputs={trader:'trader',distribution:'distribution',material:'material',brand:'brand',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',monthly_usage:'monthly-usage',price_kg:'price-kg',price_box:'price-box',note:'note'};
+  const inputs={trader:'trader',distribution:'distribution',material:'material',brand:'brand',origin:'origin',cutting_spec:'cutting',inner_packaging_spec:'inner-packaging',outer_packaging_spec:'outer-packaging',monthly_usage:'monthly-usage',stock_qty:'stock-qty',price_kg:'price-kg',price_box:'price-box',note:'note'};
   const catalog=()=>typeof labelProducts==='undefined'?[]:labelProducts;
   const usageValue=value=>value===null||value===undefined||String(value).trim()===''?null:Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null;
-  const usageText=value=>usageValue(value)===null?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:6});
+  const quantityText=value=>usageValue(value)===null?'—':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:6});
   function syncMaterialHint(){
     const id=el('material-product-id').value,p=catalog().find(p=>String(p.id)===id);
     el('material-meta').textContent=p?[p.kind,p.productCode,p.brand,p.origin,p.packunit,p.isActive===false?'사용 중지':''].filter(Boolean).join(' · '):el('material').value?(id?'기존 선택 품목 · 품목 선택으로 변경할 수 있습니다.':'기존 직접입력 · 등록 제품 또는 원료육을 선택해 연결할 수 있습니다.') : '';
@@ -165,7 +166,7 @@
     }).sort((a,b)=>compareRows(a,b)||collator.compare(a.trader??'',b.trader??'')||collator.compare(a.material??'',b.material??'')||collator.compare(a.id,b.id));
   }
   function compareRows(a,b){
-    const key=state.sortKey,numeric=key==='price_kg'||key==='price_box'||key==='monthly_usage';
+    const key=state.sortKey,numeric=numericFields.has(key);
     const value=row=>key==='inner_packaging_spec'?(row[key]??row.packaging_spec):row[key];
     const left=value(a),right=value(b);
     const empty=item=>item===null||item===undefined||normalize(item)===''||(numeric&&!Number.isFinite(Number(item)));
@@ -191,7 +192,7 @@
     const search=el('search').value.trim();
     const sortColumn=columns.find(([key])=>key===state.sortKey);
     const sortLabel=mode==='usage'?`${usageColumns.find(([key])=>key===state.usageSortKey)[1]} ${state.usageSortDirection===1?'오름차순':'내림차순'}`:sortColumn?`${sortColumn[1]} ${state.sortDirection===1?'오름차순':'내림차순'}`:'화면 목록 순서';
-    const cell=(row,key)=>key==='monthly_usage'?usageText(row[key]):key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
+    const cell=(row,key)=>key==='monthly_usage'?quantityText(row[key]):key==='inner_packaging_spec'?(row[key]??row.packaging_spec??''):(row[key]??'');
     const report=usageSummary(rows),title=mode==='usage'?'월사용량 합계':'제품스펙 목록';
     return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${title} - 동부엠티 ERP</title>
       <style>
@@ -258,10 +259,10 @@
     el('rows').innerHTML=rows.length?rows.map(row=>`<tr data-id="${esc(row.id)}">
       <td>${esc(row.trader)}</td><td>${esc(row.distribution)}</td><td>${esc(row.material)}</td><td>${esc(row.brand)}</td><td>${esc(row.origin)}</td>
       <td>${esc(row.cutting_spec)}</td><td>${esc(row.inner_packaging_spec??row.packaging_spec)}</td><td>${esc(row.outer_packaging_spec)}</td>
-      <td class="spec-qty">${usageText(row.monthly_usage)}</td>
+      <td class="spec-qty">${quantityText(row.monthly_usage)}</td><td class="spec-qty">${quantityText(row.stock_qty)}</td>
       <td class="spec-money">${money(row.price_kg)}</td><td class="spec-money">${money(row.price_box)}</td><td>${esc(row.note)}</td>
       <td>${can('update')?`<button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="${esc(row.id)}">수정</button>`:''}${can('create')?`<button type="button" class="btn btn-secondary btn-sm" data-action="copy" data-id="${esc(row.id)}">복사</button>`:''}${can('delete')?`<button type="button" class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(row.id)}">삭제</button>`:''}</td>
-    </tr>`).join(''):`<tr><td colspan="13" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
+    </tr>`).join(''):`<tr><td colspan="14" class="spec-empty">${state.loading?'제품스펙을 불러오는 중입니다.':state.rows.length?'검색 조건에 맞는 제품스펙이 없습니다.':'등록된 제품스펙이 없습니다.'}</td></tr>`;
   }
   async function load(){
     if(state.saving)return;
@@ -299,6 +300,15 @@
     if(!Number.isFinite(number)||number<0||number>999999999||Math.abs(number*100-Math.round(number*100))>0.000001)throw new Error('단가는 0 이상, 소수 둘째 자리까지 입력해주세요.');
     return number;
   }
+  function readQuantity(key,label){
+    const raw=el(inputs[key]).value.trim();
+    if(raw==='')return null;
+    const value=Number(raw);
+    if(!Number.isFinite(value)||value<0||value>999999999||Number(value.toFixed(6))!==value){
+      throw new Error(`${label}은 0 이상, 소수 여섯 자리까지 입력해주세요.`);
+    }
+    return value;
+  }
   function copy(id){
     if(state.saving||state.loading||!can('create'))return;
     const row=state.rows.find(item=>item.id===id);
@@ -315,11 +325,10 @@
     if(!el('editor').reportValidity())return;
     let record;
     try{
-      record=Object.fromEntries(fields.filter(key=>!key.startsWith('price_')&&key!=='monthly_usage').map(key=>[key,el(inputs[key]).value.trim()]));
+      record=Object.fromEntries(fields.filter(key=>!numericFields.has(key)).map(key=>[key,el(inputs[key]).value.trim()]));
       record.price_kg=readPrice('price_kg');record.price_box=readPrice('price_box');
-      const raw=el('monthly-usage').value.trim(),value=Number(raw);
-      if(raw&&(!Number.isFinite(value)||value<0||value>999999999||Number(value.toFixed(6))!==value))throw new Error('월사용량은 0 이상, 소수 여섯 자리까지 입력해주세요.');
-      record.monthly_usage=raw===''?null:value;
+      record.monthly_usage=readQuantity('monthly_usage','월사용량');
+      record.stock_qty=readQuantity('stock_qty','재고량');
       record.material_product_id=el('material-product-id').value||null;
       if(!record.material_product_id&&(!state.editing||record.material!==state.editing.material))throw new Error('품목관리에 등록된 제품 또는 원료육을 선택해주세요.');
     }catch(error){message(error.message,true);return;}
