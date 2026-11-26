@@ -7,8 +7,12 @@
   const state={token:'',user:null,mode:'inbound',items:[],partners:[],canSave:false,scans:[],scanning:false,saving:false,pending:null};
   const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const kg=value=>Number(value||0).toFixed(2);
+  const factory='가공장',warehouse='물류창고';
+  const transferOrigin=()=>$('transfer-direction').value;
+  const transferDestination=from=>from===factory?warehouse:factory;
+  const transferRoute=(from,to=transferDestination(from))=>`${from} → ${to}`;
   const today=()=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(part=>[part.type,part.value]));return `${parts.year}-${parts.month}-${parts.day}`;};
-  const action=item=>state.mode==='outbound'?(item.productionPending?'가출고 · 원가 미확정':'출고'):item.state==='shipped'?(item.productionPending?'반입 · 원가 미확정':'반입'):(item.productionPending?'생산완료 전 입고 확인':'생산입고 확인');
+  const action=item=>state.mode==='transfer'?'재고이동':state.mode==='outbound'?(item.productionPending?'가출고 · 원가 미확정':'출고'):item.state==='shipped'?(item.productionPending?'반입 · 원가 미확정':'반입'):(item.productionPending?'생산완료 전 입고 확인':'생산입고 확인');
   const storage={get(key){try{return sessionStorage.getItem(key)||'';}catch(_){return '';}},set(key,value){try{sessionStorage.setItem(key,value);}catch(_){throw Error('임시 저장을 사용할 수 없습니다. 브라우저 저장 권한을 확인해주세요.');}},remove(key){try{sessionStorage.removeItem(key);}catch(_){}}};
   function status(message,kind=''){ $('status').textContent=message;$('status').className=kind; }
   function uuid(){const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const s=[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');return s.slice(0,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16)+'-'+s.slice(16,20)+'-'+s.slice(20);}
@@ -36,31 +40,41 @@
   }
   function render(){
     const locked=state.saving||Boolean(state.pending),busy=locked||state.scanning||state.scans.length>0;
+    const transfer=state.mode==='transfer';
     $('items').innerHTML=state.items.map((item,index)=>`<li><div class="scan-product">${esc(item.product)}</div><strong class="scan-weight">${kg(item.weight)} KG</strong><div class="scan-meta"><span class="scan-action">${action(item)}</span> · ${esc(item.origin)} · ${esc(item.storage)}<br>LOT ${esc(item.lot)} · 소비기한 ${esc(item.expdate)}</div><div class="scan-code">${esc(item.code)}</div><button class="scan-remove" type="button" data-remove="${index}" aria-label="${esc(item.product)} 목록에서 제외" title="목록에서 제외" ${busy?'disabled':''}>×</button></li>`).join('');
     $('item-count').textContent=state.items.length;
     $('total').textContent=`${state.items.length}개 · ${kg(state.items.reduce((sum,item)=>sum+Number(item.weight),0))} KG`;
     $('save-detail').textContent=state.pending?'저장 응답 확인 필요':state.scanning?'바코드 조회 중':'';
-    $('save').textContent=state.saving?'저장 확인 중':state.pending?'같은 요청 재시도':state.mode==='outbound'?'출고 확인':'입고 확인';
+    $('save').textContent=state.saving?'저장 확인 중':state.pending?'같은 요청 재시도':transfer?'재고이동 확인':state.mode==='outbound'?'출고 확인':'입고 확인';
     $('save').disabled=!state.canSave||busy&&!state.pending||state.saving||!state.items.length||!navigator.onLine;
     for(const el of document.querySelectorAll('.settings input,.settings select,.mode-tabs input,#note,#manual-entry,#scan-submit,#barcode'))el.disabled=locked;
+    $('transfer-direction').disabled=busy||state.items.length>0;
     $('clear-items').disabled=busy||!state.items.length;$('refresh-items').disabled=busy||!state.items.length;$('logout').disabled=state.saving;
     $('partner-fields').hidden=state.mode!=='outbound';
-    $('settings-summary').textContent=[$('work-date').value,$('location').value,state.mode==='outbound'?$('partner').selectedOptions[0]?.textContent:''].filter(Boolean).join(' · ');
+    $('location-field').hidden=transfer;$('transfer-route').hidden=!transfer;
+    $('settings-summary').textContent=[$('work-date').value,transfer?transferRoute(transferOrigin()):$('location').value,state.mode==='outbound'?$('partner').selectedOptions[0]?.textContent:transfer?'재고이동':''].filter(Boolean).join(' · ');
     document.querySelector(`input[name="mode"][value="${state.mode}"]`).checked=true;
   }
   async function openWorkspace(session){
     state.user=session.user;state.token=storage.get(SESSION);
     const data=await rpc('dbmt_pda_bootstrap',{p_token:state.token});
     state.canSave=data.canSave===true;state.partners=data.partners||[];
-    $('location').innerHTML=(data.locations||[]).map(name=>`<option>${esc(name)}</option>`).join('');$('location').value='가공장';renderPartners();
+    $('location').innerHTML=(data.locations||[]).map(name=>`<option>${esc(name)}</option>`).join('');$('location').value=factory;
+    $('transfer-direction').value=factory;renderPartners();
     $('work-date').value=today();$('work-date').max=today();
     $('login-form').hidden=true;$('workspace').hidden=false;$('save-bar').hidden=false;$('history-open').hidden=false;$('logout').hidden=false;
     $('user-name').textContent=state.user.displayName||state.user.loginId;
     try{
       const saved=JSON.parse(storage.get(PENDING+'_'+state.user.id)||'null');
       if(saved?.userId===state.user.id&&saved.body&&Array.isArray(saved.items)){
+        if(!['inbound','outbound','transfer'].includes(saved.body.p_mode))throw Error();
+        if(saved.body.p_mode==='transfer'){
+          const {p_from_location:from,p_to_location:to}=saved.body;
+          if(![factory,warehouse].includes(from)||to!==transferDestination(from))throw Error();
+          $('transfer-direction').value=from;
+        }else $('location').value=saved.body.p_location;
         state.pending=saved.body;state.items=saved.items;state.mode=saved.body.p_mode;
-        $('location').value=saved.body.p_location;$('work-date').value=saved.body.p_date;$('partner').value=saved.body.p_trader_id||'';$('note').value=saved.body.p_note||'';
+        $('work-date').value=saved.body.p_date;$('partner').value=saved.body.p_trader_id||'';$('note').value=saved.body.p_note||'';
         $('settings-panel').open=false;
         status('이전 저장의 응답을 확인하지 못했습니다. 같은 요청 재시도로 처리 결과를 확인해주세요.','error');
       }else status(state.canSave?'':'PDA 입출고 등록 권한이 없어 조회만 가능합니다.',state.canSave?'':'error');
@@ -87,11 +101,18 @@
     state.mode=event.target.value;state.items=[];$('settings-panel').open=true;status('');render();focusScan();
   });
   $('partner-search').addEventListener('input',renderPartners);
-  for(const id of ['work-date','location','partner'])$(id).addEventListener('change',render);
+  for(const id of ['work-date','location','partner','transfer-direction'])$(id).addEventListener('change',render);
   $('manual-entry').addEventListener('change',()=>{$('barcode').inputMode=$('manual-entry').checked?'text':'none';focusScan();});
   document.querySelector('.pda-kind-mini a')?.addEventListener('click',event=>{
     if(state.saving||state.scanning||state.scans.length||(state.items.length||state.pending)&&!confirm('스캔 목록이 남아 있습니다. 원료육 화면으로 이동할까요? 저장 응답 확인 중인 요청은 제품 화면에서 같은 계정으로 재시도해주세요.'))event.preventDefault();
   });
+  function transferItemError(item){
+    if(item.productionPending)return '생산완료 후 재고이동할 수 있습니다.';
+    if(item.state==='shipped')return '이미 출고된 라벨입니다.';
+    if(item.state!=='in_stock'||!item.location)return '이동 가능한 제품 재고를 확인해주세요.';
+    if(item.location!==transferOrigin())return `현재 재고 지점은 ${item.location}입니다.`;
+    return '';
+  }
   async function scanLoop(){
     if(state.scanning)return;state.scanning=true;render();
     while(state.scans.length){
@@ -100,9 +121,13 @@
         const result=await rpc('dbmt_pda_lookup',{p_token:state.token,p_code:code});const item=result.item;
         if(state.items.some(row=>row.labelId===item.labelId))throw Error('이미 목록에 있는 라벨입니다.');
         if(state.items.length>=200)throw Error('200개까지 처리할 수 있습니다. 먼저 저장해주세요.');
-        if(state.mode==='outbound'&&item.state==='shipped')throw Error('이미 출고된 라벨입니다.');
-        if(state.mode==='inbound'&&item.registered&&item.state==='in_stock')throw Error('이미 입고 확인된 라벨입니다. 중복 입고하지 않습니다.');
-        if(item.state==='in_stock'&&item.location!==$('location').value)throw Error(`현재 재고 지점은 ${item.location}입니다.`);
+        if(state.mode==='transfer'){
+          const error=transferItemError(item);if(error)throw Error(error);
+        }else{
+          if(state.mode==='outbound'&&item.state==='shipped')throw Error('이미 출고된 라벨입니다.');
+          if(state.mode==='inbound'&&item.registered&&item.state==='in_stock')throw Error('이미 입고 확인된 라벨입니다. 중복 입고하지 않습니다.');
+          if(item.state==='in_stock'&&item.location!==$('location').value)throw Error(`현재 재고 지점은 ${item.location}입니다.`);
+        }
         state.items.push(item);$('settings-panel').open=false;status(`${item.product} · ${kg(item.weight)} KG · ${action(item)}`,'ok');
         window.DBMTPdaSound?.play('success');
       }catch(error){status(error.message,'error');window.DBMTPdaSound?.play('error');try{navigator.vibrate?.([80,40,80]);}catch(_){} }
@@ -122,7 +147,13 @@
   $('clear-items').addEventListener('click',()=>{if(confirm('스캔 목록을 비울까요?')){state.items=[];status('');render();focusScan();}});
   $('refresh-items').addEventListener('click',async()=>{
     state.scanning=true;render();
-    try{const refreshed=[];for(const item of state.items)refreshed.push((await rpc('dbmt_pda_lookup',{p_token:state.token,p_code:item.code})).item);state.items=refreshed;status('현재 처리 상태를 다시 조회했습니다.','ok');}
+    try{
+      const refreshed=[];
+      for(const item of state.items)refreshed.push((await rpc('dbmt_pda_lookup',{p_token:state.token,p_code:item.code})).item);
+      state.items=refreshed;
+      const transferError=state.mode==='transfer'&&refreshed.map(transferItemError).find(Boolean);
+      status(transferError||'현재 처리 상태를 다시 조회했습니다.',transferError?'error':'ok');
+    }
     catch(error){status(error.message,'error');}finally{state.scanning=false;render();focusScan();}
   });
   $('save').addEventListener('click',()=>{
@@ -131,8 +162,10 @@
     if(state.mode==='outbound'&&!$('partner').value){status('출고 거래처를 선택해주세요.','error');$('partner').focus();return;}
     if(!$('work-date').value){status('작업일을 선택해주세요.','error');return;}
     if(state.mode==='inbound'){startSave();return;}
-    $('confirm-title').textContent='출고 확정';
-    $('confirm-summary').textContent=`${$('work-date').value} · ${$('location').value}\n${$('total').textContent}\n${$('partner').selectedOptions[0]?.textContent||''}`;
+    const transfer=state.mode==='transfer',transferError=transfer&&state.items.map(transferItemError).find(Boolean);
+    if(transferError){status(transferError,'error');return;}
+    $('confirm-title').textContent=transfer?'재고이동 확정':'출고 확정';
+    $('confirm-summary').textContent=[`${$('work-date').value} · ${transfer?transferRoute(transferOrigin()):$('location').value}`,$('total').textContent,transfer?'':$('partner').selectedOptions[0]?.textContent].filter(Boolean).join('\n');
     $('confirm-items').innerHTML=state.items.map(item=>`<li>${esc(item.product)} · ${kg(item.weight)} KG · ${action(item)}<br>${esc(item.code)}</li>`).join('');
     $('confirm-dialog').showModal();
   });
@@ -144,28 +177,43 @@
   });
   function startSave(){
     if(state.saving||state.pending||state.scanning||state.scans.length||!state.canSave||!state.items.length||!navigator.onLine)return;
-    state.pending={p_request_id:uuid(),p_mode:state.mode,p_location:$('location').value,p_trader_id:state.mode==='outbound'?$('partner').value:null,
-      p_date:$('work-date').value,p_items:state.items.map(item=>({barcode:item.code,revision:item.revision})),p_note:$('note').value};
+    const transfer=state.mode==='transfer',from=transferOrigin();
+    state.pending={p_request_id:uuid(),p_mode:state.mode,p_date:$('work-date').value,
+      p_items:state.items.map(item=>({barcode:item.code,revision:item.revision})),p_note:$('note').value,
+      ...(transfer?{p_from_location:from,p_to_location:transferDestination(from)}:{p_location:$('location').value,p_trader_id:state.mode==='outbound'?$('partner').value:null})};
     try{pendingStore();savePending();}catch(error){state.pending=null;status(error.message,'error');render();}
   }
   async function savePending(){
     if(state.saving||!state.pending||!state.canSave||!navigator.onLine)return;state.saving=true;render();
     try{
-      pendingStore();const result=await rpc('dbmt_pda_commit',{p_token:state.token,...state.pending});
+      pendingStore();
+      const params={p_token:state.token,...state.pending},transfer=params.p_mode==='transfer';
+      if(transfer)delete params.p_mode;
+      const result=await rpc(transfer?'dbmt_pda_transfer':'dbmt_pda_commit',params);
+      if(transfer&&(result.requestId!==params.p_request_id||result.count!==state.items.length||
+        result.fromLocation!==params.p_from_location||result.toLocation!==params.p_to_location))throw Error('재고이동 저장 응답을 확인할 수 없습니다.');
       state.pending=null;pendingStore();state.items=[];
       const negative=(result.negativeStock||[]).map(row=>`${row.product} · LOT ${row.lot||'-'} · ${kg(row.weight)}KG`).join('\n');
-      if(result.cancelledTransactionIds?.length)status('ERP에서 일부 또는 전체 출고가 취소된 요청입니다. 처리이력을 확인한 후 다시 스캔해주세요.','warning');
+      if(transfer)status(`${transferRoute(params.p_from_location,params.p_to_location)} · ${result.count}개 / ${kg(result.weight)} KG 재고이동 완료`,'ok');
+      else if(result.cancelledTransactionIds?.length)status('ERP에서 일부 또는 전체 출고가 취소된 요청입니다. 처리이력을 확인한 후 다시 스캔해주세요.','warning');
       else status(`저장 완료 · ${result.count}개 / ${kg(result.weight)} KG\n생산입고 확인 ${result.received}개 · 반입 ${result.returned}개 · 출고 ${result.shipped}개${negative?'\n마이너스 재고\n'+negative:''}`,negative?'warning':'ok');
     }catch(error){
       if(error.definite&&!error.session&&error.code!=='42501'){state.pending=null;pendingStore();status(`저장되지 않았습니다. ${error.message}`,'error');}
       else status(`${error.message}\n저장 여부가 불확실합니다. 같은 요청 재시도로 결과를 확인해주세요.`,'error');
     }finally{state.saving=false;render();focusScan();}
   }
+  const historyAction={ship:'출고',return:'반입',transfer:'재고이동'};
   $('history-open').addEventListener('click',async()=>{
     $('history-list').textContent='조회 중';$('history-dialog').showModal();
     try{
       const data=await rpc('dbmt_pda_history',{p_token:state.token});
-      $('history-list').innerHTML=data.rows.map(row=>`<details class="history-row"><summary>${esc(new Date(row.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))} · ${row.request.mode==='outbound'?'출고':'입고·반입'}<br>${esc(row.request.location)} · ${row.result.count}개 / ${kg(row.result.weight)} KG${row.result.cancelledTransactionIds?.length?` · 출고 취소 ${row.result.cancelledTransactionIds.length}개`:''}</summary><small>${esc(row.id)}<br>${esc(row.request.note)}</small><ul>${row.result.items.map(item=>`<li>${esc(item.product)} · ${kg(item.weight)} KG<br>${esc(item.code)} · ${row.result.cancelledTransactionIds?.includes(item.transactionId)?'출고 취소':item.action==='ship'?'출고':item.action==='return'?'반입':'생산입고 확인'}</li>`).join('')}</ul></details>`).join('')||'처리이력이 없습니다.';
+      $('history-list').innerHTML=data.rows.map(row=>{
+        const transfer=row.request.mode==='transfer';
+        const operation=transfer?'재고이동':row.request.mode==='outbound'?'출고':'입고·반입';
+        const location=transfer?transferRoute(row.request.location,row.request.toLocation):row.request.location;
+        const cancelled=row.result.cancelledTransactionIds||[];
+        return `<details class="history-row"><summary>${esc(new Date(row.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))} · ${operation}<br>${esc(location)} · ${row.result.count}개 / ${kg(row.result.weight)} KG${cancelled.length?` · 출고 취소 ${cancelled.length}개`:''}</summary><small>${esc(row.id)}<br>${esc(row.request.note)}</small><ul>${row.result.items.map(item=>`<li>${esc(item.product)} · ${kg(item.weight)} KG<br>${esc(item.code)} · ${cancelled.includes(item.transactionId)?'출고 취소':historyAction[item.action]||'생산입고 확인'}</li>`).join('')}</ul></details>`;
+      }).join('')||'처리이력이 없습니다.';
     }catch(error){$('history-list').textContent=error.message;}
   });
   $('history-close').addEventListener('click',()=>{$('history-dialog').close();focusScan();});

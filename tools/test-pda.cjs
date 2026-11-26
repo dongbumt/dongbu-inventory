@@ -16,9 +16,9 @@ const server=http.createServer((req,res)=>{
   try{
     const context=await browser.newContext({viewport:{width:320,height:533},isMobile:true,hasTouch:true});
     const user={id:'qa-user',displayName:'테스트',loginId:'qa'};
-    const fixture={labelId:'qa-label',code:'DB2610131200-ABC120',product:'돈등심(치즈돈까스용 10mm 슬라이스)',weight:5,lot:'L12610134894005',origin:'국내산',storage:'냉동',packunit:'5KG',mfgdate:'2026-10-13',expdate:'2027-10-12',registered:false,state:'in_stock',revision:0,location:'가공장'};
+    const fixture={labelId:'qa-label',code:'DB2610131200-ABC120',product:'돈등심(치즈돈까스용 10mm 슬라이스)',weight:5,lot:'L12610134894005',origin:'국내산',storage:'냉동',packunit:'5KG',mfgdate:'2026-10-13',expdate:'2027-10-12',registered:false,state:'in_stock',revision:0,location:'가공장',stockRowId:'qa-opening-source'};
     let current={...fixture},commits=[],lookups=[],failAfterSave=false,canSave=true,canView=true,lookupDelay=0,commitDelay=0,denyCommit=false,expireCommit=false;
-    const saved=new Map(),errors=[];
+    const saved=new Map(),requests=new Map(),errors=[];
     const result=body=>({ok:true,requestId:body.p_request_id,count:body.p_items.length,weight:5*body.p_items.length,received:body.p_mode==='inbound'&&current.state!=='shipped'?body.p_items.length:0,returned:body.p_mode==='inbound'&&current.state==='shipped'?body.p_items.length:0,shipped:body.p_mode==='outbound'?body.p_items.length:0,negativeStock:body.p_mode==='outbound'?[{product:fixture.product,lot:fixture.lot,weight:-3}]:[],items:body.p_items.map(item=>({...fixture,transactionId:'qa-tx-'+body.p_request_id+'-'+item.barcode,code:item.barcode,action:body.p_mode==='outbound'?'ship':current.state==='shipped'?'return':'receive'})),savedAt:new Date().toISOString()});
     await context.route('https://**/*',async route=>{
       const url=new URL(route.request().url());
@@ -44,10 +44,26 @@ const server=http.createServer((req,res)=>{
         if(commitDelay)await new Promise(resolve=>setTimeout(resolve,commitDelay));
         if(expireCommit){await route.fulfill({status:401,contentType:'application/json',body:JSON.stringify({code:'28000',message:'로그인이 만료되었습니다.'})});return;}
         if(denyCommit){await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({code:'P0001',message:'다른 작업자가 처리한 라벨입니다.'})});return;}
-        if(!saved.has(body.p_request_id)){saved.set(body.p_request_id,result(body));current={...current,registered:true,state:body.p_mode==='outbound'?'shipped':'in_stock',revision:current.revision+1,location:body.p_location};}
+        if(!saved.has(body.p_request_id)){saved.set(body.p_request_id,result(body));requests.set(body.p_request_id,{mode:body.p_mode,location:body.p_location,note:body.p_note});current={...current,registered:true,state:body.p_mode==='outbound'?'shipped':'in_stock',revision:current.revision+1,location:body.p_location};}
         if(failAfterSave){failAfterSave=false;await route.abort();return;}
         data=saved.get(body.p_request_id);
-      }else if(name==='dbmt_pda_history')data={ok:true,rows:[...saved.values()].map(r=>({id:r.requestId,created_at:r.savedAt,request:{mode:r.shipped?'outbound':'inbound',location:'가공장',note:'QA'},result:r}))};
+      }else if(name==='dbmt_pda_transfer'){
+        commits.push(body);
+        const from=body.p_from_location,to=body.p_to_location;
+        if(!saved.has(body.p_request_id)){
+          assert.deepEqual(body.p_items,[{barcode:current.code,revision:current.revision}]);
+          assert.equal(from,current.location);
+          assert.notEqual(from,to);
+          assert.equal(current.state,'in_stock');
+          assert(!current.productionPending);
+          current={...current,registered:true,location:to,revision:current.revision+1};
+          requests.set(body.p_request_id,{mode:'transfer',location:from,toLocation:to,note:body.p_note});
+          saved.set(body.p_request_id,{ok:true,requestId:body.p_request_id,count:1,weight:current.weight,fromLocation:from,toLocation:to,
+            items:[{...current,action:'transfer',transactionId:'qa-transfer-'+body.p_request_id}],savedAt:new Date().toISOString()});
+        }
+        if(failAfterSave){failAfterSave=false;await route.abort();return;}
+        data=saved.get(body.p_request_id);
+      }else if(name==='dbmt_pda_history')data={ok:true,rows:[...saved.values()].map(r=>({id:r.requestId,created_at:r.savedAt,request:requests.get(r.requestId),result:r}))};
       else throw Error('Unexpected remote request: '+name);
       await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
     });
@@ -124,9 +140,85 @@ const server=http.createServer((req,res)=>{
     assert.equal(saved.size,savedCount);assert.equal(await page.locator('#items li').count(),0);assert.equal(await page.locator('#save').textContent(),'출고 확인');
     await page.locator('#history-open').click();await page.waitForFunction(()=>document.getElementById('history-list').textContent.includes('출고 취소 1개'));assert.match(await page.locator('#history-list li').last().textContent(),/출고 취소/);
     await page.locator('#history-dialog').screenshot({path:path.join(artifacts,'cancelled-history.png')});await page.locator('#history-close').click();current={...fixture};
+
+    const transferMode=page.locator('[name=mode][value=transfer]'),direction=page.locator('#transfer-direction');
+    const openSettings=async()=>{if(!await page.locator('#settings-panel').evaluate(panel=>panel.open))await page.locator('#settings-summary').click();};
+    const transferCount=()=>commits.filter(body=>body.p_from_location).length;
+    await page.setViewportSize({width:320,height:533});
+    await transferMode.check();await openSettings();await direction.selectOption('가공장');
+    assert(await page.locator('#partner-fields').isHidden());
+    assert(await page.locator('#location-field').isHidden());
+    assert.deepEqual(new Set(await direction.locator('option').allTextContents()),new Set(['가공장 → 물류창고','물류창고 → 가공장']));
+    await page.screenshot({path:path.join(artifacts,'product-transfer-settings-320.png'),fullPage:true});
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Transfer settings must fit 320px');
+    for(const patch of [{location:'물류창고'},{state:'shipped',registered:true},{productionPending:true,productionCost:null,costStatus:'pending'}]){
+      current={...fixture,...patch};await scan();
+      assert.equal(await page.locator('#items li').count(),0,'Only completed stock at the departure site may be staged');
+      assert.equal(await page.locator('#status').getAttribute('class'),'error');
+    }
+    assert.equal(transferCount(),0);
+    current={...fixture};
+    const firstMoveDate=await page.locator('#work-date').inputValue();
+    await page.locator('#note').fill('제품 이동 QA');await scan();
+    assert.equal(await page.locator('#items li').count(),1,'A completed unregistered product barcode can be moved');
+    assert.match(await page.locator('#items').textContent(),/재고이동/);
+    assert(await direction.isDisabled(),'A queued scan must remain tied to the selected origin');
+    current={...fixture,location:'물류창고',registered:true,revision:1};
+    await page.locator('#refresh-items').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('현재 재고 지점'));
+    await page.locator('#save').click();assert(await page.locator('#confirm-dialog').isHidden());assert.equal(transferCount(),0);
+    current={...fixture};await page.locator('#refresh-items').click();
+    await page.waitForFunction(()=>document.getElementById('status').textContent.includes('현재 처리 상태를 다시 조회'));
+    await context.setOffline(true);assert(await page.locator('#save').isDisabled());
+    await page.evaluate(()=>document.getElementById('save').dispatchEvent(new Event('click')));
+    assert.equal(transferCount(),0,'The offline transfer draft must not send a write');
+    assert.equal(await page.locator('#items li').count(),1);await context.setOffline(false);
+    await page.locator('#save').click();
+    assert.match(await page.locator('#confirm-title').textContent(),/재고이동/);
+    assert.match(await page.locator('#confirm-summary').textContent(),/가공장 → 물류창고/);
+    assert.match(await page.locator('#confirm-items').textContent(),new RegExp(fixture.code));
+    await page.locator('#confirm-dialog').screenshot({path:path.join(artifacts,'product-transfer-confirm-320.png')});
+    const transferDialogBounds=await page.locator('#confirm-dialog').boundingBox();
+    assert(transferDialogBounds.x>=0&&transferDialogBounds.x+transferDialogBounds.width<=320);
+    failAfterSave=true;const beforeTransfer=saved.size;await page.locator('#confirm-save').click();
+    await page.waitForFunction(()=>document.getElementById('save').textContent==='같은 요청 재시도');
+    const firstMove=commits.at(-1);
+    assert.deepEqual(firstMove,{p_token:'qa-token',p_request_id:firstMove.p_request_id,p_from_location:'가공장',p_to_location:'물류창고',
+      p_date:firstMoveDate,p_items:[{barcode:fixture.code,revision:0}],p_note:'제품 이동 QA'});
+    assert.match(firstMove.p_request_id,/^[0-9a-f-]{36}$/);
+    await page.reload();await instrumentSound();await page.locator('#workspace').waitFor({state:'visible'});
+    assert.equal(await direction.inputValue(),'가공장');assert(await direction.isDisabled());
+    assert.equal(await page.locator('#save').textContent(),'같은 요청 재시도');
+    assert.equal(await page.locator('#items li').count(),1);
+    await page.locator('#save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('재고이동 완료'));
+    assert.deepEqual(commits.at(-1),firstMove,'Reload must keep the original route, request ID, and item revision');
+    assert.equal(saved.size,beforeTransfer+1,'Lost response and retry must create one transfer');
+    assert.match(await page.locator('#status').textContent(),/가공장 → 물류창고/);
+    await scan();assert.match(await page.locator('#status').textContent(),/현재 재고 지점.*물류창고/);assert.equal(await page.locator('#items li').count(),0);
+    await openSettings();await direction.selectOption('물류창고');await scan();
+    assert.equal(await page.locator('#items li').count(),1,'The same barcode can move from its new site');
+    await page.locator('#save').click();
+    assert.match(await page.locator('#confirm-summary').textContent(),/물류창고 → 가공장/);
+    await page.locator('#confirm-save').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('재고이동 완료'));
+    const secondMove=commits.at(-1);
+    assert.notEqual(secondMove.p_request_id,firstMove.p_request_id);
+    assert.deepEqual([secondMove.p_from_location,secondMove.p_to_location,secondMove.p_items],['물류창고','가공장',[{barcode:fixture.code,revision:1}]]);
+    assert.equal(saved.size,beforeTransfer+2);assert.equal(transferCount(),3);
+    await scan();assert.match(await page.locator('#status').textContent(),/현재 재고 지점.*가공장/);assert.equal(await page.locator('#items li').count(),0);
+    await page.locator('#history-open').click();await page.locator('#history-list details').last().waitFor();
+    for(const expectedRoute of ['가공장 → 물류창고','물류창고 → 가공장']){
+      const entry=page.locator('#history-list details').filter({hasText:expectedRoute});
+      assert.equal(await entry.count(),1);
+      assert.match(await entry.locator('summary').textContent(),/재고이동/);
+      assert.match(await entry.locator('li').textContent(),new RegExp(fixture.code));
+    }
+    await page.locator('#history-close').click();
+    console.log('PASS: both product PDA transfer directions, original barcode/revision, branch and production guards, offline draft, idempotent retry and 320px layout');
+
     await page.locator('#logout').click();canSave=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.locator('#workspace').waitFor({state:'visible'});
     assert.match(await page.locator('#status').textContent(),/PDA 입출고 등록 권한/);
+    await transferMode.check();await openSettings();await direction.selectOption('가공장');
     await scan();assert(await page.locator('#save').isDisabled());
+    assert.equal(await page.locator('#items li').count(),1,'Read-only users may inspect a transferable product barcode');
     const readonlyCount=commits.length;await page.evaluate(()=>document.getElementById('save').dispatchEvent(new Event('click')));assert.equal(commits.length,readonlyCount,'Readonly direct submission must not write');
     await page.locator('#logout').click();canView=false;await page.locator('#login-id').fill('qa');await page.locator('#login-password').fill('0000');await page.locator('#login-submit').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('조회·등록 권한'));
     assert(await page.locator('#workspace').isHidden(),'Direct URL/login must not show the PDA workspace without view permission');

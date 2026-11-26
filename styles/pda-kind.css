@@ -1,7 +1,7 @@
 .pda-kind-mini{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:16px}
 .pda-kind-mini a{color:#287eb3;font-weight:400;text-decoration:none}
 .pda-kind-mini>:last-child{padding-left:8px;border-left:1px solid var(--border)}
-.mode-tabs.raw-mode-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mode-tabs.raw-mode-tabs,.mode-tabs.product-mode-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
 .raw-wide{grid-column:1/-1}.raw-help{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.raw-product-meta{grid-column:1/-1;font-size:12px;overflow-wrap:anywhere}
 .raw-check{display:flex;align-items:center;gap:8px;min-height:42px;margin-top:10px;font-size:13px}.raw-check input{flex:0 0 20px;width:20px;height:20px}
 .raw-confirm-line{display:flex;align-items:center;gap:10px;margin-top:4px}.raw-confirm-line label{flex:0 0 110px}.raw-confirm-line input{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.raw-confirm-line span{min-width:0;color:var(--muted);overflow-wrap:anywhere}#confirm-error{color:#ad3028;font-size:13px;overflow-wrap:anywhere}

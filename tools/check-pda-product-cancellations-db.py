@@ -20,7 +20,7 @@ def regression(conn, filename):
     namespace['check'](conn)
 
 
-def fixture(conn, completed=False, manual_sale=False, shipment_location='가공장'):
+def fixture(conn, completed=False, manual_sale=False, shipment_location='가공장', ship=True, save_label_logs=None):
     suffix = uuid.uuid4().hex[:12]
     uid = lambda name: 'qa_cancel_' + suffix + '_' + name
     role, user, partner = (uuid.uuid4() for _ in range(3))
@@ -37,8 +37,12 @@ def fixture(conn, completed=False, manual_sale=False, shipment_location='가공�
                  sourceStock=dict(key=uid('raw'), product=uid('raw'), price=1000, stock=100, origin='국내산', lot='RAW'))
     logs = [dict(id=uid('label' + str(i)), code='DB2611101200-QACN0' + str(i), workOrderId=order['id'], labelWeight=5,
                  status='active', workOrderSnapshot=order) for i in range(3)]
-    for key, value in [('workOrders', [order]), ('labelProducts', [dict(id=order['labelProductId'], name=order['product'], packunit='5KG', taxType='면세')]), ('labelPrintLogs', logs)]:
+    for key, value in [('workOrders', [order]), ('labelProducts', [dict(id=order['labelProductId'], name=order['product'], packunit='5KG', taxType='면세')])]:
         conn.execute('update public.app_data set payload=payload||%s where key=%s', (Jsonb(value), key))
+    if save_label_logs is None:
+        conn.execute("update public.app_data set payload=payload||%s where key='labelPrintLogs'", (Jsonb(logs),))
+    else:
+        save_label_logs(conn, pin, order, logs)
 
     def rpc(name, *args):
         with conn.transaction():
@@ -70,9 +74,10 @@ def fixture(conn, completed=False, manual_sale=False, shipment_location='가공�
         row = dict(id=uid('manual'), date='2026-11-11', type='출고', product=order['product'], lot=order['lot'], origin='국내산',
                    weight=15, stockRowId=source, stockLocation='가공장', stockUnitPrice=0, price=1, amount=15, trader=uid('partner'), _isUser=True)
         assert rpc('dbmt_erp_save_transactions', token, [row], [])['ok']
-    request, scans = uuid.uuid4(), [scan(i) for i in range(3)]
-    done = rpc('dbmt_pda_commit', token, request, 'outbound', shipment_location, partner, '2026-11-11', scans, 'QA')
-    ids = [item['transactionId'] for item in done['items']]
+    if ship:
+        request, scans = uuid.uuid4(), [scan(i) for i in range(3)]
+        done = rpc('dbmt_pda_commit', token, request, 'outbound', shipment_location, partner, '2026-11-11', scans, 'QA')
+        ids = [item['transactionId'] for item in done['items']]
     cancel = lambda values, rows=[]: rpc('dbmt_erp_save_transactions', token, rows, values)
     return locals()
 

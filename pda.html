@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#287eb3">
   <title>동부엠티 ERP · PDA 입출고</title>
   <link rel="stylesheet" href="styles/pda.css?v=20261110correct1">
-  <link rel="stylesheet" href="styles/pda-kind.css?v=20261021raw1">
+  <link rel="stylesheet" href="styles/pda-kind.css?v=20261126productmove1">
   <script src="pda-sound.js?v=20261014sound2" defer></script>
   <script src="pda-search.js?v=20261124initials1" defer></script>
-  <script src="pda.js?v=20261124initials1" defer></script>
+  <script src="pda.js?v=20261126productmove1" defer></script>
 </head>
 <body>
   <header class="pda-header"><div class="brand"><img src="assets/company-logo.png" alt="동부엠티" width="30" height="30"><div><strong>동부엠티 ERP</strong><h1 class="pda-kind-mini" aria-label="입출고 품목구분"><span aria-current="page">제품</span><a href="pda-raw.html?v=20261126transfer2">원료육</a></h1></div></div><div class="header-actions"><span id="user-name"></span><button id="history-open" type="button" hidden>이력</button><button id="logout" type="button" hidden>로그아웃</button></div></header>
@@ -22,10 +22,11 @@
       <button class="primary" id="login-submit" type="submit">로그인</button>
     </form>
     <section id="workspace" hidden>
-      <fieldset class="mode-tabs"><legend class="sr-only">작업구분</legend><label><input type="radio" name="mode" value="inbound" checked><span>입고·반입</span></label><label><input type="radio" name="mode" value="outbound"><span>출고</span></label></fieldset>
+      <fieldset class="mode-tabs product-mode-tabs"><legend class="sr-only">작업구분</legend><label><input type="radio" name="mode" value="inbound" checked><span>입고·반입</span></label><label><input type="radio" name="mode" value="outbound"><span>출고</span></label><label><input type="radio" name="mode" value="transfer"><span>재고이동</span></label></fieldset>
       <details id="settings-panel" open><summary id="settings-summary">작업 설정</summary><div class="settings">
         <label>작업일<input type="date" id="work-date" required></label>
-        <label>재고 지점<select id="location" required></select></label>
+        <label id="location-field">재고 지점<select id="location" required></select></label>
+        <label id="transfer-route" hidden>이동 방향<select id="transfer-direction"><option value="가공장">가공장 → 물류창고</option><option value="물류창고">물류창고 → 가공장</option></select></label>
         <div class="partner-fields" id="partner-fields" hidden><label>출고 거래처<input type="search" id="partner-search" placeholder="거래처명·초성 검색" autocomplete="off"></label><select id="partner" aria-label="출고 거래처"><option value="">거래처 선택</option></select></div>
       </div></details>
       <form id="scan-form" class="scan-form"><label for="barcode">제품 고유바코드</label><div class="scan-input"><input id="barcode" name="barcode" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100"><button id="scan-submit" class="primary" type="submit">조회</button></div><label class="manual-toggle"><input id="manual-entry" type="checkbox">수기입력</label></form>
